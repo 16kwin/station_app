@@ -1,0 +1,226 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useTabs } from '../../context/TabContext';
+
+import Icon1 from '../../assets/Menu/1.svg';
+import Icon2 from '../../assets/Menu/2.svg';
+import Icon3 from '../../assets/Menu/3.svg';
+import Icon4 from '../../assets/Menu/4.svg';
+import Icon5 from '../../assets/Menu/5.svg';
+import Icon6 from '../../assets/Menu/6.svg';
+import Icon7 from '../../assets/Menu/7.svg';
+import Icon8 from '../../assets/Menu/8.svg';
+import Icon9 from '../../assets/Menu/9.svg';
+
+interface MenuItem {
+  path: string;
+  label: string;
+  icon: string;
+}
+
+const menuItems: MenuItem[] = [
+  { path: '/main', label: 'Главная', icon: Icon1 },
+  { path: '/stations', label: 'Станции', icon: Icon2 },
+  { path: '/references', label: 'Справочники', icon: Icon3 },
+  { path: '/documents', label: 'Документы', icon: Icon4 },
+  { path: '/reports', label: 'Отчеты', icon: Icon5 },
+  { path: '/analytics', label: 'Аналитика', icon: Icon6 },
+  { path: '/settings', label: 'Настройки', icon: Icon7 },
+  { path: '/account', label: 'Аккаунт', icon: Icon8 },
+  { path: '#', label: 'Дополнительно', icon: Icon9 },
+];
+
+const FloatingMenu = () => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<number | null>(null);
+  const [isVisible, setIsVisible] = useState(true);
+  const { openTab } = useTabs();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const checkVisibility = () => {
+      const whiteBlock = document.querySelector('.white-block');
+      if (whiteBlock) {
+        const rect = whiteBlock.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        const isFullyVisible = rect.bottom <= windowHeight;
+        setIsVisible(isFullyVisible);
+      }
+    };
+
+    checkVisibility();
+    window.addEventListener('scroll', checkVisibility);
+    window.addEventListener('resize', checkVisibility);
+    
+    return () => {
+      window.removeEventListener('scroll', checkVisibility);
+      window.removeEventListener('resize', checkVisibility);
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+      setHoveredItem(null);
+    }, 100);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleNavigate = (path: string, label: string) => {
+    if (path !== '#') {
+      openTab(path, label, null);
+      // Не скрываем меню, только сбрасываем подсветку
+      setHoveredItem(null);
+    }
+  };
+
+  const gradients = [
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+    { start: '#3F3E3F', end: '#3F3E3F' },
+  ];
+
+  if (!isVisible) return null;
+
+  return (
+    <div 
+      ref={menuRef}
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 px-4 flex justify-center"
+      style={{
+        width: 'auto',
+        minWidth: isHovered ? 'auto' : '650px',
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div
+        className="transition-all duration-300 ease-out"
+        style={{
+          display: 'inline-block',
+          width: 'auto',
+        }}
+      >
+        <div 
+          className={`transition-all duration-500 ease-out ${
+            isHovered 
+              ? '-translate-y-4 rounded-[30px] bg-[#3F3E3F] shadow-xl' 
+              : 'translate-y-[30px] rounded-t-[30px] bg-[#3F3E3F]'
+          } flex items-center justify-center px-4 cursor-pointer`}
+          style={{
+            height: isHovered ? 'auto' : '60px',
+            minHeight: '60px',
+            paddingTop: isHovered ? '10px' : '0',
+            paddingBottom: isHovered ? '10px' : '0',
+            width: 'auto',
+            minWidth: isHovered ? 'auto' : '650px',
+            transformOrigin: 'center',
+            scale: hoveredItem !== null ? '1.02' : '1',
+          }}
+        >
+          {isHovered && (
+            <div className="flex items-center animate-fadeIn">
+              {menuItems.map((item, index) => {
+                const isItemHovered = hoveredItem === index;
+                const gradient = gradients[index];
+                
+                return (
+                  <div 
+                    key={index}
+                    className="flex items-center justify-center transition-all duration-500 ease-out"
+                    style={{ 
+                      marginLeft: index === 0 ? '0' : '30px', 
+                      marginRight: index === menuItems.length - 1 ? '0' : '0',
+                    }}
+                  >
+                    <div
+                      onMouseEnter={() => setHoveredItem(index)}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      onClick={() => handleNavigate(item.path, item.label)}
+                      className="relative flex items-center justify-center cursor-pointer transition-all duration-500 ease-out"
+                      style={{
+                        width: isItemHovered ? '120px' : '40px',
+                        height: '40px',
+                        borderRadius: '40px',
+                        background: isItemHovered ? `linear-gradient(45deg, ${gradient.start}, ${gradient.end})` : 'transparent',
+                        boxShadow: isItemHovered ? '0 10px 25px rgba(0, 0, 0, 0.1)' : 'none',
+                        transition: 'all 0.5s cubic-bezier(0.34, 1.2, 0.64, 1)',
+                      }}
+                    >
+                      {isItemHovered && (
+                        <div 
+                          className="absolute inset-0 rounded-[40px] transition-all duration-500 ease-out"
+                          style={{
+                            background: `linear-gradient(45deg, ${gradient.start}, ${gradient.end})`,
+                            filter: 'blur(15px)',
+                            opacity: 0.5,
+                            zIndex: -1,
+                          }}
+                        />
+                      )}
+                      <span 
+                        className="absolute text-white text-sm font-medium whitespace-nowrap transition-all duration-500 ease-out"
+                        style={{
+                          opacity: isItemHovered ? 1 : 0,
+                          transform: isItemHovered ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.8)',
+                          left: '50%',
+                          top: '50%',
+                        }}
+                      >
+                        {item.label}
+                      </span>
+                      <img 
+                        src={item.icon} 
+                        alt={item.label} 
+                        className="w-6 h-6 transition-all duration-500 ease-out"
+                        style={{
+                          opacity: isItemHovered ? 0 : 1,
+                          transform: isItemHovered ? 'scale(0)' : 'scale(1)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`
+        @keyframes fadeIn {
+          0% {
+            opacity: 0;
+          }
+          100% {
+            opacity: 1;
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out forwards;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default FloatingMenu;
