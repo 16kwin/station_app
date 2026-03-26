@@ -34,7 +34,6 @@ const FloatingMenu = () => {
   const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const { openTab } = useTabs();
-  const menuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -84,28 +83,14 @@ const FloatingMenu = () => {
   const handleNavigate = (path: string, label: string) => {
     if (path !== '#') {
       openTab(path, label, null);
-      // Не скрываем меню, только сбрасываем подсветку
       setHoveredItem(null);
     }
   };
-
-  const gradients = [
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-    { start: '#3F3E3F', end: '#3F3E3F' },
-  ];
 
   if (!isVisible) return null;
 
   return (
     <div 
-      ref={menuRef}
       className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 px-4 flex justify-center"
       style={{
         width: 'auto',
@@ -125,7 +110,7 @@ const FloatingMenu = () => {
           className={`transition-all duration-500 ease-out ${
             isHovered 
               ? '-translate-y-4 rounded-[30px] bg-[#3F3E3F] shadow-xl' 
-              : 'translate-y-[30px] rounded-t-[30px] bg-[#3F3E3F]'
+              : 'translate-y-[40px] rounded-t-[30px] bg-[#3F3E3F]'
           } flex items-center justify-center px-4 cursor-pointer`}
           style={{
             height: isHovered ? 'auto' : '60px',
@@ -135,14 +120,12 @@ const FloatingMenu = () => {
             width: 'auto',
             minWidth: isHovered ? 'auto' : '650px',
             transformOrigin: 'center',
-            scale: hoveredItem !== null ? '1.02' : '1',
           }}
         >
           {isHovered && (
             <div className="flex items-center animate-fadeIn">
               {menuItems.map((item, index) => {
                 const isItemHovered = hoveredItem === index;
-                const gradient = gradients[index];
                 
                 return (
                   <div 
@@ -162,22 +145,9 @@ const FloatingMenu = () => {
                         width: isItemHovered ? '120px' : '40px',
                         height: '40px',
                         borderRadius: '40px',
-                        background: isItemHovered ? `linear-gradient(45deg, ${gradient.start}, ${gradient.end})` : 'transparent',
-                        boxShadow: isItemHovered ? '0 10px 25px rgba(0, 0, 0, 0.1)' : 'none',
                         transition: 'all 0.5s cubic-bezier(0.34, 1.2, 0.64, 1)',
                       }}
                     >
-                      {isItemHovered && (
-                        <div 
-                          className="absolute inset-0 rounded-[40px] transition-all duration-500 ease-out"
-                          style={{
-                            background: `linear-gradient(45deg, ${gradient.start}, ${gradient.end})`,
-                            filter: 'blur(15px)',
-                            opacity: 0.5,
-                            zIndex: -1,
-                          }}
-                        />
-                      )}
                       <span 
                         className="absolute text-white text-sm font-medium whitespace-nowrap transition-all duration-500 ease-out"
                         style={{

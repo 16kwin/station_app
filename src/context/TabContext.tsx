@@ -123,25 +123,37 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const closeTab = (id: string) => {
-    if (tabs.length === 1) {
+    const tabToClose = tabs.find(tab => tab.id === id);
+    
+    // Если это последняя вкладка и она главная, не закрываем
+    if (tabs.length === 1 && tabToClose?.path === '/main') {
       return;
     }
     
     const tabIndex = tabs.findIndex(tab => tab.id === id);
     const newTabs = tabs.filter(tab => tab.id !== id);
     
+    // Если после закрытия не осталось вкладок, создаём главную
+    if (newTabs.length === 0) {
+      const mainTab: Tab = {
+        id: Date.now().toString(),
+        path: '/main',
+        label: 'Главная',
+        component: null,
+      };
+      setTabs([mainTab]);
+      setActiveTabId(mainTab.id);
+      navigate('/main');
+      return;
+    }
+    
     setTabs(newTabs);
     
     if (activeTabId === id) {
-      if (newTabs.length > 0) {
-        const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
-        const newActiveTab = newTabs[newActiveIndex];
-        setActiveTabId(newActiveTab.id);
-        navigate(newActiveTab.path);
-      } else {
-        setActiveTabId(null);
-        navigate('/main');
-      }
+      const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
+      const newActiveTab = newTabs[newActiveIndex];
+      setActiveTabId(newActiveTab.id);
+      navigate(newActiveTab.path);
     }
   };
 
