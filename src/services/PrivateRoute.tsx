@@ -1,27 +1,25 @@
-import { Navigate, useLocation } from 'react-router-dom';
+// services/PrivateRoute.tsx
+import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import FullscreenPreloader from '../components/commonComponents/FullScreenPreloader';
-import type { ReactNode } from 'react';
 
 interface PrivateRouteProps {
-  children?: ReactNode; // Универсальный тип для children
+  children: React.ReactNode;
 }
 
-// Защищенные маршруты
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
-  const { isAuth, isLoading } = useAuth();
-  const location = useLocation();
+  const { isAuth, isLoading, isLocked } = useAuth();
 
   if (isLoading) {
-    return <FullscreenPreloader />; // Пока идёт проверка авторизации, показываем прелоадер
+    return <div className="flex items-center justify-center h-screen">Загрузка...</div>;
   }
 
   if (!isAuth) {
-    // Сохраняем текущий путь для редиректа
-    return <Navigate to="/login" state={{ from: location }} />;
+    return <Navigate to="/login" replace />;
   }
 
-  return children;
+  // Если заблокирован, показываем контент, но LockScreen перекроет его
+  return <>{children}</>;
 };
 
 export default PrivateRoute;

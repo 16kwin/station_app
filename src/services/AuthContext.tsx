@@ -1,40 +1,43 @@
 import React, { useContext, useEffect, useState, type ReactNode } from 'react';
-
 import ConstantInfo from '../info/ConstantInfo';
 import AxiosService from './AxiosService';
 
 interface ModalProps {
-  children?: ReactNode; // Универсальный тип для children
+  children?: ReactNode;
+}
+
+interface UserInfo {
+  id: string;
+  name: string;
+  role: string;
+  roleDescription: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  imgAvatar: any;
 }
 
 interface ValueType {
   isAuth: boolean;
   setIsAuth: React.Dispatch<React.SetStateAction<boolean>>;
   isLoading: boolean;
-  userInfo: {
-    id: string;
-    name: string;
-    role: string;
-    roleDescription: string;
-    firstName: string;
-    middleName: string;
-    lastName: string;
-    imgAvatar: any;
-  };
+  userInfo: UserInfo;
   isAdmin: boolean;
-  setIsAdmin: React.Dispatch<React.SetStateAction<boolean>>;
   isOperator: boolean;
-  setIsOperator: React.Dispatch<React.SetStateAction<boolean>>;
   refreshAuth: () => Promise<void>;
+  logout: () => Promise<void>;
+  checkPassword: (password: string) => Promise<boolean>;
+  setLocked: (locked: boolean) => void;
+  isLocked: boolean;
 }
 
-// Контекст, проверяющий аутентификацию и авторизацию
 const AuthContext = React.createContext<ValueType | null>(null);
 
 export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [userInfo, setUserInfo] = useState({
+  const [isLocked, setIsLocked] = useState(false);
+  const [userInfo, setUserInfo] = useState<UserInfo>({
     id: '',
     name: '',
     role: '',
@@ -47,8 +50,7 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
 
-  // Функция для проверки авторизации
-  const checkAuth = async () => {
+  const checkAuth = async (): Promise<boolean> => {
     try {
       const response = await AxiosService.get(ConstantInfo.restApiCheckAuth);
       setIsAuth(true);
@@ -64,26 +66,74 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
       });
       setIsAdmin(response.data.role === 'ROLE_ADMIN');
       setIsOperator(response.data.role === 'ROLE_OPERATOR');
+      return true;
     } catch {
       setIsAuth(false);
       setIsAdmin(false);
       setIsOperator(false);
+      setUserInfo({
+        id: '',
+        name: '',
+        role: '',
+        roleDescription: '',
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        imgAvatar: undefined,
+      });
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Обновляем авторизацию вручную
   const refreshAuth = async () => {
-    setIsLoading(true); // Отображаем лоадер при обновлении
-    await checkAuth(); // Перезапускаем проверку авторизации
+    setIsLoading(true);
+    await checkAuth();
+  };
+
+  const logout = async () => {
+    try {
+      await AxiosService.post(ConstantInfo.restApiLogout);
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Очищаем состояние
+      setIsAuth(false);
+      setIsAdmin(false);
+      setIsOperator(false);
+      setIsLocked(false);
+      setUserInfo({
+        id: '',
+        name: '',
+        role: '',
+        roleDescription: '',
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        imgAvatar: undefined,
+      });
+      
+      // Очищаем localStorage (вкладки и черновики)
+      localStorage.removeItem('tabs_state');
+      localStorage.removeItem('drafts_state');
+    }
+  };
+
+  const checkPassword = async (password: string): Promise<boolean> => {
+    try {
+      const response = await AxiosService.post(ConstantInfo.restApiCheckPassword, { password });
+      return response.status === 200;
+    } catch {
+      return false;
+    }
   };
 
   useEffect(() => {
-    checkAuth(); // Проверяем авторизацию при первом рендере
+    checkAuth();
 
     const interval = setInterval(() => {
-      refreshAuth(); // обновляем каждые 180 минут в автомате
+      refreshAuth();
     }, 180 * 60 * 1000);
 
     return () => clearInterval(interval);
@@ -97,10 +147,12 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
         isLoading,
         userInfo,
         isAdmin,
-        setIsAdmin,
         isOperator,
-        setIsOperator,
         refreshAuth,
+        logout,
+        checkPassword,
+        setLocked: setIsLocked,
+        isLocked,
       }}>
       {children}
     </AuthContext.Provider>

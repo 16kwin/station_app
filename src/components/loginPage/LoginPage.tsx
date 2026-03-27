@@ -7,21 +7,24 @@ import type { AxiosError } from 'axios';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { isAuth, refreshAuth } = useAuth();
+  const { isAuth, refreshAuth, setLocked } = useAuth();
 
   useEffect(() => {
-    refreshAuth();
+    // Если уже авторизован, идем на главную
     if (isAuth) {
+      setLocked(false); // Снимаем блокировку если была
       navigate('/main');
     }
-  }, [isAuth, navigate]);
+  }, [isAuth, navigate, setLocked]);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsLoading(true);
 
     try {
       const newCsrf = await AxiosService.get('/csrf');
@@ -35,18 +38,20 @@ const LoginPage = () => {
 
       if (response.status === 200) {
         await refreshAuth();
-        navigate('/main');
+        // navigate будет в useEffect
       } else {
-        alert('Ошибка входа');
+        setMessage('Ошибка входа');
       }
     } catch (error) {
       const typeError = error as AxiosError;
       console.log(typeError);
       if (typeError.response?.status === 401) {
-        alert('Неверные данные для входа');
+        setMessage('Неверные данные для входа');
       } else {
         setMessage(typeError.message);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -66,6 +71,7 @@ const LoginPage = () => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              disabled={isLoading}
             />
           </div>
           
@@ -77,13 +83,20 @@ const LoginPage = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
             />
           </div>
           
+          {message && (
+            <p className="text-red-500 text-sm mb-4 text-center">{message}</p>
+          )}
+          
           <button
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition duration-200"
-            type="submit">
-            Войти
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition duration-200 disabled:opacity-50"
+            type="submit"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Вход...' : 'Войти'}
           </button>
         </form>
       </div>
