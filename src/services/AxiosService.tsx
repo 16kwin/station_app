@@ -1,3 +1,4 @@
+// AxiosService.ts
 import axios from 'axios';
 import ConstantInfo from '../info/ConstantInfo';
 import { navigateTo } from './navigate';
@@ -20,11 +21,43 @@ function getCookie(name: string) {
   return null;
 }
 
+let csrfInitialized = false;
+
 AxiosService.interceptors.request.use(async (config) => {
-  const csrfToken = getCookie('XSRF-TOKEN');
-  if (csrfToken) {
-    config.headers['X-XSRF-TOKEN'] = csrfToken;
+  // Для GET запросов на /csrf не добавляем CSRF токен
+  if (config.url?.includes('/csrf')) {
+    return config;
   }
+  
+  // Если CSRF ещё не инициализирован, получаем токен
+  if (!csrfInitialized) {
+    try {
+      const csrfResponse = await AxiosService.get('/csrf');
+      const csrfToken = csrfResponse.data.token;
+      // Устанавливаем в дефолтные заголовки
+      AxiosService.defaults.headers.common['X-XSRF-TOKEN'] = csrfToken;
+      csrfInitialized = true;
+      console.log('CSRF инициализирован в интерцепторе');
+    } catch (error) {
+      console.error('Ошибка получения CSRF в интерцепторе:', error);
+    }
+  }
+  
+  // Устанавливаем CSRF токен в заголовок для не-GET запросов
+  if (config.method !== 'get') {
+    const csrfToken = getCookie('XSRF-TOKEN');
+    if (csrfToken) {
+      config.headers['X-XSRF-TOKEN'] = csrfToken;
+      console.log('CSRF токен добавлен в заголовок:', csrfToken);
+    } else {
+      // Если токена в cookie нет, используем из defaults
+      const defaultToken = AxiosService.defaults.headers.common['X-XSRF-TOKEN'];
+      if (defaultToken) {
+        config.headers['X-XSRF-TOKEN'] = defaultToken;
+      }
+    }
+  }
+  
   return config;
 });
 
@@ -44,7 +77,7 @@ AxiosService.interceptors.response.use(
         return AxiosService(originalRequest);
       } catch (refreshError) {
         console.warn('Не удалось обновить токен');
-        navigateTo('/login'); //
+        navigateTo('/login');
       }
     }
     console.log('ошибка interceptors');

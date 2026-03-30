@@ -1,3 +1,4 @@
+// App.tsx
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate,  Navigate } from 'react-router-dom';
@@ -32,15 +33,18 @@ const AppContent = () => {
   }, [navigate]);
 
   useEffect(() => {
-    setNeedPreloader(false);
-
-    AxiosService.get(window.config.ip_api + ':' + ConstantInfo.serverPort + '/csrf')
+    // Получаем CSRF токен при старте
+    AxiosService.get('/csrf')
       .then((res) => {
         const csrfToken = res.data.token;
         AxiosService.defaults.headers['X-XSRF-TOKEN'] = csrfToken;
+        console.log('CSRF токен получен');
       })
       .catch((e) => {
         console.error('Ошибка получения CSRF', e);
+      })
+      .finally(() => {
+        setNeedPreloader(false);
       });
   }, []);
 
@@ -75,7 +79,6 @@ const AppContent = () => {
           <Route path="account" element={<AccountPage />} />
         </Route>
         
-        {/* Добавляем fallback для несуществующих маршрутов */}
         <Route path="*" element={<Navigate to="/main" replace />} />
       </Routes>
       
