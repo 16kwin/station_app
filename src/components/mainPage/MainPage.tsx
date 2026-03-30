@@ -193,6 +193,21 @@ const MainPage = memo(() => {
   const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+  // Получение CSRF токена при монтировании
+  useEffect(() => {
+    const initCsrf = async () => {
+      try {
+        const response = await AxiosService.get('/csrf');
+        const csrfToken = response.data.token;
+        AxiosService.defaults.headers['X-XSRF-TOKEN'] = csrfToken;
+        console.log('CSRF токен установлен:', csrfToken);
+      } catch (error) {
+        console.error('Ошибка получения CSRF:', error);
+      }
+    };
+    initCsrf();
+  }, []);
+
   // Загрузка черновиков
   const loadDrafts = async () => {
     setLoadingDrafts(true);
