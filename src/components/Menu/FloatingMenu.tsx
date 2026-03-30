@@ -10,6 +10,7 @@ import Icon6 from '../../assets/Menu/6.svg';
 import Icon7 from '../../assets/Menu/7.svg';
 import Icon8 from '../../assets/Menu/8.svg';
 import Icon9 from '../../assets/Menu/9.svg';
+import ArrowIcon from '../../assets/Menu/Arrow2.svg';
 
 interface MenuItem {
   path: string;
@@ -25,8 +26,8 @@ const menuItems: MenuItem[] = [
   { path: '/reports', label: 'Отчеты', icon: Icon5 },
   { path: '/analytics', label: 'Аналитика', icon: Icon6 },
   { path: '/settings', label: 'Настройки', icon: Icon7 },
-  { path: '/account', label: 'Аккаунт', icon: Icon8 },
-  { path: '#', label: 'Дополнительно', icon: Icon9 },
+  { path: '/notifications', label: 'Уведомления', icon: Icon8 },
+  { path: '/account', label: 'Аккаунт', icon: Icon9 },
 ];
 
 const FloatingMenu = () => {
@@ -34,7 +35,7 @@ const FloatingMenu = () => {
   const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const { openTab } = useTabs();
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkVisibility = () => {
@@ -58,15 +59,15 @@ const FloatingMenu = () => {
   }, []);
 
   const handleMouseEnter = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
     }
     setIsHovered(true);
   };
 
   const handleMouseLeave = () => {
-    hoverTimeoutRef.current = setTimeout(() => {
+    leaveTimeoutRef.current = setTimeout(() => {
       setIsHovered(false);
       setHoveredItem(null);
     }, 100);
@@ -74,17 +75,15 @@ const FloatingMenu = () => {
 
   useEffect(() => {
     return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
+      if (leaveTimeoutRef.current) {
+        clearTimeout(leaveTimeoutRef.current);
       }
     };
   }, []);
 
   const handleNavigate = (path: string, label: string) => {
-    if (path !== '#') {
-      openTab(path, label, null);
-      setHoveredItem(null);
-    }
+    openTab(path, label, null);
+    setHoveredItem(null);
   };
 
   if (!isVisible) return null;
@@ -94,34 +93,46 @@ const FloatingMenu = () => {
       className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 px-4 flex justify-center"
       style={{
         width: 'auto',
-        minWidth: isHovered ? 'auto' : '650px',
+        minWidth: '650px',
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className="transition-all duration-300 ease-out"
+        className="transition-all duration-500 ease-out"
         style={{
           display: 'inline-block',
           width: 'auto',
+          minWidth: '650px',
         }}
       >
         <div 
-          className={`transition-all duration-500 ease-out ${
+          className={`transition-all duration-700 ease-out ${
             isHovered 
               ? '-translate-y-4 rounded-[30px] bg-[#3F3E3F] shadow-xl' 
-              : 'translate-y-[40px] rounded-t-[30px] bg-[#3F3E3F]'
-          } flex items-center justify-center px-4 cursor-pointer`}
+              : 'translate-y-[30px] rounded-t-[30px] bg-[#3F3E3F]'
+          } flex items-center justify-center px-4 cursor-pointer relative`}
           style={{
             height: isHovered ? 'auto' : '60px',
             minHeight: '60px',
             paddingTop: isHovered ? '10px' : '0',
             paddingBottom: isHovered ? '10px' : '0',
             width: 'auto',
-            minWidth: isHovered ? 'auto' : '650px',
+            minWidth: '650px',
             transformOrigin: 'center',
           }}
         >
+          {/* Стрелка в скрытом состоянии */}
+          {!isHovered && (
+            <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '10px' }}>
+              <img 
+                src={ArrowIcon} 
+                alt="arrow" 
+                className="w-5 h-auto"
+              />
+            </div>
+          )}
+
           {isHovered && (
             <div className="flex items-center animate-fadeIn">
               {menuItems.map((item, index) => {
@@ -130,7 +141,7 @@ const FloatingMenu = () => {
                 return (
                   <div 
                     key={index}
-                    className="flex items-center justify-center transition-all duration-500 ease-out"
+                    className="flex items-center justify-center transition-all duration-700 ease-out"
                     style={{ 
                       marginLeft: index === 0 ? '0' : '30px', 
                       marginRight: index === menuItems.length - 1 ? '0' : '0',
@@ -140,16 +151,16 @@ const FloatingMenu = () => {
                       onMouseEnter={() => setHoveredItem(index)}
                       onMouseLeave={() => setHoveredItem(null)}
                       onClick={() => handleNavigate(item.path, item.label)}
-                      className="relative flex items-center justify-center cursor-pointer transition-all duration-500 ease-out"
+                      className="relative flex items-center justify-center cursor-pointer transition-all duration-700 ease-out"
                       style={{
                         width: isItemHovered ? '120px' : '40px',
                         height: '40px',
                         borderRadius: '40px',
-                        transition: 'all 0.5s cubic-bezier(0.34, 1.2, 0.64, 1)',
+                        transition: 'all 0.7s cubic-bezier(0.34, 1.2, 0.64, 1)',
                       }}
                     >
                       <span 
-                        className="absolute text-white text-sm font-medium whitespace-nowrap transition-all duration-500 ease-out"
+                        className="absolute text-white text-sm font-medium whitespace-nowrap transition-all duration-700 ease-out"
                         style={{
                           opacity: isItemHovered ? 1 : 0,
                           transform: isItemHovered ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.8)',
@@ -162,7 +173,7 @@ const FloatingMenu = () => {
                       <img 
                         src={item.icon} 
                         alt={item.label} 
-                        className="w-6 h-6 transition-all duration-500 ease-out"
+                        className="w-6 h-6 transition-all duration-700 ease-out"
                         style={{
                           opacity: isItemHovered ? 0 : 1,
                           transform: isItemHovered ? 'scale(0)' : 'scale(1)',
@@ -186,7 +197,7 @@ const FloatingMenu = () => {
           }
         }
         .animate-fadeIn {
-          animation: fadeIn 0.2s ease-out forwards;
+          animation: fadeIn 0.3s ease-out forwards;
         }
       `}</style>
     </div>

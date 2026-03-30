@@ -12,6 +12,7 @@ const TabBar = () => {
   const [tabWidths, setTabWidths] = useState<number[]>([]);
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ left: 0, top: 0 });
+  const [shouldAnimateTooltip, setShouldAnimateTooltip] = useState(true);
   
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const rootContainerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +20,7 @@ const TabBar = () => {
   const counterButtonRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const MIN_TAB_WIDTH = 100;
   const MAX_TAB_WIDTH = 150;
@@ -37,19 +38,9 @@ const TabBar = () => {
   };
 
   const getNaturalWidths = (): number[] => {
-    if (!measureContainerRef.current) return tabs.map(() => MIN_TAB_WIDTH);
-    
-    const widths: number[] = [];
-    const children = measureContainerRef.current.children;
-    
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i] as HTMLElement;
-      const naturalWidth = child.offsetWidth;
-      const clampedWidth = Math.min(MAX_TAB_WIDTH, Math.max(MIN_TAB_WIDTH, naturalWidth));
-      widths.push(clampedWidth);
-    }
-    
-    return widths;
+    // Всегда возвращаем MAX_TAB_WIDTH, если места достаточно
+    // Сжатие будет происходить только при нехватке места
+    return tabs.map(() => MAX_TAB_WIDTH);
   };
 
   const calculateVisibleTabs = () => {
@@ -158,7 +149,6 @@ const TabBar = () => {
     return () => clearTimeout(timer);
   }, [tabs]);
 
-  // Функция для обновления позиции тултипа
   const updateTooltipPosition = (tabId: string) => {
     const tabElement = tabRefs.current.get(tabId);
     if (tabElement) {
@@ -170,9 +160,12 @@ const TabBar = () => {
     }
   };
 
-  // Обработка тултипа с задержкой
   const handleTabMouseEnter = (tabId: string) => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
     tooltipTimeoutRef.current = setTimeout(() => {
+      setShouldAnimateTooltip(true);
       setHoveredTabId(tabId);
       updateTooltipPosition(tabId);
     }, 300);
@@ -181,11 +174,12 @@ const TabBar = () => {
   const handleTabMouseLeave = () => {
     if (tooltipTimeoutRef.current) {
       clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
     }
+    setShouldAnimateTooltip(true);
     setHoveredTabId(null);
   };
 
-  // Обновление позиции тултипа при скролле или ресайзе
   useEffect(() => {
     if (!hoveredTabId) return;
 
@@ -202,7 +196,6 @@ const TabBar = () => {
     };
   }, [hoveredTabId]);
 
-  // Закрытие дропдауна при клике вне
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -232,6 +225,14 @@ const TabBar = () => {
 
   const handleCloseTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (hoveredTabId === id) {
+      setShouldAnimateTooltip(false);
+      setHoveredTabId(null);
+    }
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
     closeTab(id);
   };
 
@@ -603,8 +604,8 @@ const TabBar = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, transition: { duration: shouldAnimateTooltip ? 0.2 : 0 } }}
+            transition={{ duration: shouldAnimateTooltip ? 0.2 : 0 }}
             style={{
               position: 'fixed',
               left: tooltipPosition.left,
