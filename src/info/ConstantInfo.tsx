@@ -1,3 +1,4 @@
+// ConstantInfo.ts - добавить ендпоинты
 const ConstantInfo = {
   // База
   serverPort: '8084',
@@ -32,6 +33,11 @@ const ConstantInfo = {
   restApiDeleteAllStationPositionsByLocation: (locationId: number) => `/api/station-positions/location/${locationId}`,
   getLocationPhotoUrl: (filePath: string, fileName: string) => 
     `${ConstantInfo.fileDir}uploads/${filePath}${fileName}`,
+  
+  // Тестовые документы
+  restApiTestDocuments: '/api/test-documents',
+  restApiTestDocumentsDrafts: '/api/test-documents/drafts',
+  restApiTestDocument: (id: number) => `/api/test-documents/${id}`,
 };
 
 export default ConstantInfo;
