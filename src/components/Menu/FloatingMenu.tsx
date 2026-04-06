@@ -1,5 +1,7 @@
+// components/Menu/FloatingMenu.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabs } from '../../context/TabContext';
+import { useAuth } from '../../services/AuthContext';
 
 import Icon1 from '../../assets/Menu/1.svg';
 import Icon2 from '../../assets/Menu/2.svg';
@@ -10,12 +12,14 @@ import Icon6 from '../../assets/Menu/6.svg';
 import Icon7 from '../../assets/Menu/7.svg';
 import Icon8 from '../../assets/Menu/8.svg';
 import Icon9 from '../../assets/Menu/9.svg';
+import LockIcon from '../../assets/Menu/Lock.svg';
 import ArrowIcon from '../../assets/Menu/Arrow2.svg';
 
 interface MenuItem {
   path: string;
   label: string;
   icon: string;
+  isSleep?: boolean;
 }
 
 const menuItems: MenuItem[] = [
@@ -28,6 +32,7 @@ const menuItems: MenuItem[] = [
   { path: '/settings', label: 'Настройки', icon: Icon7 },
   { path: '/notifications', label: 'Уведомления', icon: Icon8 },
   { path: '/account', label: 'Аккаунт', icon: Icon9 },
+  { path: '', label: 'Спящий режим', icon: LockIcon, isSleep: true },
 ];
 
 const FloatingMenu = () => {
@@ -35,6 +40,7 @@ const FloatingMenu = () => {
   const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const { openTab } = useTabs();
+  const { setLocked } = useAuth();
   const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -81,8 +87,12 @@ const FloatingMenu = () => {
     };
   }, []);
 
-  const handleNavigate = (path: string, label: string) => {
-    openTab(path, label, null);
+  const handleNavigate = (path: string, label: string, isSleep?: boolean) => {
+    if (isSleep) {
+      setLocked(true);
+    } else {
+      openTab(path, label, null);
+    }
     setHoveredItem(null);
   };
 
@@ -150,7 +160,7 @@ const FloatingMenu = () => {
                     <div
                       onMouseEnter={() => setHoveredItem(index)}
                       onMouseLeave={() => setHoveredItem(null)}
-                      onClick={() => handleNavigate(item.path, item.label)}
+                      onClick={() => handleNavigate(item.path, item.label, item.isSleep)}
                       className="relative flex items-center justify-center cursor-pointer transition-all duration-700 ease-out"
                       style={{
                         width: isItemHovered ? '120px' : '40px',

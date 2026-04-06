@@ -21,6 +21,8 @@ import { AuthProvider, useAuth } from './services/AuthContext';
 import LockScreen from './components/LockScreen/LockScreen';
 import InactivityWarning from './components/InactivityWarning/InactivityWarning';
 import { useInactivityLock } from './components/hooks/useInactivityLock';
+import AnimatedGradientBackground from './effects/AnimatedGradientBackground';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const AppContent = () => {
   const [needPreloader, setNeedPreloader] = useState(true);
@@ -57,34 +59,58 @@ const AppContent = () => {
   }
 
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        
-        <Route path="/" element={
-          <PrivateRoute>
-            <TabProvider>
-              <MainLayout />
-            </TabProvider>
-          </PrivateRoute>
-        }>
-          <Route index element={<MainPage />} />
-          <Route path="main" element={<MainPage />} />
-          <Route path="stations" element={<StationsPage />} />
-          <Route path="references" element={<ReferencesPage />} />
-          <Route path="documents" element={<DocumentsPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="account" element={<AccountPage />} />
-        </Route>
-        
-        <Route path="*" element={<Navigate to="/main" replace />} />
-      </Routes>
+    <div className="relative min-h-screen">
+      <AnimatedGradientBackground />
       
-      <InactivityWarning show={showWarning} onClose={() => setShowWarning(false)} />
-      {isAuth && isLocked && <LockScreen onUnlock={handleUnlock} />}
-    </>
+      <AnimatePresence mode="wait">
+        {isAuth && isLocked ? (
+          <motion.div
+            key="lock"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[100]"
+          >
+            <LockScreen onUnlock={handleUnlock} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              
+              <Route path="/" element={
+                <PrivateRoute>
+                  <TabProvider>
+                    <MainLayout />
+                  </TabProvider>
+                </PrivateRoute>
+              }>
+                <Route index element={<MainPage />} />
+                <Route path="main" element={<MainPage />} />
+                <Route path="stations" element={<StationsPage />} />
+                <Route path="references" element={<ReferencesPage />} />
+                <Route path="documents" element={<DocumentsPage />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="analytics" element={<AnalyticsPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="account" element={<AccountPage />} />
+              </Route>
+              
+              <Route path="*" element={<Navigate to="/main" replace />} />
+            </Routes>
+            
+            <InactivityWarning show={showWarning} onClose={() => setShowWarning(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 

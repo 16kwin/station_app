@@ -2,7 +2,14 @@
 const ConstantInfo = {
   // База
   serverPort: '8084',
+  serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''), // Хост без http://
   fileDir: window.config.ip_api + ':8084/',
+
+  // API базовый URL
+  apiBaseUrl: `${window.config.ip_api}:8084`,
+  
+  // WebSocket базовый URL
+  wsBaseUrl: `ws://${window.config.ip_api.replace('http://', '').replace('https://', '')}:8084`,
 
   // Авторизация и т.п.
   restApiLogin: '/api/auth/login',
@@ -15,6 +22,17 @@ const ConstantInfo = {
   restApiCheckPassword: '/api/auth/check_password',
   inactivityTimeout: 5 * 60 * 1000, // 5 минут бездействия до блокировки
   warningTimeout: 30 * 1000, // 30 секунд предупреждение до блокировки
+  
+  // Станции
+  restApiStationsStatic: '/api/stations/static',
+  restApiStationsDynamic: '/api/stations/dynamic',
+  restApiStationStatic: (uid: string) => `/api/stations/static/${uid}`,
+  restApiStationDynamic: (uid: string) => `/api/stations/dynamic/${uid}`,
+  
+  // WebSocket
+  wsStationsStatic: '/topic/stations/static',
+  wsStationsDynamic: '/topic/stations/dynamic',
+  wsStationsPath: '/ws-stations',
   
   // Остальные эндпоинты
   restApiLocationHierarchy: '/api/locations/hierarchy/first',

@@ -1,6 +1,5 @@
 // layouts/MainLayout.tsx
 import { useLocation } from 'react-router-dom';
-import AnimatedGradientBackground from '../effects/AnimatedGradientBackground';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
 import { useTabs } from '../context/TabContext';
@@ -13,8 +12,6 @@ import ReportsPage from '../components/ReportsPage/ReportsPage';
 import AnalyticsPage from '../components/AnalyticsPage/AnalyticsPage';
 import SettingsPage from '../components/SettingsPage/SettingsPage';
 import AccountPage from '../components/AccountPage/AccountPage';
-import { useAuth } from '../services/AuthContext';
-import LockIcon from '../assets/Menu/Lock.svg';
 
 // Маппинг путей к компонентам
 const pageComponents: Record<string, React.ReactNode> = {
@@ -32,9 +29,7 @@ const MainLayout = () => {
   const [padding, setPadding] = useState(60);
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 1080 });
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isSleepButtonVisible, setIsSleepButtonVisible] = useState(true);
   const { tabs, activeTabId, openTab, updateTabComponent } = useTabs();
-  const { setLocked } = useAuth();
   const location = useLocation();
   const isInitialMount = useRef(true);
 
@@ -63,33 +58,6 @@ const MainLayout = () => {
     setWindowSize({ width: finalWidth, height: finalHeight });
     setIsLoaded(true);
   }, []);
-
-  // Проверка видимости кнопки спящего режима
-  useEffect(() => {
-    const checkVisibility = () => {
-      const whiteBlock = document.querySelector('.white-block');
-      if (whiteBlock) {
-        const rect = whiteBlock.getBoundingClientRect();
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-        const isFullyVisibleRight = rect.right <= windowWidth;
-        const isFullyVisibleTop = rect.top >= 0;
-        const isFullyVisible = isFullyVisibleRight && isFullyVisibleTop;
-        setIsSleepButtonVisible(isFullyVisible);
-      }
-    };
-
-    if (isLoaded) {
-      checkVisibility();
-      window.addEventListener('scroll', checkVisibility);
-      window.addEventListener('resize', checkVisibility);
-    }
-    
-    return () => {
-      window.removeEventListener('scroll', checkVisibility);
-      window.removeEventListener('resize', checkVisibility);
-    };
-  }, [isLoaded]);
 
   // Синхронизация URL с активной вкладкой и создание компонентов
   useEffect(() => {
@@ -177,19 +145,6 @@ const MainLayout = () => {
         minHeight: `${windowSize.height}px`,
       }}
     >
-      <AnimatedGradientBackground />
-      
-      {/* Кнопка спящего режима */}
-      {isSleepButtonVisible && (
-        <button
-          onClick={() => setLocked(true)}
-          className="fixed top-5 right-5 z-50 w-9 h-9 rounded-full bg-[#3F3E3F] hover:bg-[#5a5a5a] transition-colors flex items-center justify-center shadow-lg"
-          style={{ width: '36px', height: '36px' }}
-        >
-          <img src={LockIcon} alt="lock" className="w-5 h-5" />
-        </button>
-      )}
-      
       <div className="w-full h-full flex items-center justify-center">
         <div 
           style={{ 
@@ -216,8 +171,9 @@ const MainLayout = () => {
               right: `${padding}px`,
               top: `${topOffset + tabBarHeight + gapBetweenTabBarAndWhiteBlock}px`,
               bottom: `${padding}px`,
+              backgroundColor: '#FAFBFC',
             }}
-            className="bg-white rounded-[20px] shadow overflow-auto white-block relative"
+            className="rounded-[20px] shadow overflow-auto white-block relative"
           >
             {/* Рендерим все сохранённые компоненты вкладок */}
             {tabs.map(tab => (
