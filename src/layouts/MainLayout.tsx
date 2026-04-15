@@ -33,8 +33,8 @@ const MainLayout = () => {
   const location = useLocation();
   const isInitialMount = useRef(true);
 
-  const MIN_WIDTH = 1366;
-  const MIN_HEIGHT = 768;
+  const MIN_WIDTH = 1920;
+  const MIN_HEIGHT = 900;
   const MAX_WIDTH = 1920;
   const MAX_HEIGHT = 1080;
 

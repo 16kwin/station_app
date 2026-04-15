@@ -1,5 +1,5 @@
 // components/StationsPage/StationCell.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Импорт фонов
 import SectionCard1 from '../../assets/Station/StationCard1.svg';
@@ -44,6 +44,22 @@ import Icon3 from '../../assets/Station/Icon3.svg';
 // Импорт иконки ошибки
 import ERR from '../../assets/Station/ERR.svg';
 
+// Импорт иконок для информации
+import TMC from '../../assets/Station/TMC.svg';
+import SGD from '../../assets/Station/SGD.svg';
+import OK from '../../assets/Station/OK.svg';
+import CHAIN from '../../assets/Station/CHAIN.svg';
+
+// Импорт иконок для конфигурации
+import Config1 from '../../assets/Station/Config1.svg';
+import Config2 from '../../assets/Station/Config2.svg';
+import Config3 from '../../assets/Station/Config3.svg';
+import Config4 from '../../assets/Station/Config4.svg';
+
+// Импорт иконок для статусов
+import KRIT from '../../assets/Station/KRIT.svg';
+import KRIT2 from '../../assets/Station/KRIT2.svg';
+
 interface StationCellProps {
   uid?: string;
   name?: string;
@@ -51,6 +67,7 @@ interface StationCellProps {
   section?: string;
   status?: string;
   stationType?: string;
+  parentUid?: string | null;
   hasError?: boolean;
   isTmc?: boolean;
   isSgd?: boolean;
@@ -58,6 +75,12 @@ interface StationCellProps {
   filledCellsPercent?: number;
   remainingNomenclaturePercent?: number;
   readyPartsPercent?: number;
+  totalCells?: number;
+  filledCells?: number;
+  templateNomenclatureCount?: number;
+  remainingNomenclatureCount?: number;
+  maxReadyParts?: number;
+  readyPartsCount?: number;
 }
 
 type CardSide = 'front' | 'back1' | 'back2';
@@ -69,6 +92,7 @@ const StationCell: React.FC<StationCellProps> = ({
   section,
   status,
   stationType,
+  parentUid,
   hasError = false,
   isTmc,
   isSgd,
@@ -76,10 +100,64 @@ const StationCell: React.FC<StationCellProps> = ({
   filledCellsPercent = 0,
   remainingNomenclaturePercent = 0,
   readyPartsPercent = 0,
+  totalCells = 0,
+  filledCells = 0,
+  templateNomenclatureCount = 0,
+  remainingNomenclatureCount = 0,
+  maxReadyParts = 0,
+  readyPartsCount = 0,
 }) => {
   const [side, setSide] = useState<CardSide>('front');
+  const [displaySide, setDisplaySide] = useState<CardSide>('front');
+  const [isAnimating, setIsAnimating] = useState(false);
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
+  
+  // Состояния для анимированных процентов
+  const [animatedFilled, setAnimatedFilled] = useState(0);
+  const [animatedRemaining, setAnimatedRemaining] = useState(0);
+  const [animatedReady, setAnimatedReady] = useState(0);
+  
+  // Состояние для начала анимации
+  const [startAnimation, setStartAnimation] = useState(false);
+
+  // Задержка перед началом анимации
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setStartAnimation(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Анимация процентов
+  useEffect(() => {
+    if (!startAnimation) return;
+    
+    const duration = 1000;
+    const steps = 60;
+    const interval = duration / steps;
+    
+    let step = 0;
+    
+    const timer = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      
+      setAnimatedFilled(filledCellsPercent * progress);
+      setAnimatedRemaining(remainingNomenclaturePercent * progress);
+      setAnimatedReady(readyPartsPercent * progress);
+      
+      if (step >= steps) {
+        clearInterval(timer);
+        setAnimatedFilled(filledCellsPercent);
+        setAnimatedRemaining(remainingNomenclaturePercent);
+        setAnimatedReady(readyPartsPercent);
+      }
+    }, interval);
+    
+    return () => clearInterval(timer);
+  }, [startAnimation, filledCellsPercent, remainingNomenclaturePercent, readyPartsPercent]);
 
   // Определение фона в зависимости от статуса
   const getBackgroundImage = () => {
@@ -124,7 +202,7 @@ const StationCell: React.FC<StationCellProps> = ({
       case 'WORKING': return '#666EFE';
       case 'OFFLINE': return '#777777';
       case 'MINIMAL_STOCK': return '#FDA373';
-      case 'CRITICAL_STOCK': return '#1774FF'; // Исправлено с #FF3052
+      case 'CRITICAL_STOCK': return '#FF3052';
       default: return '#777777';
     }
   };
@@ -148,46 +226,77 @@ const StationCell: React.FC<StationCellProps> = ({
       case 'WORKING': return '#E8E9FF';
       case 'OFFLINE': return '#E2E2E2';
       case 'MINIMAL_STOCK': return '#FEE8DC';
-      case 'CRITICAL_STOCK': return '#E8F0FE'; // Исправлено с #FFDAE0
+      case 'CRITICAL_STOCK': return '#FFDAE0';
       default: return '#E2E2E2';
     }
   };
 
   const handleFlipLeft = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    const newSide = side === 'front' ? 'back1' : 'front';
+    setSide(newSide);
+    
     if (side === 'front') {
-      setSide('back1');
+      setDisplaySide(newSide);
+      setIsAnimating(false);
     } else {
-      setSide('front');
+      setTimeout(() => {
+        setDisplaySide(newSide);
+        setIsAnimating(false);
+      }, 600);
     }
   };
 
   const handleFlipRight = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    const newSide = side === 'front' ? 'back2' : 'front';
+    setSide(newSide);
+    
     if (side === 'front') {
-      setSide('back2');
+      setDisplaySide(newSide);
+      setIsAnimating(false);
     } else {
-      setSide('front');
+      setTimeout(() => {
+        setDisplaySide(newSide);
+        setIsAnimating(false);
+      }, 600);
     }
   };
 
   const handleBack = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
     setSide('front');
+    
+    setTimeout(() => {
+      setDisplaySide('front');
+      setIsAnimating(false);
+    }, 600);
   };
 
-  const getRotationY = () => {
+  const getContainerTransform = () => {
     switch (side) {
-      case 'front': return '0deg';
-      case 'back1': return '180deg';
-      case 'back2': return '-180deg';
-      default: return '0deg';
+      case 'front': return 'rotateY(0deg)';
+      case 'back1': return 'rotateY(180deg)';
+      case 'back2': return 'rotateY(-180deg)';
+      default: return 'rotateY(0deg)';
     }
   };
 
   const arrows = getArrows();
   const displayName = name || uid || '—';
   const workshopSectionText = `${workshop || '—'} ${section || '—'}`;
+
+  // Вычисляем данные для отображения
+  const overNorm = templateNomenclatureCount > 0 ? Math.max(0, templateNomenclatureCount - remainingNomenclatureCount) : 0;
 
   // Контент для front
   const renderFront = () => (
@@ -365,54 +474,52 @@ const StationCell: React.FC<StationCellProps> = ({
             height: '15px',
             position: 'relative',
             marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
           <img
             src={Icon1}
             alt=""
             style={{
-              position: 'absolute',
-              left: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
               width: '17px',
               height: '8px',
+              flexShrink: 0,
             }}
           />
           <div
             style={{
-              position: 'absolute',
-              left: '20px',
-              top: '50%',
-              transform: 'translateY(-50%)',
               width: '130px',
               height: '8px',
               backgroundColor: 'rgba(45, 64, 89, 0.08)',
               borderRadius: '4px',
+              marginLeft: '3px',
+              position: 'relative',
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                width: `${Math.min(filledCellsPercent, 100)}%`,
+                width: `${Math.min(animatedFilled, 100)}%`,
                 height: '8px',
                 backgroundColor: getProgressBarColor(),
                 borderRadius: '4px',
+                transition: 'width 0.05s linear',
               }}
             />
           </div>
           <div
             style={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
+              marginLeft: '6px',
               fontSize: '12px',
               fontWeight: 500,
               color: '#6C7A8B',
               letterSpacing: '0.1em',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
-            {Math.round(filledCellsPercent)}%
+            {Math.round(animatedFilled)}%
           </div>
         </div>
 
@@ -423,54 +530,52 @@ const StationCell: React.FC<StationCellProps> = ({
             height: '15px',
             position: 'relative',
             marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
           <img
             src={Icon2}
             alt=""
             style={{
-              position: 'absolute',
-              left: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
               width: '15px',
               height: '14px',
+              flexShrink: 0,
             }}
           />
           <div
             style={{
-              position: 'absolute',
-              left: '20px',
-              top: '50%',
-              transform: 'translateY(-50%)',
               width: '130px',
               height: '8px',
               backgroundColor: 'rgba(45, 64, 89, 0.08)',
               borderRadius: '4px',
+              marginLeft: '5px',
+              position: 'relative',
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                width: `${Math.min(remainingNomenclaturePercent, 100)}%`,
+                width: `${Math.min(animatedRemaining, 100)}%`,
                 height: '8px',
                 backgroundColor: getProgressBarColor(),
                 borderRadius: '4px',
+                transition: 'width 0.05s linear',
               }}
             />
           </div>
           <div
             style={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
+              marginLeft: '6px',
               fontSize: '12px',
               fontWeight: 500,
               color: '#6C7A8B',
               letterSpacing: '0.1em',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
-            {Math.round(remainingNomenclaturePercent)}%
+            {Math.round(animatedRemaining)}%
           </div>
         </div>
 
@@ -480,54 +585,53 @@ const StationCell: React.FC<StationCellProps> = ({
             width: '184px',
             height: '15px',
             position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
           <img
             src={Icon3}
             alt=""
             style={{
-              position: 'absolute',
-              left: '3px',
-              top: '50%',
-              transform: 'translateY(-50%)',
               width: '9px',
               height: '15px',
+              marginLeft: '3px',
+              flexShrink: 0,
             }}
           />
           <div
             style={{
-              position: 'absolute',
-              left: '20px',
-              top: '50%',
-              transform: 'translateY(-50%)',
               width: '130px',
               height: '8px',
               backgroundColor: 'rgba(45, 64, 89, 0.08)',
               borderRadius: '4px',
+              marginLeft: '8px',
+              position: 'relative',
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                width: `${Math.min(readyPartsPercent, 100)}%`,
+                width: `${Math.min(animatedReady, 100)}%`,
                 height: '8px',
                 backgroundColor: getProgressBarColor(),
                 borderRadius: '4px',
+                transition: 'width 0.05s linear',
               }}
             />
           </div>
           <div
             style={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
+              marginLeft: '6px',
               fontSize: '12px',
               fontWeight: 500,
               color: '#6C7A8B',
               letterSpacing: '0.1em',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
-            {Math.round(readyPartsPercent)}%
+            {Math.round(animatedReady)}%
           </div>
         </div>
       </div>
@@ -552,14 +656,43 @@ const StationCell: React.FC<StationCellProps> = ({
         }}
         onClick={(e) => {
           e.stopPropagation();
-          // Заглушка
           console.log('Пополнить');
         }}
       >
         Пополнить
       </button>
 
-      {/* Индикатор ошибки */}
+      {/* Индикаторы статуса и ошибки */}
+      {status === 'MINIMAL_STOCK' && (
+        <img
+          src={KRIT}
+          alt="krit"
+          style={{
+            position: 'absolute',
+            left: '10px',
+            top: '41px',
+            width: '21px',
+            height: '19px',
+            zIndex: 2,
+          }}
+        />
+      )}
+      
+      {status === 'CRITICAL_STOCK' && (
+        <img
+          src={KRIT2}
+          alt="krit2"
+          style={{
+            position: 'absolute',
+            left: '10px',
+            top: '41px',
+            width: '21px',
+            height: '19px',
+            zIndex: 2,
+          }}
+        />
+      )}
+      
       {hasError && (
         <img
           src={ERR}
@@ -567,9 +700,9 @@ const StationCell: React.FC<StationCellProps> = ({
           style={{
             position: 'absolute',
             left: '10px',
-            top: '41px',
+            top: (status === 'MINIMAL_STOCK' || status === 'CRITICAL_STOCK') ? '70px' : '41px',
             width: '21px',
-            height: '13px',
+            height: '19px',
             zIndex: 2,
           }}
         />
@@ -585,41 +718,264 @@ const StationCell: React.FC<StationCellProps> = ({
         flexDirection: 'column',
         height: '100%',
         position: 'relative',
+        paddingTop: '9px',
       }}
     >
       {/* Заголовок Информация */}
       <div
         style={{
-          position: 'absolute',
-          top: '9px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          color: '#8F9CAB',
+          color: getStatusColor(),
           fontSize: '15px',
           fontWeight: 500,
           letterSpacing: '0px',
           textAlign: 'center',
+          marginBottom: '8px',
         }}
       >
         Информация
       </div>
       
+      {/* Название станции */}
+      <div
+        style={{
+          maxWidth: '184px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          marginBottom: '10px',
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 500,
+            fontSize: '17px',
+            lineHeight: '20px',
+            color: '#2D4059',
+            letterSpacing: '0px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textAlign: 'center',
+          }}
+        >
+          {displayName}
+        </div>
+      </div>
+      
+      {/* Иконки */}
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          justifyContent: 'center',
           alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          marginBottom: '15px',
         }}
       >
-        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#2D4059', textAlign: 'center' }}>
-          Дополнительные данные 1
+        {isTmc && <img src={TMC} alt="TMC" style={{ width: '30px', height: '17px' }} />}
+        {isSgd && <img src={SGD} alt="SGD" style={{ width: '30px', height: '17px' }} />}
+        {isOk && <img src={OK} alt="OK" style={{ width: '30px', height: '17px' }} />}
+        {parentUid && <img src={CHAIN} alt="CHAIN" style={{ width: '30px', height: '17px' }} />}
+      </div>
+      
+      {/* Данные */}
+      <div
+        style={{
+          width: '100%',
+          paddingLeft: '15px',
+          paddingRight: '27px',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* ТМЦ в станции */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '17px',
+            marginBottom: '20px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+              lineHeight: '17px',
+            }}
+          >
+            ТМЦ в станции
+          </span>
+          <div
+            style={{
+              width: '40px',
+              textAlign: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                letterSpacing: '0px',
+                color: '#2D4059',
+                lineHeight: '17px',
+              }}
+            >
+              {totalCells}
+            </span>
+          </div>
         </div>
-        <div style={{ fontSize: '12px', color: '#5A6E82', marginTop: '8px', textAlign: 'center' }}>
-          Здесь будет информация для back1
+        
+        {/* Выдано ТМЦ */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '17px',
+            marginBottom: '20px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+              lineHeight: '17px',
+            }}
+          >
+            Выдано ТМЦ
+          </span>
+          <div
+            style={{
+              width: '40px',
+              textAlign: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                letterSpacing: '0px',
+                color: '#2D4059',
+                lineHeight: '17px',
+              }}
+            >
+              {filledCells}
+            </span>
+          </div>
+        </div>
+        
+        {/* Выдано сверхнормы */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '17px',
+            marginBottom: '20px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+              whiteSpace: 'nowrap',
+              lineHeight: '17px',
+            }}
+          >
+            Выдано сверхнормы
+          </span>
+          <div
+            style={{
+              width: '40px',
+              textAlign: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                letterSpacing: '0px',
+                color: '#2D4059',
+                lineHeight: '17px',
+              }}
+            >
+              {overNorm}
+            </span>
+          </div>
+        </div>
+        
+        {/* Готовые детали */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '17px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+              lineHeight: '17px',
+            }}
+          >
+            Готовые детали
+          </span>
+          <div
+            style={{
+              width: '40px',
+              textAlign: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                letterSpacing: '0px',
+                color: '#2D4059',
+                lineHeight: '17px',
+              }}
+            >
+              {readyPartsCount}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Кнопка Аналитика */}
+      <button
+        style={{
+          position: 'absolute',
+          bottom: '18px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '164px',
+          height: '30px',
+          backgroundColor: getButtonColor(),
+          border: 'none',
+          borderRadius: '20px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 500,
+          color: '#2D4059',
+          letterSpacing: '0px',
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          console.log('Аналитика');
+        }}
+      >
+        Аналитика
+      </button>
     </div>
   );
 
@@ -630,15 +986,209 @@ const StationCell: React.FC<StationCellProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
+        position: 'relative',
+        paddingTop: '9px',
       }}
     >
-      <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#2D4059', textAlign: 'center' }}>
-        Дополнительные данные 2
+      {/* Заголовок Конфигурация */}
+      <div
+        style={{
+          color: getStatusColor(),
+          fontSize: '15px',
+          fontWeight: 500,
+          letterSpacing: '0px',
+          textAlign: 'center',
+          marginBottom: '8px',
+        }}
+      >
+        Конфигурация
       </div>
-      <div style={{ fontSize: '12px', color: '#5A6E82', marginTop: '8px', textAlign: 'center' }}>
-        Здесь будет информация для back2
+      
+      {/* Название станции */}
+      <div
+        style={{
+          maxWidth: '184px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          marginBottom: '1px',
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 500,
+            fontSize: '17px',
+            lineHeight: '20px',
+            color: '#2D4059',
+            letterSpacing: '0px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textAlign: 'center',
+          }}
+        >
+          {displayName}
+        </div>
+      </div>
+      
+      {/* Цех и Участок */}
+      <div
+        style={{
+          maxWidth: '184px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 500,
+            fontSize: '14px',
+            lineHeight: '16px',
+            color: '#2D4059',
+            opacity: 0.5,
+            letterSpacing: '0px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textAlign: 'center',
+          }}
+        >
+          {workshopSectionText}
+        </div>
+      </div>
+      
+      {/* Меню конфигурации */}
+      <div
+        style={{
+          width: '100%',
+          paddingLeft: '60px',
+          paddingRight: '10px',
+          boxSizing: 'border-box',
+          marginTop: '23px',
+        }}
+      >
+        {/* Шаблоны загрузки */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: '28px',
+            position: 'relative',
+          }}
+        >
+          <img
+            src={Config1}
+            alt=""
+            style={{
+              position: 'absolute',
+              left: '-33px',
+              width: '21px',
+              height: '21px',
+            }}
+          />
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+            }}
+          >
+            Шаблоны загрузки
+          </span>
+        </div>
+        
+        {/* Карта загрузки */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: '28px',
+            position: 'relative',
+          }}
+        >
+          <img
+            src={Config2}
+            alt=""
+            style={{
+              position: 'absolute',
+              left: '-33px',
+              width: '21px',
+              height: '16px',
+            }}
+          />
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+            }}
+          >
+            Карта загрузки
+          </span>
+        </div>
+        
+        {/* Отчет движения ТМЦ/деталей */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            marginBottom: '28px',
+            position: 'relative',
+          }}
+        >
+          <img
+            src={Config3}
+            alt=""
+            style={{
+              position: 'absolute',
+              left: '-33px',
+              width: '21px',
+              height: '21px',
+            }}
+          />
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+              lineHeight: '16px',
+            }}
+          >
+            Отчет движения<br />ТМЦ/деталей
+          </span>
+        </div>
+        
+        {/* Настройки станций */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            position: 'relative',
+          }}
+        >
+          <img
+            src={Config4}
+            alt=""
+            style={{
+              position: 'absolute',
+              left: '-33px',
+              width: '21px',
+              height: '21px',
+            }}
+          />
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              letterSpacing: '0px',
+              color: '#2D4059',
+            }}
+          >
+            Настройки станций
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -662,7 +1212,7 @@ const StationCell: React.FC<StationCellProps> = ({
           height: '100%',
           transition: 'transform 0.6s',
           transformStyle: 'preserve-3d',
-          transform: `rotateY(${getRotationY()})`,
+          transform: getContainerTransform(),
           backgroundColor: 'transparent',
         }}
       >
@@ -676,6 +1226,7 @@ const StationCell: React.FC<StationCellProps> = ({
             borderRadius: '20px',
             overflow: 'hidden',
             backgroundColor: 'transparent',
+            zIndex: displaySide === 'front' ? 2 : 1,
           }}
         >
           <img
@@ -774,6 +1325,7 @@ const StationCell: React.FC<StationCellProps> = ({
             overflow: 'hidden',
             transform: 'rotateY(180deg)',
             backgroundColor: 'transparent',
+            zIndex: displaySide === 'back1' ? 2 : 1,
           }}
         >
           <img
@@ -792,7 +1344,6 @@ const StationCell: React.FC<StationCellProps> = ({
             style={{
               position: 'relative',
               zIndex: 1,
-              padding: '12px',
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
@@ -843,6 +1394,7 @@ const StationCell: React.FC<StationCellProps> = ({
             overflow: 'hidden',
             transform: 'rotateY(-180deg)',
             backgroundColor: 'transparent',
+            zIndex: displaySide === 'back2' ? 2 : 1,
           }}
         >
           <img
@@ -861,7 +1413,6 @@ const StationCell: React.FC<StationCellProps> = ({
             style={{
               position: 'relative',
               zIndex: 1,
-              padding: '12px',
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
