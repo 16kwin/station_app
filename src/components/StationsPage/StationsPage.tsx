@@ -54,16 +54,14 @@ type FilterSubmenuType = 'placement' | 'status' | 'type' | 'overissue' | 'error'
 interface FilterCascadeState {
   activeType: FilterSubmenuType;
   activeItemIndex: number;
-  selectedEnterprise: string | null;
-  selectedWorkshop: string | null;
-  selectedSection: string | null;
+  selectedEnterprises: string[];
+  selectedWorkshops: string[];
+  selectedSections: string[];
 }
 
 const StationsPage = () => {
   const [activeButtons, setActiveButtons] = useState<number[]>([9]);
   const [expandedButton, setExpandedButton] = useState<number | null>(null);
-  const [closingButton, setClosingButton] = useState<number | null>(null);
-  const [openingButton, setOpeningButton] = useState<number | null>(null);
   const expandedRef = useRef<HTMLDivElement>(null);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
@@ -82,7 +80,6 @@ const StationsPage = () => {
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [hasSortSelection, setHasSortSelection] = useState(false);
-  const [hasFilterSelection, setHasFilterSelection] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [hasSearchQuery, setHasSearchQuery] = useState(false);
@@ -99,12 +96,17 @@ const StationsPage = () => {
   const [selectedWorkshops, setSelectedWorkshops] = useState<string[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
 
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedOverissue, setSelectedOverissue] = useState<string | null>(null);
+  const [selectedError, setSelectedError] = useState<string | null>(null);
+
   const [filterCascade, setFilterCascade] = useState<FilterCascadeState>({
     activeType: null,
     activeItemIndex: 0,
-    selectedEnterprise: null,
-    selectedWorkshop: null,
-    selectedSection: null,
+    selectedEnterprises: [],
+    selectedWorkshops: [],
+    selectedSections: [],
   });
 
   const sortOptions = [
@@ -126,6 +128,20 @@ const StationsPage = () => {
     { label: 'Очистить фильтр', type: null },
   ];
 
+  const statusOptions = [
+    'В работе',
+    'Не в сети',
+    'Минимальный остаток',
+    'Критический остаток',
+  ];
+
+  const typeOptions = [
+    'СГД',
+    'Операционная карта',
+    'ТМЦ',
+    'Связанные модули',
+  ];
+
   const buttons = [
     { icon: Icon1, label: 'Поиск' },
     { icon: Icon2, label: 'Сортировка' },
@@ -140,11 +156,24 @@ const StationsPage = () => {
     { icon: Icon11, label: '' },
   ];
 
-  const isFilterActive = hasFilterSelection;
+  const isFilterActive = selectedEnterprises.length > 0 || 
+                         selectedWorkshops.length > 0 || 
+                         selectedSections.length > 0 ||
+                         selectedStatuses.length > 0 || 
+                         selectedTypes.length > 0 || 
+                         selectedOverissue !== null || 
+                         selectedError !== null;
+  
   const isOstatokActive = minOstatokEnabled || criticalOstatokEnabled;
   const isEnterpriseActive = selectedEnterprises.length > 0;
   const isWorkshopActive = selectedWorkshops.length > 0;
   const isSectionActive = selectedSections.length > 0;
+
+  const isPlacementActive = selectedEnterprises.length > 0 || selectedWorkshops.length > 0 || selectedSections.length > 0;
+  const isStatusActive = selectedStatuses.length > 0;
+  const isTypeActive = selectedTypes.length > 0;
+  const isOverissueActive = selectedOverissue !== null;
+  const isErrorActive = selectedError !== null;
 
   const getAvailableWorkshops = (): Workshop[] => {
     if (selectedEnterprises.length === 0) {
@@ -163,13 +192,43 @@ const StationsPage = () => {
     return mockSections.filter(s => selectedWorkshops.includes(s.workshopId));
   };
 
-  const getFilterWorkshops = (enterpriseId: string): Workshop[] => {
-    return mockWorkshops.filter(w => w.enterpriseId === enterpriseId);
+  const getFilterWorkshops = (enterpriseIds: string[]): Workshop[] => {
+    if (enterpriseIds.length === 0) return mockWorkshops;
+    return mockWorkshops.filter(w => enterpriseIds.includes(w.enterpriseId));
   };
 
-  const getFilterSections = (workshopId: string): Section[] => {
-    return mockSections.filter(s => s.workshopId === workshopId);
+  const getFilterSections = (workshopIds: string[]): Section[] => {
+    if (workshopIds.length === 0) return [];
+    return mockSections.filter(s => workshopIds.includes(s.workshopId));
   };
+
+  useEffect(() => {
+    setFilterCascade(prev => ({
+      ...prev,
+      selectedEnterprises: selectedEnterprises,
+      selectedWorkshops: [],
+      selectedSections: [],
+    }));
+  }, [selectedEnterprises]);
+
+  useEffect(() => {
+    if (selectedWorkshops.length > 0) {
+      setFilterCascade(prev => ({
+        ...prev,
+        selectedWorkshops: selectedWorkshops,
+        selectedSections: [],
+      }));
+    }
+  }, [selectedWorkshops]);
+
+  useEffect(() => {
+    if (selectedSections.length > 0) {
+      setFilterCascade(prev => ({
+        ...prev,
+        selectedSections: selectedSections,
+      }));
+    }
+  }, [selectedSections]);
 
   useEffect(() => {
     const availableWorkshopIds = getAvailableWorkshops().map(w => w.id);
@@ -182,7 +241,40 @@ const StationsPage = () => {
   }, [selectedWorkshops]);
 
   const getFilteredAndSortedStations = () => {
-    return stationsStatic;
+    let filtered = [...stationsStatic];
+
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(s => 
+        s.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    if (hasSortSelection) {
+      switch (sortOption) {
+        case 'nameAsc':
+          filtered.sort((a, b) => a.name.localeCompare(b.name));
+          break;
+        case 'nameDesc':
+          filtered.sort((a, b) => b.name.localeCompare(a.name));
+          break;
+        case 'tmcSgd':
+          filtered.sort((a, b) => {
+            if (a.isTmc && !b.isTmc) return -1;
+            if (!a.isTmc && b.isTmc) return 1;
+            return 0;
+          });
+          break;
+        case 'sgdTmc':
+          filtered.sort((a, b) => {
+            if (a.isSgd && !b.isSgd) return -1;
+            if (!a.isSgd && b.isSgd) return 1;
+            return 0;
+          });
+          break;
+      }
+    }
+
+    return filtered;
   };
 
   const displayedStations = getFilteredAndSortedStations();
@@ -292,44 +384,6 @@ const StationsPage = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
-        setShowSortDropdown(false);
-      }
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
-        setShowFilterDropdown(false);
-        setFilterCascade({
-          activeType: null,
-          activeItemIndex: 0,
-          selectedEnterprise: null,
-          selectedWorkshop: null,
-          selectedSection: null,
-        });
-      }
-      if (ostatokDropdownRef.current && !ostatokDropdownRef.current.contains(event.target as Node)) {
-        setShowOstatokDropdown(false);
-      }
-      if (enterpriseDropdownRef.current && !enterpriseDropdownRef.current.contains(event.target as Node)) {
-        setShowEnterpriseDropdown(false);
-      }
-      if (workshopDropdownRef.current && !workshopDropdownRef.current.contains(event.target as Node)) {
-        setShowWorkshopDropdown(false);
-      }
-      if (sectionDropdownRef.current && !sectionDropdownRef.current.contains(event.target as Node)) {
-        setShowSectionDropdown(false);
-      }
-    };
-
-    if (showSortDropdown || showFilterDropdown || showOstatokDropdown || showEnterpriseDropdown || showWorkshopDropdown || showSectionDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showSortDropdown, showFilterDropdown, showOstatokDropdown, showEnterpriseDropdown, showWorkshopDropdown, showSectionDropdown]);
-
   const toggleButton = (index: number) => {
     setActiveButtons(prev =>
       prev.includes(index)
@@ -355,7 +409,6 @@ const StationsPage = () => {
   const closeExpanded = () => {
     if (expandedButton !== null) {
       const closingIndex = expandedButton;
-      setClosingButton(closingIndex);
       
       if (closingIndex === 1 && !hasSortSelection) {
         setActiveButtons(prev => prev.filter(i => i !== closingIndex));
@@ -363,7 +416,7 @@ const StationsPage = () => {
       if (closingIndex === 0 && !hasSearchQuery) {
         setActiveButtons(prev => prev.filter(i => i !== closingIndex));
       }
-      if (closingIndex === 2 && !hasFilterSelection) {
+      if (closingIndex === 2 && !isFilterActive) {
         setActiveButtons(prev => prev.filter(i => i !== closingIndex));
       }
       if (closingIndex === 8 && !isOstatokActive) {
@@ -382,19 +435,15 @@ const StationsPage = () => {
       setExpandedButton(null);
       setShowSortDropdown(false);
       setShowFilterDropdown(false);
-      setFilterCascade({
+      setFilterCascade(prev => ({
+        ...prev,
         activeType: null,
         activeItemIndex: 0,
-        selectedEnterprise: null,
-        selectedWorkshop: null,
-        selectedSection: null,
-      });
+      }));
       setShowOstatokDropdown(false);
       setShowEnterpriseDropdown(false);
       setShowWorkshopDropdown(false);
       setShowSectionDropdown(false);
-      
-      setClosingButton(null);
     }
   };
 
@@ -409,18 +458,21 @@ const StationsPage = () => {
       }
     }
     
-    setOpeningButton(index);
-    
-    setTimeout(() => {
-      setOpeningButton(null);
-      setExpandedButton(index);
-      if (index === 1) setShowSortDropdown(true);
-      if (index === 2) setShowFilterDropdown(true);
-      if (index === 8) setShowOstatokDropdown(true);
-      if (index === 3) setShowEnterpriseDropdown(true);
-      if (index === 4) setShowWorkshopDropdown(true);
-      if (index === 5) setShowSectionDropdown(true);
-    }, 150);
+    setExpandedButton(index);
+    if (index === 1) setShowSortDropdown(true);
+    if (index === 2) {
+      setShowFilterDropdown(true);
+      setFilterCascade(prev => ({
+        ...prev,
+        selectedEnterprises: selectedEnterprises,
+        selectedWorkshops: selectedWorkshops,
+        selectedSections: selectedSections,
+      }));
+    }
+    if (index === 8) setShowOstatokDropdown(true);
+    if (index === 3) setShowEnterpriseDropdown(true);
+    if (index === 4) setShowWorkshopDropdown(true);
+    if (index === 5) setShowSectionDropdown(true);
   };
 
   const handleButtonClick = (index: number) => {
@@ -438,37 +490,9 @@ const StationsPage = () => {
       closeExpanded();
     } else {
       if (expandedButton !== null) {
-        const prevExpanded = expandedButton;
-        
-        if (prevExpanded === 1 && !hasSortSelection) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        if (prevExpanded === 0 && !hasSearchQuery) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        if (prevExpanded === 2 && !hasFilterSelection) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        if (prevExpanded === 8 && !isOstatokActive) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        if (prevExpanded === 3 && !isEnterpriseActive) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        if (prevExpanded === 4 && !isWorkshopActive) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        if (prevExpanded === 5 && !isSectionActive) setActiveButtons(prev => prev.filter(i => i !== prevExpanded));
-        
-        setExpandedButton(null);
-        setShowSortDropdown(false);
-        setShowFilterDropdown(false);
-        setFilterCascade({
-          activeType: null,
-          activeItemIndex: 0,
-          selectedEnterprise: null,
-          selectedWorkshop: null,
-          selectedSection: null,
-        });
-        setShowOstatokDropdown(false);
-        setShowEnterpriseDropdown(false);
-        setShowWorkshopDropdown(false);
-        setShowSectionDropdown(false);
-        
-        setTimeout(() => {
-          openButton(index);
-        }, 50);
-      } else {
-        openButton(index);
+        closeExpanded();
       }
+      openButton(index);
     }
   };
 
@@ -510,75 +534,94 @@ const StationsPage = () => {
   const handleFilterItemClick = (e: React.MouseEvent, type: FilterSubmenuType, index: number) => {
     e.stopPropagation();
     if (type === null) {
-      setHasFilterSelection(false);
+      setSelectedEnterprises([]);
+      setSelectedWorkshops([]);
+      setSelectedSections([]);
+      setSelectedStatuses([]);
+      setSelectedTypes([]);
+      setSelectedOverissue(null);
+      setSelectedError(null);
       setFilterCascade({
         activeType: null,
         activeItemIndex: 0,
-        selectedEnterprise: null,
-        selectedWorkshop: null,
-        selectedSection: null,
+        selectedEnterprises: [],
+        selectedWorkshops: [],
+        selectedSections: [],
       });
       return;
     }
     
-    setFilterCascade({
+    if (filterCascade.activeType === type) {
+      setFilterCascade(prev => ({
+        ...prev,
+        activeType: null,
+        activeItemIndex: 0,
+      }));
+      return;
+    }
+    
+    setFilterCascade(prev => ({
+      ...prev,
       activeType: type,
       activeItemIndex: index,
-      selectedEnterprise: null,
-      selectedWorkshop: null,
-      selectedSection: null,
-    });
-  };
-
-  const handleFilterEnterpriseSelect = (e: React.MouseEvent, enterpriseId: string) => {
-    e.stopPropagation();
-    setFilterCascade(prev => ({
-      ...prev,
-      selectedEnterprise: enterpriseId,
-      selectedWorkshop: null,
-      selectedSection: null,
+      selectedEnterprises: selectedEnterprises,
+      selectedWorkshops: selectedWorkshops,
+      selectedSections: selectedSections,
     }));
   };
 
-  const handleFilterWorkshopSelect = (e: React.MouseEvent, workshopId: string) => {
+  const toggleFilterEnterprise = (e: React.MouseEvent, enterpriseId: string) => {
     e.stopPropagation();
-    setFilterCascade(prev => ({
-      ...prev,
-      selectedWorkshop: workshopId,
-      selectedSection: null,
-    }));
+    setSelectedEnterprises(prev =>
+      prev.includes(enterpriseId)
+        ? prev.filter(id => id !== enterpriseId)
+        : [...prev, enterpriseId]
+    );
+    setSelectedWorkshops([]);
+    setSelectedSections([]);
   };
 
-  const handleFilterSectionSelect = (e: React.MouseEvent, sectionId: string) => {
+  const toggleFilterWorkshop = (e: React.MouseEvent, workshopId: string) => {
     e.stopPropagation();
-    setFilterCascade(prev => ({
-      ...prev,
-      selectedSection: sectionId,
-    }));
-    setHasFilterSelection(true);
+    setSelectedWorkshops(prev =>
+      prev.includes(workshopId)
+        ? prev.filter(id => id !== workshopId)
+        : [...prev, workshopId]
+    );
+    setSelectedSections([]);
   };
 
-  const handleFilterBack = (e: React.MouseEvent, level: 'enterprise' | 'workshop' | 'section') => {
+  const toggleFilterSection = (e: React.MouseEvent, sectionId: string) => {
     e.stopPropagation();
-    if (level === 'enterprise') {
-      setFilterCascade(prev => ({
-        ...prev,
-        selectedEnterprise: null,
-        selectedWorkshop: null,
-        selectedSection: null,
-      }));
-    } else if (level === 'workshop') {
-      setFilterCascade(prev => ({
-        ...prev,
-        selectedWorkshop: null,
-        selectedSection: null,
-      }));
-    } else if (level === 'section') {
-      setFilterCascade(prev => ({
-        ...prev,
-        selectedSection: null,
-      }));
-    }
+    setSelectedSections(prev =>
+      prev.includes(sectionId)
+        ? prev.filter(id => id !== sectionId)
+        : [...prev, sectionId]
+    );
+  };
+
+  const toggleStatus = (status: string) => {
+    setSelectedStatuses(prev =>
+      prev.includes(status)
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    );
+  };
+
+  const toggleType = (type: string) => {
+    setSelectedTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  const selectOverissue = (value: string) => {
+    setSelectedOverissue(value);
+  };
+
+  const selectError = (value: string) => {
+    setSelectedError(value);
   };
 
   useEffect(() => {
@@ -587,282 +630,581 @@ const StationsPage = () => {
         if (expandedButton !== null) {
           closeExpanded();
         }
+        return;
+      }
+      
+      if (expandedButton === null) {
+        if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
+          setShowSortDropdown(false);
+        }
+        if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+          setShowFilterDropdown(false);
+          setFilterCascade(prev => ({
+            ...prev,
+            activeType: null,
+            activeItemIndex: 0,
+          }));
+        }
+        if (ostatokDropdownRef.current && !ostatokDropdownRef.current.contains(event.target as Node)) {
+          setShowOstatokDropdown(false);
+        }
+        if (enterpriseDropdownRef.current && !enterpriseDropdownRef.current.contains(event.target as Node)) {
+          setShowEnterpriseDropdown(false);
+        }
+        if (workshopDropdownRef.current && !workshopDropdownRef.current.contains(event.target as Node)) {
+          setShowWorkshopDropdown(false);
+        }
+        if (sectionDropdownRef.current && !sectionDropdownRef.current.contains(event.target as Node)) {
+          setShowSectionDropdown(false);
+        }
       }
     };
 
-    if (expandedButton !== null) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [expandedButton, hasSortSelection, hasFilterSelection, hasSearchQuery, isOstatokActive, isEnterpriseActive, isWorkshopActive, isSectionActive]);
+  }, [expandedButton, expandedRef]);
 
   const renderFilterCascadeWindows = () => {
     if (!showFilterDropdown || !filterCascade.activeType) return null;
 
     const windows: JSX.Element[] = [];
-    let leftOffset = 226;
+    let leftOffset = 230;
     const itemHeight = 38;
     const baseTop = filterCascade.activeItemIndex * itemHeight;
 
     if (filterCascade.activeType === 'placement') {
+      const availableEnterprises = mockEnterprises;
+      
       windows.push(
-        <div
+        <motion.div
           key="enterprise"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
             top: `${baseTop}px`,
             width: '226px',
             backgroundColor: '#FFFFFF',
-            borderRadius: '27px',
-            borderTopLeftRadius: '27px',
+            borderRadius: '15px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
             overflow: 'hidden',
-            padding: '8px 0',
-            maxHeight: '300px',
-            overflowY: 'auto',
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <div
             style={{
-              height: '38px',
-              padding: '0 16px',
+              height: '54px',
+              backgroundColor: '#666EFE',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: '15px', fontWeight: 500, color: '#2D4059' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
               Предприятие
             </span>
           </div>
-          {mockEnterprises.map((enterprise) => (
-            <div
-              key={enterprise.id}
-              onClick={(e) => handleFilterEnterpriseSelect(e, enterprise.id)}
-              style={{
-                height: '38px',
-                padding: '0 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                backgroundColor: filterCascade.selectedEnterprise === enterprise.id ? '#BCC8FF' : '#FFFFFF',
-                transition: 'background-color 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (filterCascade.selectedEnterprise !== enterprise.id) {
-                  e.currentTarget.style.backgroundColor = '#E2E8FF';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (filterCascade.selectedEnterprise !== enterprise.id) {
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            >
-              <span style={{ 
-                fontSize: '15px', 
-                fontWeight: 500, 
-                color: filterCascade.selectedEnterprise === enterprise.id ? '#2D4059' : '#9CA3AF' 
-              }}>
-                {enterprise.name}
-              </span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M6 4L10 8L6 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          ))}
-        </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {availableEnterprises.map((enterprise) => {
+              const isChecked = selectedEnterprises.includes(enterprise.id);
+              return (
+                <div
+                  key={enterprise.id}
+                  onClick={(e) => toggleFilterEnterprise(e, enterprise.id)}
+                  style={{
+                    height: '38px',
+                    padding: '0 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                    transition: 'background-color 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  }}
+                >
+                  <span style={{ 
+                    fontSize: '15px', 
+                    fontWeight: 500, 
+                    color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  }}>
+                    {enterprise.name}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleFilterEnterprise(e as any, enterprise.id);
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
       );
-      leftOffset += 226;
+      leftOffset += 230;
     }
 
-    if (filterCascade.activeType === 'placement' && filterCascade.selectedEnterprise) {
-      const workshops = getFilterWorkshops(filterCascade.selectedEnterprise);
+    if (filterCascade.activeType === 'placement' && selectedEnterprises.length > 0) {
+      const workshops = getFilterWorkshops(selectedEnterprises);
+      
       windows.push(
-        <div
+        <motion.div
           key="workshop"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
             top: `${baseTop}px`,
             width: '226px',
             backgroundColor: '#FFFFFF',
-            borderRadius: '27px',
-            borderTopLeftRadius: '27px',
+            borderRadius: '15px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
             overflow: 'hidden',
-            padding: '8px 0',
-            maxHeight: '300px',
-            overflowY: 'auto',
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <div
             style={{
-              height: '38px',
-              padding: '0 16px',
+              height: '54px',
+              backgroundColor: '#666EFE',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
+              justifyContent: 'center',
             }}
-            onClick={(e) => handleFilterBack(e, 'enterprise')}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transform: 'rotate(180deg)' }}>
-              <path d="M6 4L10 8L6 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span style={{ fontSize: '15px', fontWeight: 500, color: '#2D4059' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
               Цех
             </span>
           </div>
-          {workshops.map((workshop) => (
-            <div
-              key={workshop.id}
-              onClick={(e) => handleFilterWorkshopSelect(e, workshop.id)}
-              style={{
-                height: '38px',
-                padding: '0 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                backgroundColor: filterCascade.selectedWorkshop === workshop.id ? '#BCC8FF' : '#FFFFFF',
-                transition: 'background-color 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (filterCascade.selectedWorkshop !== workshop.id) {
-                  e.currentTarget.style.backgroundColor = '#E2E8FF';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (filterCascade.selectedWorkshop !== workshop.id) {
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            >
-              <span style={{ 
-                fontSize: '15px', 
-                fontWeight: 500, 
-                color: filterCascade.selectedWorkshop === workshop.id ? '#2D4059' : '#9CA3AF' 
-              }}>
-                {workshop.name}
-              </span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M6 4L10 8L6 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          ))}
-        </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {workshops.map((workshop) => {
+              const isChecked = selectedWorkshops.includes(workshop.id);
+              return (
+                <div
+                  key={workshop.id}
+                  onClick={(e) => toggleFilterWorkshop(e, workshop.id)}
+                  style={{
+                    height: '38px',
+                    padding: '0 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                    transition: 'background-color 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  }}
+                >
+                  <span style={{ 
+                    fontSize: '15px', 
+                    fontWeight: 500, 
+                    color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  }}>
+                    {workshop.name}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleFilterWorkshop(e as any, workshop.id);
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
       );
-      leftOffset += 226;
+      leftOffset += 230;
     }
 
-    if (filterCascade.activeType === 'placement' && filterCascade.selectedWorkshop) {
-      const sections = getFilterSections(filterCascade.selectedWorkshop);
+    if (filterCascade.activeType === 'placement' && selectedWorkshops.length > 0) {
+      const sections = getFilterSections(selectedWorkshops);
+      
       windows.push(
-        <div
+        <motion.div
           key="section"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
             top: `${baseTop}px`,
             width: '226px',
             backgroundColor: '#FFFFFF',
-            borderRadius: '27px',
-            borderTopLeftRadius: '27px',
+            borderRadius: '15px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
             overflow: 'hidden',
-            padding: '8px 0',
-            maxHeight: '300px',
-            overflowY: 'auto',
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <div
             style={{
-              height: '38px',
-              padding: '0 16px',
+              height: '54px',
+              backgroundColor: '#666EFE',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
+              justifyContent: 'center',
             }}
-            onClick={(e) => handleFilterBack(e, 'workshop')}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transform: 'rotate(180deg)' }}>
-              <path d="M6 4L10 8L6 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span style={{ fontSize: '15px', fontWeight: 500, color: '#2D4059' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
               Участок
             </span>
           </div>
-          {sections.map((section) => (
-            <div
-              key={section.id}
-              onClick={(e) => handleFilterSectionSelect(e, section.id)}
-              style={{
-                height: '38px',
-                padding: '0 16px',
-                display: 'flex',
-                alignItems: 'center',
-                cursor: 'pointer',
-                backgroundColor: filterCascade.selectedSection === section.id ? '#BCC8FF' : '#FFFFFF',
-                transition: 'background-color 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (filterCascade.selectedSection !== section.id) {
-                  e.currentTarget.style.backgroundColor = '#E2E8FF';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (filterCascade.selectedSection !== section.id) {
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            >
-              <span style={{ 
-                fontSize: '15px', 
-                fontWeight: 500, 
-                color: filterCascade.selectedSection === section.id ? '#2D4059' : '#9CA3AF' 
-              }}>
-                {section.name}
-              </span>
-            </div>
-          ))}
-        </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {sections.map((section) => {
+              const isChecked = selectedSections.includes(section.id);
+              return (
+                <div
+                  key={section.id}
+                  onClick={(e) => toggleFilterSection(e, section.id)}
+                  style={{
+                    height: '38px',
+                    padding: '0 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                    transition: 'background-color 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  }}
+                >
+                  <span style={{ 
+                    fontSize: '15px', 
+                    fontWeight: 500, 
+                    color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  }}>
+                    {section.name}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleFilterSection(e as any, section.id);
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
       );
-      leftOffset += 226;
+      leftOffset += 230;
     }
 
-    if (filterCascade.activeType && filterCascade.activeType !== 'placement') {
+    if (filterCascade.activeType === 'status') {
       windows.push(
-        <div
-          key="placeholder"
+        <motion.div
+          key="status"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
             top: `${baseTop}px`,
             width: '226px',
             backgroundColor: '#FFFFFF',
-            borderRadius: '27px',
-            borderTopLeftRadius: '27px',
+            borderRadius: '15px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
             overflow: 'hidden',
-            padding: '16px',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <span style={{ fontSize: '15px', color: '#9CA3AF' }}>Скоро...</span>
-        </div>
+          {statusOptions.map((status) => {
+            const isChecked = selectedStatuses.includes(status);
+            return (
+              <div
+                key={status}
+                onClick={() => toggleStatus(status)}
+                style={{
+                  height: '38px',
+                  padding: '0 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                  transition: 'background-color 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }}
+              >
+                <span style={{ 
+                  fontSize: '15px', 
+                  fontWeight: 500, 
+                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                }}>
+                  {status}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => toggleStatus(status)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            );
+          })}
+        </motion.div>
+      );
+    }
+
+    if (filterCascade.activeType === 'type') {
+      windows.push(
+        <motion.div
+          key="type"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
+          style={{
+            position: 'absolute',
+            left: `${leftOffset}px`,
+            top: `${baseTop}px`,
+            width: '226px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '15px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {typeOptions.map((type) => {
+            const isChecked = selectedTypes.includes(type);
+            return (
+              <div
+                key={type}
+                onClick={() => toggleType(type)}
+                style={{
+                  height: '38px',
+                  padding: '0 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                  transition: 'background-color 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }}
+              >
+                <span style={{ 
+                  fontSize: '15px', 
+                  fontWeight: 500, 
+                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                }}>
+                  {type}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => toggleType(type)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            );
+          })}
+        </motion.div>
+      );
+    }
+
+    if (filterCascade.activeType === 'overissue') {
+      windows.push(
+        <motion.div
+          key="overissue"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
+          style={{
+            position: 'absolute',
+            left: `${leftOffset}px`,
+            top: `${baseTop}px`,
+            width: '226px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '15px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {['Да', 'Нет'].map((option) => {
+            const isChecked = selectedOverissue === option;
+            return (
+              <div
+                key={option}
+                onClick={() => selectOverissue(option)}
+                style={{
+                  height: '38px',
+                  padding: '0 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                  transition: 'background-color 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }}
+              >
+                <span style={{ 
+                  fontSize: '15px', 
+                  fontWeight: 500, 
+                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                }}>
+                  {option}
+                </span>
+                <input
+                  type="radio"
+                  name="overissue"
+                  checked={isChecked}
+                  onChange={() => selectOverissue(option)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            );
+          })}
+        </motion.div>
+      );
+    }
+
+    if (filterCascade.activeType === 'error') {
+      windows.push(
+        <motion.div
+          key="error"
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.15 }}
+          style={{
+            position: 'absolute',
+            left: `${leftOffset}px`,
+            top: `${baseTop}px`,
+            width: '226px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '15px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {['Да', 'Нет'].map((option) => {
+            const isChecked = selectedError === option;
+            return (
+              <div
+                key={option}
+                onClick={() => selectError(option)}
+                style={{
+                  height: '38px',
+                  padding: '0 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF',
+                  transition: 'background-color 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }}
+              >
+                <span style={{ 
+                  fontSize: '15px', 
+                  fontWeight: 500, 
+                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                }}>
+                  {option}
+                </span>
+                <input
+                  type="radio"
+                  name="error"
+                  checked={isChecked}
+                  onChange={() => selectError(option)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            );
+          })}
+        </motion.div>
       );
     }
 
     return windows;
+  };
+
+  const getExpandedWidth = (index: number): number => {
+    if (index === 0) return 314;
+    return 226;
+  };
+
+  const calculateGapWidth = () => {
+    if (expandedButton === null) return 342;
+    
+    if (expandedButton <= 2) {
+      const expandedWidth = getExpandedWidth(expandedButton);
+      const extraWidth = expandedWidth - 54;
+      return Math.max(0, 342 - extraWidth);
+    }
+    
+    return 342;
   };
 
   const renderButton = (button: typeof buttons[0], globalIdx: number) => {
@@ -877,14 +1219,9 @@ const StationsPage = () => {
     const isWorkshopButton = globalIdx === 4;
     const isSectionButton = globalIdx === 5;
     const isNonExpandable = [6, 7].includes(globalIdx);
-
-    const isThisClosing = closingButton === globalIdx;
-    const isThisOpening = openingButton === globalIdx;
     
-    const showAsActive = isActive && !isThisClosing;
+    const showAsActive = isActive;
     const backgroundColor = showAsActive ? '#666EFE' : '#FFFFFF';
-    
-    const actuallyExpanded = isExpanded && !isThisClosing;
 
     if (isRightTwo) {
       return (
@@ -958,8 +1295,9 @@ const StationsPage = () => {
 
     if (isSearchButton) {
       const isSearchActive = activeButtons.includes(globalIdx) || hasSearchQuery;
-      const showAsActiveForSearch = isSearchActive && !isThisClosing;
+      const showAsActiveForSearch = isSearchActive;
       const backgroundColorForSearch = showAsActiveForSearch ? '#666EFE' : '#FFFFFF';
+      const expandedWidth = 314;
       
       return (
         <div key={`button-${globalIdx}`} style={{ display: 'inline-flex' }}>
@@ -967,21 +1305,19 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '314px' : '54px',
-              height: '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#666EFE' : backgroundColorForSearch,
+              width: isExpanded ? expandedWidth : 54,
+              height: 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#666EFE' : backgroundColorForSearch,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: actuallyExpanded ? 'flex-start' : 'center',
-              padding: actuallyExpanded ? '0 7px' : '0',
-              boxShadow: (showAsActiveForSearch && !actuallyExpanded)
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              padding: isExpanded ? '0 7px' : '0',
+              boxShadow: (showAsActiveForSearch && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease, padding 0.6s cubic-bezier(0.34, 1.2, 0.64, 1)'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease, padding 0.4s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'hidden',
@@ -991,18 +1327,16 @@ const StationsPage = () => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0px',
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                width: actuallyExpanded ? 'auto' : '0',
+                gap: 0,
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
-                  <div style={{ width: '74px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>
+                  <div style={{ width: 74, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       Поиск
                     </span>
                   </div>
@@ -1012,13 +1346,13 @@ const StationsPage = () => {
                     value={searchQuery}
                     onChange={handleSearchChange}
                     style={{
-                      width: '227px',
-                      height: '42px',
-                      borderRadius: '27px',
+                      width: 227,
+                      height: 42,
+                      borderRadius: 27,
                       backgroundColor: '#E9EDFF',
                       border: 'none',
                       padding: '0 16px',
-                      fontSize: '14px',
+                      fontSize: 14,
                       color: '#2D4059',
                       outline: 'none',
                     }}
@@ -1033,21 +1367,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForSearch ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -1058,7 +1389,7 @@ const StationsPage = () => {
 
     if (isSortButton) {
       const isSortActive = activeButtons.includes(globalIdx) || hasSortSelection;
-      const showAsActiveForSort = isSortActive && !isThisClosing;
+      const showAsActiveForSort = isSortActive;
       const backgroundColorForSort = showAsActiveForSort ? '#666EFE' : '#FFFFFF';
       
       return (
@@ -1067,23 +1398,20 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '226px' : '54px',
-              height: actuallyExpanded ? 'auto' : '54px',
-              minHeight: actuallyExpanded ? 'auto' : '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#FFFFFF' : backgroundColorForSort,
+              width: isExpanded ? 226 : 54,
+              height: isExpanded ? 'auto' : 54,
+              minHeight: isExpanded ? 'auto' : 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForSort,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
               justifyContent: 'flex-start',
-              padding: actuallyExpanded ? '0' : '0',
-              boxShadow: (showAsActiveForSort && !actuallyExpanded)
+              boxShadow: (showAsActiveForSort && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), min-height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, height 0.4s ease, min-height 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
@@ -1091,27 +1419,25 @@ const StationsPage = () => {
           >
             <div
               style={{
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                pointerEvents: actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
                   <div
                     style={{
-                      height: '54px',
+                      height: 54,
                       backgroundColor: '#666EFE',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderTopLeftRadius: '27px',
-                      borderTopRightRadius: '27px',
+                      borderTopLeftRadius: 27,
+                      borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
                       {button.label}
                     </span>
                   </div>
@@ -1119,8 +1445,8 @@ const StationsPage = () => {
                     ref={sortDropdownRef}
                     style={{
                       backgroundColor: '#FFFFFF',
-                      borderBottomLeftRadius: '27px',
-                      borderBottomRightRadius: '27px',
+                      borderBottomLeftRadius: 27,
+                      borderBottomRightRadius: 27,
                       overflow: 'hidden',
                     }}
                   >
@@ -1150,7 +1476,7 @@ const StationsPage = () => {
                                   if (!isActive) e.currentTarget.style.backgroundColor = '#FFFFFF';
                                 }}
                                 style={{
-                                  height: '38px',
+                                  height: 38,
                                   padding: '0 16px',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -1161,7 +1487,7 @@ const StationsPage = () => {
                               >
                                 <span
                                   style={{
-                                    fontSize: '15px',
+                                    fontSize: 15,
                                     fontWeight: 500,
                                     color: isActive ? '#2D4059' : '#9CA3AF',
                                   }}
@@ -1184,21 +1510,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForSort ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -1208,8 +1531,8 @@ const StationsPage = () => {
     }
 
     if (isFilterButton) {
-      const isFilterButtonActive = activeButtons.includes(globalIdx) || hasFilterSelection;
-      const showAsActiveForFilter = isFilterButtonActive && !isThisClosing;
+      const isFilterButtonActive = activeButtons.includes(globalIdx) || isFilterActive;
+      const showAsActiveForFilter = isFilterButtonActive;
       const backgroundColorForFilter = showAsActiveForFilter ? '#666EFE' : '#FFFFFF';
       
       return (
@@ -1218,23 +1541,20 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '226px' : '54px',
-              height: actuallyExpanded ? 'auto' : '54px',
-              minHeight: actuallyExpanded ? 'auto' : '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#FFFFFF' : backgroundColorForFilter,
+              width: isExpanded ? 226 : 54,
+              height: isExpanded ? 'auto' : 54,
+              minHeight: isExpanded ? 'auto' : 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForFilter,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
               justifyContent: 'flex-start',
-              padding: actuallyExpanded ? '0' : '0',
-              boxShadow: (showAsActiveForFilter && !actuallyExpanded)
+              boxShadow: (showAsActiveForFilter && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), min-height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, height 0.4s ease, min-height 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
@@ -1242,27 +1562,25 @@ const StationsPage = () => {
           >
             <div
               style={{
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                pointerEvents: actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
                   <div
                     style={{
-                      height: '54px',
+                      height: 54,
                       backgroundColor: '#666EFE',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderTopLeftRadius: '27px',
-                      borderTopRightRadius: '27px',
+                      borderTopLeftRadius: 27,
+                      borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
                       {button.label}
                     </span>
                   </div>
@@ -1270,8 +1588,8 @@ const StationsPage = () => {
                     ref={filterDropdownRef}
                     style={{
                       backgroundColor: '#FFFFFF',
-                      borderBottomLeftRadius: '27px',
-                      borderBottomRightRadius: '27px',
+                      borderBottomLeftRadius: 27,
+                      borderBottomRightRadius: 27,
                       overflow: 'visible',
                       position: 'relative',
                     }}
@@ -1287,40 +1605,47 @@ const StationsPage = () => {
                         >
                           {filterItems.map((item, index) => {
                             const isClearFilter = item.type === null;
+                            let isItemActive = false;
+                            
+                            if (item.type === 'placement') isItemActive = isPlacementActive;
+                            else if (item.type === 'status') isItemActive = isStatusActive;
+                            else if (item.type === 'type') isItemActive = isTypeActive;
+                            else if (item.type === 'overissue') isItemActive = isOverissueActive;
+                            else if (item.type === 'error') isItemActive = isErrorActive;
                             
                             return (
                               <div
                                 key={item.label}
                                 onClick={(e) => handleFilterItemClick(e, item.type, index)}
                                 style={{
-                                  height: '38px',
+                                  height: 38,
                                   padding: '0 16px',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   cursor: 'pointer',
-                                  backgroundColor: '#FFFFFF',
+                                  backgroundColor: isItemActive ? '#BCC8FF' : '#FFFFFF',
                                   transition: 'background-color 0.2s ease',
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (!isClearFilter) e.currentTarget.style.backgroundColor = '#E2E8FF';
+                                  if (!isItemActive) e.currentTarget.style.backgroundColor = '#E2E8FF';
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (!isClearFilter) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                  if (!isItemActive) e.currentTarget.style.backgroundColor = '#FFFFFF';
                                 }}
                               >
                                 <span
                                   style={{
-                                    fontSize: '15px',
+                                    fontSize: 15,
                                     fontWeight: 500,
-                                    color: '#9CA3AF',
+                                    color: isItemActive ? '#2D4059' : '#9CA3AF',
                                   }}
                                 >
                                   {item.label}
                                 </span>
                                 {!isClearFilter && (
                                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                    <path d="M6 4L10 8L6 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M6 4L10 8L6 12" stroke={isItemActive ? '#2D4059' : '#9CA3AF'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                                   </svg>
                                 )}
                               </div>
@@ -1340,21 +1665,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForFilter ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -1365,7 +1687,7 @@ const StationsPage = () => {
 
     if (isOstatokButton) {
       const isOstatokButtonActive = activeButtons.includes(globalIdx) || isOstatokActive;
-      const showAsActiveForOstatok = isOstatokButtonActive && !isThisClosing;
+      const showAsActiveForOstatok = isOstatokButtonActive;
       const backgroundColorForOstatok = showAsActiveForOstatok ? '#666EFE' : '#FFFFFF';
       
       return (
@@ -1374,23 +1696,20 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '226px' : '54px',
-              height: actuallyExpanded ? 'auto' : '54px',
-              minHeight: actuallyExpanded ? 'auto' : '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#FFFFFF' : backgroundColorForOstatok,
+              width: isExpanded ? 226 : 54,
+              height: isExpanded ? 'auto' : 54,
+              minHeight: isExpanded ? 'auto' : 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForOstatok,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
               justifyContent: 'flex-start',
-              padding: actuallyExpanded ? '0' : '0',
-              boxShadow: (showAsActiveForOstatok && !actuallyExpanded)
+              boxShadow: (showAsActiveForOstatok && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), min-height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, height 0.4s ease, min-height 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
@@ -1398,27 +1717,25 @@ const StationsPage = () => {
           >
             <div
               style={{
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                pointerEvents: actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
                   <div
                     style={{
-                      height: '54px',
+                      height: 54,
                       backgroundColor: '#666EFE',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderTopLeftRadius: '27px',
-                      borderTopRightRadius: '27px',
+                      borderTopLeftRadius: 27,
+                      borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
                       {button.label}
                     </span>
                   </div>
@@ -1426,10 +1743,10 @@ const StationsPage = () => {
                     ref={ostatokDropdownRef}
                     style={{
                       backgroundColor: '#FFFFFF',
-                      borderBottomLeftRadius: '27px',
-                      borderBottomRightRadius: '27px',
+                      borderBottomLeftRadius: 27,
+                      borderBottomRightRadius: 27,
                       overflow: 'hidden',
-                      padding: '16px',
+                      padding: 16,
                     }}
                   >
                     <AnimatePresence>
@@ -1443,7 +1760,7 @@ const StationsPage = () => {
                             backgroundColor: '#FFFFFF',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '16px',
+                            gap: 16,
                           }}
                         >
                           <div 
@@ -1453,7 +1770,7 @@ const StationsPage = () => {
                               setMinOstatokEnabled(!minOstatokEnabled);
                             }}
                           >
-                            <span style={{ fontSize: '15px', fontWeight: 500, color: '#2D4059' }}>
+                            <span style={{ fontSize: 15, fontWeight: 500, color: '#2D4059' }}>
                               Минимальный остаток
                             </span>
                             <input
@@ -1463,7 +1780,7 @@ const StationsPage = () => {
                                 e.stopPropagation();
                                 setMinOstatokEnabled(e.target.checked);
                               }}
-                              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                               onClick={(e) => e.stopPropagation()}
                             />
                           </div>
@@ -1474,7 +1791,7 @@ const StationsPage = () => {
                               setCriticalOstatokEnabled(!criticalOstatokEnabled);
                             }}
                           >
-                            <span style={{ fontSize: '15px', fontWeight: 500, color: '#2D4059' }}>
+                            <span style={{ fontSize: 15, fontWeight: 500, color: '#2D4059' }}>
                               Критический остаток
                             </span>
                             <input
@@ -1484,7 +1801,7 @@ const StationsPage = () => {
                                 e.stopPropagation();
                                 setCriticalOstatokEnabled(e.target.checked);
                               }}
-                              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                               onClick={(e) => e.stopPropagation()}
                             />
                           </div>
@@ -1501,21 +1818,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForOstatok ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -1526,7 +1840,7 @@ const StationsPage = () => {
 
     if (isEnterpriseButton) {
       const isEnterpriseButtonActive = activeButtons.includes(globalIdx) || isEnterpriseActive;
-      const showAsActiveForEnterprise = isEnterpriseButtonActive && !isThisClosing;
+      const showAsActiveForEnterprise = isEnterpriseButtonActive;
       const backgroundColorForEnterprise = showAsActiveForEnterprise ? '#666EFE' : '#FFFFFF';
       const availableEnterprises = mockEnterprises;
       
@@ -1536,23 +1850,20 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '226px' : '54px',
-              height: actuallyExpanded ? 'auto' : '54px',
-              minHeight: actuallyExpanded ? 'auto' : '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#FFFFFF' : backgroundColorForEnterprise,
+              width: isExpanded ? 226 : 54,
+              height: isExpanded ? 'auto' : 54,
+              minHeight: isExpanded ? 'auto' : 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForEnterprise,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
               justifyContent: 'flex-start',
-              padding: actuallyExpanded ? '0' : '0',
-              boxShadow: (showAsActiveForEnterprise && !actuallyExpanded)
+              boxShadow: (showAsActiveForEnterprise && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), min-height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, height 0.4s ease, min-height 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
@@ -1560,27 +1871,25 @@ const StationsPage = () => {
           >
             <div
               style={{
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                pointerEvents: actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
                   <div
                     style={{
-                      height: '54px',
+                      height: 54,
                       backgroundColor: '#666EFE',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderTopLeftRadius: '27px',
-                      borderTopRightRadius: '27px',
+                      borderTopLeftRadius: 27,
+                      borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
                       {button.label}
                     </span>
                   </div>
@@ -1588,11 +1897,11 @@ const StationsPage = () => {
                     ref={enterpriseDropdownRef}
                     style={{
                       backgroundColor: '#FFFFFF',
-                      borderBottomLeftRadius: '27px',
-                      borderBottomRightRadius: '27px',
+                      borderBottomLeftRadius: 27,
+                      borderBottomRightRadius: 27,
                       overflow: 'hidden',
                       padding: '8px 0',
-                      maxHeight: '300px',
+                      maxHeight: 300,
                       overflowY: 'auto',
                     }}
                   >
@@ -1622,7 +1931,7 @@ const StationsPage = () => {
                                   if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
                                 }}
                                 style={{
-                                  height: '38px',
+                                  height: 38,
                                   padding: '0 16px',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -1634,7 +1943,7 @@ const StationsPage = () => {
                               >
                                 <span
                                   style={{
-                                    fontSize: '15px',
+                                    fontSize: 15,
                                     fontWeight: 500,
                                     color: isChecked ? '#2D4059' : '#9CA3AF',
                                   }}
@@ -1648,7 +1957,7 @@ const StationsPage = () => {
                                     e.stopPropagation();
                                     toggleEnterprise(enterprise.id);
                                   }}
-                                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
@@ -1667,21 +1976,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForEnterprise ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -1692,7 +1998,7 @@ const StationsPage = () => {
 
     if (isWorkshopButton) {
       const isWorkshopButtonActive = activeButtons.includes(globalIdx) || isWorkshopActive;
-      const showAsActiveForWorkshop = isWorkshopButtonActive && !isThisClosing;
+      const showAsActiveForWorkshop = isWorkshopButtonActive;
       const backgroundColorForWorkshop = showAsActiveForWorkshop ? '#666EFE' : '#FFFFFF';
       const availableWorkshops = getAvailableWorkshops();
       
@@ -1702,23 +2008,20 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '226px' : '54px',
-              height: actuallyExpanded ? 'auto' : '54px',
-              minHeight: actuallyExpanded ? 'auto' : '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#FFFFFF' : backgroundColorForWorkshop,
+              width: isExpanded ? 226 : 54,
+              height: isExpanded ? 'auto' : 54,
+              minHeight: isExpanded ? 'auto' : 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForWorkshop,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
               justifyContent: 'flex-start',
-              padding: actuallyExpanded ? '0' : '0',
-              boxShadow: (showAsActiveForWorkshop && !actuallyExpanded)
+              boxShadow: (showAsActiveForWorkshop && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), min-height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, height 0.4s ease, min-height 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
@@ -1726,27 +2029,25 @@ const StationsPage = () => {
           >
             <div
               style={{
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                pointerEvents: actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
                   <div
                     style={{
-                      height: '54px',
+                      height: 54,
                       backgroundColor: '#666EFE',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderTopLeftRadius: '27px',
-                      borderTopRightRadius: '27px',
+                      borderTopLeftRadius: 27,
+                      borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
                       {button.label}
                     </span>
                   </div>
@@ -1754,11 +2055,11 @@ const StationsPage = () => {
                     ref={workshopDropdownRef}
                     style={{
                       backgroundColor: '#FFFFFF',
-                      borderBottomLeftRadius: '27px',
-                      borderBottomRightRadius: '27px',
+                      borderBottomLeftRadius: 27,
+                      borderBottomRightRadius: 27,
                       overflow: 'hidden',
                       padding: '8px 0',
-                      maxHeight: '300px',
+                      maxHeight: 300,
                       overflowY: 'auto',
                     }}
                   >
@@ -1788,7 +2089,7 @@ const StationsPage = () => {
                                   if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
                                 }}
                                 style={{
-                                  height: '38px',
+                                  height: 38,
                                   padding: '0 16px',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -1800,7 +2101,7 @@ const StationsPage = () => {
                               >
                                 <span
                                   style={{
-                                    fontSize: '15px',
+                                    fontSize: 15,
                                     fontWeight: 500,
                                     color: isChecked ? '#2D4059' : '#9CA3AF',
                                   }}
@@ -1814,7 +2115,7 @@ const StationsPage = () => {
                                     e.stopPropagation();
                                     toggleWorkshop(workshop.id);
                                   }}
-                                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
@@ -1833,21 +2134,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForWorkshop ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -1858,7 +2156,7 @@ const StationsPage = () => {
 
     if (isSectionButton) {
       const isSectionButtonActive = activeButtons.includes(globalIdx) || isSectionActive;
-      const showAsActiveForSection = isSectionButtonActive && !isThisClosing;
+      const showAsActiveForSection = isSectionButtonActive;
       const backgroundColorForSection = showAsActiveForSection ? '#666EFE' : '#FFFFFF';
       const availableSections = getAvailableSections();
       
@@ -1868,23 +2166,20 @@ const StationsPage = () => {
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
             style={{
-              width: actuallyExpanded ? '226px' : '54px',
-              height: actuallyExpanded ? 'auto' : '54px',
-              minHeight: actuallyExpanded ? 'auto' : '54px',
-              borderRadius: '27px',
-              backgroundColor: actuallyExpanded ? '#FFFFFF' : backgroundColorForSection,
+              width: isExpanded ? 226 : 54,
+              height: isExpanded ? 'auto' : 54,
+              minHeight: isExpanded ? 'auto' : 54,
+              borderRadius: 27,
+              backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForSection,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
               justifyContent: 'flex-start',
-              padding: actuallyExpanded ? '0' : '0',
-              boxShadow: (showAsActiveForSection && !actuallyExpanded)
+              boxShadow: (showAsActiveForSection && !isExpanded)
                 ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
                 : '0 2px 4px rgba(0, 0, 0, 0.05)',
-              transition: actuallyExpanded 
-                ? 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), min-height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.3s ease, box-shadow 0.3s ease'
-                : 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0s ease, box-shadow 0.3s ease',
+              transition: 'width 0.4s ease, height 0.4s ease, min-height 0.4s ease, background-color 0.3s ease, box-shadow 0.3s ease',
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
@@ -1892,27 +2187,25 @@ const StationsPage = () => {
           >
             <div
               style={{
-                opacity: actuallyExpanded ? 1 : 0,
-                transition: actuallyExpanded
-                  ? 'opacity 0.3s ease 0.45s' 
-                  : 'opacity 0.15s ease',
-                pointerEvents: actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'auto' : 'none',
               }}
             >
-              {actuallyExpanded && (
+              {isExpanded && (
                 <>
                   <div
                     style={{
-                      height: '54px',
+                      height: 54,
                       backgroundColor: '#666EFE',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderTopLeftRadius: '27px',
-                      borderTopRightRadius: '27px',
+                      borderTopLeftRadius: 27,
+                      borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
                       {button.label}
                     </span>
                   </div>
@@ -1920,11 +2213,11 @@ const StationsPage = () => {
                     ref={sectionDropdownRef}
                     style={{
                       backgroundColor: '#FFFFFF',
-                      borderBottomLeftRadius: '27px',
-                      borderBottomRightRadius: '27px',
+                      borderBottomLeftRadius: 27,
+                      borderBottomRightRadius: 27,
                       overflow: 'hidden',
                       padding: '8px 0',
-                      maxHeight: '300px',
+                      maxHeight: 300,
                       overflowY: 'auto',
                     }}
                   >
@@ -1954,7 +2247,7 @@ const StationsPage = () => {
                                   if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF';
                                 }}
                                 style={{
-                                  height: '38px',
+                                  height: 38,
                                   padding: '0 16px',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -1966,7 +2259,7 @@ const StationsPage = () => {
                               >
                                 <span
                                   style={{
-                                    fontSize: '15px',
+                                    fontSize: 15,
                                     fontWeight: 500,
                                     color: isChecked ? '#2D4059' : '#9CA3AF',
                                   }}
@@ -1980,7 +2273,7 @@ const StationsPage = () => {
                                     e.stopPropagation();
                                     toggleSection(section.id);
                                   }}
-                                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }}
+                                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
@@ -1999,21 +2292,18 @@ const StationsPage = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                opacity: (!actuallyExpanded || isThisOpening) ? 1 : 0,
-                transition: (!actuallyExpanded || isThisOpening)
-                  ? 'opacity 0.3s ease 0.15s' 
-                  : 'opacity 0.1s ease',
-                pointerEvents: !actuallyExpanded ? 'auto' : 'none',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease',
+                pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
               <img
                 src={button.icon}
                 alt={`icon${globalIdx + 1}`}
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   filter: showAsActiveForSection ? 'brightness(0) invert(1)' : 'none',
-                  transition: 'filter 0s ease',
                 }}
               />
             </div>
@@ -2026,7 +2316,12 @@ const StationsPage = () => {
   };
 
   const renderStationsGrid = () => (
-    <div
+    <motion.div
+      key="grid"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 220px)',
@@ -2066,15 +2361,20 @@ const StationsPage = () => {
           />
         );
       })}
-    </div>
+    </motion.div>
   );
 
   const renderStationsList = () => (
-    <div
+    <motion.div
+      key="list"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '20px',
         paddingTop: '10px',
         paddingBottom: '10px',
         paddingLeft: '40px',
@@ -2110,10 +2410,10 @@ const StationsPage = () => {
           />
         );
       })}
-    </div>
+    </motion.div>
   );
 
-  const isFirstThreeExpanded = expandedButton !== null && expandedButton <= 2;
+  const gapWidth = calculateGapWidth();
 
   return (
     <div style={{ position: 'relative', height: '100%' }}>
@@ -2155,8 +2455,8 @@ const StationsPage = () => {
 
           <div 
             style={{ 
-              width: isFirstThreeExpanded ? '0px' : '170px',
-              transition: 'width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1)',
+              width: `${gapWidth}px`,
+              transition: 'width 0.4s ease',
               overflow: 'hidden',
             }} 
           />
@@ -2207,7 +2507,9 @@ const StationsPage = () => {
             Нет данных о станциях
           </div>
         ) : (
-          viewMode === 'grid' ? renderStationsGrid() : renderStationsList()
+          <AnimatePresence mode="wait">
+            {viewMode === 'grid' ? renderStationsGrid() : renderStationsList()}
+          </AnimatePresence>
         )}
       </div>
     </div>

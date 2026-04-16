@@ -1,5 +1,11 @@
 // components/StationsPage/StationRow.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+
+// Импорт фонов для ряда
+import Line1 from '../../assets/Station/Line1.svg';
+import Line2 from '../../assets/Station/Line2.svg';
+import Line3 from '../../assets/Station/Line3.svg';
+import Line4 from '../../assets/Station/Line4.svg';
 
 // Импорт иконок для статусов
 import KRIT from '../../assets/Station/KRIT.svg';
@@ -68,54 +74,20 @@ const StationRow: React.FC<StationRowProps> = ({
   filledCells = 0,
   templateNomenclatureCount = 0,
   remainingNomenclatureCount = 0,
-  maxReadyParts = 0,
   readyPartsCount = 0,
 }) => {
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
-  
-  // Состояния для анимированных процентов
-  const [animatedFilled, setAnimatedFilled] = useState(0);
-  const [animatedRemaining, setAnimatedRemaining] = useState(0);
-  const [animatedReady, setAnimatedReady] = useState(0);
-  
-  const [startAnimation, setStartAnimation] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setStartAnimation(true);
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!startAnimation) return;
-    
-    const duration = 1000;
-    const steps = 60;
-    const interval = duration / steps;
-    
-    let step = 0;
-    
-    const timer = setInterval(() => {
-      step++;
-      const progress = step / steps;
-      
-      setAnimatedFilled(filledCellsPercent * progress);
-      setAnimatedRemaining(remainingNomenclaturePercent * progress);
-      setAnimatedReady(readyPartsPercent * progress);
-      
-      if (step >= steps) {
-        clearInterval(timer);
-        setAnimatedFilled(filledCellsPercent);
-        setAnimatedRemaining(remainingNomenclaturePercent);
-        setAnimatedReady(readyPartsPercent);
-      }
-    }, interval);
-    
-    return () => clearInterval(timer);
-  }, [startAnimation, filledCellsPercent, remainingNomenclaturePercent, readyPartsPercent]);
+  const getBackgroundImage = () => {
+    switch (status) {
+      case 'WORKING': return Line1;
+      case 'OFFLINE': return Line2;
+      case 'MINIMAL_STOCK': return Line3;
+      case 'CRITICAL_STOCK': return Line4;
+      default: return Line2;
+    }
+  };
 
   const getFonStation = () => {
     switch (status) {
@@ -165,20 +137,141 @@ const StationRow: React.FC<StationRowProps> = ({
   const workshopSectionText = `${workshop || '—'} ${section || '—'}`;
   const overNorm = templateNomenclatureCount > 0 ? Math.max(0, templateNomenclatureCount - remainingNomenclatureCount) : 0;
 
+  // Собираем массив иконок для отображения
+  const statusIcons: string[] = [];
+  if (isTmc) statusIcons.push(TMC);
+  if (isSgd) statusIcons.push(SGD);
+  if (isOk) statusIcons.push(OK);
+  if (parentUid) statusIcons.push(CHAIN);
+  if (hasError) statusIcons.push(ERR);
+
+  const renderStatusIcons = () => {
+    const count = statusIcons.length;
+    
+    if (count === 0) return null;
+    
+    const iconWidth = 30;
+    const iconHeight = 17;
+    const gap = 4;
+    
+    if (count === 1) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: iconWidth,
+            height: '100%',
+          }}
+        >
+          <img src={statusIcons[0]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+        </div>
+      );
+    }
+    
+    if (count === 2) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: `${gap}px`,
+          }}
+        >
+          {statusIcons.map((icon, idx) => (
+            <img key={idx} src={icon} alt="" style={{ width: iconWidth, height: iconHeight }} />
+          ))}
+        </div>
+      );
+    }
+    
+    if (count === 3) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: `${gap}px`,
+          }}
+        >
+          <div style={{ display: 'flex', gap: `${gap}px` }}>
+            <img src={statusIcons[0]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+            <img src={statusIcons[1]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+          </div>
+          <img src={statusIcons[2]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+        </div>
+      );
+    }
+    
+    if (count === 4) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: `${gap}px`,
+          }}
+        >
+          <div style={{ display: 'flex', gap: `${gap}px` }}>
+            <img src={statusIcons[0]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+            <img src={statusIcons[1]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+          </div>
+          <div style={{ display: 'flex', gap: `${gap}px` }}>
+            <img src={statusIcons[2]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+            <img src={statusIcons[3]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+          </div>
+        </div>
+      );
+    }
+    
+    if (count === 5) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: `${gap}px`,
+          }}
+        >
+          <div style={{ display: 'flex', gap: `${gap}px` }}>
+            <img src={statusIcons[0]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+            <img src={statusIcons[1]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+          </div>
+          <div style={{ display: 'flex', gap: `${gap}px` }}>
+            <img src={statusIcons[2]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+            <img src={statusIcons[3]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+          </div>
+          <img src={statusIcons[4]} alt="" style={{ width: iconWidth, height: iconHeight }} />
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
+  const showKrit = status === 'MINIMAL_STOCK' || status === 'CRITICAL_STOCK';
+  const kritIcon = status === 'MINIMAL_STOCK' ? KRIT : KRIT2;
+
   return (
     <div
       style={{
-        width: '100%',
-        height: '80px',
-        backgroundColor: '#FFFFFF',
-        borderRadius: '12px',
+        width: '1720px',
+        height: '112px',
+        borderRadius: '25px',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 16px',
-        gap: '16px',
         position: 'relative',
         transition: 'box-shadow 0.2s ease',
+        overflow: 'hidden',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)';
@@ -187,59 +280,32 @@ const StationRow: React.FC<StationRowProps> = ({
         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
       }}
     >
-      {/* Индикаторы статуса и ошибки */}
-      {status === 'MINIMAL_STOCK' && (
-        <img
-          src={KRIT}
-          alt="krit"
-          style={{
-            position: 'absolute',
-            left: '4px',
-            top: '4px',
-            width: '16px',
-            height: '14px',
-            zIndex: 2,
-          }}
-        />
-      )}
-      
-      {status === 'CRITICAL_STOCK' && (
-        <img
-          src={KRIT2}
-          alt="krit2"
-          style={{
-            position: 'absolute',
-            left: '4px',
-            top: '4px',
-            width: '16px',
-            height: '14px',
-            zIndex: 2,
-          }}
-        />
-      )}
-      
-      {hasError && (
-        <img
-          src={ERR}
-          alt="error"
-          style={{
-            position: 'absolute',
-            left: '4px',
-            top: (status === 'MINIMAL_STOCK' || status === 'CRITICAL_STOCK') ? '22px' : '4px',
-            width: '16px',
-            height: '14px',
-            zIndex: 2,
-          }}
-        />
-      )}
+      {/* Фоновое изображение */}
+      <img
+        src={getBackgroundImage()}
+        alt=""
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          zIndex: 0,
+        }}
+      />
 
       {/* Иконка станции */}
       <div
         style={{
-          width: '48px',
-          height: '52px',
+          width: '84px',
+          height: '92px',
           position: 'relative',
           flexShrink: 0,
+          marginLeft: '30px',
+          marginTop: '10px',
+          marginBottom: '10px',
+          zIndex: 1,
         }}
       >
         <img
@@ -262,27 +328,48 @@ const StationRow: React.FC<StationRowProps> = ({
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: '38px',
-            height: '42px',
+            width: '68px',
+            height: '76px',
             objectFit: 'contain',
             zIndex: 1,
           }}
         />
       </div>
 
-      {/* Информация о станции */}
+      {/* Блок с иконками статусов (TMC, SGD, OK, CHAIN, ERR) */}
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          minWidth: '160px',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginLeft: '30px',
+          height: '100%',
           flexShrink: 0,
+          zIndex: 1,
         }}
       >
+        {renderStatusIcons()}
+      </div>
+
+      {/* Информация о станции - начинается на 243px от левого края */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '243px',
+          top: 0,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          zIndex: 1,
+        }}
+      >
+        {/* Название */}
         <div
           style={{
             position: 'relative',
-            maxWidth: '160px',
+            width: '148px',
           }}
           onMouseEnter={() => setShowNameTooltip(true)}
           onMouseLeave={() => setShowNameTooltip(false)}
@@ -296,6 +383,7 @@ const StationRow: React.FC<StationRowProps> = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              textAlign: 'center',
             }}
           >
             {displayName}
@@ -305,7 +393,8 @@ const StationRow: React.FC<StationRowProps> = ({
               style={{
                 position: 'absolute',
                 bottom: '100%',
-                left: '0',
+                left: '50%',
+                transform: 'translateX(-50%)',
                 marginBottom: '4px',
                 padding: '4px 8px',
                 backgroundColor: 'rgba(45, 64, 89, 0.9)',
@@ -322,10 +411,12 @@ const StationRow: React.FC<StationRowProps> = ({
           )}
         </div>
         
+        {/* Цех и участок */}
         <div
           style={{
             position: 'relative',
-            maxWidth: '160px',
+            width: '148px',
+            marginTop: '1px',
           }}
           onMouseEnter={() => setShowWorkshopTooltip(true)}
           onMouseLeave={() => setShowWorkshopTooltip(false)}
@@ -340,6 +431,7 @@ const StationRow: React.FC<StationRowProps> = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              textAlign: 'center',
             }}
           >
             {workshopSectionText}
@@ -349,7 +441,8 @@ const StationRow: React.FC<StationRowProps> = ({
               style={{
                 position: 'absolute',
                 bottom: '100%',
-                left: '0',
+                left: '50%',
+                transform: 'translateX(-50%)',
                 marginBottom: '4px',
                 padding: '4px 8px',
                 backgroundColor: 'rgba(45, 64, 89, 0.9)',
@@ -365,54 +458,64 @@ const StationRow: React.FC<StationRowProps> = ({
             </div>
           )}
         </div>
+
+        {/* Статус */}
+        <div
+          style={{
+            fontWeight: 500,
+            fontSize: '13px',
+            color: getStatusColor(),
+            width: '148px',
+            marginTop: '7px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textAlign: 'center',
+          }}
+        >
+          {getStatusText()}
+        </div>
       </div>
 
-      {/* Статус */}
+      {/* Иконка КРИТ на 421px от левого края */}
       <div
         style={{
-          fontWeight: 500,
-          fontSize: '13px',
-          color: getStatusColor(),
-          minWidth: '130px',
+          position: 'absolute',
+          left: '421px',
+          top: '44px',
+          width: '26px',
+          height: '24px',
           flexShrink: 0,
+          zIndex: 1,
         }}
       >
-        {getStatusText()}
+        {showKrit && (
+          <img
+            src={kritIcon}
+            alt="krit"
+            style={{
+              width: '26px',
+              height: '24px',
+            }}
+          />
+        )}
       </div>
 
-      {/* Иконки информации */}
+      {/* Прогресс бары - начинаются на 421 + 26 + 30 = 477px от левого края */}
       <div
         style={{
+          position: 'absolute',
+          left: '477px',
+          top: '50%',
+          transform: 'translateY(-50%)',
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: 'column',
           gap: '6px',
-          minWidth: '80px',
-          flexShrink: 0,
-        }}
-      >
-        {isTmc && <img src={TMC} alt="TMC" style={{ width: '24px', height: '14px' }} />}
-        {isSgd && <img src={SGD} alt="SGD" style={{ width: '24px', height: '14px' }} />}
-        {isOk && <img src={OK} alt="OK" style={{ width: '24px', height: '14px' }} />}
-        {parentUid && <img src={CHAIN} alt="CHAIN" style={{ width: '24px', height: '14px' }} />}
-      </div>
-
-      {/* Прогресс бары */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '24px',
-          flex: 1,
+          zIndex: 1,
         }}
       >
         {/* Прогресс бар 1 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <img src={Icon1} alt="" style={{ width: '14px', height: '7px' }} />
           <div
             style={{
@@ -425,27 +528,20 @@ const StationRow: React.FC<StationRowProps> = ({
           >
             <div
               style={{
-                width: `${Math.min(animatedFilled, 100)}%`,
+                width: `${Math.min(filledCellsPercent, 100)}%`,
                 height: '6px',
                 backgroundColor: getProgressBarColor(),
                 borderRadius: '3px',
-                transition: 'width 0.05s linear',
               }}
             />
           </div>
           <span style={{ fontSize: '12px', fontWeight: 500, color: '#6C7A8B', minWidth: '36px' }}>
-            {Math.round(animatedFilled)}%
+            {Math.round(filledCellsPercent)}%
           </span>
         </div>
 
         {/* Прогресс бар 2 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <img src={Icon2} alt="" style={{ width: '13px', height: '12px' }} />
           <div
             style={{
@@ -458,27 +554,20 @@ const StationRow: React.FC<StationRowProps> = ({
           >
             <div
               style={{
-                width: `${Math.min(animatedRemaining, 100)}%`,
+                width: `${Math.min(remainingNomenclaturePercent, 100)}%`,
                 height: '6px',
                 backgroundColor: getProgressBarColor(),
                 borderRadius: '3px',
-                transition: 'width 0.05s linear',
               }}
             />
           </div>
           <span style={{ fontSize: '12px', fontWeight: 500, color: '#6C7A8B', minWidth: '36px' }}>
-            {Math.round(animatedRemaining)}%
+            {Math.round(remainingNomenclaturePercent)}%
           </span>
         </div>
 
         {/* Прогресс бар 3 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <img src={Icon3} alt="" style={{ width: '8px', height: '13px' }} />
           <div
             style={{
@@ -491,50 +580,57 @@ const StationRow: React.FC<StationRowProps> = ({
           >
             <div
               style={{
-                width: `${Math.min(animatedReady, 100)}%`,
+                width: `${Math.min(readyPartsPercent, 100)}%`,
                 height: '6px',
                 backgroundColor: getProgressBarColor(),
                 borderRadius: '3px',
-                transition: 'width 0.05s linear',
               }}
             />
           </div>
           <span style={{ fontSize: '12px', fontWeight: 500, color: '#6C7A8B', minWidth: '36px' }}>
-            {Math.round(animatedReady)}%
+            {Math.round(readyPartsPercent)}%
           </span>
         </div>
       </div>
 
-      {/* Данные */}
+      {/* Данные - справа от прогресс баров */}
       <div
         style={{
+          position: 'absolute',
+          left: '650px',
+          top: '50%',
+          transform: 'translateY(-50%)',
           display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          flexShrink: 0,
+          flexDirection: 'column',
+          gap: '6px',
+          zIndex: 1,
         }}
       >
-        <div style={{ textAlign: 'center', minWidth: '50px' }}>
-          <div style={{ fontSize: '11px', color: '#6C7A8B' }}>ТМЦ</div>
-          <div style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>{totalCells}</div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>ТМЦ</span>
+          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{totalCells}</span>
         </div>
-        <div style={{ textAlign: 'center', minWidth: '50px' }}>
-          <div style={{ fontSize: '11px', color: '#6C7A8B' }}>Выдано</div>
-          <div style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>{filledCells}</div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>Выдано</span>
+          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{filledCells}</span>
         </div>
-        <div style={{ textAlign: 'center', minWidth: '50px' }}>
-          <div style={{ fontSize: '11px', color: '#6C7A8B' }}>Сверх</div>
-          <div style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>{overNorm}</div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>Сверх</span>
+          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{overNorm}</span>
         </div>
-        <div style={{ textAlign: 'center', minWidth: '50px' }}>
-          <div style={{ fontSize: '11px', color: '#6C7A8B' }}>Готово</div>
-          <div style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>{readyPartsCount}</div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>Готово</span>
+          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{readyPartsCount}</span>
         </div>
       </div>
 
       {/* Кнопка Пополнить */}
       <button
         style={{
+          position: 'absolute',
+          left: '780px',
+          top: '50%',
+          transform: 'translateY(-50%)',
           padding: '6px 16px',
           backgroundColor: getButtonColor(),
           border: 'none',
@@ -544,7 +640,7 @@ const StationRow: React.FC<StationRowProps> = ({
           fontWeight: 500,
           color: '#2D4059',
           flexShrink: 0,
-          marginLeft: 'auto',
+          zIndex: 1,
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -553,6 +649,36 @@ const StationRow: React.FC<StationRowProps> = ({
       >
         Пополнить
       </button>
+
+      {/* Два пустых значка справа */}
+      <div
+        style={{
+          position: 'absolute',
+          right: '30px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          display: 'flex',
+          gap: '20px',
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            backgroundColor: '#F0F2F5',
+            borderRadius: '8px',
+          }}
+        />
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            backgroundColor: '#F0F2F5',
+            borderRadius: '8px',
+          }}
+        />
+      </div>
     </div>
   );
 };
