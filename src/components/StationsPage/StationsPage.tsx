@@ -59,8 +59,44 @@ interface FilterCascadeState {
   selectedSections: string[];
 }
 
+// Фиксированная высота скролл-области
+const SCROLL_AREA_HEIGHT = 640;
+
+// Высоты фиксированных элементов
+const HEADER_HEIGHT = 36;
+const CONTROLS_HEIGHT = 74;
+
+// Базовые отступы при 1920x960 (желаемые пропорции)
+const BASE_GAP_TOP = 35;
+const BASE_GAP_TITLE_TO_CONTROLS = 20;
+const BASE_GAP_CONTROLS_TO_SCROLL = 30;
+const BASE_GAP_BOTTOM = 30;
+
+// Сумма базовых отступов
+const BASE_GAPS_SUM = BASE_GAP_TOP + BASE_GAP_TITLE_TO_CONTROLS + BASE_GAP_CONTROLS_TO_SCROLL + BASE_GAP_BOTTOM;
+
+// Ключ для localStorage
+const STORAGE_KEY = 'stationsPageState';
+
+// Загружаем сохранённые состояния из localStorage
+const loadSavedState = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load saved state:', e);
+  }
+  return null;
+};
+
 const StationsPage = () => {
-  const [activeButtons, setActiveButtons] = useState<number[]>([9]);
+  const savedState = loadSavedState();
+
+  const [activeButtons, setActiveButtons] = useState<number[]>(
+    savedState?.activeButtons || [9]
+  );
   const [expandedButton, setExpandedButton] = useState<number | null>(null);
   const expandedRef = useRef<HTMLDivElement>(null);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
@@ -69,37 +105,67 @@ const StationsPage = () => {
   const enterpriseDropdownRef = useRef<HTMLDivElement>(null);
   const workshopDropdownRef = useRef<HTMLDivElement>(null);
   const sectionDropdownRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controlsRowRef = useRef<HTMLDivElement>(null);
   
   const [stationsStatic, setStationsStatic] = useState<StationStatic[]>([]);
   const [stationsDynamic, setStationsDynamic] = useState<Map<string, StationDynamic>>(new Map());
   const [loading, setLoading] = useState(true);
   const [stationsError, setStationsError] = useState<string | null>(null);
   
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortOption, setSortOption] = useState<SortOption>('nameAsc');
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    savedState?.viewMode || 'grid'
+  );
+  const [sortOption, setSortOption] = useState<SortOption>(
+    savedState?.sortOption || 'nameAsc'
+  );
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [hasSortSelection, setHasSortSelection] = useState(false);
+  const [hasSortSelection, setHasSortSelection] = useState(
+    savedState?.hasSortSelection || false
+  );
   
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hasSearchQuery, setHasSearchQuery] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(
+    savedState?.searchQuery || ''
+  );
+  const [hasSearchQuery, setHasSearchQuery] = useState(
+    savedState?.hasSearchQuery || false
+  );
 
   const [showOstatokDropdown, setShowOstatokDropdown] = useState(false);
-  const [minOstatokEnabled, setMinOstatokEnabled] = useState(false);
-  const [criticalOstatokEnabled, setCriticalOstatokEnabled] = useState(false);
+  const [minOstatokEnabled, setMinOstatokEnabled] = useState(
+    savedState?.minOstatokEnabled || false
+  );
+  const [criticalOstatokEnabled, setCriticalOstatokEnabled] = useState(
+    savedState?.criticalOstatokEnabled || false
+  );
 
   const [showEnterpriseDropdown, setShowEnterpriseDropdown] = useState(false);
   const [showWorkshopDropdown, setShowWorkshopDropdown] = useState(false);
   const [showSectionDropdown, setShowSectionDropdown] = useState(false);
   
-  const [selectedEnterprises, setSelectedEnterprises] = useState<string[]>([]);
-  const [selectedWorkshops, setSelectedWorkshops] = useState<string[]>([]);
-  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [selectedEnterprises, setSelectedEnterprises] = useState<string[]>(
+    savedState?.selectedEnterprises || []
+  );
+  const [selectedWorkshops, setSelectedWorkshops] = useState<string[]>(
+    savedState?.selectedWorkshops || []
+  );
+  const [selectedSections, setSelectedSections] = useState<string[]>(
+    savedState?.selectedSections || []
+  );
 
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedOverissue, setSelectedOverissue] = useState<string | null>(null);
-  const [selectedError, setSelectedError] = useState<string | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+    savedState?.selectedStatuses || []
+  );
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(
+    savedState?.selectedTypes || []
+  );
+  const [selectedOverissue, setSelectedOverissue] = useState<string | null>(
+    savedState?.selectedOverissue || null
+  );
+  const [selectedError, setSelectedError] = useState<string | null>(
+    savedState?.selectedError || null
+  );
 
   const [filterCascade, setFilterCascade] = useState<FilterCascadeState>({
     activeType: null,
@@ -108,6 +174,223 @@ const StationsPage = () => {
     selectedWorkshops: [],
     selectedSections: [],
   });
+
+  // Состояние для адаптивных отступов
+  const [adaptiveGaps, setAdaptiveGaps] = useState({
+    topPadding: BASE_GAP_TOP,
+    controlsMarginTop: BASE_GAP_TITLE_TO_CONTROLS,
+    scrollMarginTop: BASE_GAP_CONTROLS_TO_SCROLL,
+    bottomPadding: BASE_GAP_BOTTOM,
+  });
+
+  // Состояние для проверки масштаба
+  const [isScaleTooLarge, setIsScaleTooLarge] = useState(false);
+  const [showScaleWarning, setShowScaleWarning] = useState(false);
+  const scaleWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Проверка масштаба экрана
+  useEffect(() => {
+    const checkScale = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const baseWidth = 1920;
+      const baseHeight = 1080;
+      
+      const widthScale = width / baseWidth;
+      const heightScale = height / baseHeight;
+      const maxScale = Math.max(widthScale, heightScale);
+      
+      // Если масштаб больше 1.5 (т.е. окно больше 2880x1620)
+      if (maxScale > 1.5) {
+        setIsScaleTooLarge(true);
+        setShowScaleWarning(true);
+        
+        // Автоматически скрываем предупреждение через 2 секунды
+        if (scaleWarningTimerRef.current) {
+          clearTimeout(scaleWarningTimerRef.current);
+        }
+        scaleWarningTimerRef.current = setTimeout(() => {
+          setShowScaleWarning(false);
+        }, 2000);
+      } else {
+        setIsScaleTooLarge(false);
+        setShowScaleWarning(false);
+      }
+    };
+    
+    checkScale();
+    
+    const handleResize = () => {
+      checkScale();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (scaleWarningTimerRef.current) {
+        clearTimeout(scaleWarningTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Сохраняем состояние в localStorage при изменении
+  useEffect(() => {
+    const stateToSave = {
+      activeButtons,
+      viewMode,
+      sortOption,
+      hasSortSelection,
+      searchQuery,
+      hasSearchQuery,
+      minOstatokEnabled,
+      criticalOstatokEnabled,
+      selectedEnterprises,
+      selectedWorkshops,
+      selectedSections,
+      selectedStatuses,
+      selectedTypes,
+      selectedOverissue,
+      selectedError,
+    };
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+  }, [
+    activeButtons,
+    viewMode,
+    sortOption,
+    hasSortSelection,
+    searchQuery,
+    hasSearchQuery,
+    minOstatokEnabled,
+    criticalOstatokEnabled,
+    selectedEnterprises,
+    selectedWorkshops,
+    selectedSections,
+    selectedStatuses,
+    selectedTypes,
+    selectedOverissue,
+    selectedError,
+  ]);
+
+  // Сбрасываем expanded состояние при монтировании
+  useEffect(() => {
+    setExpandedButton(null);
+    setShowSortDropdown(false);
+    setShowFilterDropdown(false);
+    setShowOstatokDropdown(false);
+    setShowEnterpriseDropdown(false);
+    setShowWorkshopDropdown(false);
+    setShowSectionDropdown(false);
+  }, []);
+
+  // Синхронизация активных кнопок с фильтрами
+  useEffect(() => {
+    if (selectedEnterprises.length > 0 && !activeButtons.includes(3)) {
+      setActiveButtons(prev => [...prev, 3]);
+    } else if (selectedEnterprises.length === 0 && activeButtons.includes(3) && expandedButton !== 3) {
+      setActiveButtons(prev => prev.filter(i => i !== 3));
+    }
+  }, [selectedEnterprises]);
+
+  useEffect(() => {
+    if (selectedWorkshops.length > 0 && !activeButtons.includes(4)) {
+      setActiveButtons(prev => [...prev, 4]);
+    } else if (selectedWorkshops.length === 0 && activeButtons.includes(4) && expandedButton !== 4) {
+      setActiveButtons(prev => prev.filter(i => i !== 4));
+    }
+  }, [selectedWorkshops]);
+
+  useEffect(() => {
+    if (selectedSections.length > 0 && !activeButtons.includes(5)) {
+      setActiveButtons(prev => [...prev, 5]);
+    } else if (selectedSections.length === 0 && activeButtons.includes(5) && expandedButton !== 5) {
+      setActiveButtons(prev => prev.filter(i => i !== 5));
+    }
+  }, [selectedSections]);
+
+  useEffect(() => {
+    if (hasSearchQuery && !activeButtons.includes(0)) {
+      setActiveButtons(prev => [...prev, 0]);
+    } else if (!hasSearchQuery && activeButtons.includes(0) && expandedButton !== 0) {
+      setActiveButtons(prev => prev.filter(i => i !== 0));
+    }
+  }, [hasSearchQuery]);
+
+  useEffect(() => {
+    if (hasSortSelection && !activeButtons.includes(1)) {
+      setActiveButtons(prev => [...prev, 1]);
+    } else if (!hasSortSelection && activeButtons.includes(1) && expandedButton !== 1) {
+      setActiveButtons(prev => prev.filter(i => i !== 1));
+    }
+  }, [hasSortSelection]);
+
+  useEffect(() => {
+    const isFilterActive = selectedEnterprises.length > 0 || 
+                           selectedWorkshops.length > 0 || 
+                           selectedSections.length > 0 ||
+                           selectedStatuses.length > 0 || 
+                           selectedTypes.length > 0 || 
+                           selectedOverissue !== null || 
+                           selectedError !== null;
+    
+    if (isFilterActive && !activeButtons.includes(2)) {
+      setActiveButtons(prev => [...prev, 2]);
+    } else if (!isFilterActive && activeButtons.includes(2) && expandedButton !== 2) {
+      setActiveButtons(prev => prev.filter(i => i !== 2));
+    }
+  }, [selectedEnterprises, selectedWorkshops, selectedSections, selectedStatuses, selectedTypes, selectedOverissue, selectedError]);
+
+  useEffect(() => {
+    const isOstatokActive = minOstatokEnabled || criticalOstatokEnabled;
+    
+    if (isOstatokActive && !activeButtons.includes(8)) {
+      setActiveButtons(prev => [...prev, 8]);
+    } else if (!isOstatokActive && activeButtons.includes(8) && expandedButton !== 8) {
+      setActiveButtons(prev => prev.filter(i => i !== 8));
+    }
+  }, [minOstatokEnabled, criticalOstatokEnabled]);
+
+  // Расчёт адаптивных отступов
+  useEffect(() => {
+    const calculateAdaptiveGaps = () => {
+      if (!containerRef.current) return;
+      
+      const whiteBlock = containerRef.current.closest('.white-block');
+      if (!whiteBlock) return;
+      
+      const whiteBlockHeight = whiteBlock.clientHeight;
+      
+      const fixedHeight = HEADER_HEIGHT + CONTROLS_HEIGHT + SCROLL_AREA_HEIGHT;
+      const availableGapSpace = whiteBlockHeight - fixedHeight;
+      const scale = availableGapSpace / BASE_GAPS_SUM;
+      
+      setAdaptiveGaps({
+        topPadding: Math.max(5, Math.round(BASE_GAP_TOP * scale)),
+        controlsMarginTop: Math.max(5, Math.round(BASE_GAP_TITLE_TO_CONTROLS * scale)),
+        scrollMarginTop: Math.max(5, Math.round(BASE_GAP_CONTROLS_TO_SCROLL * scale)),
+        bottomPadding: Math.max(5, Math.round(BASE_GAP_BOTTOM * scale)),
+      });
+    };
+    
+    calculateAdaptiveGaps();
+    
+    const resizeObserver = new ResizeObserver(calculateAdaptiveGaps);
+    
+    if (containerRef.current) {
+      const whiteBlock = containerRef.current.closest('.white-block');
+      if (whiteBlock) {
+        resizeObserver.observe(whiteBlock);
+      }
+    }
+    
+    window.addEventListener('resize', calculateAdaptiveGaps);
+    
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', calculateAdaptiveGaps);
+    };
+  }, []);
 
   const sortOptions = [
     { value: 'nameAsc', label: 'По названию (А-Я)' },
@@ -240,9 +523,11 @@ const StationsPage = () => {
     setSelectedSections(prev => prev.filter(id => availableSectionIds.includes(id)));
   }, [selectedWorkshops]);
 
+  // ФИЛЬТРЫ НЕ ВЛИЯЮТ НА ОТОБРАЖЕНИЕ СТАНЦИЙ
   const getFilteredAndSortedStations = () => {
     let filtered = [...stationsStatic];
 
+    // Только поиск и сортировка влияют на отображение
     if (searchQuery.trim()) {
       filtered = filtered.filter(s => 
         s.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -385,6 +670,7 @@ const StationsPage = () => {
   }, []);
 
   const toggleButton = (index: number) => {
+    if (isScaleTooLarge) return;
     setActiveButtons(prev =>
       prev.includes(index)
         ? prev.filter(i => i !== index)
@@ -393,6 +679,7 @@ const StationsPage = () => {
   };
 
   const handleViewModeToggle = (index: number) => {
+    if (isScaleTooLarge) return;
     const newMode = index === 9 ? 'grid' : 'list';
     setViewMode(newMode);
     
@@ -476,6 +763,17 @@ const StationsPage = () => {
   };
 
   const handleButtonClick = (index: number) => {
+    if (isScaleTooLarge) {
+      setShowScaleWarning(true);
+      if (scaleWarningTimerRef.current) {
+        clearTimeout(scaleWarningTimerRef.current);
+      }
+      scaleWarningTimerRef.current = setTimeout(() => {
+        setShowScaleWarning(false);
+      }, 2000);
+      return;
+    }
+    
     if (index === 9 || index === 10) {
       handleViewModeToggle(index);
       return;
@@ -678,12 +976,8 @@ const StationsPage = () => {
       const availableEnterprises = mockEnterprises;
       
       windows.push(
-        <motion.div
+        <div
           key="enterprise"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -705,7 +999,7 @@ const StationsPage = () => {
               justifyContent: 'center',
             }}
           >
-            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>
               Предприятие
             </span>
           </div>
@@ -736,7 +1030,10 @@ const StationsPage = () => {
                   <span style={{ 
                     fontSize: '15px', 
                     fontWeight: 500, 
-                    color: isChecked ? '#2D4059' : '#9CA3AF' 
+                    color: isChecked ? '#2D4059' : '#9CA3AF',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}>
                     {enterprise.name}
                   </span>
@@ -754,7 +1051,7 @@ const StationsPage = () => {
               );
             })}
           </div>
-        </motion.div>
+        </div>
       );
       leftOffset += 230;
     }
@@ -763,12 +1060,8 @@ const StationsPage = () => {
       const workshops = getFilterWorkshops(selectedEnterprises);
       
       windows.push(
-        <motion.div
+        <div
           key="workshop"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -790,7 +1083,7 @@ const StationsPage = () => {
               justifyContent: 'center',
             }}
           >
-            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>
               Цех
             </span>
           </div>
@@ -821,7 +1114,10 @@ const StationsPage = () => {
                   <span style={{ 
                     fontSize: '15px', 
                     fontWeight: 500, 
-                    color: isChecked ? '#2D4059' : '#9CA3AF' 
+                    color: isChecked ? '#2D4059' : '#9CA3AF',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}>
                     {workshop.name}
                   </span>
@@ -839,7 +1135,7 @@ const StationsPage = () => {
               );
             })}
           </div>
-        </motion.div>
+        </div>
       );
       leftOffset += 230;
     }
@@ -848,12 +1144,8 @@ const StationsPage = () => {
       const sections = getFilterSections(selectedWorkshops);
       
       windows.push(
-        <motion.div
+        <div
           key="section"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -875,7 +1167,7 @@ const StationsPage = () => {
               justifyContent: 'center',
             }}
           >
-            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400' }}>
+            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>
               Участок
             </span>
           </div>
@@ -906,7 +1198,10 @@ const StationsPage = () => {
                   <span style={{ 
                     fontSize: '15px', 
                     fontWeight: 500, 
-                    color: isChecked ? '#2D4059' : '#9CA3AF' 
+                    color: isChecked ? '#2D4059' : '#9CA3AF',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}>
                     {section.name}
                   </span>
@@ -924,19 +1219,15 @@ const StationsPage = () => {
               );
             })}
           </div>
-        </motion.div>
+        </div>
       );
       leftOffset += 230;
     }
 
     if (filterCascade.activeType === 'status') {
       windows.push(
-        <motion.div
+        <div
           key="status"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -975,7 +1266,8 @@ const StationsPage = () => {
                 <span style={{ 
                   fontSize: '15px', 
                   fontWeight: 500, 
-                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  color: isChecked ? '#2D4059' : '#9CA3AF',
+                  whiteSpace: 'nowrap',
                 }}>
                   {status}
                 </span>
@@ -989,18 +1281,14 @@ const StationsPage = () => {
               </div>
             );
           })}
-        </motion.div>
+        </div>
       );
     }
 
     if (filterCascade.activeType === 'type') {
       windows.push(
-        <motion.div
+        <div
           key="type"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -1039,7 +1327,8 @@ const StationsPage = () => {
                 <span style={{ 
                   fontSize: '15px', 
                   fontWeight: 500, 
-                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  color: isChecked ? '#2D4059' : '#9CA3AF',
+                  whiteSpace: 'nowrap',
                 }}>
                   {type}
                 </span>
@@ -1053,18 +1342,14 @@ const StationsPage = () => {
               </div>
             );
           })}
-        </motion.div>
+        </div>
       );
     }
 
     if (filterCascade.activeType === 'overissue') {
       windows.push(
-        <motion.div
+        <div
           key="overissue"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -1103,7 +1388,8 @@ const StationsPage = () => {
                 <span style={{ 
                   fontSize: '15px', 
                   fontWeight: 500, 
-                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  color: isChecked ? '#2D4059' : '#9CA3AF',
+                  whiteSpace: 'nowrap',
                 }}>
                   {option}
                 </span>
@@ -1118,18 +1404,14 @@ const StationsPage = () => {
               </div>
             );
           })}
-        </motion.div>
+        </div>
       );
     }
 
     if (filterCascade.activeType === 'error') {
       windows.push(
-        <motion.div
+        <div
           key="error"
-          initial={{ opacity: 0, x: -4 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -4 }}
-          transition={{ duration: 0.15 }}
           style={{
             position: 'absolute',
             left: `${leftOffset}px`,
@@ -1168,7 +1450,8 @@ const StationsPage = () => {
                 <span style={{ 
                   fontSize: '15px', 
                   fontWeight: 500, 
-                  color: isChecked ? '#2D4059' : '#9CA3AF' 
+                  color: isChecked ? '#2D4059' : '#9CA3AF',
+                  whiteSpace: 'nowrap',
                 }}>
                   {option}
                 </span>
@@ -1183,7 +1466,7 @@ const StationsPage = () => {
               </div>
             );
           })}
-        </motion.div>
+        </div>
       );
     }
 
@@ -1227,6 +1510,7 @@ const StationsPage = () => {
       return (
         <button
           key={`button-${globalIdx}`}
+          data-button-id={globalIdx}
           onClick={() => handleButtonClick(globalIdx)}
           style={{
             width: '54px',
@@ -1234,7 +1518,7 @@ const StationsPage = () => {
             borderRadius: '50%',
             backgroundColor,
             border: 'none',
-            cursor: 'pointer',
+            cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1242,6 +1526,7 @@ const StationsPage = () => {
               ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
               : '0 2px 4px rgba(0, 0, 0, 0.05)',
             transition: 'all 0.3s ease',
+            opacity: isScaleTooLarge ? 0.5 : 1,
           }}
         >
           <img
@@ -1262,6 +1547,7 @@ const StationsPage = () => {
       return (
         <button
           key={`button-${globalIdx}`}
+          data-button-id={globalIdx}
           onClick={() => toggleButton(globalIdx)}
           style={{
             width: '54px',
@@ -1269,7 +1555,7 @@ const StationsPage = () => {
             borderRadius: '50%',
             backgroundColor,
             border: 'none',
-            cursor: 'pointer',
+            cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1277,6 +1563,7 @@ const StationsPage = () => {
               ? '0 4px 12px rgba(102, 110, 254, 0.3)' 
               : '0 2px 4px rgba(0, 0, 0, 0.05)',
             transition: 'all 0.3s ease',
+            opacity: isScaleTooLarge ? 0.5 : 1,
           }}
         >
           <img
@@ -1300,7 +1587,7 @@ const StationsPage = () => {
       const expandedWidth = 314;
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -1309,7 +1596,7 @@ const StationsPage = () => {
               height: 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#666EFE' : backgroundColorForSearch,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: isExpanded ? 'flex-start' : 'center',
@@ -1321,6 +1608,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'hidden',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -1357,6 +1645,7 @@ const StationsPage = () => {
                       outline: 'none',
                     }}
                     onClick={(e) => e.stopPropagation()}
+                    disabled={isScaleTooLarge}
                   />
                 </>
               )}
@@ -1368,7 +1657,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -1379,6 +1668,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForSearch ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -1393,7 +1683,7 @@ const StationsPage = () => {
       const backgroundColorForSort = showAsActiveForSort ? '#666EFE' : '#FFFFFF';
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -1403,7 +1693,7 @@ const StationsPage = () => {
               minHeight: isExpanded ? 'auto' : 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForSort,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -1415,6 +1705,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -1437,7 +1728,7 @@ const StationsPage = () => {
                       borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       {button.label}
                     </span>
                   </div>
@@ -1490,6 +1781,7 @@ const StationsPage = () => {
                                     fontSize: 15,
                                     fontWeight: 500,
                                     color: isActive ? '#2D4059' : '#9CA3AF',
+                                    whiteSpace: 'nowrap',
                                   }}
                                 >
                                   {option.label}
@@ -1511,7 +1803,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -1522,6 +1814,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForSort ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -1536,7 +1829,7 @@ const StationsPage = () => {
       const backgroundColorForFilter = showAsActiveForFilter ? '#666EFE' : '#FFFFFF';
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -1546,7 +1839,7 @@ const StationsPage = () => {
               minHeight: isExpanded ? 'auto' : 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForFilter,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -1558,6 +1851,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -1580,7 +1874,7 @@ const StationsPage = () => {
                       borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       {button.label}
                     </span>
                   </div>
@@ -1639,6 +1933,7 @@ const StationsPage = () => {
                                     fontSize: 15,
                                     fontWeight: 500,
                                     color: isItemActive ? '#2D4059' : '#9CA3AF',
+                                    whiteSpace: 'nowrap',
                                   }}
                                 >
                                   {item.label}
@@ -1666,7 +1961,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -1677,6 +1972,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForFilter ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -1691,7 +1987,7 @@ const StationsPage = () => {
       const backgroundColorForOstatok = showAsActiveForOstatok ? '#666EFE' : '#FFFFFF';
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -1701,7 +1997,7 @@ const StationsPage = () => {
               minHeight: isExpanded ? 'auto' : 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForOstatok,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -1713,6 +2009,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -1735,7 +2032,7 @@ const StationsPage = () => {
                       borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       {button.label}
                     </span>
                   </div>
@@ -1770,7 +2067,7 @@ const StationsPage = () => {
                               setMinOstatokEnabled(!minOstatokEnabled);
                             }}
                           >
-                            <span style={{ fontSize: 15, fontWeight: 500, color: '#2D4059' }}>
+                            <span style={{ fontSize: 15, fontWeight: 500, color: '#2D4059', whiteSpace: 'nowrap' }}>
                               Минимальный остаток
                             </span>
                             <input
@@ -1782,6 +2079,7 @@ const StationsPage = () => {
                               }}
                               style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                               onClick={(e) => e.stopPropagation()}
+                              disabled={isScaleTooLarge}
                             />
                           </div>
                           <div 
@@ -1791,7 +2089,7 @@ const StationsPage = () => {
                               setCriticalOstatokEnabled(!criticalOstatokEnabled);
                             }}
                           >
-                            <span style={{ fontSize: 15, fontWeight: 500, color: '#2D4059' }}>
+                            <span style={{ fontSize: 15, fontWeight: 500, color: '#2D4059', whiteSpace: 'nowrap' }}>
                               Критический остаток
                             </span>
                             <input
@@ -1803,6 +2101,7 @@ const StationsPage = () => {
                               }}
                               style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                               onClick={(e) => e.stopPropagation()}
+                              disabled={isScaleTooLarge}
                             />
                           </div>
                         </motion.div>
@@ -1819,7 +2118,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -1830,6 +2129,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForOstatok ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -1845,7 +2145,7 @@ const StationsPage = () => {
       const availableEnterprises = mockEnterprises;
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -1855,7 +2155,7 @@ const StationsPage = () => {
               minHeight: isExpanded ? 'auto' : 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForEnterprise,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -1867,6 +2167,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -1889,7 +2190,7 @@ const StationsPage = () => {
                       borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       {button.label}
                     </span>
                   </div>
@@ -1946,6 +2247,10 @@ const StationsPage = () => {
                                     fontSize: 15,
                                     fontWeight: 500,
                                     color: isChecked ? '#2D4059' : '#9CA3AF',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '160px',
                                   }}
                                 >
                                   {enterprise.name}
@@ -1959,6 +2264,7 @@ const StationsPage = () => {
                                   }}
                                   style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                                   onClick={(e) => e.stopPropagation()}
+                                  disabled={isScaleTooLarge}
                                 />
                               </div>
                             );
@@ -1977,7 +2283,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -1988,6 +2294,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForEnterprise ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -2003,7 +2310,7 @@ const StationsPage = () => {
       const availableWorkshops = getAvailableWorkshops();
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -2013,7 +2320,7 @@ const StationsPage = () => {
               minHeight: isExpanded ? 'auto' : 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForWorkshop,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -2025,6 +2332,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -2047,7 +2355,7 @@ const StationsPage = () => {
                       borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       {button.label}
                     </span>
                   </div>
@@ -2104,6 +2412,10 @@ const StationsPage = () => {
                                     fontSize: 15,
                                     fontWeight: 500,
                                     color: isChecked ? '#2D4059' : '#9CA3AF',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '160px',
                                   }}
                                 >
                                   {workshop.name}
@@ -2117,6 +2429,7 @@ const StationsPage = () => {
                                   }}
                                   style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                                   onClick={(e) => e.stopPropagation()}
+                                  disabled={isScaleTooLarge}
                                 />
                               </div>
                             );
@@ -2135,7 +2448,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -2146,6 +2459,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForWorkshop ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -2161,7 +2475,7 @@ const StationsPage = () => {
       const availableSections = getAvailableSections();
       
       return (
-        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }}>
+        <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
           <div
             ref={isExpanded ? expandedRef : null}
             onClick={() => handleButtonClick(globalIdx)}
@@ -2171,7 +2485,7 @@ const StationsPage = () => {
               minHeight: isExpanded ? 'auto' : 54,
               borderRadius: 27,
               backgroundColor: isExpanded ? '#FFFFFF' : backgroundColorForSection,
-              cursor: 'pointer',
+              cursor: isScaleTooLarge ? 'not-allowed' : 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -2183,6 +2497,7 @@ const StationsPage = () => {
               zIndex: isExpanded ? 200 : 1,
               position: 'relative',
               overflow: 'visible',
+              opacity: isScaleTooLarge ? 0.5 : 1,
             }}
           >
             <div
@@ -2205,7 +2520,7 @@ const StationsPage = () => {
                       borderTopRightRadius: 27,
                     }}
                   >
-                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400 }}>
+                    <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 400, whiteSpace: 'nowrap' }}>
                       {button.label}
                     </span>
                   </div>
@@ -2262,6 +2577,10 @@ const StationsPage = () => {
                                     fontSize: 15,
                                     fontWeight: 500,
                                     color: isChecked ? '#2D4059' : '#9CA3AF',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '160px',
                                   }}
                                 >
                                   {section.name}
@@ -2275,6 +2594,7 @@ const StationsPage = () => {
                                   }}
                                   style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#666EFE' }}
                                   onClick={(e) => e.stopPropagation()}
+                                  disabled={isScaleTooLarge}
                                 />
                               </div>
                             );
@@ -2293,7 +2613,7 @@ const StationsPage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: isExpanded ? 0 : 1,
-                transition: 'opacity 0.2s ease',
+                transition: 'opacity 0.3s ease 0.1s',
                 pointerEvents: isExpanded ? 'none' : 'auto',
               }}
             >
@@ -2304,6 +2624,7 @@ const StationsPage = () => {
                   width: 24,
                   height: 24,
                   filter: showAsActiveForSection ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'filter 0.3s ease',
                 }}
               />
             </div>
@@ -2415,11 +2736,43 @@ const StationsPage = () => {
 
   const gapWidth = calculateGapWidth();
 
+  // Вычисляем позицию скролл-области
+  const scrollAreaTop = adaptiveGaps.topPadding + HEADER_HEIGHT + adaptiveGaps.controlsMarginTop + CONTROLS_HEIGHT + adaptiveGaps.scrollMarginTop;
+
   return (
-    <div style={{ position: 'relative', height: '100%' }}>
+    <div ref={containerRef} style={{ position: 'relative', height: '100%' }}>
+      {/* Всплывающее предупреждение о масштабе */}
+      <AnimatePresence>
+        {showScaleWarning && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            transition={{ duration: 0.3 }}
+            style={{
+              position: 'fixed',
+              top: '20px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: '#F44336',
+              color: '#FFFFFF',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: '500',
+              zIndex: 1000,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Верните экран в нормальный масштаб
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div
         style={{
-          paddingTop: '35px',
+          paddingTop: `${adaptiveGaps.topPadding}px`,
           paddingLeft: '60px',
         }}
       >
@@ -2438,8 +2791,9 @@ const StationsPage = () => {
       </div>
 
       <div
+        ref={controlsRowRef}
         style={{
-          marginTop: '20px',
+          marginTop: `${adaptiveGaps.controlsMarginTop}px`,
           paddingLeft: '70px',
           paddingRight: '70px',
           display: 'flex',
@@ -2486,10 +2840,10 @@ const StationsPage = () => {
       <div
         style={{
           position: 'absolute',
-          top: '160px',
-          bottom: '30px',
+          top: `${scrollAreaTop}px`,
           left: '0',
           right: '15px',
+          height: `${SCROLL_AREA_HEIGHT}px`,
           overflow: 'auto',
           zIndex: 1,
         }}

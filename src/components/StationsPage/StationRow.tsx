@@ -1,5 +1,6 @@
 // components/StationsPage/StationRow.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Импорт фонов для ряда
 import Line1 from '../../assets/Station/Line1.svg';
@@ -10,7 +11,7 @@ import Line4 from '../../assets/Station/Line4.svg';
 // Импорт иконок для статусов
 import KRIT from '../../assets/Station/KRIT.svg';
 import KRIT2 from '../../assets/Station/KRIT2.svg';
-import ERR from '../../assets/Station/ERR.svg';
+import ERR from '../../assets/Station/ERR2.svg';
 
 // Импорт иконок для информации
 import TMC from '../../assets/Station/TMC.svg';
@@ -31,6 +32,40 @@ import FonStation1 from '../../assets/Station/FonStation1.svg';
 import FonStation2 from '../../assets/Station/FonStation2.svg';
 import FonStation3 from '../../assets/Station/FonStation3.svg';
 import FonStation4 from '../../assets/Station/FonStation4.svg';
+
+// Импорт иконок для кнопок справа
+import Analytic1 from '../../assets/Station/Analitic1.svg';
+import Analytic2 from '../../assets/Station/Analitic2.svg';
+import Analytic3 from '../../assets/Station/Analitic3.svg';
+import Analytic4 from '../../assets/Station/Analitic4.svg';
+import ArrowRight1 from '../../assets/Station/arrow-right1.svg';
+import ArrowRight2 from '../../assets/Station/arrow-right2.svg';
+import ArrowRight3 from '../../assets/Station/arrow-right3.svg';
+import ArrowRight4 from '../../assets/Station/arrow-right4.svg';
+
+// Импорт иконок для конфигурации
+import Config1_1 from '../../assets/Station/Config11.svg';
+import Config1_2 from '../../assets/Station/Config12.svg';
+import Config1_3 from '../../assets/Station/Config13.svg';
+import Config1_4 from '../../assets/Station/Config14.svg';
+import Config2_1 from '../../assets/Station/Config21.svg';
+import Config2_2 from '../../assets/Station/Config22.svg';
+import Config2_3 from '../../assets/Station/Config23.svg';
+import Config2_4 from '../../assets/Station/Config24.svg';
+import Config3_1 from '../../assets/Station/Config31.svg';
+import Config3_2 from '../../assets/Station/Config32.svg';
+import Config3_3 from '../../assets/Station/Config33.svg';
+import Config3_4 from '../../assets/Station/Config34.svg';
+import Config4_1 from '../../assets/Station/Config41.svg';
+import Config4_2 from '../../assets/Station/Config42.svg';
+import Config4_3 from '../../assets/Station/Config43.svg';
+import Config4_4 from '../../assets/Station/Config44.svg';
+
+// Импорт стрелок назад для конфигурации
+import ArrowBack1 from '../../assets/Station/arrow-back1.svg';
+import ArrowBack2 from '../../assets/Station/arrow-back2.svg';
+import ArrowBack3 from '../../assets/Station/arrow-back3.svg';
+import ArrowBack4 from '../../assets/Station/arrow-back4.svg';
 
 interface StationRowProps {
   uid?: string;
@@ -78,6 +113,53 @@ const StationRow: React.FC<StationRowProps> = ({
 }) => {
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
+  const [isConfigMode, setIsConfigMode] = useState(false);
+  
+  // Состояния для анимированных процентов
+  const [animatedFilled, setAnimatedFilled] = useState(0);
+  const [animatedRemaining, setAnimatedRemaining] = useState(0);
+  const [animatedReady, setAnimatedReady] = useState(0);
+  
+  // Состояние для начала анимации
+  const [startAnimation, setStartAnimation] = useState(false);
+
+  // Задержка перед началом анимации
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setStartAnimation(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Анимация процентов
+  useEffect(() => {
+    if (!startAnimation) return;
+    
+    const duration = 1000;
+    const steps = 60;
+    const interval = duration / steps;
+    
+    let step = 0;
+    
+    const timer = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      
+      setAnimatedFilled(filledCellsPercent * progress);
+      setAnimatedRemaining(remainingNomenclaturePercent * progress);
+      setAnimatedReady(readyPartsPercent * progress);
+      
+      if (step >= steps) {
+        clearInterval(timer);
+        setAnimatedFilled(filledCellsPercent);
+        setAnimatedRemaining(remainingNomenclaturePercent);
+        setAnimatedReady(readyPartsPercent);
+      }
+    }, interval);
+    
+    return () => clearInterval(timer);
+  }, [startAnimation, filledCellsPercent, remainingNomenclaturePercent, readyPartsPercent]);
 
   const getBackgroundImage = () => {
     switch (status) {
@@ -133,9 +215,78 @@ const StationRow: React.FC<StationRowProps> = ({
     }
   };
 
+  const getAnalyticIcon = () => {
+    switch (status) {
+      case 'WORKING': return Analytic1;
+      case 'OFFLINE': return Analytic2;
+      case 'MINIMAL_STOCK': return Analytic3;
+      case 'CRITICAL_STOCK': return Analytic4;
+      default: return Analytic2;
+    }
+  };
+
+  const getArrowRightIcon = () => {
+    switch (status) {
+      case 'WORKING': return ArrowRight1;
+      case 'OFFLINE': return ArrowRight2;
+      case 'MINIMAL_STOCK': return ArrowRight3;
+      case 'CRITICAL_STOCK': return ArrowRight4;
+      default: return ArrowRight2;
+    }
+  };
+
+  const getArrowBackIcon = () => {
+    switch (status) {
+      case 'WORKING': return ArrowBack1;
+      case 'OFFLINE': return ArrowBack2;
+      case 'MINIMAL_STOCK': return ArrowBack3;
+      case 'CRITICAL_STOCK': return ArrowBack4;
+      default: return ArrowBack2;
+    }
+  };
+
+  const getConfig1Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config1_1;
+      case 'OFFLINE': return Config1_2;
+      case 'MINIMAL_STOCK': return Config1_3;
+      case 'CRITICAL_STOCK': return Config1_4;
+      default: return Config1_2;
+    }
+  };
+
+  const getConfig2Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config2_1;
+      case 'OFFLINE': return Config2_2;
+      case 'MINIMAL_STOCK': return Config2_3;
+      case 'CRITICAL_STOCK': return Config2_4;
+      default: return Config2_2;
+    }
+  };
+
+  const getConfig3Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config3_1;
+      case 'OFFLINE': return Config3_2;
+      case 'MINIMAL_STOCK': return Config3_3;
+      case 'CRITICAL_STOCK': return Config3_4;
+      default: return Config3_2;
+    }
+  };
+
+  const getConfig4Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config4_1;
+      case 'OFFLINE': return Config4_2;
+      case 'MINIMAL_STOCK': return Config4_3;
+      case 'CRITICAL_STOCK': return Config4_4;
+      default: return Config4_2;
+    }
+  };
+
   const displayName = name || uid || '—';
   const workshopSectionText = `${workshop || '—'} ${section || '—'}`;
-  const overNorm = templateNomenclatureCount > 0 ? Math.max(0, templateNomenclatureCount - remainingNomenclatureCount) : 0;
 
   // Собираем массив иконок для отображения
   const statusIcons: string[] = [];
@@ -259,6 +410,19 @@ const StationRow: React.FC<StationRowProps> = ({
 
   const showKrit = status === 'MINIMAL_STOCK' || status === 'CRITICAL_STOCK';
   const kritIcon = status === 'MINIMAL_STOCK' ? KRIT : KRIT2;
+  
+  const labelColor = status === 'OFFLINE' ? '#777777' : '#2D4059';
+  const valueColor = status === 'OFFLINE' ? '#777777' : '#2D4059';
+
+  const handleRightButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsConfigMode(true);
+  };
+
+  const handleBackClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsConfigMode(false);
+  };
 
   return (
     <div
@@ -295,17 +459,16 @@ const StationRow: React.FC<StationRowProps> = ({
         }}
       />
 
+      {/* Статичные элементы */}
       {/* Иконка станции */}
       <div
         style={{
           width: '84px',
           height: '92px',
-          position: 'relative',
-          flexShrink: 0,
-          marginLeft: '30px',
-          marginTop: '10px',
-          marginBottom: '10px',
-          zIndex: 1,
+          position: 'absolute',
+          left: '30px',
+          top: '10px',
+          zIndex: 2,
         }}
       >
         <img
@@ -342,16 +505,16 @@ const StationRow: React.FC<StationRowProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginLeft: '30px',
+          position: 'absolute',
+          left: '144px',
           height: '100%',
-          flexShrink: 0,
-          zIndex: 1,
+          zIndex: 2,
         }}
       >
         {renderStatusIcons()}
       </div>
 
-      {/* Информация о станции - начинается на 243px от левого края */}
+      {/* Информация о станции - название, цех, статус */}
       <div
         style={{
           position: 'absolute',
@@ -362,7 +525,7 @@ const StationRow: React.FC<StationRowProps> = ({
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'flex-start',
-          zIndex: 1,
+          zIndex: 2,
         }}
       >
         {/* Название */}
@@ -477,208 +640,714 @@ const StationRow: React.FC<StationRowProps> = ({
         </div>
       </div>
 
-      {/* Иконка КРИТ на 421px от левого края */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '421px',
-          top: '44px',
-          width: '26px',
-          height: '24px',
-          flexShrink: 0,
-          zIndex: 1,
-        }}
-      >
-        {showKrit && (
-          <img
-            src={kritIcon}
-            alt="krit"
+      {/* Анимируемая часть */}
+      <AnimatePresence mode="wait">
+        {!isConfigMode ? (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
             style={{
-              width: '26px',
-              height: '24px',
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 1,
             }}
-          />
+          >
+            {/* Иконка КРИТ на 421px от левого края */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '421px',
+                top: '44px',
+                width: '26px',
+                height: '24px',
+              }}
+            >
+              {showKrit && (
+                <img
+                  src={kritIcon}
+                  alt="krit"
+                  style={{
+                    width: '26px',
+                    height: '24px',
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Блок "Использование ячеек" - на 477px от левого края */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '477px',
+                top: '25px',
+                width: '194px',
+                height: '62px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: labelColor,
+                  textAlign: 'center',
+                  lineHeight: '14px',
+                }}
+              >
+                Использование ячеек
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginTop: '7px',
+                }}
+              >
+                <img 
+                  src={Icon1} 
+                  alt="" 
+                  style={{ 
+                    width: '24px', 
+                    height: '12px',
+                    flexShrink: 0,
+                  }} 
+                />
+                <div
+                  style={{
+                    width: '130px',
+                    height: '16px',
+                    backgroundColor: 'rgba(45, 64, 89, 0.08)',
+                    borderRadius: '8px',
+                    marginLeft: '6px',
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(animatedFilled, 100)}%`,
+                      height: '16px',
+                      backgroundColor: getProgressBarColor(),
+                      borderRadius: '8px',
+                      transition: 'width 0.05s linear',
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    marginLeft: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: valueColor,
+                    letterSpacing: '0.1em',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {Math.round(animatedFilled)}%
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: valueColor,
+                  textAlign: 'center',
+                  marginTop: '7px',
+                  lineHeight: '12px',
+                }}
+              >
+                {filledCells} / {totalCells}
+              </div>
+            </div>
+
+            {/* Блок "Остаток ТМЦ в станциях" - на 698px от левого края */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '698px',
+                top: '25px',
+                width: '194px',
+                height: '62px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: labelColor,
+                  textAlign: 'center',
+                  lineHeight: '14px',
+                }}
+              >
+                Остаток ТМЦ в станциях
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginTop: '7px',
+                }}
+              >
+                <img 
+                  src={Icon2} 
+                  alt="" 
+                  style={{ 
+                    width: '24px', 
+                    height: '22px',
+                    flexShrink: 0,
+                  }} 
+                />
+                <div
+                  style={{
+                    width: '130px',
+                    height: '16px',
+                    backgroundColor: 'rgba(45, 64, 89, 0.08)',
+                    borderRadius: '8px',
+                    marginLeft: '6px',
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(animatedRemaining, 100)}%`,
+                      height: '16px',
+                      backgroundColor: getProgressBarColor(),
+                      borderRadius: '8px',
+                      transition: 'width 0.05s linear',
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    marginLeft: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: valueColor,
+                    letterSpacing: '0.1em',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {Math.round(animatedRemaining)}%
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: valueColor,
+                  textAlign: 'center',
+                  marginTop: '7px',
+                  lineHeight: '12px',
+                }}
+              >
+                {remainingNomenclatureCount}
+              </div>
+            </div>
+
+            {/* Блок "Готовые детали" - на 919px от левого края */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '919px',
+                top: '25px',
+                width: '194px',
+                height: '62px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: labelColor,
+                  textAlign: 'center',
+                  lineHeight: '14px',
+                }}
+              >
+                Готовые детали
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginTop: '7px',
+                }}
+              >
+                <img 
+                  src={Icon3} 
+                  alt="" 
+                  style={{ 
+                    width: '13px', 
+                    height: '22px',
+                    flexShrink: 0,
+                  }} 
+                />
+                <div
+                  style={{
+                    width: '130px',
+                    height: '16px',
+                    backgroundColor: 'rgba(45, 64, 89, 0.08)',
+                    borderRadius: '8px',
+                    marginLeft: '6px',
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(animatedReady, 100)}%`,
+                      height: '16px',
+                      backgroundColor: getProgressBarColor(),
+                      borderRadius: '8px',
+                      transition: 'width 0.05s linear',
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    marginLeft: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: valueColor,
+                    letterSpacing: '0.1em',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {Math.round(animatedReady)}%
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: valueColor,
+                  textAlign: 'center',
+                  marginTop: '7px',
+                  lineHeight: '12px',
+                }}
+              >
+                {readyPartsCount}
+              </div>
+            </div>
+
+            {/* Текстовые значения справа от прогресс-баров - на 1159px от левого края */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '1159px',
+                top: '15px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+              }}
+            >
+              {/* ТМЦ в станции */}
+              <div
+                style={{
+                  width: '193px',
+                  height: '17px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                  ТМЦ в станции
+                </span>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                    {totalCells}
+                  </span>
+                </div>
+              </div>
+
+              {/* Выдано ТМЦ */}
+              <div
+                style={{
+                  width: '193px',
+                  height: '17px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                  Выдано ТМЦ
+                </span>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                    {filledCells}
+                  </span>
+                </div>
+              </div>
+
+              {/* Выдано сверхнормы */}
+              <div
+                style={{
+                  width: '193px',
+                  height: '17px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                  Выдано сверхнормы
+                </span>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                    {Math.max(0, templateNomenclatureCount - remainingNomenclatureCount)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Готовые детали */}
+              <div
+                style={{
+                  width: '193px',
+                  height: '17px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                  Готовые детали
+                </span>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                    {readyPartsCount}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Кнопка Пополнить - 157px от правого края */}
+            <button
+              style={{
+                position: 'absolute',
+                right: '157px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '164px',
+                height: '30px',
+                backgroundColor: getButtonColor(),
+                border: 'none',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                fontSize: '15px',
+                fontWeight: 500,
+                color: '#2D4059',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Пополнить', uid);
+              }}
+            >
+              Пополнить
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="config"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 1,
+            }}
+          >
+            {/* Заголовок "Конфигурация:" */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '443px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '15px',
+                fontWeight: 500,
+                color: '#2D4059',
+                opacity: 0.5,
+              }}
+            >
+              Конфигурация:
+            </div>
+
+            {/* Кнопка 1 - Шаблоны загрузки */}
+            <button
+              style={{
+                position: 'absolute',
+                left: '570px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '192px',
+                height: '37px',
+                backgroundColor: getButtonColor(),
+                border: 'none',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: '12px',
+                gap: '8px',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Шаблоны загрузки', uid);
+              }}
+            >
+              <img src={getConfig1Icon()} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                Шаблоны загрузки
+              </span>
+            </button>
+
+            {/* Кнопка 2 - Карта загрузки */}
+            <button
+              style={{
+                position: 'absolute',
+                left: '830px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '166px',
+                height: '37px',
+                backgroundColor: getButtonColor(),
+                border: 'none',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: '12px',
+                gap: '8px',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Карта загрузки', uid);
+              }}
+            >
+              <img src={getConfig2Icon()} alt="" style={{ width: '22px', height: '17px', flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                Карта загрузки
+              </span>
+            </button>
+
+            {/* Кнопка 3 - Отчет движения ТМЦ/деталей */}
+            <button
+              style={{
+                position: 'absolute',
+                left: '1064px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '278px',
+                height: '37px',
+                backgroundColor: getButtonColor(),
+                border: 'none',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: '12px',
+                gap: '8px',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Отчет движения ТМЦ/деталей', uid);
+              }}
+            >
+              <img src={getConfig3Icon()} alt="" style={{ width: '22px', height: '22px', flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                Отчет движения ТМЦ/деталей
+              </span>
+            </button>
+
+            {/* Кнопка 4 - Настройки станций */}
+            <button
+              style={{
+                position: 'absolute',
+                left: '1410px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '192px',
+                height: '37px',
+                backgroundColor: getButtonColor(),
+                border: 'none',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: '12px',
+                gap: '8px',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Настройки станций', uid);
+              }}
+            >
+              <img src={getConfig4Icon()} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
+                Настройки станций
+              </span>
+            </button>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
-      {/* Прогресс бары - начинаются на 421 + 26 + 30 = 477px от левого края */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '477px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-          zIndex: 1,
-        }}
-      >
-        {/* Прогресс бар 1 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <img src={Icon1} alt="" style={{ width: '14px', height: '7px' }} />
-          <div
+      {/* Кнопки справа с анимацией */}
+      <AnimatePresence mode="wait">
+        {!isConfigMode ? (
+          <motion.div
+            key="main-buttons"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
             style={{
-              width: '100px',
-              height: '6px',
-              backgroundColor: 'rgba(45, 64, 89, 0.08)',
-              borderRadius: '3px',
-              position: 'relative',
+              position: 'absolute',
+              right: '30px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              display: 'flex',
+              gap: '20px',
+              zIndex: 3,
             }}
           >
-            <div
+            <button
               style={{
-                width: `${Math.min(filledCellsPercent, 100)}%`,
-                height: '6px',
-                backgroundColor: getProgressBarColor(),
-                borderRadius: '3px',
+                width: '40px',
+                height: '40px',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
               }}
-            />
-          </div>
-          <span style={{ fontSize: '12px', fontWeight: 500, color: '#6C7A8B', minWidth: '36px' }}>
-            {Math.round(filledCellsPercent)}%
-          </span>
-        </div>
-
-        {/* Прогресс бар 2 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <img src={Icon2} alt="" style={{ width: '13px', height: '12px' }} />
-          <div
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Аналитика', uid);
+              }}
+            >
+              <img 
+                src={getAnalyticIcon()} 
+                alt="Аналитика" 
+                style={{ 
+                  width: '24px', 
+                  height: '18px',
+                }} 
+              />
+            </button>
+            <button
+              style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+              }}
+              onClick={handleRightButtonClick}
+            >
+              <img 
+                src={getArrowRightIcon()} 
+                alt="Перейти" 
+                style={{ 
+                  width: '28px', 
+                  height: '21px',
+                }} 
+              />
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="back-button"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
             style={{
-              width: '100px',
-              height: '6px',
-              backgroundColor: 'rgba(45, 64, 89, 0.08)',
-              borderRadius: '3px',
-              position: 'relative',
+              position: 'absolute',
+              right: '30px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 3,
             }}
           >
-            <div
+            <button
               style={{
-                width: `${Math.min(remainingNomenclaturePercent, 100)}%`,
-                height: '6px',
-                backgroundColor: getProgressBarColor(),
-                borderRadius: '3px',
+                width: '40px',
+                height: '40px',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
               }}
-            />
-          </div>
-          <span style={{ fontSize: '12px', fontWeight: 500, color: '#6C7A8B', minWidth: '36px' }}>
-            {Math.round(remainingNomenclaturePercent)}%
-          </span>
-        </div>
-
-        {/* Прогресс бар 3 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <img src={Icon3} alt="" style={{ width: '8px', height: '13px' }} />
-          <div
-            style={{
-              width: '100px',
-              height: '6px',
-              backgroundColor: 'rgba(45, 64, 89, 0.08)',
-              borderRadius: '3px',
-              position: 'relative',
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.min(readyPartsPercent, 100)}%`,
-                height: '6px',
-                backgroundColor: getProgressBarColor(),
-                borderRadius: '3px',
-              }}
-            />
-          </div>
-          <span style={{ fontSize: '12px', fontWeight: 500, color: '#6C7A8B', minWidth: '36px' }}>
-            {Math.round(readyPartsPercent)}%
-          </span>
-        </div>
-      </div>
-
-      {/* Данные - справа от прогресс баров */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '650px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-          zIndex: 1,
-        }}
-      >
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>ТМЦ</span>
-          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{totalCells}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>Выдано</span>
-          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{filledCells}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>Сверх</span>
-          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{overNorm}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <span style={{ fontSize: '11px', color: '#6C7A8B', minWidth: '50px' }}>Готово</span>
-          <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059', minWidth: '40px', textAlign: 'center' }}>{readyPartsCount}</span>
-        </div>
-      </div>
-
-      {/* Кнопка Пополнить */}
-      <button
-        style={{
-          position: 'absolute',
-          left: '780px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          padding: '6px 16px',
-          backgroundColor: getButtonColor(),
-          border: 'none',
-          borderRadius: '16px',
-          cursor: 'pointer',
-          fontSize: '13px',
-          fontWeight: 500,
-          color: '#2D4059',
-          flexShrink: 0,
-          zIndex: 1,
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          console.log('Пополнить', uid);
-        }}
-      >
-        Пополнить
-      </button>
-
-      {/* Два пустых значка справа */}
-      <div
-        style={{
-          position: 'absolute',
-          right: '30px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          display: 'flex',
-          gap: '20px',
-          zIndex: 1,
-        }}
-      >
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            backgroundColor: '#F0F2F5',
-            borderRadius: '8px',
-          }}
-        />
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            backgroundColor: '#F0F2F5',
-            borderRadius: '8px',
-          }}
-        />
-      </div>
+              onClick={handleBackClick}
+            >
+              <img 
+                src={getArrowBackIcon()} 
+                alt="Назад" 
+                style={{ 
+                  width: '24px', 
+                  height: '24px',
+                }} 
+              />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

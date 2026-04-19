@@ -33,10 +33,20 @@ interface ValueType {
 
 const AuthContext = React.createContext<ValueType | null>(null);
 
+const LOCKED_STORAGE_KEY = 'app_locked_state';
+
 export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLocked, setIsLocked] = useState(false);
+  const [isLocked, setIsLockedState] = useState(() => {
+    // Загружаем состояние блокировки из localStorage при инициализации
+    try {
+      const saved = localStorage.getItem(LOCKED_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
   const [userInfo, setUserInfo] = useState<UserInfo>({
     id: '',
     name: '',
@@ -49,6 +59,16 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   });
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
+
+  // Обёртка для setLocked, которая сохраняет состояние в localStorage
+  const setLocked = (locked: boolean) => {
+    setIsLockedState(locked);
+    try {
+      localStorage.setItem(LOCKED_STORAGE_KEY, JSON.stringify(locked));
+    } catch (e) {
+      console.error('Failed to save locked state:', e);
+    }
+  };
 
   const checkAuth = async (): Promise<boolean> => {
     try {
@@ -98,11 +118,10 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Очищаем состояние
       setIsAuth(false);
       setIsAdmin(false);
       setIsOperator(false);
-      setIsLocked(false);
+      setLocked(false); // Используем обёртку, которая сохраняет в localStorage
       setUserInfo({
         id: '',
         name: '',
@@ -114,7 +133,6 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
         imgAvatar: undefined,
       });
       
-      // Очищаем localStorage (вкладки и черновики)
       localStorage.removeItem('tabs_state');
       localStorage.removeItem('drafts_state');
     }
@@ -151,7 +169,7 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
         refreshAuth,
         logout,
         checkPassword,
-        setLocked: setIsLocked,
+        setLocked,
         isLocked,
       }}>
       {children}

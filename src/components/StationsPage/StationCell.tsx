@@ -50,11 +50,23 @@ import SGD from '../../assets/Station/SGD.svg';
 import OK from '../../assets/Station/OK.svg';
 import CHAIN from '../../assets/Station/CHAIN.svg';
 
-// Импорт иконок для конфигурации
-import Config1 from '../../assets/Station/Config1.svg';
-import Config2 from '../../assets/Station/Config2.svg';
-import Config3 from '../../assets/Station/Config3.svg';
-import Config4 from '../../assets/Station/Config4.svg';
+// Импорт иконок для конфигурации по статусам
+import Config1_1 from '../../assets/Station/Config11.svg';
+import Config1_2 from '../../assets/Station/Config12.svg';
+import Config1_3 from '../../assets/Station/Config13.svg';
+import Config1_4 from '../../assets/Station/Config14.svg';
+import Config2_1 from '../../assets/Station/Config21.svg';
+import Config2_2 from '../../assets/Station/Config22.svg';
+import Config2_3 from '../../assets/Station/Config23.svg';
+import Config2_4 from '../../assets/Station/Config24.svg';
+import Config3_1 from '../../assets/Station/Config31.svg';
+import Config3_2 from '../../assets/Station/Config32.svg';
+import Config3_3 from '../../assets/Station/Config33.svg';
+import Config3_4 from '../../assets/Station/Config34.svg';
+import Config4_1 from '../../assets/Station/Config41.svg';
+import Config4_2 from '../../assets/Station/Config42.svg';
+import Config4_3 from '../../assets/Station/Config43.svg';
+import Config4_4 from '../../assets/Station/Config44.svg';
 
 // Импорт иконок для статусов
 import KRIT from '../../assets/Station/KRIT.svg';
@@ -113,15 +125,12 @@ const StationCell: React.FC<StationCellProps> = ({
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
   
-  // Состояния для анимированных процентов
   const [animatedFilled, setAnimatedFilled] = useState(0);
   const [animatedRemaining, setAnimatedRemaining] = useState(0);
   const [animatedReady, setAnimatedReady] = useState(0);
   
-  // Состояние для начала анимации
   const [startAnimation, setStartAnimation] = useState(false);
 
-  // Задержка перед началом анимации
   useEffect(() => {
     const timer = setTimeout(() => {
       setStartAnimation(true);
@@ -130,7 +139,6 @@ const StationCell: React.FC<StationCellProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Анимация процентов
   useEffect(() => {
     if (!startAnimation) return;
     
@@ -159,7 +167,6 @@ const StationCell: React.FC<StationCellProps> = ({
     return () => clearInterval(timer);
   }, [startAnimation, filledCellsPercent, remainingNomenclaturePercent, readyPartsPercent]);
 
-  // Определение фона в зависимости от статуса
   const getBackgroundImage = () => {
     switch (status) {
       case 'WORKING': return SectionCard1;
@@ -170,7 +177,6 @@ const StationCell: React.FC<StationCellProps> = ({
     }
   };
 
-  // Определение стрелок в зависимости от статуса
   const getArrows = () => {
     switch (status) {
       case 'WORKING': 
@@ -186,7 +192,6 @@ const StationCell: React.FC<StationCellProps> = ({
     }
   };
 
-  // Определение фона для блока станции
   const getFonStation = () => {
     switch (status) {
       case 'WORKING': return FonStation1;
@@ -228,6 +233,46 @@ const StationCell: React.FC<StationCellProps> = ({
       case 'MINIMAL_STOCK': return '#FEE8DC';
       case 'CRITICAL_STOCK': return '#FFDAE0';
       default: return '#E2E2E2';
+    }
+  };
+
+  const getConfig1Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config1_1;
+      case 'OFFLINE': return Config1_2;
+      case 'MINIMAL_STOCK': return Config1_3;
+      case 'CRITICAL_STOCK': return Config1_4;
+      default: return Config1_2;
+    }
+  };
+
+  const getConfig2Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config2_1;
+      case 'OFFLINE': return Config2_2;
+      case 'MINIMAL_STOCK': return Config2_3;
+      case 'CRITICAL_STOCK': return Config2_4;
+      default: return Config2_2;
+    }
+  };
+
+  const getConfig3Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config3_1;
+      case 'OFFLINE': return Config3_2;
+      case 'MINIMAL_STOCK': return Config3_3;
+      case 'CRITICAL_STOCK': return Config3_4;
+      default: return Config3_2;
+    }
+  };
+
+  const getConfig4Icon = () => {
+    switch (status) {
+      case 'WORKING': return Config4_1;
+      case 'OFFLINE': return Config4_2;
+      case 'MINIMAL_STOCK': return Config4_3;
+      case 'CRITICAL_STOCK': return Config4_4;
+      default: return Config4_2;
     }
   };
 
@@ -295,13 +340,10 @@ const StationCell: React.FC<StationCellProps> = ({
   const displayName = name || uid || '—';
   const workshopSectionText = `${workshop || '—'} ${section || '—'}`;
 
-  // Вычисляем данные для отображения
   const overNorm = templateNomenclatureCount > 0 ? Math.max(0, templateNomenclatureCount - remainingNomenclatureCount) : 0;
 
-  // Контент для front
   const renderFront = () => (
     <>
-      {/* Блок с фоном статуса и картинкой станции */}
       <div
         style={{
           position: 'absolute',
@@ -341,7 +383,6 @@ const StationCell: React.FC<StationCellProps> = ({
         />
       </div>
 
-      {/* Контейнер для текстов */}
       <div
         style={{
           position: 'absolute',
@@ -354,7 +395,6 @@ const StationCell: React.FC<StationCellProps> = ({
           width: '184px',
         }}
       >
-        {/* Название станции с тултипом */}
         <div
           style={{
             position: 'relative',
@@ -402,7 +442,6 @@ const StationCell: React.FC<StationCellProps> = ({
           )}
         </div>
         
-        {/* Цех и Участок с тултипом */}
         <div
           style={{
             position: 'relative',
@@ -451,7 +490,6 @@ const StationCell: React.FC<StationCellProps> = ({
           )}
         </div>
 
-        {/* Статус */}
         <div
           style={{
             fontWeight: 500,
@@ -467,7 +505,6 @@ const StationCell: React.FC<StationCellProps> = ({
           {getStatusText()}
         </div>
 
-        {/* Прогресс бар 1 */}
         <div
           style={{
             width: '184px',
@@ -523,7 +560,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
 
-        {/* Прогресс бар 2 */}
         <div
           style={{
             width: '184px',
@@ -579,7 +615,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
 
-        {/* Прогресс бар 3 */}
         <div
           style={{
             width: '184px',
@@ -636,7 +671,6 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
       </div>
 
-      {/* Кнопка Пополнить */}
       <button
         style={{
           position: 'absolute',
@@ -662,7 +696,6 @@ const StationCell: React.FC<StationCellProps> = ({
         Пополнить
       </button>
 
-      {/* Индикаторы статуса и ошибки */}
       {status === 'MINIMAL_STOCK' && (
         <img
           src={KRIT}
@@ -710,7 +743,6 @@ const StationCell: React.FC<StationCellProps> = ({
     </>
   );
 
-  // Контент для back1
   const renderBack1 = () => (
     <div
       style={{
@@ -721,7 +753,6 @@ const StationCell: React.FC<StationCellProps> = ({
         paddingTop: '9px',
       }}
     >
-      {/* Заголовок Информация */}
       <div
         style={{
           color: getStatusColor(),
@@ -735,7 +766,6 @@ const StationCell: React.FC<StationCellProps> = ({
         Информация
       </div>
       
-      {/* Название станции */}
       <div
         style={{
           maxWidth: '184px',
@@ -761,7 +791,6 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
       </div>
       
-      {/* Иконки */}
       <div
         style={{
           display: 'flex',
@@ -777,7 +806,6 @@ const StationCell: React.FC<StationCellProps> = ({
         {parentUid && <img src={CHAIN} alt="CHAIN" style={{ width: '30px', height: '17px' }} />}
       </div>
       
-      {/* Данные */}
       <div
         style={{
           width: '100%',
@@ -786,7 +814,6 @@ const StationCell: React.FC<StationCellProps> = ({
           boxSizing: 'border-box',
         }}
       >
-        {/* ТМЦ в станции */}
         <div
           style={{
             display: 'flex',
@@ -827,7 +854,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
         
-        {/* Выдано ТМЦ */}
         <div
           style={{
             display: 'flex',
@@ -868,7 +894,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
         
-        {/* Выдано сверхнормы */}
         <div
           style={{
             display: 'flex',
@@ -910,7 +935,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
         
-        {/* Готовые детали */}
         <div
           style={{
             display: 'flex',
@@ -951,7 +975,6 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
       </div>
 
-      {/* Кнопка Аналитика */}
       <button
         style={{
           position: 'absolute',
@@ -979,7 +1002,6 @@ const StationCell: React.FC<StationCellProps> = ({
     </div>
   );
 
-  // Контент для back2
   const renderBack2 = () => (
     <div
       style={{
@@ -990,7 +1012,6 @@ const StationCell: React.FC<StationCellProps> = ({
         paddingTop: '9px',
       }}
     >
-      {/* Заголовок Конфигурация */}
       <div
         style={{
           color: getStatusColor(),
@@ -1004,7 +1025,6 @@ const StationCell: React.FC<StationCellProps> = ({
         Конфигурация
       </div>
       
-      {/* Название станции */}
       <div
         style={{
           maxWidth: '184px',
@@ -1030,7 +1050,6 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
       </div>
       
-      {/* Цех и Участок */}
       <div
         style={{
           maxWidth: '184px',
@@ -1056,7 +1075,6 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
       </div>
       
-      {/* Меню конфигурации */}
       <div
         style={{
           width: '100%',
@@ -1066,7 +1084,6 @@ const StationCell: React.FC<StationCellProps> = ({
           marginTop: '23px',
         }}
       >
-        {/* Шаблоны загрузки */}
         <div
           style={{
             display: 'flex',
@@ -1076,7 +1093,7 @@ const StationCell: React.FC<StationCellProps> = ({
           }}
         >
           <img
-            src={Config1}
+            src={getConfig1Icon()}
             alt=""
             style={{
               position: 'absolute',
@@ -1097,7 +1114,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </span>
         </div>
         
-        {/* Карта загрузки */}
         <div
           style={{
             display: 'flex',
@@ -1107,13 +1123,13 @@ const StationCell: React.FC<StationCellProps> = ({
           }}
         >
           <img
-            src={Config2}
+            src={getConfig2Icon()}
             alt=""
             style={{
               position: 'absolute',
               left: '-33px',
-              width: '21px',
-              height: '16px',
+              width: '22px',
+              height: '17px',
             }}
           />
           <span
@@ -1128,7 +1144,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </span>
         </div>
         
-        {/* Отчет движения ТМЦ/деталей */}
         <div
           style={{
             display: 'flex',
@@ -1138,13 +1153,13 @@ const StationCell: React.FC<StationCellProps> = ({
           }}
         >
           <img
-            src={Config3}
+            src={getConfig3Icon()}
             alt=""
             style={{
               position: 'absolute',
               left: '-33px',
-              width: '21px',
-              height: '21px',
+              width: '22px',
+              height: '22px',
             }}
           />
           <span
@@ -1160,7 +1175,6 @@ const StationCell: React.FC<StationCellProps> = ({
           </span>
         </div>
         
-        {/* Настройки станций */}
         <div
           style={{
             display: 'flex',
@@ -1169,7 +1183,7 @@ const StationCell: React.FC<StationCellProps> = ({
           }}
         >
           <img
-            src={Config4}
+            src={getConfig4Icon()}
             alt=""
             style={{
               position: 'absolute',
@@ -1190,6 +1204,35 @@ const StationCell: React.FC<StationCellProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Стрелка назад в правом верхнем углу */}
+      <button
+        onClick={handleBack}
+        style={{
+          position: 'absolute',
+          right: '10px',
+          top: '10px',
+          width: '21px',
+          height: '21px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2,
+          padding: 0,
+        }}
+      >
+        <img 
+          src={arrows.back} 
+          alt="back" 
+          style={{ 
+            width: '21px', 
+            height: '21px',
+          }} 
+        />
+      </button>
     </div>
   );
 
@@ -1216,7 +1259,7 @@ const StationCell: React.FC<StationCellProps> = ({
           backgroundColor: 'transparent',
         }}
       >
-        {/* Front сторона */}
+        {/* Front */}
         <div
           style={{
             position: 'absolute',
@@ -1252,7 +1295,6 @@ const StationCell: React.FC<StationCellProps> = ({
               backgroundColor: 'transparent',
             }}
           >
-            {/* Левая стрелка */}
             <button
               onClick={handleFlipLeft}
               style={{
@@ -1281,7 +1323,6 @@ const StationCell: React.FC<StationCellProps> = ({
               />
             </button>
 
-            {/* Правая стрелка */}
             <button
               onClick={handleFlipRight}
               style={{
@@ -1314,7 +1355,7 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
 
-        {/* Back1 сторона */}
+        {/* Back1 */}
         <div
           style={{
             position: 'absolute',
@@ -1350,7 +1391,6 @@ const StationCell: React.FC<StationCellProps> = ({
               backgroundColor: 'transparent',
             }}
           >
-            {/* Стрелка назад */}
             <button
               onClick={handleBack}
               style={{
@@ -1383,7 +1423,7 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
 
-        {/* Back2 сторона */}
+        {/* Back2 */}
         <div
           style={{
             position: 'absolute',
@@ -1419,35 +1459,6 @@ const StationCell: React.FC<StationCellProps> = ({
               backgroundColor: 'transparent',
             }}
           >
-            {/* Стрелка назад */}
-            <button
-              onClick={handleBack}
-              style={{
-                position: 'absolute',
-                left: '10px',
-                top: '10px',
-                width: '21px',
-                height: '21px',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-                padding: 0,
-              }}
-            >
-              <img 
-                src={arrows.back} 
-                alt="back" 
-                style={{ 
-                  width: '21px', 
-                  height: '21px',
-                }} 
-              />
-            </button>
-            
             {renderBack2()}
           </div>
         </div>

@@ -1,7 +1,7 @@
 // App.tsx
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
-import { Routes, Route, useNavigate,  Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import PrivateRoute from './services/PrivateRoute';
 import MainLayout from './layouts/MainLayout';
 import LoginPage from './components/loginPage/LoginPage';
@@ -27,7 +27,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const AppContent = () => {
   const [needPreloader, setNeedPreloader] = useState(true);
   const navigate = useNavigate();
-  const { isAuth, isLocked, setLocked } = useAuth();
+  const { isAuth, isLoading, isLocked, setLocked } = useAuth();
   const { showWarning, setShowWarning } = useInactivityLock();
 
   useEffect(() => {
@@ -54,7 +54,8 @@ const AppContent = () => {
     setLocked(false);
   };
 
-  if (needPreloader) {
+  // Показываем прелоадер пока идёт загрузка CSRF или проверка авторизации
+  if (needPreloader || isLoading) {
     return <FullScreenPreloader />;
   }
 
@@ -74,7 +75,7 @@ const AppContent = () => {
           >
             <LockScreen onUnlock={handleUnlock} />
           </motion.div>
-        ) : (
+        ) : isAuth ? (
           <motion.div
             key="main"
             initial={{ opacity: 0 }}
@@ -83,7 +84,7 @@ const AppContent = () => {
             transition={{ duration: 0.3 }}
           >
             <Routes>
-              <Route path="/login" element={<LoginPage />} />
+              <Route path="/login" element={<Navigate to="/main" replace />} />
               
               <Route path="/" element={
                 <PrivateRoute>
@@ -107,6 +108,19 @@ const AppContent = () => {
             </Routes>
             
             <InactivityWarning show={showWarning} onClose={() => setShowWarning(false)} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="login"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
           </motion.div>
         )}
       </AnimatePresence>
