@@ -23,6 +23,24 @@ function getCookie(name: string) {
 
 let csrfInitialized = false;
 
+// Переменные для очереди обновления токена
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 AxiosService.interceptors.request.use(async (config) => {
   // Для GET запросов на /csrf не добавляем CSRF токен
   if (config.url?.includes('/csrf')) {
@@ -34,7 +52,6 @@ AxiosService.interceptors.request.use(async (config) => {
     try {
       const csrfResponse = await AxiosService.get('/csrf');
       const csrfToken = csrfResponse.data.token;
-      // Устанавливаем в дефолтные заголовки
       AxiosService.defaults.headers.common['X-XSRF-TOKEN'] = csrfToken;
       csrfInitialized = true;
       console.log('CSRF инициализирован в интерцепторе');
@@ -48,9 +65,7 @@ AxiosService.interceptors.request.use(async (config) => {
     const csrfToken = getCookie('XSRF-TOKEN');
     if (csrfToken) {
       config.headers['X-XSRF-TOKEN'] = csrfToken;
-      console.log('CSRF токен добавлен в заголовок:', csrfToken);
     } else {
-      // Если токена в cookie нет, используем из defaults
       const defaultToken = AxiosService.defaults.headers.common['X-XSRF-TOKEN'];
       if (defaultToken) {
         config.headers['X-XSRF-TOKEN'] = defaultToken;
@@ -66,20 +81,50 @@ AxiosService.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Не пытаемся обновить токен для запроса refresh_token
+    if (originalRequest.url?.includes(ConstantInfo.restApiRefreshToken)) {
+      return Promise.reject(error);
+    }
+
     if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+      
+      if (isRefreshing) {
+        // Если уже идёт обновление, ставим запрос в очередь
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => {
+          return AxiosService(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         // Пробуем обновить токен
-        await axios.get(window.config.ip_api + ':' + ConstantInfo.serverPort + ConstantInfo.restApiRefreshToken, { withCredentials: true });
+        await axios.get(
+          window.config.ip_api + ':' + ConstantInfo.serverPort + ConstantInfo.restApiRefreshToken, 
+          { withCredentials: true }
+        );
 
+        // Успешно обновили — обрабатываем очередь
+        processQueue(null);
+        
         // Повторяем исходный запрос
         return AxiosService(originalRequest);
       } catch (refreshError) {
+        // Не удалось обновить — отклоняем все запросы в очереди
+        processQueue(refreshError, null);
         console.warn('Не удалось обновить токен');
         navigateTo('/login');
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+    
     console.log('ошибка interceptors');
     console.log(error);
     return Promise.reject(error);

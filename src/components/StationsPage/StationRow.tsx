@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Импорт фонов для ряда
-import Line1 from '../../assets/Station/Line1.svg';
+import Line1 from '../../assets/Station/Line1.svg';10
 import Line2 from '../../assets/Station/Line2.svg';
 import Line3 from '../../assets/Station/Line3.svg';
 import Line4 from '../../assets/Station/Line4.svg';

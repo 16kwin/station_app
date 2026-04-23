@@ -1205,7 +1205,6 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
       </div>
 
-      {/* Стрелка назад в правом верхнем углу */}
       <button
         onClick={handleBack}
         style={{
@@ -1230,6 +1229,7 @@ const StationCell: React.FC<StationCellProps> = ({
           style={{ 
             width: '21px', 
             height: '21px',
+            transform: 'rotate(180deg)',
           }} 
         />
       </button>

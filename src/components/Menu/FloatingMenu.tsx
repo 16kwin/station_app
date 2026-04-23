@@ -42,6 +42,7 @@ const FloatingMenu = () => {
   const { openTab } = useTabs();
   const { setLocked } = useAuth();
   const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkVisibility = () => {
@@ -69,20 +70,30 @@ const FloatingMenu = () => {
       clearTimeout(leaveTimeoutRef.current);
       leaveTimeoutRef.current = null;
     }
+    if (collapseTimeoutRef.current) {
+      clearTimeout(collapseTimeoutRef.current);
+      collapseTimeoutRef.current = null;
+    }
     setIsHovered(true);
   };
 
   const handleMouseLeave = () => {
     leaveTimeoutRef.current = setTimeout(() => {
-      setIsHovered(false);
       setHoveredItem(null);
     }, 100);
+
+    collapseTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+    }, 400);
   };
 
   useEffect(() => {
     return () => {
       if (leaveTimeoutRef.current) {
         clearTimeout(leaveTimeoutRef.current);
+      }
+      if (collapseTimeoutRef.current) {
+        clearTimeout(collapseTimeoutRef.current);
       }
     };
   }, []);
@@ -103,21 +114,21 @@ const FloatingMenu = () => {
       className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 px-4 flex justify-center"
       style={{
         width: 'auto',
-        minWidth: '650px',
+        minWidth: '702px',
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className="transition-all duration-500 ease-out"
+        className="transition-all duration-1000 ease-out"
         style={{
           display: 'inline-block',
           width: 'auto',
-          minWidth: '650px',
+          minWidth: '702px',
         }}
       >
         <div 
-          className={`transition-all duration-700 ease-out ${
+          className={`transition-all duration-1000 ease-out ${
             isHovered 
               ? '-translate-y-4 rounded-[30px] bg-[#3F3E3F] shadow-xl' 
               : 'translate-y-[30px] rounded-t-[30px] bg-[#3F3E3F]'
@@ -127,8 +138,8 @@ const FloatingMenu = () => {
             minHeight: '60px',
             paddingTop: isHovered ? '10px' : '0',
             paddingBottom: isHovered ? '10px' : '0',
-            width: 'auto',
-            minWidth: '650px',
+            width: isHovered ? 'auto' : '702px',
+            minWidth: '702px',
             transformOrigin: 'center',
           }}
         >

@@ -1,4 +1,4 @@
-// ConstantInfo.ts - добавить ендпоинты
+// ConstantInfo.ts - добавить новые ендпоинты
 const ConstantInfo = {
   // База
   serverPort: '8084',
@@ -34,8 +34,13 @@ const ConstantInfo = {
   wsStationsDynamic: '/topic/stations/dynamic',
   wsStationsPath: '/ws-stations',
   
+  // Иерархия размещения
+  restApiLocationHierarchy: '/api/locations/hierarchy',
+  
+  // Фильтры пользователя
+  restApiUserFilters: '/api/user/filters',
+  
   // Остальные эндпоинты
-  restApiLocationHierarchy: '/api/locations/hierarchy/first',
   restApiCreateLocation: '/api/locations',
   restApiCreateStation: '/api/stations',
   restApiDashboardStats: '/api/dashboard/stats',
@@ -51,7 +56,8 @@ const ConstantInfo = {
   restApiDeleteAllStationPositionsByLocation: (locationId: number) => `/api/station-positions/location/${locationId}`,
   getLocationPhotoUrl: (filePath: string, fileName: string) => 
     `${ConstantInfo.fileDir}uploads/${filePath}${fileName}`,
-  
+  restApiStationsStaticFiltered: '/api/stations/static/filtered',
+restApiStationsDynamicFiltered: '/api/stations/dynamic/filtered',
   // Тестовые документы
   restApiTestDocuments: '/api/test-documents',
   restApiTestDocumentsDrafts: '/api/test-documents/drafts',
