@@ -11,7 +11,7 @@ declare global {
 
 // Настройка axios
 const AxiosService = axios.create({
-  baseURL: window.config.ip_api + ':' + ConstantInfo.serverPort,
+  baseURL: window.config.ip_api,
   withCredentials: true,
 });
 
@@ -81,6 +81,11 @@ AxiosService.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Если оригинальный запрос не существует, просто отклоняем
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
     // Не пытаемся обновить токен для запроса refresh_token
     if (originalRequest.url?.includes(ConstantInfo.restApiRefreshToken)) {
       return Promise.reject(error);
@@ -105,7 +110,7 @@ AxiosService.interceptors.response.use(
       try {
         // Пробуем обновить токен
         await axios.get(
-          window.config.ip_api + ':' + ConstantInfo.serverPort + ConstantInfo.restApiRefreshToken, 
+          window.config.ip_api + ConstantInfo.restApiRefreshToken, 
           { withCredentials: true }
         );
 

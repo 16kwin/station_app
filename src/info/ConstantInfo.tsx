@@ -1,15 +1,14 @@
 // ConstantInfo.ts - добавить новые ендпоинты
 const ConstantInfo = {
   // База
-  serverPort: '8084',
-  serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''), // Хост без http://
-  fileDir: window.config.ip_api + ':8084/',
+  serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''),
+  fileDir: window.config.ip_api + '/',
 
   // API базовый URL
-  apiBaseUrl: `${window.config.ip_api}:8084`,
+  apiBaseUrl: `${window.config.ip_api}`,
   
   // WebSocket базовый URL
-  wsBaseUrl: `ws://${window.config.ip_api.replace('http://', '').replace('https://', '')}:8084`,
+  wsBaseUrl: `ws://${window.config.ip_api.replace('http://', '').replace('https://', '')}`,
 
   // Авторизация и т.п.
   restApiLogin: '/api/auth/login',
@@ -20,8 +19,8 @@ const ConstantInfo = {
   
   // Спящий режим
   restApiCheckPassword: '/api/auth/check_password',
-  inactivityTimeout: 5 * 60 * 1000, // 5 минут бездействия до блокировки
-  warningTimeout: 30 * 1000, // 30 секунд предупреждение до блокировки
+  inactivityTimeout: 5 * 60 * 1000,
+  warningTimeout: 30 * 1000,
   
   // Станции
   restApiStationsStatic: '/api/stations/static',
@@ -57,7 +56,8 @@ const ConstantInfo = {
   getLocationPhotoUrl: (filePath: string, fileName: string) => 
     `${ConstantInfo.fileDir}uploads/${filePath}${fileName}`,
   restApiStationsStaticFiltered: '/api/stations/static/filtered',
-restApiStationsDynamicFiltered: '/api/stations/dynamic/filtered',
+  restApiStationsDynamicFiltered: '/api/stations/dynamic/filtered',
+  
   // Тестовые документы
   restApiTestDocuments: '/api/test-documents',
   restApiTestDocumentsDrafts: '/api/test-documents/drafts',
