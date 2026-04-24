@@ -4,5 +4,5 @@ window.config = {
           window.location.hostname === '127.0.0.1' ||
           window.location.hostname.includes('192.168.')
           ? 'http://localhost' 
-          : 'http://109.69.22.155'
+          : window.location.protocol + '//' + window.location.hostname
 };
