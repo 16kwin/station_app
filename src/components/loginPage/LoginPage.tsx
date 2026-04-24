@@ -7,6 +7,11 @@ import type { AxiosError } from 'axios';
 import LOGO from '../../assets/LOGO.svg';
 import LOGIN_IMAGE from '../../assets/Login.svg';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { refreshAuth, setLocked } = useAuth();
@@ -16,6 +21,62 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isYandex, setIsYandex] = useState(false);
+
+  useEffect(() => {
+    // Определяем Яндекс
+    const yandex = /YaBrowser|Yandex/.test(navigator.userAgent);
+    setIsYandex(yandex);
+
+    // Проверяем standalone режим
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    setIsStandalone(standalone);
+
+    // Проверяем установку
+    const installed = localStorage.getItem('pwa_installed');
+    if (installed === 'true') {
+      setIsPwaInstalled(true);
+    }
+
+    // beforeinstallprompt (Chrome)
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    // appinstalled (Chrome)
+    const handleAppInstalled = () => {
+      setIsPwaInstalled(true);
+      localStorage.setItem('pwa_installed', 'true');
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handlePwaAction = async () => {
+    if (isPwaInstalled) {
+      window.open(window.location.origin + '/', '_self');
+    } else if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsPwaInstalled(true);
+        localStorage.setItem('pwa_installed', 'true');
+      }
+      setDeferredPrompt(null);
+    }
+  };
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -138,6 +199,24 @@ const LoginPage = () => {
               {isLoading ? 'Вход...' : 'Войти'}
             </button>
           </form>
+
+          {/* PWA блок — показываем только в браузере */}
+          {!isStandalone && (
+            <div className="mt-4 text-center">
+              {isYandex ? (
+                <p className="text-gray-400 text-[14px]">
+                  Чтобы установить приложение, нажмите ⋮ → «Установить приложение»
+                </p>
+              ) : (deferredPrompt || isPwaInstalled) ? (
+                <button
+                  onClick={handlePwaAction}
+                  className="text-gray-400 text-[14px] hover:text-gray-500 transition-colors underline cursor-pointer"
+                >
+                  {isPwaInstalled ? 'Открыть в приложении' : 'Скачать как приложение'}
+                </button>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Правая часть - картинка */}
