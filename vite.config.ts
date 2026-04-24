@@ -6,6 +6,12 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
-    open: true
+    open: true,
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      '109.69.22.155',
+      'dynamikaawms.ru'
+    ]
   }
 })
