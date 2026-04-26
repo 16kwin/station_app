@@ -1,44 +1,35 @@
 // components/LockScreen/LockScreen.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../services/AuthContext';
-import LOGO from '../../assets/LOGO.svg';
-import Hand from '../../assets/Hand.svg';
 
 interface LockScreenProps {
   onUnlock: () => void;
-}
-
-interface Ripple {
-  id: number;
 }
 
 const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const { userInfo, checkPassword } = useAuth();
   const [scale, setScale] = useState(1);
-  const [ripples, setRipples] = useState<Ripple[]>([]);
-  const nextIdRef = useRef(0);
-  const buttonContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setShowLoginForm(false);
+    setShowForm(false);
     setPassword('');
     setError('');
   }, []);
 
   useEffect(() => {
-    if (showLoginForm) {
+    if (showForm) {
       const timer = setTimeout(() => {
         const input = document.querySelector('input[type="password"]') as HTMLInputElement;
         if (input) input.focus();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [showLoginForm]);
+  }, [showForm]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -53,31 +44,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // Бесконечная генерация кругов
-  useEffect(() => {
-    if (!showLoginForm) {
-      const interval = setInterval(() => {
-        setRipples(prev => [...prev, { id: nextIdRef.current++ }]);
-      }, 800);
-
-      // Удаляем старые круги после анимации
-      const cleanup = setInterval(() => {
-        setRipples(prev => prev.slice(-20));
-      }, 2000);
-
-      return () => {
-        clearInterval(interval);
-        clearInterval(cleanup);
-      };
-    } else {
-      setRipples([]);
-    }
-  }, [showLoginForm]);
-
-  const handleWakeUp = () => {
-    setShowLoginForm(true);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,107 +63,32 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     setIsLoading(false);
   };
 
-  const buttonSize = 66 * scale;
-
   return (
     <div className="w-full h-full overflow-hidden" style={{ fontFamily: 'Roboto, sans-serif' }}>
       <div className="relative w-full h-full">
         <AnimatePresence mode="wait">
-          {!showLoginForm && (
+          {!showForm && (
             <motion.div
-              key="welcome"
+              key="idle"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="absolute inset-0 flex flex-col items-center justify-between"
-              style={{ 
-                paddingTop: `${200 * scale}px`, 
-                paddingBottom: `${120 * scale}px` 
-              }}
+              className="absolute inset-0 flex items-center justify-center"
             >
-              <div className="flex flex-col items-center">
-                <img 
-                  src={LOGO} 
-                  alt="logo" 
-                  style={{ 
-                    width: `${332 * scale}px`, 
-                    height: `${287 * scale}px` 
-                  }}
-                />
-
-                <h1 
-                  className="text-white"
-                  style={{ 
-                    fontSize: `${65 * scale}px`, 
-                    fontWeight: 700,
-                    letterSpacing: `${3 * scale}px`,
-                    marginTop: `${32 * scale}px`,
-                    fontFamily: 'Roboto, sans-serif'
-                  }}
-                >
-                  ДИНАМИКА
-                </h1>
-
-                <p 
-                  className="text-white"
-                  style={{ 
-                    fontSize: `${32 * scale}px`, 
-                    fontWeight: 600,
-                    letterSpacing: `${1 * scale}px`,
-                    marginTop: `${21 * scale}px`,
-                    fontFamily: 'Roboto, sans-serif'
-                  }}
-                >
-                  ПРОМЫШЛЕННЫЕ СИСТЕМЫ
-                </p>
-              </div>
-
-              {/* Кнопка с бесконечными кругами */}
-              <div 
-                ref={buttonContainerRef}
-                className="relative flex items-center justify-center"
+              <button
+                onClick={() => setShowForm(true)}
+                className="bg-white/10 backdrop-blur-sm border border-white/20 text-white px-10 py-4 rounded-2xl text-xl font-medium hover:bg-white/20 transition-all duration-300"
+                style={{
+                  transform: `scale(${scale})`,
+                }}
               >
-                {/* Рендерим все активные круги */}
-                {ripples.map((ripple) => (
-                  <div
-                    key={ripple.id}
-                    className="absolute rounded-full border-2 border-white"
-                    style={{
-                      width: `${buttonSize}px`,
-                      height: `${buttonSize}px`,
-                      left: '50%',
-                      top: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      animation: 'rippleExpand 2s linear forwards',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                ))}
-                
-                {/* Кнопка */}
-                <button
-                  onClick={handleWakeUp}
-                  className="relative z-10 rounded-full transition-transform duration-300 flex items-center justify-center bg-transparent hover:-translate-y-2"
-                  style={{
-                    width: `${buttonSize}px`,
-                    height: `${buttonSize}px`,
-                  }}
-                >
-                  <img 
-                    src={Hand} 
-                    alt="hand" 
-                    style={{ 
-                      width: `${30 * scale}px`, 
-                      height: `${30 * scale}px` 
-                    }}
-                  />
-                </button>
-              </div>
+                Разблокировать
+              </button>
             </motion.div>
           )}
 
-          {showLoginForm && (
+          {showForm && (
             <motion.div
               key="password"
               initial={{ opacity: 0, y: '100%' }}
@@ -254,19 +145,6 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           )}
         </AnimatePresence>
       </div>
-
-      <style>{`
-        @keyframes rippleExpand {
-          0% {
-            transform: translate(-50%, -50%) scale(1);
-            opacity: 0.8;
-          }
-          100% {
-            transform: translate(-50%, -50%) scale(4);
-            opacity: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 };

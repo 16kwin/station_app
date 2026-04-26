@@ -5,6 +5,41 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import { AuthProvider } from './services/AuthContext.tsx';
 
+// Регистрация service worker для PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+
+// Полная блокировка масштабирования
+window.addEventListener('wheel', (e) => {
+  if (e.ctrlKey) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '0' || e.key === '=')) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+});
+
+document.addEventListener('gesturestart', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('gesturechange', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('gestureend', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>

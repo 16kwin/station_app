@@ -39,10 +39,24 @@ const FloatingMenu = () => {
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const [isVisible, setIsVisible] = useState(true);
+  const [canHoverItems, setCanHoverItems] = useState(false);
   const { openTab } = useTabs();
   const { setLocked } = useAuth();
   const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverEnableTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const menuFullyClosedRef = useRef(true);
+  const mousePosRef = useRef({ x: 0, y: 0 });
+
+  // Глобально отслеживаем позицию мыши
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   useEffect(() => {
     const checkVisibility = () => {
@@ -75,26 +89,51 @@ const FloatingMenu = () => {
       collapseTimeoutRef.current = null;
     }
     setIsHovered(true);
+
+    // Задержку применяем только если меню было полностью закрыто
+    if (menuFullyClosedRef.current) {
+      setCanHoverItems(false);
+      menuFullyClosedRef.current = false;
+
+      hoverEnableTimeoutRef.current = setTimeout(() => {
+        setCanHoverItems(true);
+        const { x, y } = mousePosRef.current;
+        const elementUnderCursor = document.elementFromPoint(x, y);
+        if (elementUnderCursor) {
+          const itemIndex = itemRefs.current.findIndex(
+            ref => ref && (ref === elementUnderCursor || ref.contains(elementUnderCursor))
+          );
+          if (itemIndex !== -1) {
+            setHoveredItem(itemIndex);
+          }
+        }
+      }, 500);
+    }
   };
 
   const handleMouseLeave = () => {
+    if (hoverEnableTimeoutRef.current) {
+      clearTimeout(hoverEnableTimeoutRef.current);
+      hoverEnableTimeoutRef.current = null;
+    }
+
     leaveTimeoutRef.current = setTimeout(() => {
       setHoveredItem(null);
     }, 100);
 
     collapseTimeoutRef.current = setTimeout(() => {
       setIsHovered(false);
+      setCanHoverItems(false);
+      menuFullyClosedRef.current = true;
+      setHoveredItem(null);
     }, 400);
   };
 
   useEffect(() => {
     return () => {
-      if (leaveTimeoutRef.current) {
-        clearTimeout(leaveTimeoutRef.current);
-      }
-      if (collapseTimeoutRef.current) {
-        clearTimeout(collapseTimeoutRef.current);
-      }
+      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
+      if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
+      if (hoverEnableTimeoutRef.current) clearTimeout(hoverEnableTimeoutRef.current);
     };
   }, []);
 
@@ -112,20 +151,13 @@ const FloatingMenu = () => {
   return (
     <div 
       className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 px-4 flex justify-center"
-      style={{
-        width: 'auto',
-        minWidth: '702px',
-      }}
+      style={{ width: 'auto', minWidth: '702px' }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div
         className="transition-all duration-1000 ease-out"
-        style={{
-          display: 'inline-block',
-          width: 'auto',
-          minWidth: '702px',
-        }}
+        style={{ display: 'inline-block', width: 'auto', minWidth: '702px' }}
       >
         <div 
           className={`transition-all duration-1000 ease-out ${
@@ -143,21 +175,16 @@ const FloatingMenu = () => {
             transformOrigin: 'center',
           }}
         >
-          {/* Стрелка в скрытом состоянии */}
           {!isHovered && (
             <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '10px' }}>
-              <img 
-                src={ArrowIcon} 
-                alt="arrow" 
-                className="w-5 h-auto"
-              />
+              <img src={ArrowIcon} alt="arrow" className="w-5 h-auto" />
             </div>
           )}
 
           {isHovered && (
             <div className="flex items-center animate-fadeIn">
               {menuItems.map((item, index) => {
-                const isItemHovered = hoveredItem === index;
+                const isItemHovered = hoveredItem === index && canHoverItems;
                 
                 return (
                   <div 
@@ -169,7 +196,10 @@ const FloatingMenu = () => {
                     }}
                   >
                     <div
-                      onMouseEnter={() => setHoveredItem(index)}
+                      ref={(el) => { itemRefs.current[index] = el; }}
+                      onMouseEnter={() => {
+                        if (canHoverItems) setHoveredItem(index);
+                      }}
                       onMouseLeave={() => setHoveredItem(null)}
                       onClick={() => handleNavigate(item.path, item.label, item.isSleep)}
                       className="relative flex items-center justify-center cursor-pointer transition-all duration-700 ease-out"
@@ -210,12 +240,8 @@ const FloatingMenu = () => {
       </div>
       <style>{`
         @keyframes fadeIn {
-          0% {
-            opacity: 0;
-          }
-          100% {
-            opacity: 1;
-          }
+          0% { opacity: 0; }
+          100% { opacity: 1; }
         }
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out forwards;
