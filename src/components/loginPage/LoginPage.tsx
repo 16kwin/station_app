@@ -1,6 +1,6 @@
 // components/loginPage/LoginPage.tsx
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../services/AuthContext';
 import AxiosService from '../../services/AxiosService';
@@ -10,41 +10,73 @@ import LOGO from '../../assets/LOGO.svg';
 import LOGIN_IMAGE from '../../assets/Login.svg';
 import Hand from '../../assets/Hand.svg';
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
 interface Ripple {
   id: number;
 }
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { refreshAuth, setLocked } = useAuth();
   const [rememberMe, setRememberMe] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+
+  const skipSplash = searchParams.get('skipSplash') === 'true';
+  const [showForm, setShowForm] = useState(skipSplash);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isYandex, setIsYandex] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [focusedField, setFocusedField] = useState<'username' | 'password' | null>(null);
 
   const [scale, setScale] = useState(1);
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const nextIdRef = useRef(0);
 
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
+
+  const [EyeIcon, setEyeIcon] = useState<string | null>(null);
+  const [EyeOffIcon, setEyeOffIcon] = useState<string | null>(null);
+
   useEffect(() => {
-    setShowForm(false);
+    import('../../assets/Eye.svg').then(m => setEyeIcon(m.default));
+    import('../../assets/EyeOff.svg').then(m => setEyeOffIcon(m.default));
+  }, []);
+
+  useEffect(() => {
     setUsername('');
     setPassword('');
     setMessage('');
-  }, []);
+    setHasError(false);
+  }, [showForm]);
+
+  useEffect(() => {
+    const resetInactivityTimer = () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      if (showForm) {
+        inactivityTimerRef.current = setTimeout(() => {
+          setShowForm(false);
+        }, INACTIVITY_TIMEOUT);
+      }
+    };
+
+    resetInactivityTimer();
+
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(event => document.addEventListener(event, resetInactivityTimer));
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      events.forEach(event => document.removeEventListener(event, resetInactivityTimer));
+    };
+  }, [showForm]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -79,52 +111,11 @@ const LoginPage = () => {
     }
   }, [showForm]);
 
-  useEffect(() => {
-    const ua = navigator.userAgent;
-    const yandex = /YaBrowser/.test(ua) && !/Chrome/.test(ua);
-    setIsYandex(yandex);
-
-    const standalone = window.matchMedia('(display-mode: standalone)').matches;
-    setIsStandalone(standalone);
-
-    const installed = localStorage.getItem('pwa_installed') === 'true';
-    setIsPwaInstalled(installed);
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-
-    const handleAppInstalled = () => {
-      setIsPwaInstalled(true);
-      localStorage.setItem('pwa_installed', 'true');
-      setDeferredPrompt(null);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  const handleInstallPwa = async () => {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setIsPwaInstalled(true);
-        localStorage.setItem('pwa_installed', 'true');
-      }
-      setDeferredPrompt(null);
-    }
-  };
-
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
+    setHasError(false);
+    setMessage('');
 
     try {
       const newCsrf = await AxiosService.get('/csrf');
@@ -141,22 +132,67 @@ const LoginPage = () => {
         setLocked(false);
         navigate('/main');
       } else {
-        setMessage('Ошибка входа');
+        setMessage('Логин или пароль введены неправильно, введите заново');
+        setHasError(true);
       }
     } catch (error) {
       const typeError = error as AxiosError;
       console.log(typeError);
       if (typeError.response?.status === 401) {
-        setMessage('Неверные данные для входа');
+        setMessage('Логин или пароль введены неправильно, введите заново');
+        setHasError(true);
       } else {
         setMessage(typeError.message);
+        setHasError(true);
       }
     } finally {
       setIsLoading(false);
     }
   };
 
+  const isFieldActive = (field: 'username' | 'password'): boolean => {
+    return focusedField === field || (field === 'username' && username.length > 0) || (field === 'password' && password.length > 0);
+  };
+
+  const getLegendStyle = (field: 'username' | 'password'): React.CSSProperties => {
+    const width = field === 'username' ? '48px' : '57px';
+    return {
+      fontSize: '14px',
+      fontWeight: 500,
+      fontFamily: 'Roboto, sans-serif',
+      width: width,
+      height: '21px',
+      lineHeight: '21px',
+      color: hasError ? '#FF3052' : isFieldActive(field) ? '#666EFE' : 'rgba(45, 64, 89, 0.5)',
+      padding: '0 4px',
+      marginLeft: '12px',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      transform: 'translateY(-50%)',
+      backgroundColor: '#FFFFFF',
+    };
+  };
+
+  const getFieldsetStyle = (field: 'username' | 'password'): React.CSSProperties => {
+    return {
+      width: '399px',
+      height: '59px',
+      borderColor: hasError ? '#FF3052' : isFieldActive(field) ? '#666EFE' : '#D1D5DB',
+      borderRadius: '8px',
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      padding: 0,
+      display: 'flex',
+      alignItems: 'center',
+      margin: 0,
+      position: 'relative',
+      boxSizing: 'border-box',
+    };
+  };
+
   const buttonSize = 66 * scale;
+  const isButtonActive = username.length > 0 && password.length > 0;
 
   return (
     <div className="w-full h-screen overflow-hidden" style={{ fontFamily: 'Roboto, sans-serif' }}>
@@ -194,20 +230,20 @@ const LoginPage = () => {
                   fontFamily: 'Roboto, sans-serif'
                 }}
               >
-                ДИНАМИКА
+                ДИНАМИКА:AWMS
               </h1>
 
               <p
                 className="text-white"
                 style={{
-                  fontSize: `${32 * scale}px`,
+                  fontSize: `${31 * scale}px`,
                   fontWeight: 600,
                   letterSpacing: `${1 * scale}px`,
                   marginTop: `${21 * scale}px`,
                   fontFamily: 'Roboto, sans-serif'
                 }}
               >
-                ПРОМЫШЛЕННЫЕ СИСТЕМЫ
+                СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ
               </p>
             </div>
 
@@ -256,59 +292,142 @@ const LoginPage = () => {
             transition={{ duration: 0.3 }}
             className="flex h-screen items-center justify-center"
           >
-            <div className="w-[1253px] h-[800px] bg-[#FFFFFF] rounded-2xl shadow-xl flex relative overflow-hidden font-roboto">
-              <div className="absolute left-[15px] top-[15px] flex items-center gap-[9px]">
-                <img src={LOGO} alt="ДИНАМИКА" className="w-[57px] h-[49px]" />
-                <div>
-                  <h1 className="text-[23px] font-black tracking-[2px] text-gray-900">
-                    ДИНАМИКА
-                  </h1>
-                  <p className="text-[16px] font-medium tracking-[0px] text-gray-600">
-                    ПРОМЫШЛЕННЫЕ СИСТЕМЫ
-                  </p>
+            <div className="w-[1250px] h-[800px] bg-[#FFFFFF] rounded-[15px] shadow-xl flex relative overflow-hidden font-roboto">
+              {/* Левая часть */}
+              <div className="w-[600px] h-full flex flex-col" style={{ paddingTop: '40px' }}>
+                {/* Логотип */}
+                <div className="flex justify-center">
+                  <img src={LOGO} alt="ДИНАМИКА" className="w-[68px] h-[58px]" />
                 </div>
-              </div>
 
-              <div className="w-[615px] h-full flex flex-col justify-center px-[60px]">
-                <h2 className="text-gray-900 font-roboto font-bold text-[40px] leading-[110%] tracking-[-0.04em] mb-2">
+                {/* Название */}
+                <h1
+                  className="text-gray-900 font-roboto text-center"
+                  style={{
+                    fontSize: '21px',
+                    fontWeight: 900,
+                    letterSpacing: '2px',
+                    marginTop: '5px',
+                    width: '216px',
+                    height: '25px',
+                    lineHeight: '25px',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                  }}
+                >
+                  ДИНАМИКА:AWMS
+                </h1>
+
+                {/* Подзаголовок */}
+                <p
+                  className="text-gray-600 font-roboto text-center whitespace-nowrap"
+                  style={{
+                    fontSize: '17px',
+                    fontWeight: 500,
+                    letterSpacing: '1px',
+                    marginTop: '30px',
+                  }}
+                >
+                  СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ
+                </p>
+
+                {/* Заголовок формы */}
+                <h2
+                  className="text-gray-900 font-roboto"
+                  style={{
+                    fontSize: '30px',
+                    fontWeight: 700,
+                    marginTop: '50px',
+                    marginLeft: '113px',
+                  }}
+                >
                   Вход в аккаунт
                 </h2>
-                <p className="text-gray-500 text-[16px] mb-8">
+
+                {/* Подзаголовок формы */}
+                <p
+                  className="text-[#2D4059] font-roboto whitespace-nowrap"
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 400,
+                    opacity: 0.5,
+                    marginTop: '10px',
+                    marginLeft: '113px',
+                  }}
+                >
                   Войдите в учетную запись для продолжения работы
                 </p>
 
-                <form onSubmit={handleSubmit}>
-                  <div className="mb-5">
-                    <label className="block text-gray-700 text-[14px] font-medium mb-2">
-                      Логин
-                    </label>
-                    <input
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 text-[16px] placeholder-gray-400 focus:outline-none focus:border-[#666EFE] focus:ring-1 focus:ring-[#666EFE] transition-all"
-                      name="username"
-                      placeholder="admin"
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      disabled={isLoading}
-                    />
+                {/* Форма входа */}
+                <form onSubmit={handleSubmit} style={{ marginTop: '36px', marginLeft: '113px', marginRight: '113px' }}>
+                  {/* Поле Логин */}
+                  <div className="mb-[30px]">
+                    <fieldset
+                      style={getFieldsetStyle('username')}
+                      onFocus={() => { setFocusedField('username'); setHasError(false); }}
+                      onBlur={() => setFocusedField(null)}
+                    >
+                      <legend style={getLegendStyle('username')}>Логин</legend>
+                      <input
+                        className="w-full bg-transparent text-gray-900 focus:outline-none placeholder-gray-400"
+                        style={{
+                          fontSize: '16px',
+                          fontFamily: 'Roboto, sans-serif',
+                          fontWeight: 400,
+                          paddingLeft: '16px',
+                          paddingRight: '16px',
+                        }}
+                        name="username"
+                        placeholder="Введите логин"
+                        type="text"
+                        value={username}
+                        onChange={(e) => { setUsername(e.target.value); setHasError(false); }}
+                        disabled={isLoading}
+                      />
+                    </fieldset>
                   </div>
 
-                  <div className="mb-5">
-                    <label className="block text-gray-700 text-[14px] font-medium mb-2">
-                      Пароль
-                    </label>
-                    <input
-                      name="password"
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 text-[16px] placeholder-gray-400 focus:outline-none focus:border-[#666EFE] focus:ring-1 focus:ring-[#666EFE] transition-all"
-                      placeholder=""
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isLoading}
-                    />
+                  {/* Поле Пароль */}
+                  <div className="mb-[25px]">
+                    <fieldset
+                      style={getFieldsetStyle('password')}
+                      onFocus={() => { setFocusedField('password'); setHasError(false); }}
+                      onBlur={() => setFocusedField(null)}
+                    >
+                      <legend style={getLegendStyle('password')}>Пароль</legend>
+                      <input
+                        className="w-full bg-transparent text-gray-900 focus:outline-none placeholder-gray-400"
+                        style={{
+                          fontSize: '16px',
+                          fontFamily: 'Roboto, sans-serif',
+                          fontWeight: 400,
+                          paddingLeft: '16px',
+                          paddingRight: '40px',
+                        }}
+                        name="password"
+                        placeholder="Введите пароль"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => { setPassword(e.target.value); setHasError(false); }}
+                        disabled={isLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer flex items-center justify-center"
+                        style={{ background: 'none', border: 'none', padding: 0 }}
+                      >
+                        {showPassword ? (
+                          EyeIcon ? <img src={EyeIcon} alt="show" className="w-6 h-6" /> : <span className="text-gray-400 text-sm">👁</span>
+                        ) : (
+                          EyeOffIcon ? <img src={EyeOffIcon} alt="hide" className="w-6 h-6" /> : <span className="text-gray-400 text-sm">🙈</span>
+                        )}
+                      </button>
+                    </fieldset>
                   </div>
 
-                  <div className="flex items-center mb-6">
+                  {/* Запомнить учетную запись */}
+                  <div className="flex items-center" style={{ marginBottom: '50px' }}>
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
@@ -322,38 +441,40 @@ const LoginPage = () => {
                     </label>
                   </div>
 
-                  {message && (
-                    <p className="text-red-500 text-sm mb-4">{message}</p>
-                  )}
-
+                  {/* Кнопка Войти */}
                   <button
-                    className="w-full bg-[#4A90E2] hover:bg-[#3A80D2] text-white py-3 rounded-lg font-medium text-[16px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full text-white rounded-lg font-medium text-[16px] transition-all"
+                    style={{
+                      width: '399px',
+                      height: '59px',
+                      backgroundColor: '#666EFE',
+                      opacity: isButtonActive ? 1 : 0.5,
+                    }}
                     type="submit"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Вход...' : 'Войти'}
                   </button>
-                </form>
 
-                {!isStandalone && !isPwaInstalled && (
-                  <div className="mt-4 text-center">
-                    {isYandex ? (
-                      <p className="text-gray-400 text-[14px]">
-                        Чтобы установить приложение, нажмите ⋮ → «Установить приложение»
-                      </p>
-                    ) : (
-                      <button
-                        onClick={handleInstallPwa}
-                        className="text-[#4A90E2] text-[14px] hover:text-[#3A80D2] transition-colors underline cursor-pointer"
-                      >
-                        Скачать как приложение
-                      </button>
-                    )}
-                  </div>
-                )}
+                  {/* Сообщение об ошибке */}
+                  {message && (
+                    <p
+                      className="text-[#FF3052] font-roboto whitespace-nowrap"
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: 400,
+                        marginTop: '8px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {message}
+                    </p>
+                  )}
+                </form>
               </div>
 
-              <div className="absolute right-[15px] top-[15px] w-[608px] h-[770px] rounded-2xl overflow-hidden">
+              {/* Правая часть - картинка */}
+              <div className="absolute right-0 top-0 w-[650px] h-full overflow-hidden rounded-r-[15px]">
                 <img src={LOGIN_IMAGE} alt="Login" className="w-full h-full object-cover" />
               </div>
             </div>
