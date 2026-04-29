@@ -1,4 +1,3 @@
-// App.tsx
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -13,6 +12,7 @@ import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
 import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
+import SchablonPage from './components/DocumentsPage/Schablon/SchablonPage';
 import AxiosService from './services/AxiosService';
 import ConstantInfo from './info/ConstantInfo';
 import { setNavigator } from './services/navigate';
@@ -98,6 +98,7 @@ const AppContent = () => {
                 <Route path="stations" element={<StationsPage />} />
                 <Route path="references" element={<ReferencesPage />} />
                 <Route path="documents" element={<DocumentsPage />} />
+                <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="settings" element={<SettingsPage />} />

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useTabs } from '../../context/TabContext';
 import type { Tab } from '../../context/TabContext';
 import Logo from '../../assets/Menu/Logo.svg';
@@ -6,7 +6,7 @@ import Arrow from '../../assets/Menu/Arrow.svg';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TabBar = () => {
-  const { tabs, activeTabId, closeTab, switchTab, openNewTab } = useTabs();
+  const { tabs, activeTabId, closeTab, switchTab } = useTabs();
   const [showDropdown, setShowDropdown] = useState(false);
   const [visibleTabs, setVisibleTabs] = useState<Tab[]>([]);
   const [tabWidths, setTabWidths] = useState<number[]>([]);
@@ -16,11 +16,15 @@ const TabBar = () => {
   
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const rootContainerRef = useRef<HTMLDivElement>(null);
-  const measureContainerRef = useRef<HTMLDivElement>(null);
   const counterButtonRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Предыдущие значения для сравнения
+  const prevVisibleTabsRef = useRef<string>('');
+  const prevTabWidthsRef = useRef<string>('');
+  const prevTabsLengthRef = useRef<number>(0);
   
   const MIN_TAB_WIDTH = 100;
   const MAX_TAB_WIDTH = 150;
@@ -37,93 +41,114 @@ const TabBar = () => {
     return false;
   };
 
-  const getNaturalWidths = (): number[] => {
-    // Всегда возвращаем MAX_TAB_WIDTH, если места достаточно
-    // Сжатие будет происходить только при нехватке места
-    return tabs.map(() => MAX_TAB_WIDTH);
-  };
-
-  const calculateVisibleTabs = () => {
-    if (!rootContainerRef.current || tabs.length === 0) return;
+  const calculateVisibleTabs = useCallback(() => {
+    if (!rootContainerRef.current || tabs.length === 0) {
+      setVisibleTabs([]);
+      setTabWidths([]);
+      prevVisibleTabsRef.current = '';
+      prevTabWidthsRef.current = '';
+      return;
+    }
     
     const totalWidth = rootContainerRef.current.clientWidth;
     const fixedWidth = HORIZONTAL_PADDING + LOGO_WIDTH + GAP_BETWEEN_LOGO_COUNTER + COUNTER_WIDTH + GAP_BETWEEN_COUNTER_TABS + HORIZONTAL_PADDING;
     const availableWidth = totalWidth - fixedWidth;
     
     if (availableWidth <= MIN_TAB_WIDTH) {
-      setVisibleTabs([]);
-      setTabWidths([]);
+      const newVisibleStr = '[]';
+      const newWidthsStr = '[]';
+      if (prevVisibleTabsRef.current !== newVisibleStr || prevTabWidthsRef.current !== newWidthsStr) {
+        setVisibleTabs([]);
+        setTabWidths([]);
+        prevVisibleTabsRef.current = newVisibleStr;
+        prevTabWidthsRef.current = newWidthsStr;
+      }
       return;
     }
     
-    const naturalWidths = getNaturalWidths();
+    const naturalWidths = tabs.map(() => MAX_TAB_WIDTH);
     const totalGaps = (tabs.length - 1) * GAP_BETWEEN_TABS;
     const totalNaturalWidth = naturalWidths.reduce((sum, w) => sum + w, 0);
     const totalNeeded = totalNaturalWidth + totalGaps;
     
+    let newVisibleTabs: Tab[];
+    let newTabWidths: number[];
+    
     if (totalNeeded <= availableWidth) {
-      setVisibleTabs([...tabs]);
-      setTabWidths(naturalWidths);
-      return;
-    }
-    
-    let bestCount = 0;
-    let bestWidths: number[] = [];
-    
-    const maxPossibleByMinWidth = Math.floor((availableWidth + GAP_BETWEEN_TABS) / (MIN_TAB_WIDTH + GAP_BETWEEN_TABS));
-    const maxCount = Math.min(tabs.length, maxPossibleByMinWidth);
-    
-    for (let count = maxCount; count >= 1; count--) {
-      const candidateTabs = tabs.slice(-count);
-      const candidateNaturalWidths = naturalWidths.slice(-count);
-      const candidateGaps = (count - 1) * GAP_BETWEEN_TABS;
-      const totalCandidateNatural = candidateNaturalWidths.reduce((sum, w) => sum + w, 0);
+      newVisibleTabs = [...tabs];
+      newTabWidths = naturalWidths;
+    } else {
+      let bestCount = 0;
+      let bestWidths: number[] = [];
       
-      if (totalCandidateNatural + candidateGaps <= availableWidth) {
-        bestCount = count;
-        bestWidths = candidateNaturalWidths;
-        break;
-      }
+      const maxPossibleByMinWidth = Math.floor((availableWidth + GAP_BETWEEN_TABS) / (MIN_TAB_WIDTH + GAP_BETWEEN_TABS));
+      const maxCount = Math.min(tabs.length, maxPossibleByMinWidth);
       
-      const availableForWidths = availableWidth - candidateGaps;
-      if (availableForWidths > 0) {
-        const scale = availableForWidths / totalCandidateNatural;
-        const compressedWidths = candidateNaturalWidths.map(w => {
-          const compressed = w * scale;
-          return Math.max(MIN_TAB_WIDTH, Math.min(MAX_TAB_WIDTH, compressed));
-        });
+      for (let count = maxCount; count >= 1; count--) {
+        const candidateTabs = tabs.slice(-count);
+        const candidateNaturalWidths = naturalWidths.slice(-count);
+        const candidateGaps = (count - 1) * GAP_BETWEEN_TABS;
+        const totalCandidateNatural = candidateNaturalWidths.reduce((sum, w) => sum + w, 0);
         
-        const totalCompressed = compressedWidths.reduce((sum, w) => sum + w, 0);
-        
-        if (totalCompressed + candidateGaps <= availableWidth + 0.5) {
+        if (totalCandidateNatural + candidateGaps <= availableWidth) {
           bestCount = count;
-          bestWidths = compressedWidths;
+          bestWidths = candidateNaturalWidths;
           break;
         }
+        
+        const availableForWidths = availableWidth - candidateGaps;
+        if (availableForWidths > 0) {
+          const scale = availableForWidths / totalCandidateNatural;
+          const compressedWidths = candidateNaturalWidths.map(w => {
+            const compressed = w * scale;
+            return Math.max(MIN_TAB_WIDTH, Math.min(MAX_TAB_WIDTH, compressed));
+          });
+          
+          const totalCompressed = compressedWidths.reduce((sum, w) => sum + w, 0);
+          
+          if (totalCompressed + candidateGaps <= availableWidth + 0.5) {
+            bestCount = count;
+            bestWidths = compressedWidths;
+            break;
+          }
+        }
+      }
+      
+      if (bestCount > 0) {
+        newVisibleTabs = tabs.slice(-bestCount);
+        newTabWidths = bestWidths;
+      } else {
+        newVisibleTabs = [tabs[tabs.length - 1]];
+        newTabWidths = [MIN_TAB_WIDTH];
       }
     }
     
-    if (bestCount > 0) {
-      setVisibleTabs(tabs.slice(-bestCount));
-      setTabWidths(bestWidths);
-    } else if (tabs.length > 0) {
-      setVisibleTabs([tabs[tabs.length - 1]]);
-      setTabWidths([MIN_TAB_WIDTH]);
-    } else {
-      setVisibleTabs([]);
-      setTabWidths([]);
-    }
-  };
-
-  useLayoutEffect(() => {
-    if (tabs.length > 0) {
-      calculateVisibleTabs();
-    } else {
-      setVisibleTabs([]);
-      setTabWidths([]);
+    // Сравниваем с предыдущими значениями
+    const newVisibleStr = JSON.stringify(newVisibleTabs.map(t => t.id));
+    const newWidthsStr = JSON.stringify(newTabWidths);
+    
+    if (prevVisibleTabsRef.current !== newVisibleStr || prevTabWidthsRef.current !== newWidthsStr) {
+      setVisibleTabs(newVisibleTabs);
+      setTabWidths(newTabWidths);
+      prevVisibleTabsRef.current = newVisibleStr;
+      prevTabWidthsRef.current = newWidthsStr;
     }
   }, [tabs]);
+
+  // Вызываем только при изменении tabs
+  useLayoutEffect(() => {
+    if (tabs.length !== prevTabsLengthRef.current) {
+      prevTabsLengthRef.current = tabs.length;
+      calculateVisibleTabs();
+    } else if (tabs.length === 0) {
+      setVisibleTabs([]);
+      setTabWidths([]);
+      prevVisibleTabsRef.current = '';
+      prevTabWidthsRef.current = '';
+    }
+  }, [tabs.length, calculateVisibleTabs]);
   
+  // Отдельный эффект для ResizeObserver
   useEffect(() => {
     let resizeObserver: ResizeObserver | null = null;
     
@@ -139,15 +164,7 @@ const TabBar = () => {
         resizeObserver.disconnect();
       }
     };
-  }, [tabs]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      calculateVisibleTabs();
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [tabs]);
+  }, [calculateVisibleTabs]);
 
   const updateTooltipPosition = (tabId: string) => {
     const tabElement = tabRefs.current.get(tabId);
@@ -257,7 +274,7 @@ const TabBar = () => {
 
         <div style={{ width: `${GAP_BETWEEN_LOGO_COUNTER}px`, flexShrink: 0 }} />
 
-        {/* Счетчик вкладок с относительным позиционированием для дропдауна */}
+        {/* Счетчик вкладок */}
         <div className="relative flex-shrink-0">
           <div
             ref={counterButtonRef}
@@ -494,7 +511,7 @@ const TabBar = () => {
                     }}
                   />
                   
-                  {/* Текст - цвет применяется к div с text-overflow */}
+                  {/* Текст */}
                   <div
                     style={{
                       position: 'absolute',
@@ -559,42 +576,6 @@ const TabBar = () => {
               </motion.div>
             );
           })}
-        </div>
-
-        {/* Невидимый контейнер для измерения */}
-        <div
-          ref={measureContainerRef}
-          className="fixed invisible top-0 left-0 flex"
-          style={{ 
-            gap: `${GAP_BETWEEN_TABS}px`,
-            pointerEvents: 'none',
-            zIndex: -1,
-          }}
-        >
-          {tabs.map(tab => (
-            <div
-              key={`measure-${tab.id}`}
-              className="flex items-center"
-              style={{ height: '35px', width: 'auto' }}
-            >
-              <div
-                style={{
-                  paddingLeft: '15px',
-                  paddingRight: '31px',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span style={{ fontSize: '15px', fontWeight: 500 }}>
-                  {tab.label}
-                </span>
-              </div>
-              <div style={{ width: '8px', marginLeft: '-23px', marginRight: '11px' }}>
-                <svg width="8" height="8" viewBox="0 0 8 8">
-                  <path d="M1 1L7 7M7 1L1 7" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 

@@ -1,9 +1,9 @@
-// components/StationsPage/StationRow.tsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 // Импорт фонов для ряда
-import Line1 from '../../assets/Station/Line1.svg';10
+import Line1 from '../../assets/Station/Line1.svg';
 import Line2 from '../../assets/Station/Line2.svg';
 import Line3 from '../../assets/Station/Line3.svg';
 import Line4 from '../../assets/Station/Line4.svg';
@@ -111,6 +111,7 @@ const StationRow: React.FC<StationRowProps> = ({
   remainingNomenclatureCount = 0,
   readyPartsCount = 0,
 }) => {
+  const navigate = useNavigate();
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
@@ -1139,7 +1140,7 @@ const StationRow: React.FC<StationRowProps> = ({
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                console.log('Шаблоны загрузки', uid);
+                navigate(`/documents/schablon/${uid}`);
               }}
             >
               <img src={getConfig1Icon()} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />

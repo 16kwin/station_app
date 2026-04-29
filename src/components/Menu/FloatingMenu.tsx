@@ -42,21 +42,11 @@ const FloatingMenu = () => {
   const [canHoverItems, setCanHoverItems] = useState(false);
   const { openTab } = useTabs();
   const { setLocked } = useAuth();
-  const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverEnableTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const menuFullyClosedRef = useRef(true);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-
-  // Глобально отслеживаем позицию мыши
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      mousePosRef.current = { x: e.clientX, y: e.clientY };
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
 
   useEffect(() => {
     const checkVisibility = () => {
@@ -79,35 +69,26 @@ const FloatingMenu = () => {
     };
   }, []);
 
-  const handleMouseEnter = () => {
-    if (leaveTimeoutRef.current) {
-      clearTimeout(leaveTimeoutRef.current);
-      leaveTimeoutRef.current = null;
+  const enableHoverWithDelay = () => {
+    if (hoverEnableTimeoutRef.current) {
+      clearTimeout(hoverEnableTimeoutRef.current);
     }
+    setCanHoverItems(false);
+    menuFullyClosedRef.current = false;
+    hoverEnableTimeoutRef.current = setTimeout(() => {
+      setCanHoverItems(true);
+    }, 500);
+  };
+
+  const handleMouseEnter = () => {
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
       collapseTimeoutRef.current = null;
     }
     setIsHovered(true);
 
-    // Задержку применяем только если меню было полностью закрыто
-    if (menuFullyClosedRef.current) {
-      setCanHoverItems(false);
-      menuFullyClosedRef.current = false;
-
-      hoverEnableTimeoutRef.current = setTimeout(() => {
-        setCanHoverItems(true);
-        const { x, y } = mousePosRef.current;
-        const elementUnderCursor = document.elementFromPoint(x, y);
-        if (elementUnderCursor) {
-          const itemIndex = itemRefs.current.findIndex(
-            ref => ref && (ref === elementUnderCursor || ref.contains(elementUnderCursor))
-          );
-          if (itemIndex !== -1) {
-            setHoveredItem(itemIndex);
-          }
-        }
-      }, 500);
+    if (menuFullyClosedRef.current || !canHoverItems) {
+      enableHoverWithDelay();
     }
   };
 
@@ -117,10 +98,6 @@ const FloatingMenu = () => {
       hoverEnableTimeoutRef.current = null;
     }
 
-    leaveTimeoutRef.current = setTimeout(() => {
-      setHoveredItem(null);
-    }, 100);
-
     collapseTimeoutRef.current = setTimeout(() => {
       setIsHovered(false);
       setCanHoverItems(false);
@@ -129,9 +106,23 @@ const FloatingMenu = () => {
     }, 400);
   };
 
+  const handleItemMouseEnter = (index: number) => {
+    if (itemLeaveTimeoutRef.current) {
+      clearTimeout(itemLeaveTimeoutRef.current);
+      itemLeaveTimeoutRef.current = null;
+    }
+    setHoveredItem(index);
+  };
+
+  const handleItemMouseLeave = () => {
+    itemLeaveTimeoutRef.current = setTimeout(() => {
+      setHoveredItem(null);
+    }, 100);
+  };
+
   useEffect(() => {
     return () => {
-      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
+      if (itemLeaveTimeoutRef.current) clearTimeout(itemLeaveTimeoutRef.current);
       if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
       if (hoverEnableTimeoutRef.current) clearTimeout(hoverEnableTimeoutRef.current);
     };
@@ -184,7 +175,7 @@ const FloatingMenu = () => {
           {isHovered && (
             <div className="flex items-center animate-fadeIn">
               {menuItems.map((item, index) => {
-                const isItemHovered = hoveredItem === index && canHoverItems;
+                const isItemHovered = hoveredItem === index;
                 
                 return (
                   <div 
@@ -197,14 +188,12 @@ const FloatingMenu = () => {
                   >
                     <div
                       ref={(el) => { itemRefs.current[index] = el; }}
-                      onMouseEnter={() => {
-                        if (canHoverItems) setHoveredItem(index);
-                      }}
-                      onMouseLeave={() => setHoveredItem(null)}
+                      onMouseEnter={() => handleItemMouseEnter(index)}
+                      onMouseLeave={handleItemMouseLeave}
                       onClick={() => handleNavigate(item.path, item.label, item.isSleep)}
                       className="relative flex items-center justify-center cursor-pointer transition-all duration-700 ease-out"
                       style={{
-                        width: isItemHovered ? '120px' : '40px',
+                        width: isItemHovered && canHoverItems ? '120px' : '40px',
                         height: '40px',
                         borderRadius: '40px',
                         transition: 'all 0.7s cubic-bezier(0.34, 1.2, 0.64, 1)',
@@ -213,8 +202,8 @@ const FloatingMenu = () => {
                       <span 
                         className="absolute text-white text-sm font-medium whitespace-nowrap transition-all duration-700 ease-out"
                         style={{
-                          opacity: isItemHovered ? 1 : 0,
-                          transform: isItemHovered ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.8)',
+                          opacity: isItemHovered && canHoverItems ? 1 : 0,
+                          transform: isItemHovered && canHoverItems ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.8)',
                           left: '50%',
                           top: '50%',
                         }}
@@ -226,8 +215,8 @@ const FloatingMenu = () => {
                         alt={item.label} 
                         className="w-6 h-6 transition-all duration-700 ease-out"
                         style={{
-                          opacity: isItemHovered ? 0 : 1,
-                          transform: isItemHovered ? 'scale(0)' : 'scale(1)',
+                          opacity: isItemHovered && canHoverItems ? 0 : 1,
+                          transform: isItemHovered && canHoverItems ? 'scale(0)' : 'scale(1)',
                         }}
                       />
                     </div>

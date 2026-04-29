@@ -96,9 +96,6 @@ type FilterSubmenuType = 'placement' | 'status' | 'type' | 'overissue' | 'error'
 interface FilterCascadeState {
   activeType: FilterSubmenuType;
   activeItemIndex: number;
-  selectedEnterprises: number[];
-  selectedWorkshops: number[];
-  selectedSections: number[];
 }
 
 // Маппинг сортировки
@@ -210,12 +207,11 @@ const StationsPage = () => {
   const [selectedOverissue, setSelectedOverissue] = useState<string | null>(savedState?.selectedOverissue || null);
   const [selectedError, setSelectedError] = useState<string | null>(savedState?.selectedError || null);
 
+  const [backendFiltersLoaded, setBackendFiltersLoaded] = useState(false);
+
   const [filterCascade, setFilterCascade] = useState<FilterCascadeState>({
     activeType: null,
     activeItemIndex: 0,
-    selectedEnterprises: [],
-    selectedWorkshops: [],
-    selectedSections: [],
   });
 
   const [adaptiveGaps, setAdaptiveGaps] = useState({
@@ -228,7 +224,7 @@ const StationsPage = () => {
   const [isScaleTooLarge, setIsScaleTooLarge] = useState(false);
   const [showScaleWarning, setShowScaleWarning] = useState(false);
 
-  // Вычисляемые значения (единый источник правды)
+  // Вычисляемые значения
   const isTmcEnabled = selectedTypes.includes('ТМЦ');
   const isSgdEnabled = selectedTypes.includes('СГД');
   const minOstatokEnabled = selectedStatuses.includes('Минимальный остаток');
@@ -355,10 +351,10 @@ const StationsPage = () => {
         if (filters.isSgd) {
           setSelectedTypes(prev => prev.includes('СГД') ? prev : [...prev, 'СГД']);
         }
-        if (filters.overissue !== undefined) {
+        if (filters.overissue !== undefined && filters.overissue !== null) {
           setSelectedOverissue(filters.overissue === true ? 'Да' : filters.overissue === false ? 'Нет' : null);
         }
-        if (filters.hasError !== undefined) {
+        if (filters.hasError !== undefined && filters.hasError !== null) {
           setSelectedError(filters.hasError === true ? 'Да' : filters.hasError === false ? 'Нет' : null);
         }
         if (filters.sortOption) {
@@ -366,13 +362,21 @@ const StationsPage = () => {
           setSortOption(frontSort);
           setHasSortSelection(!!frontSort);
         }
-        if (filters.viewMode) setViewMode(filters.viewMode as ViewMode);
+        if (filters.viewMode) {
+          setViewMode(filters.viewMode as ViewMode);
+          setActiveButtons(prev => {
+            const filtered = prev.filter(i => i !== 9 && i !== 10);
+            return [...filtered, filters.viewMode === 'grid' ? 9 : 10];
+          });
+        }
         if (filters.searchQuery) {
           setSearchQuery(filters.searchQuery);
           setHasSearchQuery(true);
         }
       } catch (error) {
         console.error('Ошибка загрузки фильтров:', error);
+      } finally {
+        setBackendFiltersLoaded(true);
       }
     };
     
@@ -381,14 +385,14 @@ const StationsPage = () => {
 
   // Сохранение фильтров
   const saveUserFilters = useCallback(async () => {
-    if (!hierarchy) return;
+    if (!hierarchy || !backendFiltersLoaded) return;
     const filters = buildFilterDTO();
     try {
       await AxiosService.post(ConstantInfo.restApiUserFilters, filters);
     } catch (error) {
       console.error('Ошибка сохранения фильтров:', error);
     }
-  }, [buildFilterDTO, hierarchy]);
+  }, [buildFilterDTO, hierarchy, backendFiltersLoaded]);
 
   useEffect(() => {
     saveUserFilters();
@@ -417,7 +421,7 @@ const StationsPage = () => {
     };
   }, [searchQuery, debouncedFetch, hierarchy]);
 
-  // Автофокус на поиск при открытии
+  // Автофокус на поиск
   useEffect(() => {
     if (expandedButton === 0 && searchInputRef.current) {
       setTimeout(() => {
@@ -471,7 +475,7 @@ const StationsPage = () => {
     selectedStatuses, selectedTypes, selectedOverissue, selectedError,
   ]);
 
-  // Сброс expanded при монтировании
+  // Сброс expanded
   useEffect(() => {
     setExpandedButton(null);
     setShowSortDropdown(false);
@@ -481,6 +485,18 @@ const StationsPage = () => {
     setShowWorkshopDropdown(false);
     setShowSectionDropdown(false);
   }, []);
+
+  // Синхронизация activeButtons с viewMode
+  useEffect(() => {
+    const gridButton = 9;
+    const listButton = 10;
+    
+    setActiveButtons(prev => {
+      const withoutViewButtons = prev.filter(i => i !== gridButton && i !== listButton);
+      const viewButton = viewMode === 'grid' ? gridButton : listButton;
+      return [...withoutViewButtons, viewButton];
+    });
+  }, [viewMode]);
 
   // Синхронизация активных кнопок
   useEffect(() => {
@@ -665,55 +681,74 @@ const StationsPage = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [expandedButton]);
 
-  // Вспомогательные функции для размещения
-  const getAvailableWorkshops = (): Workshop[] => {
-    if (selectedEnterprises.length === 0) return workshops;
-    return workshops.filter(w => selectedEnterprises.includes(w.enterpriseId));
+  // ==================== ФУНКЦИИ ДЛЯ ОТДЕЛЬНЫХ КНОПОК ====================
+  // Отдельная кнопка "Цех" - показывает ВСЕ цеха (не фильтрует по предприятиям)
+  const getAvailableWorkshopsForButton = (): Workshop[] => {
+    return workshops;
   };
 
-  const getAvailableSections = (): Section[] => {
-    const availableWorkshops = getAvailableWorkshops();
-    const workshopIds = availableWorkshops.map(w => w.id);
-    if (selectedWorkshops.length === 0) return sections.filter(s => workshopIds.includes(s.workshopId));
-    return sections.filter(s => selectedWorkshops.includes(s.workshopId));
+  // Отдельная кнопка "Участок" - показывает ВСЕ участки (не фильтрует по цехам или предприятиям)
+  const getAvailableSectionsForButton = (): Section[] => {
+    return sections;
   };
 
-  const getFilterWorkshops = (enterpriseIds: number[]): Workshop[] => {
-    if (enterpriseIds.length === 0) return workshops;
-    return workshops.filter(w => enterpriseIds.includes(w.enterpriseId));
-  };
-
-  const getFilterSections = (workshopIds: number[]): Section[] => {
-    if (workshopIds.length === 0) return [];
-    return sections.filter(s => workshopIds.includes(s.workshopId));
-  };
-
-  // Сброс зависимых выборов при изменении родительских
+  // Сброс зависимых выборов (только вниз)
   useEffect(() => {
-    setFilterCascade(prev => ({ ...prev, selectedEnterprises: selectedEnterprises, selectedWorkshops: [], selectedSections: [] }));
+    if (selectedEnterprises.length > 0) {
+      const validWorkshopIds = workshops
+        .filter(w => selectedEnterprises.includes(w.enterpriseId))
+        .map(w => w.id);
+      setSelectedWorkshops(prev => prev.filter(id => validWorkshopIds.includes(id)));
+    }
   }, [selectedEnterprises]);
 
   useEffect(() => {
     if (selectedWorkshops.length > 0) {
-      setFilterCascade(prev => ({ ...prev, selectedWorkshops: selectedWorkshops, selectedSections: [] }));
+      const validSectionIds = sections
+        .filter(s => selectedWorkshops.includes(s.workshopId))
+        .map(s => s.id);
+      setSelectedSections(prev => prev.filter(id => validSectionIds.includes(id)));
     }
   }, [selectedWorkshops]);
 
-  useEffect(() => {
+  // ==================== ФУНКЦИИ ДЛЯ КАСКАДНОГО ФИЛЬТРА (фильтрация только вниз) ====================
+  const getFilterEnterprises = (): Enterprise[] => {
+    if (selectedEnterprises.length > 0) {
+      return enterprises.filter(e => selectedEnterprises.includes(e.id));
+    }
+    // Всегда показываем все предприятия (фильтрация только вниз)
+    return enterprises;
+  };
+
+  const getFilterWorkshops = (): Workshop[] => {
+    if (selectedEnterprises.length > 0) {
+      return workshops.filter(w => selectedEnterprises.includes(w.enterpriseId));
+    }
+    if (selectedWorkshops.length > 0) {
+      return workshops.filter(w => selectedWorkshops.includes(w.id));
+    }
+    return workshops;
+  };
+
+  const getFilterSections = (): Section[] => {
+    const filteredWorkshops = getFilterWorkshops();
+    const workshopIds = new Set(filteredWorkshops.map(w => w.id));
+    
+    if (selectedSections.length > 0 && selectedWorkshops.length === 0 && selectedEnterprises.length === 0) {
+      return sections.filter(s => selectedSections.includes(s.id));
+    }
+    
     if (selectedSections.length > 0) {
-      setFilterCascade(prev => ({ ...prev, selectedSections: selectedSections }));
+      return sections.filter(s => selectedSections.includes(s.id) && workshopIds.has(s.workshopId));
     }
-  }, [selectedSections]);
+    
+    return sections.filter(s => workshopIds.has(s.workshopId));
+  };
 
-  useEffect(() => {
-    const availableWorkshopIds = getAvailableWorkshops().map(w => w.id);
-    setSelectedWorkshops(prev => prev.filter(id => availableWorkshopIds.includes(id)));
-  }, [selectedEnterprises]);
-
-  useEffect(() => {
-    const availableSectionIds = getAvailableSections().map(s => s.id);
-    setSelectedSections(prev => prev.filter(id => availableSectionIds.includes(id)));
-  }, [selectedWorkshops]);
+  const shouldShowFilterSections = (): boolean => {
+    const filterSections = getFilterSections();
+    return filterSections.length > 0;
+  };
 
   // Обработчики кнопок
   const toggleButton = (index: number) => {
@@ -731,20 +766,10 @@ const StationsPage = () => {
     if (isScaleTooLarge) return;
     const newMode = index === 9 ? 'grid' : 'list';
     setViewMode(newMode);
-    setActiveButtons(prev => {
-      const otherIndex = index === 9 ? 10 : 9;
-      const filtered = prev.filter(i => i !== otherIndex);
-      if (!filtered.includes(index)) return [...filtered, index];
-      return filtered;
-    });
   };
 
   const closeExpanded = () => {
     if (expandedButton === null) return;
-    const closingIndex = expandedButton;
-    
-    // Не убираем кнопку из activeButtons при закрытии, если фильтр активен
-    // Это позволяет кнопке оставаться синей
     
     setExpandedButton(null);
     setShowSortDropdown(false);
@@ -757,18 +782,11 @@ const StationsPage = () => {
   };
 
   const openButton = (index: number) => {
-    if ([0, 1, 2, 3, 4, 5, 8].includes(index)) {
-      if (!activeButtons.includes(index)) setActiveButtons(prev => [...prev, index]);
-    } else {
-      if (!activeButtons.includes(index)) setActiveButtons(prev => [...prev, index]);
-    }
+    if (!activeButtons.includes(index)) setActiveButtons(prev => [...prev, index]);
     
     setExpandedButton(index);
     if (index === 1) setShowSortDropdown(true);
-    if (index === 2) {
-      setShowFilterDropdown(true);
-      setFilterCascade(prev => ({ ...prev, selectedEnterprises, selectedWorkshops, selectedSections }));
-    }
+    if (index === 2) setShowFilterDropdown(true);
     if (index === 8) setShowOstatokDropdown(true);
     if (index === 3) setShowEnterpriseDropdown(true);
     if (index === 4) setShowWorkshopDropdown(true);
@@ -839,7 +857,7 @@ const StationsPage = () => {
       setSelectedTypes([]);
       setSelectedOverissue(null);
       setSelectedError(null);
-      setFilterCascade({ activeType: null, activeItemIndex: 0, selectedEnterprises: [], selectedWorkshops: [], selectedSections: [] });
+      setFilterCascade({ activeType: null, activeItemIndex: 0 });
       return;
     }
     
@@ -848,20 +866,47 @@ const StationsPage = () => {
       return;
     }
     
-    setFilterCascade(prev => ({ ...prev, activeType: type, activeItemIndex: index, selectedEnterprises, selectedWorkshops, selectedSections }));
+    setFilterCascade(prev => ({ ...prev, activeType: type, activeItemIndex: index }));
   };
 
   const toggleFilterEnterprise = (e: React.MouseEvent, enterpriseId: number) => {
     e.stopPropagation();
-    setSelectedEnterprises(prev => prev.includes(enterpriseId) ? prev.filter(id => id !== enterpriseId) : [...prev, enterpriseId]);
-    setSelectedWorkshops([]);
-    setSelectedSections([]);
+    setSelectedEnterprises(prev => {
+      const newSelected = prev.includes(enterpriseId) 
+        ? prev.filter(id => id !== enterpriseId)
+        : [...prev, enterpriseId];
+      
+      if (newSelected.length > 0) {
+        const validWorkshopIds = workshops
+          .filter(w => newSelected.includes(w.enterpriseId))
+          .map(w => w.id);
+        setSelectedWorkshops(prevW => prevW.filter(id => validWorkshopIds.includes(id)));
+        const validSectionIds = sections
+          .filter(s => validWorkshopIds.includes(s.workshopId))
+          .map(s => s.id);
+        setSelectedSections(prevS => prevS.filter(id => validSectionIds.includes(id)));
+      }
+      
+      return newSelected;
+    });
   };
 
   const toggleFilterWorkshop = (e: React.MouseEvent, workshopId: number) => {
     e.stopPropagation();
-    setSelectedWorkshops(prev => prev.includes(workshopId) ? prev.filter(id => id !== workshopId) : [...prev, workshopId]);
-    setSelectedSections([]);
+    setSelectedWorkshops(prev => {
+      const newSelected = prev.includes(workshopId)
+        ? prev.filter(id => id !== workshopId)
+        : [...prev, workshopId];
+      
+      if (newSelected.length > 0) {
+        const validSectionIds = sections
+          .filter(s => newSelected.includes(s.workshopId))
+          .map(s => s.id);
+        setSelectedSections(prevS => prevS.filter(id => validSectionIds.includes(id)));
+      }
+      
+      return newSelected;
+    });
   };
 
   const toggleFilterSection = (e: React.MouseEvent, sectionId: number) => {
@@ -933,7 +978,7 @@ const StationsPage = () => {
     return 342;
   };
 
-  // Рендер каскадных окон фильтра
+  // Рендер каскадных окон фильтра (фильтрация только вниз, overflow: visible)
   const renderFilterCascadeWindows = () => {
     if (!showFilterDropdown || !filterCascade.activeType) return null;
 
@@ -943,13 +988,14 @@ const StationsPage = () => {
     const baseTop = filterCascade.activeItemIndex * itemHeight;
 
     if (filterCascade.activeType === 'placement') {
+      const filterEnterprises = getFilterEnterprises();
       windows.push(
-        <div key="enterprise" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div key="enterprise" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
           <div style={{ height: '54px', backgroundColor: '#666EFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Предприятие</span>
           </div>
           <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            {enterprises.map((enterprise) => {
+            {filterEnterprises.map((enterprise) => {
               const isChecked = selectedEnterprises.includes(enterprise.id);
               return (
                 <div key={enterprise.id} onClick={(e) => toggleFilterEnterprise(e, enterprise.id)} style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}
@@ -964,17 +1010,15 @@ const StationsPage = () => {
         </div>
       );
       leftOffset += 230;
-    }
 
-    if (filterCascade.activeType === 'placement' && selectedEnterprises.length > 0) {
-      const filteredWorkshops = getFilterWorkshops(selectedEnterprises);
+      const filterWorkshops = getFilterWorkshops();
       windows.push(
-        <div key="workshop" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div key="workshop" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
           <div style={{ height: '54px', backgroundColor: '#666EFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Цех</span>
           </div>
           <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            {filteredWorkshops.map((workshop) => {
+            {filterWorkshops.map((workshop) => {
               const isChecked = selectedWorkshops.includes(workshop.id);
               return (
                 <div key={workshop.id} onClick={(e) => toggleFilterWorkshop(e, workshop.id)} style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}
@@ -989,36 +1033,36 @@ const StationsPage = () => {
         </div>
       );
       leftOffset += 230;
-    }
 
-    if (filterCascade.activeType === 'placement' && selectedWorkshops.length > 0) {
-      const filteredSections = getFilterSections(selectedWorkshops);
-      windows.push(
-        <div key="section" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
-          <div style={{ height: '54px', backgroundColor: '#666EFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Участок</span>
+      if (shouldShowFilterSections()) {
+        const filterSections = getFilterSections();
+        windows.push(
+          <div key="section" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ height: '54px', backgroundColor: '#666EFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Участок</span>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {filterSections.map((section) => {
+                const isChecked = selectedSections.includes(section.id);
+                return (
+                  <div key={section.id} onClick={(e) => toggleFilterSection(e, section.id)} style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}
+                    onMouseEnter={(e) => { if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
+                    onMouseLeave={(e) => { if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}>
+                    <span style={{ fontSize: '15px', fontWeight: 500, color: isChecked ? '#2D4059' : '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.name}</span>
+                    <input type="checkbox" checked={isChecked} onChange={(e) => { e.stopPropagation(); toggleFilterSection(e as any, section.id); }} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }} onClick={(e) => e.stopPropagation()} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            {filteredSections.map((section) => {
-              const isChecked = selectedSections.includes(section.id);
-              return (
-                <div key={section.id} onClick={(e) => toggleFilterSection(e, section.id)} style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: isChecked ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}
-                  onMouseEnter={(e) => { if (!isChecked) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
-                  onMouseLeave={(e) => { if (!isChecked) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}>
-                  <span style={{ fontSize: '15px', fontWeight: 500, color: isChecked ? '#2D4059' : '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.name}</span>
-                  <input type="checkbox" checked={isChecked} onChange={(e) => { e.stopPropagation(); toggleFilterSection(e as any, section.id); }} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#666EFE' }} onClick={(e) => e.stopPropagation()} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-      leftOffset += 230;
+        );
+        leftOffset += 230;
+      }
     }
 
     if (filterCascade.activeType === 'status') {
       windows.push(
-        <div key="status" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div key="status" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
           {statusOptions.map((status) => {
             const isChecked = selectedStatuses.includes(status);
             return (
@@ -1036,7 +1080,7 @@ const StationsPage = () => {
 
     if (filterCascade.activeType === 'type') {
       windows.push(
-        <div key="type" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div key="type" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
           {typeOptions.map((type) => {
             const isChecked = selectedTypes.includes(type);
             return (
@@ -1054,7 +1098,7 @@ const StationsPage = () => {
 
     if (filterCascade.activeType === 'overissue') {
       windows.push(
-        <div key="overissue" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div key="overissue" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
           {['Да', 'Нет'].map((option) => {
             const isChecked = selectedOverissue === option;
             return (
@@ -1072,7 +1116,7 @@ const StationsPage = () => {
 
     if (filterCascade.activeType === 'error') {
       windows.push(
-        <div key="error" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+        <div key="error" style={{ position: 'absolute', left: `${leftOffset}px`, top: `${baseTop}px`, width: '226px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
           {['Да', 'Нет'].map((option) => {
             const isChecked = selectedError === option;
             return (
@@ -1105,7 +1149,6 @@ const StationsPage = () => {
     const isSectionButton = globalIdx === 5;
     const isNonExpandable = [6, 7].includes(globalIdx);
     
-    // Определяем активность кнопки на основе фильтров, а не activeButtons
     let showAsActive = isActive;
     if (isSearchButton) showAsActive = hasSearchQuery;
     else if (isSortButton) showAsActive = hasSortSelection;
@@ -1180,11 +1223,13 @@ const StationsPage = () => {
                       {showSortDropdown && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ backgroundColor: '#FFFFFF' }}>
                           {sortOptions.map((option) => {
-                            const isActive = option.value === 'reset' ? !hasSortSelection : sortOption === option.value;
+                            const isReset = option.value === 'reset';
+                            // Кнопка "Сброс сортировки" не выделяется цветом
+                            const isActive = !isReset && sortOption === option.value;
                             return (
                               <div key={option.value} onClick={(e) => { e.stopPropagation(); handleSortSelect(option.value); }}
-                                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
-                                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                                onMouseEnter={(e) => { if (!isActive && !isReset) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
+                                onMouseLeave={(e) => { if (!isActive && !isReset) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
                                 style={{ height: 38, padding: '0 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', backgroundColor: isActive ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}>
                                 <span style={{ fontSize: 15, fontWeight: 500, color: isActive ? '#2D4059' : '#9CA3AF', whiteSpace: 'nowrap' }}>{option.label}</span>
                               </div>
@@ -1229,9 +1274,17 @@ const StationsPage = () => {
                             else if (item.type === 'overissue') isItemActive = isOverissueActive;
                             else if (item.type === 'error') isItemActive = isErrorActive;
                             
+                            const isLast = index === filterItems.length - 1;
+                            
                             return (
                               <div key={item.label} onClick={(e) => handleFilterItemClick(e, item.type, index)}
-                                style={{ height: 38, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: isItemActive ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}
+                                style={{ 
+                                  height: 38, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                                  cursor: 'pointer', backgroundColor: isItemActive ? '#BCC8FF' : '#FFFFFF', 
+                                  transition: 'background-color 0.2s ease',
+                                  borderBottomLeftRadius: isLast ? 27 : 0,
+                                  borderBottomRightRadius: isLast ? 27 : 0,
+                                }}
                                 onMouseEnter={(e) => { if (!isItemActive) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
                                 onMouseLeave={(e) => { if (!isItemActive) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}>
                                 <span style={{ fontSize: 15, fontWeight: 500, color: isItemActive ? '#2D4059' : '#9CA3AF', whiteSpace: 'nowrap' }}>{item.label}</span>
@@ -1340,7 +1393,8 @@ const StationsPage = () => {
     }
 
     if (isWorkshopButton) {
-      const availableWorkshops = getAvailableWorkshops();
+      // Отдельная кнопка "Цех" - показывает ВСЕ цеха
+      const availableWorkshops = getAvailableWorkshopsForButton();
       
       return (
         <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
@@ -1384,7 +1438,8 @@ const StationsPage = () => {
     }
 
     if (isSectionButton) {
-      const availableSections = getAvailableSections();
+      // Отдельная кнопка "Участок" - показывает ВСЕ участки
+      const availableSections = getAvailableSectionsForButton();
       
       return (
         <div key={`button-${globalIdx}`} style={{ display: 'inline-flex', position: 'relative' }} data-button-id={globalIdx}>
@@ -1496,4 +1551,4 @@ const StationsPage = () => {
   );
 };
 
-export default StationsPage;400
+export default StationsPage;

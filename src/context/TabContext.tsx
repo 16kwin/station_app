@@ -1,5 +1,4 @@
-// context/TabContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,11 +12,12 @@ export interface Tab {
 interface TabContextType {
   tabs: Tab[];
   activeTabId: string | null;
-  openTab: (path: string, label: string, component: ReactNode) => void;
+  openTab: (path: string, label: string, component: ReactNode) => string;
   closeTab: (id: string) => void;
   switchTab: (id: string) => void;
   openNewTab: () => void;
   updateTabComponent: (id: string, component: ReactNode) => void;
+  updateTabLabel: (id: string, label: string) => void;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -40,7 +40,6 @@ const saveTabsToStorage = (tabs: Tab[], activeId: string | null) => {
       id: tab.id,
       path: tab.path,
       label: tab.label,
-      // component не сохраняем, восстановим при загрузке
     })),
     activeTabId: activeId,
   };
@@ -64,12 +63,12 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isRestored, setIsRestored] = useState(false);
   const navigate = useNavigate();
+  const newTabIdRef = useRef<string | null>(null);
 
   // Восстановление из localStorage при загрузке
   useEffect(() => {
     const saved = loadTabsFromStorage();
     if (saved && saved.tabs.length > 0) {
-      // Восстанавливаем вкладки без компонентов (компоненты будут загружены позже)
       const restoredTabs: Tab[] = saved.tabs.map(tab => ({
         ...tab,
         component: null,
@@ -77,7 +76,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       setTabs(restoredTabs);
       setActiveTabId(saved.activeTabId);
       
-      // Переходим на последнюю активную вкладку
       const activeTab = restoredTabs.find(t => t.id === saved.activeTabId);
       if (activeTab) {
         navigate(activeTab.path);
@@ -85,7 +83,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
         navigate(restoredTabs[0].path);
       }
     } else {
-      // Если нет сохранённых вкладок, создаём главную
       const mainTab: Tab = {
         id: Date.now().toString(),
         path: '/main',
@@ -106,9 +103,16 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [tabs, activeTabId, isRestored]);
 
-  const openTab = (path: string, baseLabel: string, component: ReactNode) => {
-    const label = getLabelWithNumber(path, baseLabel, tabs);
+  const openTab = useCallback((path: string, baseLabel: string, component: ReactNode): string => {
+    // Проверяем, нет ли уже вкладки с таким путём
+    const existingTab = tabs.find(t => t.path === path);
+    if (existingTab) {
+      setActiveTabId(existingTab.id);
+      navigate(path);
+      return existingTab.id;
+    }
     
+    const label = getLabelWithNumber(path, baseLabel, tabs);
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const newTab: Tab = {
       id: newId,
@@ -117,15 +121,17 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       component,
     };
     
-    setTabs([...tabs, newTab]);
+    newTabIdRef.current = newId;
+    
+    setTabs(prev => [...prev, newTab]);
     setActiveTabId(newId);
     navigate(path);
-  };
+    return newId;
+  }, [tabs, navigate]);
 
-  const closeTab = (id: string) => {
+  const closeTab = useCallback((id: string) => {
     const tabToClose = tabs.find(tab => tab.id === id);
     
-    // Если это последняя вкладка и она главная, не закрываем
     if (tabs.length === 1 && tabToClose?.path === '/main') {
       return;
     }
@@ -133,7 +139,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     const tabIndex = tabs.findIndex(tab => tab.id === id);
     const newTabs = tabs.filter(tab => tab.id !== id);
     
-    // Если после закрытия не осталось вкладок, создаём главную
     if (newTabs.length === 0) {
       const mainTab: Tab = {
         id: Date.now().toString(),
@@ -155,34 +160,51 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       setActiveTabId(newActiveTab.id);
       navigate(newActiveTab.path);
     }
-  };
+  }, [tabs, activeTabId, navigate]);
 
-  const switchTab = (id: string) => {
+  const switchTab = useCallback((id: string) => {
     const tab = tabs.find(t => t.id === id);
     if (tab) {
       setActiveTabId(id);
       navigate(tab.path);
     }
-  };
+  }, [tabs, navigate]);
 
-  const openNewTab = () => {
+  const openNewTab = useCallback(() => {
     openTab('/main', 'Главная', null);
-  };
+  }, [openTab]);
 
-  const updateTabComponent = (id: string, component: ReactNode) => {
+  const updateTabComponent = useCallback((id: string, component: ReactNode) => {
     setTabs(prevTabs => 
       prevTabs.map(tab => 
         tab.id === id ? { ...tab, component } : tab
       )
     );
-  };
+  }, []);
+
+  const updateTabLabel = useCallback((id: string, label: string) => {
+    setTabs(prevTabs => 
+      prevTabs.map(tab => 
+        tab.id === id ? { ...tab, label } : tab
+      )
+    );
+  }, []);
 
   if (!isRestored) {
-    return null; // или лоадер
+    return null;
   }
 
   return (
-    <TabContext.Provider value={{ tabs, activeTabId, openTab, closeTab, switchTab, openNewTab, updateTabComponent }}>
+    <TabContext.Provider value={{ 
+      tabs, 
+      activeTabId, 
+      openTab, 
+      closeTab, 
+      switchTab, 
+      openNewTab, 
+      updateTabComponent,
+      updateTabLabel,
+    }}>
       {children}
     </TabContext.Provider>
   );
