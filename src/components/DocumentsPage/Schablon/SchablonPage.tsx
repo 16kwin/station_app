@@ -1,3 +1,4 @@
+// SchablonPage.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -11,6 +12,15 @@ import Schablon3 from '../../../assets/Schablon/Schablon3.svg';
 import Schablon4 from '../../../assets/Schablon/Schablon4.svg';
 import Schablon5 from '../../../assets/Schablon/Schablon5.svg';
 import Schablon6 from '../../../assets/Schablon/Schablon6.svg';
+import StationFull from '../../../assets/StationAnimation/StationFull.svg';
+
+// Иконки статусов
+import TMC from '../../../assets/Station/TMC.svg';
+import SGD from '../../../assets/Station/SGD.svg';
+import OK from '../../../assets/Station/OK.svg';
+import CHAIN from '../../../assets/Station/CHAIN.svg';
+
+import SchablonTable from './SchablonTable';
 
 const SchablonPage: React.FC = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -18,28 +28,51 @@ const SchablonPage: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [stationName, setStationName] = useState<string>(uid || '');
+  const [isTmc, setIsTmc] = useState(false);
+  const [isSgd, setIsSgd] = useState(false);
+  const [isOk, setIsOk] = useState(false);
+  const [parentUid, setParentUid] = useState<string | null>(null);
   const [adaptiveTopPadding, setAdaptiveTopPadding] = useState(35);
-  const [adaptiveBottomPadding, setAdaptiveBottomPadding] = useState(40);
+  const [adaptiveTitleToButtonsGap, setAdaptiveTitleToButtonsGap] = useState(28);
   const [adaptiveButtonGap, setAdaptiveButtonGap] = useState(16);
+  const [adaptiveBottomPadding, setAdaptiveBottomPadding] = useState(40);
+
+  // Состояния для кнопок
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [activeButtons, setActiveButtons] = useState<number[]>([]);
 
   const BASE_TOP_PADDING = 35;
-  const BASE_BOTTOM_PADDING = 40;
+  const BASE_TITLE_TO_BUTTONS_GAP = 28;
   const BASE_BUTTON_GAP = 16;
+  const BASE_BOTTOM_PADDING = 40;
+  const TITLE_HEIGHT = 27;
+  const BUTTONS_HEIGHT = 54;
+  const BLOCKS_HEIGHT = 640;
+  const FIXED_CONTENT_HEIGHT = TITLE_HEIGHT + BUTTONS_HEIGHT + BLOCKS_HEIGHT;
+  const BASE_GAPS_SUM = BASE_TOP_PADDING + BASE_TITLE_TO_BUTTONS_GAP + BASE_BUTTON_GAP + BASE_BOTTOM_PADDING;
 
-  // Загружаем название станции
+  const GRID_WIDTH = 331;
+  const GRID_HEIGHT = 512;
+
+  // Загружаем данные станции
   useEffect(() => {
     if (!uid) return;
 
-    const fetchStationName = async () => {
+    const fetchStationData = async () => {
       try {
         const response = await AxiosService.get(`${ConstantInfo.restApiStationsStatic}/${uid}`);
-        setStationName(response.data?.name || uid);
+        const data = response.data;
+        setStationName(data?.name || uid);
+        setIsTmc(data?.isTmc || false);
+        setIsSgd(data?.isSgd || false);
+        setIsOk(data?.isOk || false);
+        setParentUid(data?.parentUid || null);
       } catch {
         setStationName(uid);
       }
     };
 
-    fetchStationName();
+    fetchStationData();
   }, [uid]);
 
   // Адаптивные отступы
@@ -50,12 +83,13 @@ const SchablonPage: React.FC = () => {
     if (!whiteBlock) return;
 
     const whiteBlockHeight = whiteBlock.clientHeight;
-    const baseWhiteBlockHeight = 960;
-    const scale = whiteBlockHeight / baseWhiteBlockHeight;
+    const availableGapSpace = whiteBlockHeight - FIXED_CONTENT_HEIGHT;
+    const scale = availableGapSpace / BASE_GAPS_SUM;
 
     setAdaptiveTopPadding(Math.max(5, Math.round(BASE_TOP_PADDING * scale)));
-    setAdaptiveBottomPadding(Math.max(5, Math.round(BASE_BOTTOM_PADDING * scale)));
+    setAdaptiveTitleToButtonsGap(Math.max(5, Math.round(BASE_TITLE_TO_BUTTONS_GAP * scale)));
     setAdaptiveButtonGap(Math.max(5, Math.round(BASE_BUTTON_GAP * scale)));
+    setAdaptiveBottomPadding(Math.max(5, Math.round(BASE_BOTTOM_PADDING * scale)));
   }, []);
 
   useEffect(() => {
@@ -83,26 +117,53 @@ const SchablonPage: React.FC = () => {
     }
   };
 
+  const handleButtonClick = (index: number) => {
+    if (index === 1) {
+      setIsMultiSelect(prev => !prev);
+      setActiveButtons(prev =>
+        prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+      );
+    } else {
+      setActiveButtons(prev =>
+        prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+      );
+    }
+  };
+
+  const handleEnableMultiSelect = () => {
+    if (!isMultiSelect) {
+      setIsMultiSelect(true);
+      setActiveButtons(prev => prev.includes(1) ? prev : [...prev, 1]);
+    }
+  };
+
   const title = `Документ - Шаблон загрузки станции ${stationName}`;
 
   const leftIcons = [Schablon1, Schablon2, Schablon3];
   const rightIcons = [Schablon4, Schablon5, Schablon6];
 
-  // Стиль для круглой кнопки
-  const roundButtonStyle: React.CSSProperties = {
+  // Собираем иконки статусов
+  const statusIcons: string[] = [];
+  if (isTmc) statusIcons.push(TMC);
+  if (isSgd) statusIcons.push(SGD);
+  if (isOk) statusIcons.push(OK);
+  if (parentUid) statusIcons.push(CHAIN);
+
+  const getRoundButtonStyle = (isActive: boolean): React.CSSProperties => ({
     width: '54px',
     height: '54px',
     borderRadius: '50%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: isActive ? '#666EFE' : '#FFFFFF',
     border: 'none',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 0,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    boxShadow: isActive ? '0 4px 12px rgba(102, 110, 254, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.08)',
     flexShrink: 0,
-  };
+    transition: 'all 0.3s ease',
+  });
 
   return (
     <div ref={containerRef} style={{ position: 'relative', height: '100%' }}>
@@ -124,7 +185,8 @@ const SchablonPage: React.FC = () => {
             fontWeight: 500,
             color: '#2D4059',
             margin: 0,
-            lineHeight: '28px',
+            lineHeight: `${TITLE_HEIGHT}px`,
+            height: `${TITLE_HEIGHT}px`,
           }}
         >
           {title}
@@ -153,24 +215,8 @@ const SchablonPage: React.FC = () => {
             xmlns="http://www.w3.org/2000/svg"
             style={{ position: 'absolute', top: 0, left: 0 }}
           >
-            <line
-              x1="1.5"
-              y1="1.5"
-              x2="12.5"
-              y2="12.5"
-              stroke="#2D4059"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <line
-              x1="12.5"
-              y1="1.5"
-              x2="1.5"
-              y2="12.5"
-              stroke="#2D4059"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
+            <line x1="1.5" y1="1.5" x2="12.5" y2="12.5" stroke="#2D4059" strokeWidth="3" strokeLinecap="round" />
+            <line x1="12.5" y1="1.5" x2="1.5" y2="12.5" stroke="#2D4059" strokeWidth="3" strokeLinecap="round" />
           </svg>
         </button>
       </div>
@@ -181,7 +227,7 @@ const SchablonPage: React.FC = () => {
           position: 'absolute',
           left: 0,
           right: 0,
-          top: `${adaptiveTopPadding + 28 + 30}px`,
+          top: `${adaptiveTopPadding + TITLE_HEIGHT + adaptiveTitleToButtonsGap}px`,
           bottom: 0,
         }}
       >
@@ -192,17 +238,64 @@ const SchablonPage: React.FC = () => {
             left: '40px',
             bottom: `${adaptiveBottomPadding}px`,
             width: '507px',
-            height: '641px',
+            height: `${BLOCKS_HEIGHT}px`,
             backgroundColor: '#F3F4F6',
-            borderRadius: '20px',
+            borderRadius: '10px',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
+            overflow: 'hidden',
           }}
         >
-          <span style={{ fontSize: '18px', fontWeight: 500, color: '#9CA3AF' }}>
-            В разработке
-          </span>
+          {/* Название станции */}
+          <div
+            style={{
+              marginTop: '30px',
+              height: '23px',
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 600,
+              fontSize: '19px',
+              lineHeight: '23px',
+              color: '#2D4059',
+              textAlign: 'center',
+              maxWidth: '400px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {stationName}
+          </div>
+
+          {/* Иконки статусов */}
+          {statusIcons.length > 0 && (
+            <div
+              style={{
+                marginTop: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '7px',
+              }}
+            >
+              {statusIcons.map((icon, index) => (
+                <img key={index} src={icon} alt="" style={{ width: '35px', height: '20px' }} />
+              ))}
+            </div>
+          )}
+
+          {/* Картинка станции */}
+          <div
+            style={{
+              position: 'absolute',
+              left: '88px',
+              bottom: '30px',
+              width: `${GRID_WIDTH}px`,
+              height: `${GRID_HEIGHT}px`,
+            }}
+          >
+            <img src={StationFull} alt="Station" style={{ width: '100%', height: '100%' }} />
+          </div>
         </div>
 
         {/* Правая часть */}
@@ -218,7 +311,7 @@ const SchablonPage: React.FC = () => {
           <div
             style={{
               width: '1183px',
-              height: '54px',
+              height: `${BUTTONS_HEIGHT}px`,
               marginBottom: `${adaptiveButtonGap}px`,
               display: 'flex',
               alignItems: 'center',
@@ -227,8 +320,21 @@ const SchablonPage: React.FC = () => {
             {/* Левая группа кнопок */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginLeft: '30px' }}>
               {leftIcons.map((icon, index) => (
-                <button key={`left-${index}`} style={roundButtonStyle}>
-                  <img src={icon} alt="" style={{ width: '24px', height: '24px' }} />
+                <button
+                  key={`left-${index}`}
+                  onClick={() => handleButtonClick(index)}
+                  style={getRoundButtonStyle(activeButtons.includes(index))}
+                >
+                  <img
+                    src={icon}
+                    alt=""
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      filter: activeButtons.includes(index) ? 'brightness(0) invert(1)' : 'none',
+                      transition: 'filter 0.3s ease',
+                    }}
+                  />
                 </button>
               ))}
             </div>
@@ -254,29 +360,31 @@ const SchablonPage: React.FC = () => {
             {/* Правая группа кнопок */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginRight: '30px' }}>
               {rightIcons.map((icon, index) => (
-                <button key={`right-${index}`} style={roundButtonStyle}>
-                  <img src={icon} alt="" style={{ width: '24px', height: '24px' }} />
+                <button
+                  key={`right-${index}`}
+                  onClick={() => handleButtonClick(index + 3)}
+                  style={getRoundButtonStyle(activeButtons.includes(index + 3))}
+                >
+                  <img
+                    src={icon}
+                    alt=""
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      filter: activeButtons.includes(index + 3) ? 'brightness(0) invert(1)' : 'none',
+                      transition: 'filter 0.3s ease',
+                    }}
+                  />
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Окно */}
-          <div
-            style={{
-              width: '1183px',
-              height: '640px',
-              backgroundColor: '#F3F4F6',
-              borderRadius: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <span style={{ fontSize: '18px', fontWeight: 500, color: '#9CA3AF' }}>
-              В разработке
-            </span>
-          </div>
+          {/* Таблица */}
+          <SchablonTable
+            isMultiSelect={isMultiSelect}
+            onEnableMultiSelect={handleEnableMultiSelect}
+          />
         </div>
       </div>
     </div>

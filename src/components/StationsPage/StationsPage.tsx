@@ -5,6 +5,7 @@ import StationCell from './StationCell';
 import StationRow from './StationRow';
 import ConstantInfo from '../../info/ConstantInfo';
 import AxiosService from '../../services/AxiosService';
+import CustomScrollbar from '../../components/CustomScrollbar';
 
 import Icon1 from '../../assets/Station/1.svg';
 import Icon2 from '../../assets/Station/2.svg';
@@ -19,7 +20,6 @@ import Icon10 from '../../assets/Station/10.svg';
 import Icon11 from '../../assets/Station/11.svg';
 import type { JSX } from 'react/jsx-runtime';
 
-// Интерфейсы для данных с бэка
 interface Enterprise {
   id: number;
   name: string;
@@ -98,7 +98,6 @@ interface FilterCascadeState {
   activeItemIndex: number;
 }
 
-// Маппинг сортировки
 const sortOptionToBackend: Record<string, string> = {
   'nameAsc': 'NAME_ASC',
   'nameDesc': 'NAME_DESC',
@@ -115,7 +114,6 @@ const backendToSortOption: Record<string, string> = {
   'TYPE_PRIORITY': 'tmcSgd',
 };
 
-// Маппинг статусов
 const statusMapping: Record<string, string> = {
   'В работе': 'WORKING',
   'Не в сети': 'OFFLINE',
@@ -130,7 +128,6 @@ const reverseStatusMapping: Record<string, string> = {
   'CRITICAL_STOCK': 'Критический остаток',
 };
 
-// Фиксированные размеры
 const SCROLL_AREA_HEIGHT = 640;
 const HEADER_HEIGHT = 36;
 const CONTROLS_HEIGHT = 74;
@@ -168,6 +165,7 @@ const StationsPage = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsRowRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scaleWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -224,7 +222,6 @@ const StationsPage = () => {
   const [isScaleTooLarge, setIsScaleTooLarge] = useState(false);
   const [showScaleWarning, setShowScaleWarning] = useState(false);
 
-  // Вычисляемые значения
   const isTmcEnabled = selectedTypes.includes('ТМЦ');
   const isSgdEnabled = selectedTypes.includes('СГД');
   const minOstatokEnabled = selectedStatuses.includes('Минимальный остаток');
@@ -237,7 +234,6 @@ const StationsPage = () => {
                          selectedSections.length > 0 || selectedStatuses.length > 0 || 
                          selectedTypes.length > 0 || selectedOverissue !== null || selectedError !== null;
 
-  // Построение фильтров
   const buildFilterDTO = useCallback((): UserFilterDTO => {
     return {
       searchQuery,
@@ -261,7 +257,6 @@ const StationsPage = () => {
     isTmcEnabled, isSgdEnabled, minOstatokEnabled, criticalOstatokEnabled, viewMode,
   ]);
 
-  // Загрузка станций
   const fetchFilteredStations = useCallback(async () => {
     try {
       if (!window.config || !window.config.ip_api) {
@@ -293,7 +288,6 @@ const StationsPage = () => {
     }
   }, [buildFilterDTO]);
 
-  // Дебаунс для поиска
   const debouncedFetch = useCallback(() => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
@@ -303,7 +297,6 @@ const StationsPage = () => {
     }, 300);
   }, [fetchFilteredStations]);
 
-  // Загрузка иерархии
   useEffect(() => {
     const fetchHierarchy = async () => {
       try {
@@ -332,7 +325,6 @@ const StationsPage = () => {
     fetchHierarchy();
   }, []);
 
-  // Загрузка фильтров с бэка
   useEffect(() => {
     const fetchUserFilters = async () => {
       try {
@@ -383,7 +375,6 @@ const StationsPage = () => {
     fetchUserFilters();
   }, []);
 
-  // Сохранение фильтров
   const saveUserFilters = useCallback(async () => {
     if (!hierarchy || !backendFiltersLoaded) return;
     const filters = buildFilterDTO();
@@ -398,7 +389,6 @@ const StationsPage = () => {
     saveUserFilters();
   }, [saveUserFilters]);
 
-  // Загрузка станций при изменении фильтров
   useEffect(() => {
     if (!hierarchy) return;
     setLoading(true);
@@ -409,7 +399,6 @@ const StationsPage = () => {
     fetchFilteredStations, hierarchy,
   ]);
 
-  // Поиск с дебаунсом
   useEffect(() => {
     if (!hierarchy) return;
     setLoading(true);
@@ -421,7 +410,6 @@ const StationsPage = () => {
     };
   }, [searchQuery, debouncedFetch, hierarchy]);
 
-  // Автофокус на поиск
   useEffect(() => {
     if (expandedButton === 0 && searchInputRef.current) {
       setTimeout(() => {
@@ -430,7 +418,6 @@ const StationsPage = () => {
     }
   }, [expandedButton]);
 
-  // Проверка масштаба
   useEffect(() => {
     const checkScale = () => {
       const width = window.innerWidth;
@@ -461,7 +448,6 @@ const StationsPage = () => {
     };
   }, []);
 
-  // Сохранение в localStorage
   useEffect(() => {
     const stateToSave = {
       activeButtons, viewMode, sortOption, hasSortSelection, searchQuery,
@@ -475,7 +461,6 @@ const StationsPage = () => {
     selectedStatuses, selectedTypes, selectedOverissue, selectedError,
   ]);
 
-  // Сброс expanded
   useEffect(() => {
     setExpandedButton(null);
     setShowSortDropdown(false);
@@ -486,7 +471,6 @@ const StationsPage = () => {
     setShowSectionDropdown(false);
   }, []);
 
-  // Синхронизация activeButtons с viewMode
   useEffect(() => {
     const gridButton = 9;
     const listButton = 10;
@@ -498,7 +482,6 @@ const StationsPage = () => {
     });
   }, [viewMode]);
 
-  // Синхронизация активных кнопок
   useEffect(() => {
     if (isEnterpriseActive && !activeButtons.includes(3)) {
       setActiveButtons(prev => [...prev, 3]);
@@ -571,7 +554,6 @@ const StationsPage = () => {
     }
   }, [isSgdEnabled]);
 
-  // Расчёт адаптивных отступов
   useEffect(() => {
     const calculateAdaptiveGaps = () => {
       if (!containerRef.current) return;
@@ -606,7 +588,6 @@ const StationsPage = () => {
     };
   }, []);
 
-  // WebSocket
   useEffect(() => {
     if (!window.config || !window.config.ip_api) return;
 
@@ -656,7 +637,6 @@ const StationsPage = () => {
     };
   }, []);
 
-  // Обработчики кликов вне dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (expandedRef.current && !expandedRef.current.contains(event.target as Node)) {
@@ -681,18 +661,6 @@ const StationsPage = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [expandedButton]);
 
-  // ==================== ФУНКЦИИ ДЛЯ ОТДЕЛЬНЫХ КНОПОК ====================
-  // Отдельная кнопка "Цех" - показывает ВСЕ цеха (не фильтрует по предприятиям)
-  const getAvailableWorkshopsForButton = (): Workshop[] => {
-    return workshops;
-  };
-
-  // Отдельная кнопка "Участок" - показывает ВСЕ участки (не фильтрует по цехам или предприятиям)
-  const getAvailableSectionsForButton = (): Section[] => {
-    return sections;
-  };
-
-  // Сброс зависимых выборов (только вниз)
   useEffect(() => {
     if (selectedEnterprises.length > 0) {
       const validWorkshopIds = workshops
@@ -711,12 +679,18 @@ const StationsPage = () => {
     }
   }, [selectedWorkshops]);
 
-  // ==================== ФУНКЦИИ ДЛЯ КАСКАДНОГО ФИЛЬТРА (фильтрация только вниз) ====================
+  const getAvailableWorkshopsForButton = (): Workshop[] => {
+    return workshops;
+  };
+
+  const getAvailableSectionsForButton = (): Section[] => {
+    return sections;
+  };
+
   const getFilterEnterprises = (): Enterprise[] => {
     if (selectedEnterprises.length > 0) {
       return enterprises.filter(e => selectedEnterprises.includes(e.id));
     }
-    // Всегда показываем все предприятия (фильтрация только вниз)
     return enterprises;
   };
 
@@ -750,7 +724,6 @@ const StationsPage = () => {
     return filterSections.length > 0;
   };
 
-  // Обработчики кнопок
   const toggleButton = (index: number) => {
     if (isScaleTooLarge) return;
     if (index === 6) {
@@ -925,7 +898,6 @@ const StationsPage = () => {
   const selectOverissue = (value: string) => setSelectedOverissue(value);
   const selectError = (value: string) => setSelectedError(value);
 
-  // Данные для UI
   const sortOptions = [
     { value: 'nameAsc', label: 'По названию (А-Я)' },
     { value: 'nameDesc', label: 'По названию (Я-А)' },
@@ -978,7 +950,6 @@ const StationsPage = () => {
     return 342;
   };
 
-  // Рендер каскадных окон фильтра (фильтрация только вниз, overflow: visible)
   const renderFilterCascadeWindows = () => {
     if (!showFilterDropdown || !filterCascade.activeType) return null;
 
@@ -1135,7 +1106,6 @@ const StationsPage = () => {
     return windows;
   };
 
-  // Рендер кнопки
   const renderButton = (button: typeof buttons[0], globalIdx: number) => {
     const isActive = activeButtons.includes(globalIdx);
     const isExpanded = expandedButton === globalIdx;
@@ -1224,7 +1194,6 @@ const StationsPage = () => {
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ backgroundColor: '#FFFFFF' }}>
                           {sortOptions.map((option) => {
                             const isReset = option.value === 'reset';
-                            // Кнопка "Сброс сортировки" не выделяется цветом
                             const isActive = !isReset && sortOption === option.value;
                             return (
                               <div key={option.value} onClick={(e) => { e.stopPropagation(); handleSortSelect(option.value); }}
@@ -1393,7 +1362,6 @@ const StationsPage = () => {
     }
 
     if (isWorkshopButton) {
-      // Отдельная кнопка "Цех" - показывает ВСЕ цеха
       const availableWorkshops = getAvailableWorkshopsForButton();
       
       return (
@@ -1438,7 +1406,6 @@ const StationsPage = () => {
     }
 
     if (isSectionButton) {
-      // Отдельная кнопка "Участок" - показывает ВСЕ участки
       const availableSections = getAvailableSectionsForButton();
       
       return (
@@ -1536,16 +1503,37 @@ const StationsPage = () => {
         <div style={{ display: 'flex', gap: '20px' }}>{buttons.slice(9, 11).map((button, idx) => renderButton(button, idx + 9))}</div>
       </div>
 
-      <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '0', right: '15px', height: `${SCROLL_AREA_HEIGHT}px`, overflow: 'auto', zIndex: 1 }}>
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Загрузка станций...</div>
-        ) : stationsError ? (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#F44336' }}>{stationsError}</div>
-        ) : stationsStatic.length === 0 ? (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Нет данных о станциях</div>
-        ) : (
-          <AnimatePresence mode="wait">{viewMode === 'grid' ? renderStationsGrid() : renderStationsList()}</AnimatePresence>
-        )}
+      <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '0', right: '0', height: `${SCROLL_AREA_HEIGHT}px`, zIndex: 1 }}>
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <div
+            ref={scrollContainerRef}
+            style={{
+              width: '100%',
+              height: '100%',
+              overflowY: 'auto',
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
+            {loading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Загрузка станций...</div>
+            ) : stationsError ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#F44336' }}>{stationsError}</div>
+            ) : stationsStatic.length === 0 ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Нет данных о станциях</div>
+            ) : (
+              <AnimatePresence mode="wait">{viewMode === 'grid' ? renderStationsGrid() : renderStationsList()}</AnimatePresence>
+            )}
+          </div>
+          <div style={{ position: 'absolute', right: '15px', top: 0 }}>
+            <CustomScrollbar
+              scrollContainerRef={scrollContainerRef}
+              orientation="vertical"
+              trackSize={SCROLL_AREA_HEIGHT}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
