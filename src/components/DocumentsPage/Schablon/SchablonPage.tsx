@@ -5,7 +5,6 @@ import { useTabs } from '../../../context/TabContext';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 
-// Иконки для кнопок
 import Schablon1 from '../../../assets/Schablon/Schablon1.svg';
 import Schablon2 from '../../../assets/Schablon/Schablon2.svg';
 import Schablon3 from '../../../assets/Schablon/Schablon3.svg';
@@ -14,13 +13,24 @@ import Schablon5 from '../../../assets/Schablon/Schablon5.svg';
 import Schablon6 from '../../../assets/Schablon/Schablon6.svg';
 import StationFull from '../../../assets/StationAnimation/StationFull.svg';
 
-// Иконки статусов
+import frame1 from '../../../assets/StationAnimation/frame-1.svg';
+import frame2 from '../../../assets/StationAnimation/frame-2.svg';
+import frame3 from '../../../assets/StationAnimation/frame-3.svg';
+import frame4 from '../../../assets/StationAnimation/frame-4.svg';
+
 import TMC from '../../../assets/Station/TMC.svg';
 import SGD from '../../../assets/Station/SGD.svg';
 import OK from '../../../assets/Station/OK.svg';
 import CHAIN from '../../../assets/Station/CHAIN.svg';
 
 import SchablonTable from './SchablonTable';
+import ClearPopup from './ClearPopup';
+import CellDetailsPopup from './CellDetailsPopup';
+
+const FRAMES = [frame1, frame2, frame3, frame4];
+const ANIMATION_DURATION = 2000;
+const FRAMES_COUNT = 4;
+const FRAME_INTERVAL = ANIMATION_DURATION / FRAMES_COUNT;
 
 const SchablonPage: React.FC = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -37,9 +47,29 @@ const SchablonPage: React.FC = () => {
   const [adaptiveButtonGap, setAdaptiveButtonGap] = useState(16);
   const [adaptiveBottomPadding, setAdaptiveBottomPadding] = useState(40);
 
-  // Состояния для кнопок
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [activeButtons, setActiveButtons] = useState<number[]>([]);
+
+  const TOGGLES_COUNT = 18;
+  const [selectedDrum, setSelectedDrum] = useState<'left' | 'right'>('left');
+  
+  const [currentFrameArr, setCurrentFrameArr] = useState<number[]>(Array(TOGGLES_COUNT).fill(0));
+  const [isAnimatingArr, setIsAnimatingArr] = useState<boolean[]>(Array(TOGGLES_COUNT).fill(false));
+
+  const [isClearPopupOpen, setIsClearPopupOpen] = useState(false);
+  const [isCellPopupOpen, setIsCellPopupOpen] = useState(false);
+  const [cellPopupData, setCellPopupData] = useState<{ id: number; name: string; column: number; selectedIds: Set<number> }>({ id: 0, name: '', column: 1, selectedIds: new Set() });
+
+  const isAnyPopupOpen = isClearPopupOpen || isCellPopupOpen;
+
+  const isAnimatingRef = useRef<boolean[]>(Array(TOGGLES_COUNT).fill(false));
+  const currentFrameRef = useRef<number[]>(Array(TOGGLES_COUNT).fill(0));
+  const animationFrameRef = useRef<(number | null)[]>(Array(TOGGLES_COUNT).fill(null));
+  const lastFrameTimeRef = useRef<(number | null)[]>(Array(TOGGLES_COUNT).fill(null));
+  const frameIndexInSequenceRef = useRef<number[]>(Array(TOGGLES_COUNT).fill(0));
+  const directionRef = useRef<('open' | 'close')[]>(Array(TOGGLES_COUNT).fill('open'));
+
+  const prevSelectedIdsRef = useRef<Set<number>>(new Set());
 
   const BASE_TOP_PADDING = 35;
   const BASE_TITLE_TO_BUTTONS_GAP = 28;
@@ -54,7 +84,102 @@ const SchablonPage: React.FC = () => {
   const GRID_WIDTH = 331;
   const GRID_HEIGHT = 512;
 
-  // Загружаем данные станции
+  const TOGGLE_START_TOP = 47;
+  const TOGGLE_HEIGHT = 24;
+  const TOGGLE_GAP = 1;
+  const TOGGLE_STEP = TOGGLE_HEIGHT + TOGGLE_GAP;
+
+  const handleCloseClearPopup = useCallback(() => {
+    setIsClearPopupOpen(false);
+    setActiveButtons(prev => prev.filter(i => i !== 2));
+  }, []);
+
+  const handleCloseCellPopup = useCallback(() => {
+    setIsCellPopupOpen(false);
+  }, []);
+
+  const startSequenceAnimation = useCallback((toggleIndex: number, opening: boolean) => {
+    if (isAnimatingRef.current[toggleIndex]) {
+      directionRef.current[toggleIndex] = opening ? 'open' : 'close';
+      return;
+    }
+
+    isAnimatingRef.current[toggleIndex] = true;
+    directionRef.current[toggleIndex] = opening ? 'open' : 'close';
+    lastFrameTimeRef.current[toggleIndex] = null;
+    
+    frameIndexInSequenceRef.current[toggleIndex] = currentFrameRef.current[toggleIndex];
+
+    setIsAnimatingArr(prev => {
+      const copy = [...prev];
+      copy[toggleIndex] = true;
+      return copy;
+    });
+
+    const animate = (timestamp: number) => {
+      if (lastFrameTimeRef.current[toggleIndex] === null) {
+        lastFrameTimeRef.current[toggleIndex] = timestamp;
+      }
+
+      const elapsed = timestamp - lastFrameTimeRef.current[toggleIndex]!;
+      const dir = directionRef.current[toggleIndex];
+
+      if (elapsed >= FRAME_INTERVAL) {
+        lastFrameTimeRef.current[toggleIndex] = timestamp;
+
+        if (dir === 'open') {
+          const nextFrame = Math.min(currentFrameRef.current[toggleIndex] + 1, 3);
+          currentFrameRef.current[toggleIndex] = nextFrame;
+          setCurrentFrameArr(prev => {
+            const copy = [...prev];
+            copy[toggleIndex] = nextFrame;
+            return copy;
+          });
+        } else {
+          const nextFrame = Math.max(currentFrameRef.current[toggleIndex] - 1, 0);
+          currentFrameRef.current[toggleIndex] = nextFrame;
+          setCurrentFrameArr(prev => {
+            const copy = [...prev];
+            copy[toggleIndex] = nextFrame;
+            return copy;
+          });
+        }
+      }
+
+      const currentFrame = currentFrameRef.current[toggleIndex];
+      const isComplete = (dir === 'open' && currentFrame >= 3) || 
+                         (dir === 'close' && currentFrame <= 0);
+
+      if (!isComplete || elapsed < FRAME_INTERVAL) {
+        animationFrameRef.current[toggleIndex] = requestAnimationFrame(animate);
+      } else {
+        if ((dir === 'open' && currentFrame >= 3 && directionRef.current[toggleIndex] === 'open') ||
+            (dir === 'close' && currentFrame <= 0 && directionRef.current[toggleIndex] === 'close')) {
+          setIsAnimatingArr(prev => {
+            const copy = [...prev];
+            copy[toggleIndex] = false;
+            return copy;
+          });
+          isAnimatingRef.current[toggleIndex] = false;
+          animationFrameRef.current[toggleIndex] = null;
+          lastFrameTimeRef.current[toggleIndex] = null;
+        } else {
+          animationFrameRef.current[toggleIndex] = requestAnimationFrame(animate);
+        }
+      }
+    };
+
+    animationFrameRef.current[toggleIndex] = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      animationFrameRef.current.forEach(frame => {
+        if (frame !== null) cancelAnimationFrame(frame);
+      });
+    };
+  }, []);
+
   useEffect(() => {
     if (!uid) return;
 
@@ -75,7 +200,6 @@ const SchablonPage: React.FC = () => {
     fetchStationData();
   }, [uid]);
 
-  // Адаптивные отступы
   const calculateAdaptivePaddings = useCallback(() => {
     if (!containerRef.current) return;
 
@@ -109,7 +233,6 @@ const SchablonPage: React.FC = () => {
     };
   }, [calculateAdaptivePaddings]);
 
-  // Закрытие текущей вкладки
   const handleClose = () => {
     const currentTab = tabs.find(tab => tab.id === activeTabId);
     if (currentTab) {
@@ -118,6 +241,16 @@ const SchablonPage: React.FC = () => {
   };
 
   const handleButtonClick = (index: number) => {
+    if (index === 2) {
+      if (isClearPopupOpen) {
+        handleCloseClearPopup();
+      } else {
+        setIsClearPopupOpen(true);
+        setActiveButtons(prev => prev.includes(index) ? prev : [...prev, index]);
+      }
+      return;
+    }
+
     if (index === 1) {
       setIsMultiSelect(prev => !prev);
       setActiveButtons(prev =>
@@ -137,12 +270,57 @@ const SchablonPage: React.FC = () => {
     }
   };
 
+  const triggerToggleAnimation = useCallback((toggleIndex: number, opening: boolean) => {
+    startSequenceAnimation(toggleIndex, opening);
+  }, [startSequenceAnimation]);
+
+  const handleTableSelectionChange = useCallback((selectedIds: Set<number>) => {
+    const prevIds = prevSelectedIdsRef.current;
+    
+    for (let i = 0; i < TOGGLES_COUNT; i++) {
+      const id = i + 1;
+      const wasSelected = prevIds.has(id);
+      const isSelected = selectedIds.has(id);
+      
+      if (!wasSelected && isSelected) {
+        triggerToggleAnimation(i, true);
+      } else if (wasSelected && !isSelected) {
+        triggerToggleAnimation(i, false);
+      }
+    }
+    
+    prevSelectedIdsRef.current = new Set(selectedIds);
+  }, [triggerToggleAnimation]);
+
+  const handleDrumChange = useCallback((drum: 'left' | 'right') => {
+    if (drum === selectedDrum) return;
+    setSelectedDrum(drum);
+    
+    animationFrameRef.current.forEach(frame => {
+      if (frame !== null) cancelAnimationFrame(frame);
+    });
+    
+    isAnimatingRef.current = Array(TOGGLES_COUNT).fill(false);
+    currentFrameRef.current = Array(TOGGLES_COUNT).fill(0);
+    animationFrameRef.current = Array(TOGGLES_COUNT).fill(null);
+    lastFrameTimeRef.current = Array(TOGGLES_COUNT).fill(null);
+    directionRef.current = Array(TOGGLES_COUNT).fill('open');
+    
+    setIsAnimatingArr(Array(TOGGLES_COUNT).fill(false));
+    setCurrentFrameArr(Array(TOGGLES_COUNT).fill(0));
+    prevSelectedIdsRef.current = new Set();
+  }, [selectedDrum]);
+
+  const handleCellDoubleClick = useCallback((id: number, column: number, selectedIds: Set<number>) => {
+    setCellPopupData({ id, name: `Ячейка ${id}`, column, selectedIds });
+    setIsCellPopupOpen(true);
+  }, []);
+
   const title = `Документ - Шаблон загрузки станции ${stationName}`;
 
   const leftIcons = [Schablon1, Schablon2, Schablon3];
   const rightIcons = [Schablon4, Schablon5, Schablon6];
 
-  // Собираем иконки статусов
   const statusIcons: string[] = [];
   if (isTmc) statusIcons.push(TMC);
   if (isSgd) statusIcons.push(SGD);
@@ -165,9 +343,49 @@ const SchablonPage: React.FC = () => {
     transition: 'all 0.3s ease',
   });
 
+  const isLeftDrum = selectedDrum === 'left';
+
+  const renderToggle = (index: number) => {
+    const frameIdx = currentFrameArr[index];
+    const imageSrc = FRAMES[frameIdx];
+
+    return (
+      <div
+        key={`toggle-${index}`}
+        style={{
+          position: 'absolute',
+          ...(isLeftDrum
+            ? { left: '28px' }
+            : { right: '28px' }
+          ),
+          top: `${TOGGLE_START_TOP + index * TOGGLE_STEP}px`,
+          width: '89px',
+          height: `${TOGGLE_HEIGHT}px`,
+          ...(isLeftDrum ? {} : { transform: 'scaleX(-1)' }),
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        <img
+          src={imageSrc}
+          alt="toggle"
+          draggable={false}
+          style={{
+            width: '89px',
+            height: '24px',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        />
+      </div>
+    );
+  };
+
   return (
     <div ref={containerRef} style={{ position: 'relative', height: '100%' }}>
-      {/* Заголовок */}
       <div
         style={{
           paddingTop: `${adaptiveTopPadding}px`,
@@ -192,7 +410,6 @@ const SchablonPage: React.FC = () => {
           {title}
         </h1>
 
-        {/* Крестик закрытия */}
         <button
           onClick={handleClose}
           style={{
@@ -221,7 +438,6 @@ const SchablonPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Основной контент */}
       <div
         style={{
           position: 'absolute',
@@ -231,7 +447,6 @@ const SchablonPage: React.FC = () => {
           bottom: 0,
         }}
       >
-        {/* Левая часть */}
         <div
           style={{
             position: 'absolute',
@@ -247,7 +462,6 @@ const SchablonPage: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Название станции */}
           <div
             style={{
               marginTop: '30px',
@@ -267,7 +481,6 @@ const SchablonPage: React.FC = () => {
             {stationName}
           </div>
 
-          {/* Иконки статусов */}
           {statusIcons.length > 0 && (
             <div
               style={{
@@ -284,7 +497,6 @@ const SchablonPage: React.FC = () => {
             </div>
           )}
 
-          {/* Картинка станции */}
           <div
             style={{
               position: 'absolute',
@@ -294,11 +506,21 @@ const SchablonPage: React.FC = () => {
               height: `${GRID_HEIGHT}px`,
             }}
           >
-            <img src={StationFull} alt="Station" style={{ width: '100%', height: '100%' }} />
+            <img 
+              src={StationFull} 
+              alt="Station" 
+              draggable={false}
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                pointerEvents: 'none', 
+                userSelect: 'none' 
+              }} 
+            />
+            {Array.from({ length: TOGGLES_COUNT }).map((_, index) => renderToggle(index))}
           </div>
         </div>
 
-        {/* Правая часть */}
         <div
           style={{
             position: 'absolute',
@@ -307,7 +529,6 @@ const SchablonPage: React.FC = () => {
             bottom: `${adaptiveBottomPadding}px`,
           }}
         >
-          {/* Кнопки */}
           <div
             style={{
               width: '1183px',
@@ -315,9 +536,11 @@ const SchablonPage: React.FC = () => {
               marginBottom: `${adaptiveButtonGap}px`,
               display: 'flex',
               alignItems: 'center',
+              filter: isAnyPopupOpen ? 'blur(2px)' : 'none',
+              transition: 'filter 0.3s ease',
+              pointerEvents: isAnyPopupOpen ? 'none' : 'auto',
             }}
           >
-            {/* Левая группа кнопок */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginLeft: '30px' }}>
               {leftIcons.map((icon, index) => (
                 <button
@@ -339,10 +562,8 @@ const SchablonPage: React.FC = () => {
               ))}
             </div>
 
-            {/* Отступ */}
             <div style={{ width: '145px', flexShrink: 0 }} />
 
-            {/* Центральный блок */}
             <div
               style={{
                 width: '429px',
@@ -354,10 +575,8 @@ const SchablonPage: React.FC = () => {
               }}
             />
 
-            {/* Отступ */}
             <div style={{ width: '145px', flexShrink: 0 }} />
 
-            {/* Правая группа кнопок */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginRight: '30px' }}>
               {rightIcons.map((icon, index) => (
                 <button
@@ -380,12 +599,57 @@ const SchablonPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Таблица */}
           <SchablonTable
             isMultiSelect={isMultiSelect}
             onEnableMultiSelect={handleEnableMultiSelect}
+            onSelectionChange={handleTableSelectionChange}
+            selectedDrum={selectedDrum}
+            onDrumChange={handleDrumChange}
+            onCellDoubleClick={handleCellDoubleClick}
+            isBlurred={isAnyPopupOpen}
           />
         </div>
+
+        {isClearPopupOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '577px',
+              right: '40px',
+              bottom: `${adaptiveBottomPadding}px`,
+              top: 0,
+              zIndex: 100,
+            }}
+          >
+            <ClearPopup
+              isOpen={isClearPopupOpen}
+              onClose={handleCloseClearPopup}
+            />
+          </div>
+        )}
+
+        {isCellPopupOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '577px',
+              right: '40px',
+              bottom: `${adaptiveBottomPadding}px`,
+              top: 0,
+              zIndex: 100,
+            }}
+          >
+            <CellDetailsPopup
+              isOpen={isCellPopupOpen}
+              onClose={handleCloseCellPopup}
+              cellId={cellPopupData.id}
+              cellName={cellPopupData.name}
+              selectedColumn={cellPopupData.column}
+              isMultiSelect={isMultiSelect}
+              selectedCellIds={cellPopupData.selectedIds}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

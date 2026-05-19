@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import StationCell from './StationCell';
 import StationRow from './StationRow';
+import SchablonPopup from './SchablonPopup';
 import ConstantInfo from '../../info/ConstantInfo';
 import AxiosService from '../../services/AxiosService';
 import CustomScrollbar from '../../components/CustomScrollbar';
@@ -154,7 +155,6 @@ const loadSavedState = () => {
 const StationsPage = () => {
   const savedState = loadSavedState();
 
-  // Refs
   const expandedRef = useRef<HTMLDivElement>(null);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
@@ -169,7 +169,6 @@ const StationsPage = () => {
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scaleWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Состояния
   const [activeButtons, setActiveButtons] = useState<number[]>(savedState?.activeButtons || [9]);
   const [expandedButton, setExpandedButton] = useState<number | null>(null);
   const [stationsStatic, setStationsStatic] = useState<StationStatic[]>([]);
@@ -221,6 +220,15 @@ const StationsPage = () => {
 
   const [isScaleTooLarge, setIsScaleTooLarge] = useState(false);
   const [showScaleWarning, setShowScaleWarning] = useState(false);
+
+  const [schablonPopupData, setSchablonPopupData] = useState<{
+    isOpen: boolean;
+    uid?: string;
+    name?: string;
+    workshop?: string;
+    section?: string;
+    status?: string;
+  }>({ isOpen: false });
 
   const isTmcEnabled = selectedTypes.includes('ТМЦ');
   const isSgdEnabled = selectedTypes.includes('СГД');
@@ -296,6 +304,21 @@ const StationsPage = () => {
       fetchFilteredStations();
     }, 300);
   }, [fetchFilteredStations]);
+
+  const handleOpenSchablonPopup = (station: StationStatic) => {
+    setSchablonPopupData({
+      isOpen: true,
+      uid: station.uid,
+      name: station.name,
+      workshop: station.workshop,
+      section: station.section,
+      status: station.status,
+    });
+  };
+
+  const handleCloseSchablonPopup = () => {
+    setSchablonPopupData({ isOpen: false });
+  };
 
   useEffect(() => {
     const fetchHierarchy = async () => {
@@ -1194,13 +1217,13 @@ const StationsPage = () => {
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ backgroundColor: '#FFFFFF' }}>
                           {sortOptions.map((option) => {
                             const isReset = option.value === 'reset';
-                            const isActive = !isReset && sortOption === option.value;
+                            const isActiveOption = !isReset && sortOption === option.value;
                             return (
                               <div key={option.value} onClick={(e) => { e.stopPropagation(); handleSortSelect(option.value); }}
-                                onMouseEnter={(e) => { if (!isActive && !isReset) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
-                                onMouseLeave={(e) => { if (!isActive && !isReset) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
-                                style={{ height: 38, padding: '0 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', backgroundColor: isActive ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}>
-                                <span style={{ fontSize: 15, fontWeight: 500, color: isActive ? '#2D4059' : '#9CA3AF', whiteSpace: 'nowrap' }}>{option.label}</span>
+                                onMouseEnter={(e) => { if (!isActiveOption && !isReset) e.currentTarget.style.backgroundColor = '#E2E8FF'; }}
+                                onMouseLeave={(e) => { if (!isActiveOption && !isReset) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                                style={{ height: 38, padding: '0 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', backgroundColor: isActiveOption ? '#BCC8FF' : '#FFFFFF', transition: 'background-color 0.2s ease' }}>
+                                <span style={{ fontSize: 15, fontWeight: 500, color: isActiveOption ? '#2D4059' : '#9CA3AF', whiteSpace: 'nowrap' }}>{option.label}</span>
                               </div>
                             );
                           })}
@@ -1457,7 +1480,7 @@ const StationsPage = () => {
       style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 220px)', gap: '30px', paddingTop: '10px', paddingBottom: '10px', paddingLeft: '40px', paddingRight: '15px', width: 'max-content' }}>
       {stationsStatic.map((station) => {
         const dynamic = stationsDynamic.get(station.uid);
-        return <StationCell key={station.uid} uid={station.uid} name={station.name} workshop={station.workshop} section={station.section} status={station.status} stationType={station.stationType} parentUid={station.parentUid} hasError={station.hasError} isTmc={station.isTmc} isSgd={station.isSgd} isOk={station.isOk} filledCellsPercent={dynamic?.filledCellsPercent} remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent} readyPartsPercent={dynamic?.readyPartsPercent} totalCells={dynamic?.totalCells} filledCells={dynamic?.filledCells} templateNomenclatureCount={dynamic?.templateNomenclatureCount} remainingNomenclatureCount={dynamic?.remainingNomenclatureCount} maxReadyParts={dynamic?.maxReadyParts} readyPartsCount={dynamic?.readyPartsCount} />;
+        return <StationCell key={station.uid} uid={station.uid} name={station.name} workshop={station.workshop} section={station.section} status={station.status} stationType={station.stationType} parentUid={station.parentUid} hasError={station.hasError} isTmc={station.isTmc} isSgd={station.isSgd} isOk={station.isOk} filledCellsPercent={dynamic?.filledCellsPercent} remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent} readyPartsPercent={dynamic?.readyPartsPercent} totalCells={dynamic?.totalCells} filledCells={dynamic?.filledCells} templateNomenclatureCount={dynamic?.templateNomenclatureCount} remainingNomenclatureCount={dynamic?.remainingNomenclatureCount} maxReadyParts={dynamic?.maxReadyParts} readyPartsCount={dynamic?.readyPartsCount} onOpenSchablonPopup={handleOpenSchablonPopup} />;
       })}
     </motion.div>
   );
@@ -1467,7 +1490,7 @@ const StationsPage = () => {
       style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingLeft: '40px', paddingRight: '15px', width: 'max-content' }}>
       {stationsStatic.map((station) => {
         const dynamic = stationsDynamic.get(station.uid);
-        return <StationRow key={station.uid} uid={station.uid} name={station.name} workshop={station.workshop} section={station.section} status={station.status} stationType={station.stationType} parentUid={station.parentUid} hasError={station.hasError} isTmc={station.isTmc} isSgd={station.isSgd} isOk={station.isOk} filledCellsPercent={dynamic?.filledCellsPercent} remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent} readyPartsPercent={dynamic?.readyPartsPercent} totalCells={dynamic?.totalCells} filledCells={dynamic?.filledCells} templateNomenclatureCount={dynamic?.templateNomenclatureCount} remainingNomenclatureCount={dynamic?.remainingNomenclatureCount} maxReadyParts={dynamic?.maxReadyParts} readyPartsCount={dynamic?.readyPartsCount} />;
+        return <StationRow key={station.uid} uid={station.uid} name={station.name} workshop={station.workshop} section={station.section} status={station.status} stationType={station.stationType} parentUid={station.parentUid} hasError={station.hasError} isTmc={station.isTmc} isSgd={station.isSgd} isOk={station.isOk} filledCellsPercent={dynamic?.filledCellsPercent} remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent} readyPartsPercent={dynamic?.readyPartsPercent} totalCells={dynamic?.totalCells} filledCells={dynamic?.filledCells} templateNomenclatureCount={dynamic?.templateNomenclatureCount} remainingNomenclatureCount={dynamic?.remainingNomenclatureCount} maxReadyParts={dynamic?.maxReadyParts} readyPartsCount={dynamic?.readyPartsCount} onOpenSchablonPopup={handleOpenSchablonPopup} />;
       })}
     </motion.div>
   );
@@ -1477,6 +1500,16 @@ const StationsPage = () => {
 
   return (
     <div ref={containerRef} style={{ position: 'relative', height: '100%' }}>
+      <SchablonPopup
+        isOpen={schablonPopupData.isOpen}
+        onClose={handleCloseSchablonPopup}
+        uid={schablonPopupData.uid}
+        name={schablonPopupData.name}
+        workshop={schablonPopupData.workshop}
+        section={schablonPopupData.section}
+        status={schablonPopupData.status}
+      />
+
       <AnimatePresence>
         {showScaleWarning && (
           <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -50 }} transition={{ duration: 0.3 }}

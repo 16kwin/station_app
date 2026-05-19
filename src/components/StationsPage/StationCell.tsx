@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 // Импорт фонов
 import SectionCard1 from '../../assets/Station/StationCard1.svg';
@@ -93,6 +92,7 @@ interface StationCellProps {
   remainingNomenclatureCount?: number;
   maxReadyParts?: number;
   readyPartsCount?: number;
+  onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
 }
 
 type CardSide = 'front' | 'back1' | 'back2';
@@ -118,8 +118,8 @@ const StationCell: React.FC<StationCellProps> = ({
   remainingNomenclatureCount = 0,
   maxReadyParts = 0,
   readyPartsCount = 0,
+  onOpenSchablonPopup,
 }) => {
-  const navigate = useNavigate();
   const [side, setSide] = useState<CardSide>('front');
   const [displaySide, setDisplaySide] = useState<CardSide>('front');
   const [isAnimating, setIsAnimating] = useState(false);
@@ -326,6 +326,19 @@ const StationCell: React.FC<StationCellProps> = ({
       setDisplaySide('front');
       setIsAnimating(false);
     }, 600);
+  };
+
+  const handleSchablonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenSchablonPopup) {
+      onOpenSchablonPopup({
+        uid: uid || '',
+        name: name || '',
+        workshop: workshop || '',
+        section: section || '',
+        status: status || '',
+      });
+    }
   };
 
   const getContainerTransform = () => {
@@ -1086,10 +1099,7 @@ const StationCell: React.FC<StationCellProps> = ({
         }}
       >
         <div
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/documents/schablon/${uid}`);
-          }}
+          onClick={handleSchablonClick}
           style={{
             display: 'flex',
             alignItems: 'center',

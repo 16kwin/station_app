@@ -23,6 +23,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
 }) => {
   const [thumbSize, setThumbSize] = useState(0);
   const [thumbOffset, setThumbOffset] = useState(0);
+  const [hasScroll, setHasScroll] = useState(false);
 
   const updateScrollbar = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -33,9 +34,12 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
     const clientSize = isVertical ? container.clientHeight : container.clientWidth;
 
     if (scrollSize <= clientSize) {
+      setHasScroll(false);
       setThumbSize(0);
       return;
     }
+
+    setHasScroll(true);
 
     const trackInnerSize = trackSize - (TRIANGLE_SIZE + TRIANGLE_MARGIN) * 2;
     const thumb = (clientSize / scrollSize) * trackInnerSize;
@@ -49,22 +53,18 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
   }, [scrollContainerRef, orientation, trackSize]);
 
   useEffect(() => {
-    // Сразу обновляем при маунте
     updateScrollbar();
 
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    // Слушаем скролл
     container.addEventListener('scroll', updateScrollbar);
 
-    // Отслеживаем изменение размеров контейнера
     const resizeObserver = new ResizeObserver(() => {
       updateScrollbar();
     });
     resizeObserver.observe(container);
 
-    // Отслеживаем изменение содержимого (дети добавляются/удаляются)
     const mutationObserver = new MutationObserver(() => {
       updateScrollbar();
     });
@@ -181,8 +181,6 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
         alignItems: 'center',
       };
 
-  if (thumbSize === 0) return null;
-
   return (
     <div style={wrapperStyle}>
       <div
@@ -195,6 +193,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
                 borderRight: '4px solid transparent',
                 borderBottom: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
                 flexShrink: 0,
+                opacity: hasScroll ? 1 : 0.3,
               }
             : {
                 width: 0,
@@ -203,12 +202,15 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
                 borderBottom: '4px solid transparent',
                 borderRight: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
                 flexShrink: 0,
+                opacity: hasScroll ? 1 : 0.3,
               }
         }
       />
 
       <div style={trackStyle}>
-        <div onMouseDown={handleThumbMouseDown} style={thumbStyle} />
+        {hasScroll && (
+          <div onMouseDown={handleThumbMouseDown} style={thumbStyle} />
+        )}
       </div>
 
       <div
@@ -221,6 +223,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
                 borderRight: '4px solid transparent',
                 borderTop: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
                 flexShrink: 0,
+                opacity: hasScroll ? 1 : 0.3,
               }
             : {
                 width: 0,
@@ -229,6 +232,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
                 borderBottom: '4px solid transparent',
                 borderLeft: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
                 flexShrink: 0,
+                opacity: hasScroll ? 1 : 0.3,
               }
         }
       />

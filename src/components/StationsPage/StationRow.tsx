@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 
 // Импорт фонов для ряда
 import Line1 from '../../assets/Station/Line1.svg';
@@ -88,6 +87,7 @@ interface StationRowProps {
   remainingNomenclatureCount?: number;
   maxReadyParts?: number;
   readyPartsCount?: number;
+  onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
 }
 
 const StationRow: React.FC<StationRowProps> = ({
@@ -110,21 +110,18 @@ const StationRow: React.FC<StationRowProps> = ({
   templateNomenclatureCount = 0,
   remainingNomenclatureCount = 0,
   readyPartsCount = 0,
+  onOpenSchablonPopup,
 }) => {
-  const navigate = useNavigate();
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
   
-  // Состояния для анимированных процентов
   const [animatedFilled, setAnimatedFilled] = useState(0);
   const [animatedRemaining, setAnimatedRemaining] = useState(0);
   const [animatedReady, setAnimatedReady] = useState(0);
   
-  // Состояние для начала анимации
   const [startAnimation, setStartAnimation] = useState(false);
 
-  // Задержка перед началом анимации
   useEffect(() => {
     const timer = setTimeout(() => {
       setStartAnimation(true);
@@ -133,7 +130,6 @@ const StationRow: React.FC<StationRowProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Анимация процентов
   useEffect(() => {
     if (!startAnimation) return;
     
@@ -289,7 +285,6 @@ const StationRow: React.FC<StationRowProps> = ({
   const displayName = name || uid || '—';
   const workshopSectionText = `${workshop || '—'} ${section || '—'}`;
 
-  // Собираем массив иконок для отображения
   const statusIcons: string[] = [];
   if (isTmc) statusIcons.push(TMC);
   if (isSgd) statusIcons.push(SGD);
@@ -425,6 +420,19 @@ const StationRow: React.FC<StationRowProps> = ({
     setIsConfigMode(false);
   };
 
+  const handleSchablonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenSchablonPopup) {
+      onOpenSchablonPopup({
+        uid: uid || '',
+        name: name || '',
+        workshop: workshop || '',
+        section: section || '',
+        status: status || '',
+      });
+    }
+  };
+
   return (
     <div
       style={{
@@ -445,7 +453,6 @@ const StationRow: React.FC<StationRowProps> = ({
         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
       }}
     >
-      {/* Фоновое изображение */}
       <img
         src={getBackgroundImage()}
         alt=""
@@ -460,8 +467,6 @@ const StationRow: React.FC<StationRowProps> = ({
         }}
       />
 
-      {/* Статичные элементы */}
-      {/* Иконка станции */}
       <div
         style={{
           width: '84px',
@@ -500,7 +505,6 @@ const StationRow: React.FC<StationRowProps> = ({
         />
       </div>
 
-      {/* Блок с иконками статусов (TMC, SGD, OK, CHAIN, ERR) */}
       <div
         style={{
           display: 'flex',
@@ -515,7 +519,6 @@ const StationRow: React.FC<StationRowProps> = ({
         {renderStatusIcons()}
       </div>
 
-      {/* Информация о станции - название, цех, статус */}
       <div
         style={{
           position: 'absolute',
@@ -529,7 +532,6 @@ const StationRow: React.FC<StationRowProps> = ({
           zIndex: 2,
         }}
       >
-        {/* Название */}
         <div
           style={{
             position: 'relative',
@@ -575,7 +577,6 @@ const StationRow: React.FC<StationRowProps> = ({
           )}
         </div>
         
-        {/* Цех и участок */}
         <div
           style={{
             position: 'relative',
@@ -623,7 +624,6 @@ const StationRow: React.FC<StationRowProps> = ({
           )}
         </div>
 
-        {/* Статус */}
         <div
           style={{
             fontWeight: 500,
@@ -641,7 +641,6 @@ const StationRow: React.FC<StationRowProps> = ({
         </div>
       </div>
 
-      {/* Анимируемая часть */}
       <AnimatePresence mode="wait">
         {!isConfigMode ? (
           <motion.div
@@ -659,7 +658,6 @@ const StationRow: React.FC<StationRowProps> = ({
               zIndex: 1,
             }}
           >
-            {/* Иконка КРИТ на 421px от левого края */}
             <div
               style={{
                 position: 'absolute',
@@ -681,7 +679,6 @@ const StationRow: React.FC<StationRowProps> = ({
               )}
             </div>
 
-            {/* Блок "Использование ячеек" - на 477px от левого края */}
             <div
               style={{
                 position: 'absolute',
@@ -767,7 +764,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </div>
             </div>
 
-            {/* Блок "Остаток ТМЦ в станциях" - на 698px от левого края */}
             <div
               style={{
                 position: 'absolute',
@@ -853,7 +849,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </div>
             </div>
 
-            {/* Блок "Готовые детали" - на 919px от левого края */}
             <div
               style={{
                 position: 'absolute',
@@ -939,7 +934,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </div>
             </div>
 
-            {/* Текстовые значения справа от прогресс-баров - на 1159px от левого края */}
             <div
               style={{
                 position: 'absolute',
@@ -950,7 +944,6 @@ const StationRow: React.FC<StationRowProps> = ({
                 gap: '5px',
               }}
             >
-              {/* ТМЦ в станции */}
               <div
                 style={{
                   width: '193px',
@@ -978,7 +971,6 @@ const StationRow: React.FC<StationRowProps> = ({
                 </div>
               </div>
 
-              {/* Выдано ТМЦ */}
               <div
                 style={{
                   width: '193px',
@@ -1006,7 +998,6 @@ const StationRow: React.FC<StationRowProps> = ({
                 </div>
               </div>
 
-              {/* Выдано сверхнормы */}
               <div
                 style={{
                   width: '193px',
@@ -1034,7 +1025,6 @@ const StationRow: React.FC<StationRowProps> = ({
                 </div>
               </div>
 
-              {/* Готовые детали */}
               <div
                 style={{
                   width: '193px',
@@ -1063,7 +1053,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </div>
             </div>
 
-            {/* Кнопка Пополнить - 157px от правого края */}
             <button
               style={{
                 position: 'absolute',
@@ -1104,7 +1093,6 @@ const StationRow: React.FC<StationRowProps> = ({
               zIndex: 1,
             }}
           >
-            {/* Заголовок "Конфигурация:" */}
             <div
               style={{
                 position: 'absolute',
@@ -1120,7 +1108,6 @@ const StationRow: React.FC<StationRowProps> = ({
               Конфигурация:
             </div>
 
-            {/* Кнопка 1 - Шаблоны загрузки */}
             <button
               style={{
                 position: 'absolute',
@@ -1138,10 +1125,7 @@ const StationRow: React.FC<StationRowProps> = ({
                 paddingLeft: '12px',
                 gap: '8px',
               }}
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/documents/schablon/${uid}`);
-              }}
+              onClick={handleSchablonClick}
             >
               <img src={getConfig1Icon()} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />
               <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>
@@ -1149,7 +1133,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </span>
             </button>
 
-            {/* Кнопка 2 - Карта загрузки */}
             <button
               style={{
                 position: 'absolute',
@@ -1178,7 +1161,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </span>
             </button>
 
-            {/* Кнопка 3 - Отчет движения ТМЦ/деталей */}
             <button
               style={{
                 position: 'absolute',
@@ -1207,7 +1189,6 @@ const StationRow: React.FC<StationRowProps> = ({
               </span>
             </button>
 
-            {/* Кнопка 4 - Настройки станций */}
             <button
               style={{
                 position: 'absolute',
@@ -1239,7 +1220,6 @@ const StationRow: React.FC<StationRowProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Кнопки справа с анимацией */}
       <AnimatePresence mode="wait">
         {!isConfigMode ? (
           <motion.div

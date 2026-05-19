@@ -13,19 +13,18 @@ const TabBar = () => {
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ left: 0, top: 0 });
   const [shouldAnimateTooltip, setShouldAnimateTooltip] = useState(true);
-  
+
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const rootContainerRef = useRef<HTMLDivElement>(null);
   const counterButtonRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Предыдущие значения для сравнения
+
   const prevVisibleTabsRef = useRef<string>('');
   const prevTabWidthsRef = useRef<string>('');
   const prevTabsLengthRef = useRef<number>(0);
-  
+
   const MIN_TAB_WIDTH = 100;
   const MAX_TAB_WIDTH = 150;
   const LOGO_WIDTH = 165;
@@ -49,11 +48,11 @@ const TabBar = () => {
       prevTabWidthsRef.current = '';
       return;
     }
-    
+
     const totalWidth = rootContainerRef.current.clientWidth;
     const fixedWidth = HORIZONTAL_PADDING + LOGO_WIDTH + GAP_BETWEEN_LOGO_COUNTER + COUNTER_WIDTH + GAP_BETWEEN_COUNTER_TABS + HORIZONTAL_PADDING;
     const availableWidth = totalWidth - fixedWidth;
-    
+
     if (availableWidth <= MIN_TAB_WIDTH) {
       const newVisibleStr = '[]';
       const newWidthsStr = '[]';
@@ -65,37 +64,37 @@ const TabBar = () => {
       }
       return;
     }
-    
+
     const naturalWidths = tabs.map(() => MAX_TAB_WIDTH);
     const totalGaps = (tabs.length - 1) * GAP_BETWEEN_TABS;
     const totalNaturalWidth = naturalWidths.reduce((sum, w) => sum + w, 0);
     const totalNeeded = totalNaturalWidth + totalGaps;
-    
+
     let newVisibleTabs: Tab[];
     let newTabWidths: number[];
-    
+
     if (totalNeeded <= availableWidth) {
       newVisibleTabs = [...tabs];
       newTabWidths = naturalWidths;
     } else {
       let bestCount = 0;
       let bestWidths: number[] = [];
-      
+
       const maxPossibleByMinWidth = Math.floor((availableWidth + GAP_BETWEEN_TABS) / (MIN_TAB_WIDTH + GAP_BETWEEN_TABS));
       const maxCount = Math.min(tabs.length, maxPossibleByMinWidth);
-      
+
       for (let count = maxCount; count >= 1; count--) {
         const candidateTabs = tabs.slice(-count);
         const candidateNaturalWidths = naturalWidths.slice(-count);
         const candidateGaps = (count - 1) * GAP_BETWEEN_TABS;
         const totalCandidateNatural = candidateNaturalWidths.reduce((sum, w) => sum + w, 0);
-        
+
         if (totalCandidateNatural + candidateGaps <= availableWidth) {
           bestCount = count;
           bestWidths = candidateNaturalWidths;
           break;
         }
-        
+
         const availableForWidths = availableWidth - candidateGaps;
         if (availableForWidths > 0) {
           const scale = availableForWidths / totalCandidateNatural;
@@ -103,9 +102,9 @@ const TabBar = () => {
             const compressed = w * scale;
             return Math.max(MIN_TAB_WIDTH, Math.min(MAX_TAB_WIDTH, compressed));
           });
-          
+
           const totalCompressed = compressedWidths.reduce((sum, w) => sum + w, 0);
-          
+
           if (totalCompressed + candidateGaps <= availableWidth + 0.5) {
             bestCount = count;
             bestWidths = compressedWidths;
@@ -113,7 +112,7 @@ const TabBar = () => {
           }
         }
       }
-      
+
       if (bestCount > 0) {
         newVisibleTabs = tabs.slice(-bestCount);
         newTabWidths = bestWidths;
@@ -122,11 +121,10 @@ const TabBar = () => {
         newTabWidths = [MIN_TAB_WIDTH];
       }
     }
-    
-    // Сравниваем с предыдущими значениями
+
     const newVisibleStr = JSON.stringify(newVisibleTabs.map(t => t.id));
     const newWidthsStr = JSON.stringify(newTabWidths);
-    
+
     if (prevVisibleTabsRef.current !== newVisibleStr || prevTabWidthsRef.current !== newWidthsStr) {
       setVisibleTabs(newVisibleTabs);
       setTabWidths(newTabWidths);
@@ -135,7 +133,6 @@ const TabBar = () => {
     }
   }, [tabs]);
 
-  // Вызываем только при изменении tabs
   useLayoutEffect(() => {
     if (tabs.length !== prevTabsLengthRef.current) {
       prevTabsLengthRef.current = tabs.length;
@@ -147,18 +144,17 @@ const TabBar = () => {
       prevTabWidthsRef.current = '';
     }
   }, [tabs.length, calculateVisibleTabs]);
-  
-  // Отдельный эффект для ResizeObserver
+
   useEffect(() => {
     let resizeObserver: ResizeObserver | null = null;
-    
+
     if (rootContainerRef.current) {
       resizeObserver = new ResizeObserver(() => {
         calculateVisibleTabs();
       });
       resizeObserver.observe(rootContainerRef.current);
     }
-    
+
     return () => {
       if (resizeObserver) {
         resizeObserver.disconnect();
@@ -255,19 +251,19 @@ const TabBar = () => {
 
   return (
     <>
-      <div 
+      <div
         ref={rootContainerRef}
         className="flex items-center h-[35px] w-full relative"
         style={{ paddingLeft: `${HORIZONTAL_PADDING}px`, paddingRight: `${HORIZONTAL_PADDING}px` }}
       >
         {/* Логотип */}
-        <div 
+        <div
           className="flex-shrink-0 flex items-center justify-center"
           style={{ width: `${LOGO_WIDTH}px`, height: '35px' }}
         >
-          <img 
-            src={Logo} 
-            alt="Logo" 
+          <img
+            src={Logo}
+            alt="Logo"
             className="h-full w-auto object-contain"
           />
         </div>
@@ -280,18 +276,18 @@ const TabBar = () => {
             ref={counterButtonRef}
             onClick={handleDropdownClick}
             className="flex items-center justify-between cursor-pointer transition-all duration-300 hover:shadow-md"
-            style={{ 
-              width: `${COUNTER_WIDTH}px`, 
+            style={{
+              width: `${COUNTER_WIDTH}px`,
               height: '35px',
               backgroundColor: '#FFFFFF',
               borderRadius: '10px',
               paddingLeft: '10px',
-              paddingRight: '10px',
+              paddingRight: '6px',
             }}
           >
-            <span 
+            <span
               className="font-medium"
-              style={{ 
+              style={{
                 fontSize: '15px',
                 fontWeight: 500,
                 color: '#2D4059',
@@ -299,29 +295,43 @@ const TabBar = () => {
             >
               {tabs.length}
             </span>
-            <motion.div
-              animate={{ rotate: showDropdown ? 180 : 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+            {/* Прозрачный блок 18x18 со стрелкой 10x8 по центру */}
+            <div
               style={{
-                width: '12px',
-                height: '12px',
+                width: '18px',
+                height: '18px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                backgroundColor: 'transparent',
+                perspective: '200px',
               }}
             >
-              <img 
-                src={Arrow} 
-                alt="arrow" 
-                style={{ width: '12px', height: '12px' }}
-              />
-            </motion.div>
+              <motion.div
+                animate={{ rotateX: showDropdown ? 180 : 0 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                style={{
+                  width: '10px',
+                  height: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transformStyle: 'preserve-3d',
+                }}
+              >
+                <img
+                  src={Arrow}
+                  alt="arrow"
+                  style={{ width: '10px', height: '8px' }}
+                />
+              </motion.div>
+            </div>
           </div>
 
           {/* Dropdown */}
           <AnimatePresence>
             {showDropdown && tabs.length > 0 && (
-              <motion.div 
+              <motion.div
                 ref={dropdownRef}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -356,7 +366,7 @@ const TabBar = () => {
                   const isActive = activeTabId === tab.id;
                   const showCloseButton = canCloseTab(tab);
                   const textColor = isActive ? '#2D4059' : '#9CA3AF';
-                  
+
                   return (
                     <div
                       key={tab.id}
@@ -449,7 +459,7 @@ const TabBar = () => {
         <div style={{ width: `${GAP_BETWEEN_COUNTER_TABS}px`, flexShrink: 0 }} />
 
         {/* Контейнер для вкладок */}
-        <div 
+        <div
           ref={tabsContainerRef}
           className="flex items-center flex-1 min-w-0 overflow-hidden"
           style={{ gap: `${GAP_BETWEEN_TABS}px` }}
@@ -459,7 +469,7 @@ const TabBar = () => {
             const tabWidth = tabWidths[index] || MAX_TAB_WIDTH;
             const showCloseButton = canCloseTab(tab);
             const textColor = isActive ? '#2D4059' : '#9CA3AF';
-            
+
             return (
               <motion.div
                 key={tab.id}
@@ -467,14 +477,14 @@ const TabBar = () => {
                 initial={{ opacity: 0, scale: 0.8, x: -20 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.8, x: 20 }}
-                transition={{ 
-                  type: "spring", 
-                  stiffness: 500, 
+                transition={{
+                  type: "spring",
+                  stiffness: 500,
                   damping: 40,
                   duration: 0.3
                 }}
                 className="flex-shrink-0"
-                style={{ 
+                style={{
                   width: `${tabWidth}px`,
                 }}
               >
@@ -490,7 +500,7 @@ const TabBar = () => {
                   onMouseEnter={() => handleTabMouseEnter(tab.id)}
                   onMouseLeave={handleTabMouseLeave}
                   className="relative flex items-center cursor-pointer"
-                  style={{ 
+                  style={{
                     height: '35px',
                     width: '100%',
                     borderRadius: '6px',
@@ -510,7 +520,7 @@ const TabBar = () => {
                       backgroundColor: '#666EFE',
                     }}
                   />
-                  
+
                   {/* Текст */}
                   <div
                     style={{
@@ -527,7 +537,7 @@ const TabBar = () => {
                   >
                     {tab.label}
                   </div>
-                  
+
                   {/* Крестик */}
                   {showCloseButton && (
                     <motion.button

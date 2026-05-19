@@ -1,4 +1,4 @@
-// SchablonTable.tsx — меняю expandedCells на expandedCellId
+// SchablonTable.tsx
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
@@ -11,10 +11,14 @@ interface TableRow {
 interface SchablonTableProps {
   isMultiSelect: boolean;
   onEnableMultiSelect: () => void;
+  onSelectionChange: (selectedIds: Set<number>) => void;
+  selectedDrum: 'left' | 'right';
+  onDrumChange: (drum: 'left' | 'right') => void;
+  onCellDoubleClick: (id: number, column: number, selectedIds: Set<number>) => void;
+  isBlurred: boolean;
 }
 
-const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMultiSelect }) => {
-  const [selectedDrum, setSelectedDrum] = useState<'left' | 'right'>('left');
+const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMultiSelect, onSelectionChange, selectedDrum, onDrumChange, onCellDoubleClick, isBlurred }) => {
   const [selectedColumn, setSelectedColumn] = useState<number>(1);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationHighlight, setAnimationHighlight] = useState<number | null>(null);
@@ -28,6 +32,10 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
     id: i + 1,
     name: `Ячейка ${i + 1}`,
   }));
+
+  useEffect(() => {
+    onSelectionChange(selectedCellIds);
+  }, [selectedCellIds, onSelectionChange]);
 
   const prevMultiSelect = useRef(isMultiSelect);
   useEffect(() => {
@@ -53,26 +61,71 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
   };
 
   const handleSelect = (id: number, ctrlKey: boolean) => {
-    if (ctrlKey || isMultiSelect) {
+    if (expandedCellId === id && selectedCellIds.has(id)) {
+      return;
+    }
+
+    if (isMultiSelect || ctrlKey) {
       if (ctrlKey && !isMultiSelect) {
         onEnableMultiSelect();
       }
       setSelectedCellIds(prev => {
         const next = new Set(prev);
         if (next.has(id)) {
+          if (expandedCellId === id) return prev;
           next.delete(id);
         } else {
           next.add(id);
         }
         return next;
       });
-    } else {
-      setSelectedCellIds(new Set([id]));
+      return;
     }
+
+    if (expandedCellId !== null && expandedCellId !== id) {
+      setExpandedCellId(null);
+      setSelectedCellIds(new Set([id]));
+      return;
+    }
+
+    setSelectedCellIds(prev => {
+      if (prev.has(id) && prev.size === 1 && expandedCellId !== id) {
+        return new Set();
+      }
+      return new Set([id]);
+    });
   };
 
   const handleToggleExpand = (id: number) => {
-    setExpandedCellId(prev => prev === id ? null : id);
+    setExpandedCellId(prev => {
+      const newExpandedId = prev === id ? null : id;
+      
+      if (newExpandedId !== null) {
+        setSelectedCellIds(prevSelected => {
+          if (isMultiSelect) {
+            const next = new Set(prevSelected);
+            next.add(newExpandedId);
+            return next;
+          }
+          return new Set([newExpandedId]);
+        });
+      }
+      
+      return newExpandedId;
+    });
+  };
+
+  const handleDoubleClick = (id: number) => {
+    if (expandedCellId !== null && expandedCellId !== id) {
+      setExpandedCellId(null);
+    }
+
+    setSelectedCellIds(prev => {
+      const next = isMultiSelect ? new Set(prev) : new Set<number>();
+      next.add(id);
+      onCellDoubleClick(id, selectedColumn, next);
+      return next;
+    });
   };
 
   const setCellRef = (id: number, element: HTMLDivElement | null) => {
@@ -165,7 +218,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
   const COLUMN_BLOCK_SIZE = 35;
   const COLUMN_LINE_WIDTH = 29;
   const COLUMN_GAP = 14;
-  const COLUMN_RIGHT_MARGIN = 30;
+  const COLUMNS_LABEL_LEFT = 405;
 
   const LINE_TOP = TEXT_TOP + TEXT_HEIGHT + TEXT_TO_LINE;
   const LINE_BOTTOM = HEADER_HEIGHT - LINE_TOP - LINE_THICKNESS;
@@ -182,6 +235,14 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
     return selectedColumn === col ? '#666EFE' : 'rgba(45, 64, 89, 0.06)';
   };
 
+  const isLeftDrum = selectedDrum === 'left';
+
+  const handleDrumClick = (drum: 'left' | 'right') => {
+    onDrumChange(drum);
+    setSelectedCellIds(new Set());
+    setExpandedCellId(null);
+  };
+
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', height: '640px' }}>
       <div
@@ -194,9 +255,12 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
+          position: 'relative',
+          filter: isBlurred ? 'blur(2px)' : 'none',
+          transition: 'filter 0.3s ease',
+          pointerEvents: isBlurred ? 'none' : 'auto',
         }}
       >
-        {/* Шапка */}
         <div
           style={{
             height: `${HEADER_HEIGHT}px`,
@@ -210,10 +274,9 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
             alignItems: 'stretch',
           }}
         >
-          {/* Левая часть — выбор барабана */}
-          <div style={{ position: 'relative', width: `${DRUM_LEFT_OFFSET + DRUM_BUTTON_WIDTH + DRUM_GAP + DRUM_BUTTON_WIDTH}px`, height: '100%', flexShrink: 0 }}>
+          <div style={{ position: 'relative', width: `${COLUMNS_LABEL_LEFT}px`, height: '100%', flexShrink: 0 }}>
             <button
-              onClick={() => setSelectedDrum('left')}
+              onClick={() => handleDrumClick('left')}
               style={{
                 position: 'absolute',
                 left: `${DRUM_LEFT_OFFSET}px`,
@@ -238,7 +301,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
             </button>
 
             <button
-              onClick={() => setSelectedDrum('right')}
+              onClick={() => handleDrumClick('right')}
               style={{
                 position: 'absolute',
                 left: `${DRUM_LEFT_OFFSET + DRUM_BUTTON_WIDTH + DRUM_GAP}px`,
@@ -295,7 +358,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
               fontSize: '13px',
               letterSpacing: '1px',
               color: '#2D4059',
-              marginLeft: '87px',
               whiteSpace: 'nowrap',
               flexShrink: 0,
               alignSelf: 'center',
@@ -304,9 +366,16 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
             Столбцы:
           </span>
 
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: `${COLUMN_GAP}px`, marginRight: `${COLUMN_RIGHT_MARGIN}px`, height: '100%', position: 'relative' }}>
-            {columns.map((col) => (
+          <div style={{ 
+            display: 'flex', 
+            gap: `${COLUMN_GAP}px`, 
+            height: '100%', 
+            position: 'relative',
+            flexDirection: isLeftDrum ? 'row' : 'row-reverse',
+            marginLeft: 'auto',
+            marginRight: '30px',
+          }}>
+            {(isLeftDrum ? columns : [...columns].reverse()).map((col) => (
               <div key={col} style={{ width: `${COLUMN_BLOCK_SIZE}px`, height: '100%', position: 'relative' }}>
                 <button
                   onClick={() => handleColumnClick(col)}
@@ -352,7 +421,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
           </div>
         </div>
 
-        {/* Скроллируемые ячейки */}
         <div
           ref={scrollContainerRef}
           style={{
@@ -371,8 +439,10 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
               isSelected={selectedCellIds.has(row.id)}
               isExpanded={expandedCellId === row.id}
               isMultiSelect={isMultiSelect}
+              selectedColumn={selectedColumn}
               onSelect={handleSelect}
               onToggleExpand={handleToggleExpand}
+              onDoubleClick={handleDoubleClick}
               setRef={setCellRef}
             />
           ))}
