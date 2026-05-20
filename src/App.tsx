@@ -1,3 +1,4 @@
+// App.tsx
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -7,6 +8,17 @@ import LoginPage from './components/loginPage/LoginPage';
 import MainPage from './components/mainPage/MainPage';
 import StationsPage from './components/StationsPage/StationsPage';
 import ReferencesPage from './components/ReferencesPage/ReferencesPage';
+import NomenclaturePage from './components/ReferencesPage/NomenclaturePage/NomenclaturePage';
+import NomenclatureCreatePage from './components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage';
+import AccountingGroupsPage from './components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
+import NomenclatureGroupsPage from './components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage';
+import NomenclatureTypesPage from './components/ReferencesPage/NomenclatureTypesPage/NomenclatureTypesPage';
+import UnitsPage from './components/ReferencesPage/UnitsPage/UnitsPage';
+import BrandsPage from './components/ReferencesPage/BrandsPage/BrandsPage';
+import ModelsPage from './components/ReferencesPage/ModelsPage/ModelsPage';
+import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPage';
+import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/ManufacturersPage';
+import SuppliersPage from './components/ReferencesPage/SuppliersPage/SuppliersPage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -14,7 +26,6 @@ import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
 import SchablonPage from './components/DocumentsPage/Schablon/SchablonPage';
 import AxiosService from './services/AxiosService';
-import ConstantInfo from './info/ConstantInfo';
 import { setNavigator } from './services/navigate';
 import { TabProvider } from './context/TabContext';
 import { AuthProvider, useAuth } from './services/AuthContext';
@@ -35,7 +46,6 @@ const AppContent = () => {
   }, [navigate]);
 
   useEffect(() => {
-    // Получаем CSRF токен при старте
     AxiosService.get('/csrf')
       .then((res) => {
         const csrfToken = res.data.token;
@@ -54,7 +64,6 @@ const AppContent = () => {
     setLocked(false);
   };
 
-  // Показываем прелоадер пока идёт загрузка CSRF или проверка авторизации
   if (needPreloader || isLoading) {
     return <FullScreenPreloader />;
   }
@@ -97,6 +106,17 @@ const AppContent = () => {
                 <Route path="main" element={<MainPage />} />
                 <Route path="stations" element={<StationsPage />} />
                 <Route path="references" element={<ReferencesPage />} />
+                <Route path="references/nomenclature" element={<NomenclaturePage />} />
+                <Route path="references/nomenclature/create/:uid/:code" element={<NomenclatureCreatePage />} />
+                <Route path="references/accounting-groups" element={<AccountingGroupsPage />} />
+                <Route path="references/nomenclature-groups" element={<NomenclatureGroupsPage />} />
+                <Route path="references/nomenclature-types" element={<NomenclatureTypesPage />} />
+                <Route path="references/units" element={<UnitsPage />} />
+                <Route path="references/brands" element={<BrandsPage />} />
+                <Route path="references/models" element={<ModelsPage />} />
+                <Route path="references/countries" element={<CountriesPage />} />
+                <Route path="references/manufacturers" element={<ManufacturersPage />} />
+                <Route path="references/suppliers" element={<SuppliersPage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />

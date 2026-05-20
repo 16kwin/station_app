@@ -1,3 +1,4 @@
+// MainLayout.tsx
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -12,13 +13,22 @@ import AnalyticsPage from '../components/AnalyticsPage/AnalyticsPage';
 import SettingsPage from '../components/SettingsPage/SettingsPage';
 import AccountPage from '../components/AccountPage/AccountPage';
 import SchablonPage from '../components/DocumentsPage/Schablon/SchablonPage';
+import NomenclaturePage from '../components/ReferencesPage/NomenclaturePage/NomenclaturePage';
+import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage';
+import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
+import NomenclatureGroupsPage from '../components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage';
+import NomenclatureTypesPage from '../components/ReferencesPage/NomenclatureTypesPage/NomenclatureTypesPage';
+import UnitsPage from '../components/ReferencesPage/UnitsPage/UnitsPage';
+import BrandsPage from '../components/ReferencesPage/BrandsPage/BrandsPage';
+import ModelsPage from '../components/ReferencesPage/ModelsPage/ModelsPage';
+import CountriesPage from '../components/ReferencesPage/CountriesPage/CountriesPage';
+import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/ManufacturersPage';
+import SuppliersPage from '../components/ReferencesPage/SuppliersPage/SuppliersPage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
-// Кеш названий станций: uid -> { name, workshop, section }
 const stationInfoCache: Map<string, { name: string; workshop: string; section: string }> = new Map();
 
-// Получение информации о станции по uid
 const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: string; section: string }> => {
   if (stationInfoCache.has(uid)) {
     return stationInfoCache.get(uid)!;
@@ -41,7 +51,6 @@ const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: 
   }
 };
 
-// Маппинг путей к компонентам (для статических путей)
 const staticComponents: Record<string, React.ReactNode> = {
   '/main': <MainPage />,
   '/stations': <StationsPage />,
@@ -51,11 +60,24 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/analytics': <AnalyticsPage />,
   '/settings': <SettingsPage />,
   '/account': <AccountPage />,
+  '/references/nomenclature': <NomenclaturePage />,
+  '/references/accounting-groups': <AccountingGroupsPage />,
+  '/references/nomenclature-groups': <NomenclatureGroupsPage />,
+  '/references/nomenclature-types': <NomenclatureTypesPage />,
+  '/references/units': <UnitsPage />,
+  '/references/brands': <BrandsPage />,
+  '/references/models': <ModelsPage />,
+  '/references/countries': <CountriesPage />,
+  '/references/manufacturers': <ManufacturersPage />,
+  '/references/suppliers': <SuppliersPage />,
 };
 
-// Получение компонента по пути
 const getComponentByPath = (path: string): React.ReactNode => {
-  if (staticComponents[path]) return staticComponents[path];
+  if (staticComponents[path] !== undefined) return staticComponents[path];
+  
+  if (path.startsWith('/references/nomenclature/create/')) {
+    return <NomenclatureCreatePage />;
+  }
   
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
   if (schablonMatch) {
@@ -75,13 +97,27 @@ const getLabelByPath = (path: string): string => {
     '/analytics': 'Аналитика',
     '/settings': 'Настройки',
     '/account': 'Аккаунт',
+    '/references/nomenclature': 'Справочник: Номенклатура',
+    '/references/accounting-groups': 'Справочник: Группы учета',
+    '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
+    '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
+    '/references/units': 'Справочник: Единицы измерения',
+    '/references/brands': 'Справочник: Бренды',
+    '/references/models': 'Справочник: Модели',
+    '/references/countries': 'Справочник: Страны',
+    '/references/manufacturers': 'Справочник: Производители',
+    '/references/suppliers': 'Справочник: Поставщики',
   };
   
   if (staticLabels[path]) return staticLabels[path];
   
+  if (path.startsWith('/references/nomenclature/create/')) {
+    const code = path.split('/').pop();
+    return `Номенклатура: ${code}`;
+  }
+  
   if (path.startsWith('/documents/schablon/')) {
     const uid = path.replace('/documents/schablon/', '');
-    // Сначала проверяем кеш — если станция уже загружена, показываем имя
     const cached = stationInfoCache.get(uid);
     if (cached) {
       return `Шаблон - ${cached.name}`;
@@ -126,27 +162,22 @@ const MainLayout = () => {
     setIsLoaded(true);
   }, []);
 
-  // Синхронизация URL с вкладками
   useEffect(() => {
     if (!isLoaded) return;
     
     const path = location.pathname;
     
-    // Если путь не изменился — ничего не делаем
     if (prevPathRef.current === path) {
       return;
     }
     prevPathRef.current = path;
     
-    // Проверяем, есть ли уже вкладка с таким путём
     const existingTab = tabs.find(tab => tab.path === path);
     
     if (existingTab) {
-      // Если вкладка уже есть — просто переключаемся
       if (activeTabId !== existingTab.id) {
         switchTab(existingTab.id);
       }
-      // Обновляем компонент если был null
       if (existingTab.component === null) {
         const component = getComponentByPath(path);
         if (component) {
@@ -156,13 +187,11 @@ const MainLayout = () => {
       return;
     }
     
-    // Создаём новую вкладку
     const label = getLabelByPath(path);
     const component = getComponentByPath(path);
     
     const newTabId = openTab(path, label, component);
     
-    // Если это шаблон — асинхронно загружаем имя станции и обновляем заголовок
     if (path.startsWith('/documents/schablon/')) {
       const uid = path.replace('/documents/schablon/', '');
       fetchStationInfo(uid).then(info => {
@@ -171,9 +200,7 @@ const MainLayout = () => {
     }
   }, [location.pathname, isLoaded]);
 
-  // Сбрасываем prevPathRef когда tabs меняются (для повторных переходов на тот же путь после закрытия)
   useEffect(() => {
-    // Если текущего пути больше нет во вкладках — сбрасываем
     const currentPathExists = tabs.some(tab => tab.path === location.pathname);
     if (!currentPathExists) {
       prevPathRef.current = '';

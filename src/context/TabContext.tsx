@@ -1,3 +1,4 @@
+// TabContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -33,7 +34,6 @@ const getLabelWithNumber = (path: string, baseLabel: string, existingTabs: Tab[]
   return `${baseLabel} (${count + 1})`;
 };
 
-// Сохранение в localStorage
 const saveTabsToStorage = (tabs: Tab[], activeId: string | null) => {
   const toSave = {
     tabs: tabs.map(tab => ({
@@ -63,9 +63,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isRestored, setIsRestored] = useState(false);
   const navigate = useNavigate();
-  const newTabIdRef = useRef<string | null>(null);
 
-  // Восстановление из localStorage при загрузке
   useEffect(() => {
     const saved = loadTabsFromStorage();
     if (saved && saved.tabs.length > 0) {
@@ -96,7 +94,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     setIsRestored(true);
   }, []);
 
-  // Сохраняем в localStorage при каждом изменении
   useEffect(() => {
     if (isRestored && tabs.length > 0) {
       saveTabsToStorage(tabs, activeTabId);
@@ -104,14 +101,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   }, [tabs, activeTabId, isRestored]);
 
   const openTab = useCallback((path: string, baseLabel: string, component: ReactNode): string => {
-    // Проверяем, нет ли уже вкладки с таким путём
-    const existingTab = tabs.find(t => t.path === path);
-    if (existingTab) {
-      setActiveTabId(existingTab.id);
-      navigate(path);
-      return existingTab.id;
-    }
-    
     const label = getLabelWithNumber(path, baseLabel, tabs);
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const newTab: Tab = {
@@ -120,8 +109,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       label,
       component,
     };
-    
-    newTabIdRef.current = newId;
     
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newId);

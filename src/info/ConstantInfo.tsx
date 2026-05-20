@@ -62,6 +62,11 @@ const ConstantInfo = {
   restApiTestDocuments: '/api/test-documents',
   restApiTestDocumentsDrafts: '/api/test-documents/drafts',
   restApiTestDocument: (id: number) => `/api/test-documents/${id}`,
+  
+  // Номенклатура
+  restApiNomenclatureGenerate: '/api/nomenclature/generate',
+  restApiNomenclatureDraft: '/api/nomenclature/draft',
+  restApiNomenclatureTree: '/api/nomenclature/tree',
 };
 
 export default ConstantInfo;
