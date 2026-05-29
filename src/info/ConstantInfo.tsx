@@ -1,4 +1,4 @@
-// ConstantInfo.ts - добавить новые ендпоинты
+// ConstantInfo.ts — полный файл
 const ConstantInfo = {
   // База
   serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''),
@@ -67,6 +67,17 @@ const ConstantInfo = {
   restApiNomenclatureGenerate: '/api/nomenclature/generate',
   restApiNomenclatureDraft: '/api/nomenclature/draft',
   restApiNomenclatureTree: '/api/nomenclature/tree',
+  restApiNomenclatureDeleteItems: '/api/nomenclature/items',
+  restApiNomenclatureCopyItems: '/api/nomenclature/items/copy',
+  restApiNomenclatureMoveItems: '/api/nomenclature/items/move',
+  restApiNomenclatureGroups: '/api/nomenclature/groups',
+  restApiNomenclatureGetMaterial: (uid: string) => `/api/nomenclature/${uid}`,
+  restApiNomenclatureRenameGroup: (uid: string) => `/api/nomenclature/groups/${uid}`,
+  
+  // НОВЫЕ: справочники для формы номенклатуры
+  restApiNomenclatureTypeMaterials: '/api/nomenclature/type-materials',
+  restApiNomenclatureTypePurposes: '/api/nomenclature/type-purposes',
+  restApiNomenclatureTypeProducts: '/api/nomenclature/type-products',
 };
 
 export default ConstantInfo;

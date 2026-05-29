@@ -1,44 +1,95 @@
-// components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage.tsx
+// NomenclatureGroupsPage.tsx — полный файл
 import React, { useRef, useState, useEffect } from 'react';
+import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
+import AxiosService from '../../../services/AxiosService';
+import ConstantInfo from '../../../info/ConstantInfo';
 import Icon1 from '../../../assets/References/Icon1.svg';
 import Icon2 from '../../../assets/References/Icon2.svg';
 import Icon3 from '../../../assets/References/Icon3.svg';
 import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon5 from '../../../assets/References/Icon5.svg';
-import Icon6 from '../../../assets/References/Icon6.svg';
 import Icon7 from '../../../assets/References/Icon7.svg';
 import Icon8 from '../../../assets/References/Icon8.svg';
 import Icon9 from '../../../assets/References/Icon9.svg';
 import Icon10 from '../../../assets/References/Icon10.svg';
+import Icon19 from '../../../assets/References/Icon19.svg';
+import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
 
-interface NomenclatureGroup {
+interface TypePurposeItem {
   uid: string;
-  name: string;
-  accountingGroup?: string;
+  typeName: string;
+  typeMaterialUid: string;
+  typeMaterialName: string;
 }
 
 const NomenclatureGroupsPage = () => {
+  const { activeTabId } = useTabs();
+  const tabIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<NomenclatureGroup[]>([]);
+  const [data, setData] = useState<TypePurposeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCreatePopup, setShowCreatePopup] = useState(false);
+  const [showEditPopup, setShowEditPopup] = useState(false);
+  const [editItem, setEditItem] = useState<TypePurposeItem | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formTypeMaterialUid, setFormTypeMaterialUid] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
+  const [typeMaterials, setTypeMaterials] = useState<{ uid: string; typeName: string }[]>([]);
 
   const TABLE_WIDTH = 1720;
-  const TABLE_HEIGHT = 638;
+  const ROW_HEIGHT = 54;
+  const HEADER_HEIGHT = 54;
+  const VISIBLE_ROWS = 10;
+  const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
+
+  const COL_ACCOUNT_GROUP = 700;
 
   useEffect(() => {
-    setData([
-      { uid: '1', name: 'Крепёж', accountingGroup: 'Материалы' },
-      { uid: '2', name: 'Подшипники', accountingGroup: 'Запчасти' },
-      { uid: '3', name: 'Ремни', accountingGroup: 'Запчасти' },
-      { uid: '4', name: 'Смазки', accountingGroup: 'Расходные материалы' },
-      { uid: '5', name: 'Электрика', accountingGroup: 'Запчасти' },
-      { uid: '6', name: 'Уплотнения', accountingGroup: 'Материалы' },
-    ]);
-    setIsLoading(false);
+    tabIdRef.current = activeTabId;
   }, []);
+
+  const fetchData = async () => {
+    try {
+      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypePurposes);
+      setData(response.data || []);
+    } catch (error) {
+      console.error('Ошибка загрузки групп номенклатуры:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadTypeMaterials = async () => {
+    try {
+      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials);
+      setTypeMaterials(response.data || []);
+    } catch (error) {
+      console.error('Ошибка загрузки групп учета:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    loadTypeMaterials();
+  }, []);
+
+  useEffect(() => {
+    if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) {
+      fetchData();
+    }
+  }, [activeTabId]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [contextMenu]);
 
   const checkScroll = () => {
     const container = scrollContainerRef.current;
@@ -47,11 +98,7 @@ const NomenclatureGroupsPage = () => {
     setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
   };
 
-  useEffect(() => {
-    const timer = setTimeout(checkScroll, 350);
-    return () => clearTimeout(timer);
-  }, [data]);
-
+  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [data]);
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -59,11 +106,111 @@ const NomenclatureGroupsPage = () => {
     container.addEventListener('scroll', checkScroll);
     const ro = new ResizeObserver(checkScroll);
     ro.observe(container);
-    return () => {
-      container.removeEventListener('scroll', checkScroll);
-      ro.disconnect();
-    };
+    return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, []);
+
+  const toggleSelectItem = (uid: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  };
+
+  const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.uid));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(data.map(item => item.uid)));
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, uid, name });
+  };
+
+  const handleCreateClick = () => {
+    setFormName('');
+    setFormTypeMaterialUid('');
+    setEditItem(null);
+    setShowCreatePopup(true);
+  };
+
+  const handleCreateSubmit = async () => {
+    if (!formName.trim()) return;
+    setIsSaving(true);
+    try {
+      await AxiosService.post(ConstantInfo.restApiNomenclatureTypePurposes, {
+        name: formName.trim(),
+        typeMaterialUid: formTypeMaterialUid || null,
+      });
+      await fetchData();
+      setShowCreatePopup(false);
+    } catch (error) {
+      console.error('Ошибка создания:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditClick = () => {
+    if (!contextMenu) return;
+    const item = data.find(d => d.uid === contextMenu.uid);
+    if (item) {
+      setEditItem(item);
+      setFormName(item.typeName);
+      setFormTypeMaterialUid(item.typeMaterialUid || '');
+      setShowEditPopup(true);
+    }
+    setContextMenu(null);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editItem || !formName.trim()) return;
+    setIsSaving(true);
+    try {
+      await AxiosService.patch(`${ConstantInfo.restApiNomenclatureTypePurposes}/${editItem.uid}`, {
+        name: formName.trim(),
+        typeMaterialUid: formTypeMaterialUid || null,
+      });
+      await fetchData();
+      setShowEditPopup(false);
+      setEditItem(null);
+    } catch (error) {
+      console.error('Ошибка редактирования:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      for (const uid of selectedIds) {
+        await AxiosService.delete(`${ConstantInfo.restApiNomenclatureTypePurposes}/${uid}`);
+      }
+      await fetchData();
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Ошибка удаления:', error);
+    }
+  };
+
+  const handleContextDelete = () => {
+    if (!contextMenu) return;
+    setSelectedIds(new Set([contextMenu.uid]));
+    setContextMenu(null);
+    setTimeout(() => setShowDeleteConfirm(true), 50);
+  };
+
+  const emptyRows = Math.max(0, VISIBLE_ROWS - data.length);
 
   const smallButtonStyle: React.CSSProperties = {
     width: 40, height: 40, borderRadius: 10,
@@ -78,8 +225,26 @@ const NomenclatureGroupsPage = () => {
     cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0,
   };
 
-  const cellBorderStyle = '0.7px solid #666EFE';
   const tableBorderStyle = '2px solid #666EFE';
+  const rowBoxShadow = 'inset 0px -0.7px 0px 0px #666EFE, inset 2px 0px 0px 0px #666EFE, inset -2px 0px 0px 0px #666EFE';
+
+  const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
+    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
+    </div>
+  );
+
+  const HeaderEmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
+    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #FFFFFF', opacity: isSelected ? 1 : 1, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
+    </div>
+  );
+
+  const contextMenuButtonStyle: React.CSSProperties = {
+    width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', paddingLeft: 20,
+    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
+  };
 
   if (isLoading) {
     return (
@@ -102,14 +267,11 @@ const NomenclatureGroupsPage = () => {
           <button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
         </div>
         <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mediumButtonStyle, width: 124 }}>
+          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateClick}>
             <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
           </button>
-          <button style={{ ...mediumButtonStyle, width: 186 }}>
-            <img src={Icon5} alt="" style={{ width: 22, height: 20, marginLeft: 15 }} />
-          </button>
-          <button style={smallButtonStyle}><img src={Icon6} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
           <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
@@ -120,36 +282,99 @@ const NomenclatureGroupsPage = () => {
 
       <div style={{ position: 'absolute', top: 159, left: 40 }}>
         <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: tableBorderStyle }}>
-          <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 52, paddingRight: 40 }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: 600 }}>ГРУППА УЧЕТА</span>
+          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
+            <HeaderEmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_ACCOUNT_GROUP }}>ГРУППА УЧЕТА</span>
           </div>
           <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {data.map(item => (
-              <div key={item.uid} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, borderTop: cellBorderStyle, backgroundColor: '#FFFFFF', cursor: 'pointer', position: 'relative' }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                  <rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/>
-                  <line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15, width: 400 }}>{item.name}</span>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: 600 }}>{item.accountingGroup || '—'}</span>
-              </div>
+            {data.map(item => {
+              const isSelected = selectedIds.has(item.uid);
+              return (
+                <div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', boxShadow: rowBoxShadow }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.typeName)}>
+                  <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
+                    <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} />
+                  </div>
+                  <img src={Icon32} alt="" style={{ width: 14.5, height: 18, flexShrink: 0, marginLeft: 19 }} />
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 17.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.typeName}</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_ACCOUNT_GROUP }}>{item.typeMaterialName || '—'}</span>
+                </div>
+              );
+            })}
+            {Array.from({ length: emptyRows }).map((_, i) => (
+              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, boxShadow: rowBoxShadow }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
             ))}
           </div>
         </div>
-        {hasVerticalScroll && (
-          <div style={{ position: 'absolute', right: -25, top: 54, height: TABLE_HEIGHT - 54, width: 10 }}>
-            <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - 54} />
-          </div>
-        )}
-        {hasHorizontalScroll && (
-          <div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}>
-            <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} />
-          </div>
-        )}
+        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
+        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
       </div>
+
+      {contextMenu && (
+        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button>
+          <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
+        </div>
+      )}
+
+      {showCreatePopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание группы номенклатуры</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
+              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Группа учета</label>
+              <select value={formTypeMaterialUid} onChange={e => setFormTypeMaterialUid(e.target.value)} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}>
+                <option value="">Без группы учета</option>
+                {typeMaterials.map(tm => <option key={tm.uid} value={tm.uid}>{tm.typeName}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование группы номенклатуры</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
+              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Группа учета</label>
+              <select value={formTypeMaterialUid} onChange={e => setFormTypeMaterialUid(e.target.value)} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}>
+                <option value="">Без группы учета</option>
+                {typeMaterials.map(tm => <option key={tm.uid} value={tm.uid}>{tm.typeName}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleEditSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

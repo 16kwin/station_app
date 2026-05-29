@@ -1,4 +1,4 @@
-// components/ReferencesPage/NomenclaturePage/CatalogSelectPopup.tsx
+// CatalogSelectPopup.tsx — полный файл с созданием для nomenclatureGroup и nomenclatureType
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -9,6 +9,8 @@ import Icon1 from '../../../assets/References/Icon1.svg';
 import Icon5 from '../../../assets/References/Icon5.svg';
 import Icon11 from '../../../assets/References/Icon11.svg';
 import Icon12 from '../../../assets/References/Icon12.svg';
+import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
+import Icon72 from '../../../assets/References/NomenclatureCreatePage/Icon72.svg';
 
 export interface Column {
   key: string;
@@ -37,6 +39,8 @@ export type PopupType =
 interface PopupConfig {
   title: string;
   columns: Column[];
+  createButtonLabel?: string;
+  isFlat?: boolean;
 }
 
 const getPopupConfig = (type: PopupType): PopupConfig => {
@@ -45,21 +49,22 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
       return {
         title: 'Справочник: Номенклатура (выбор каталога)',
         columns: [{ key: 'groupCode', title: 'КОД ГРУППЫ', left: 500 }],
-      };
-    case 'accountingGroup':
-      return {
-        title: 'Справочник: Группы учета (Выбор)',
-        columns: [{ key: 'description', title: 'ОПИСАНИЕ', left: 500 }],
+        createButtonLabel: 'Создать каталог',
+        isFlat: false,
       };
     case 'nomenclatureGroup':
       return {
         title: 'Справочник: Группы номенклатуры (Выбор)',
-        columns: [{ key: 'accountingGroup', title: 'ГРУППА УЧЕТА', left: 500 }],
+        columns: [{ key: 'typeMaterialName', title: 'ГРУППА УЧЕТА', left: 500 }],
+        createButtonLabel: 'Создать группу номенклатуры',
+        isFlat: true,
       };
     case 'nomenclatureType':
       return {
         title: 'Справочник: Виды номенклатуры (Выбор)',
-        columns: [{ key: 'nomenclatureGroup', title: 'ГРУППЫ НОМЕНКЛАТУРЫ', left: 500 }],
+        columns: [{ key: 'typePurposeName', title: 'ГРУППА НОМЕНКЛАТУРЫ', left: 500 }],
+        createButtonLabel: 'Создать вид номенклатуры',
+        isFlat: true,
       };
     case 'unit':
       return {
@@ -101,35 +106,15 @@ interface BackendGroup {
   materials: any[];
 }
 
+interface FlatReferenceItem {
+  uid: string;
+  typeName?: string;
+  typeMaterialName?: string;
+  typePurposeName?: string;
+}
+
 const getStaticData = (type: PopupType): TreeItem[] => {
   switch (type) {
-    case 'accountingGroup':
-      return [
-        { id: '1', name: 'Основные средства', description: 'ОС' },
-        { id: '2', name: 'Материалы', description: 'Мат' },
-        { id: '3', name: 'Инструменты', description: 'Инс' },
-        { id: '4', name: 'Запчасти', description: 'З/ч' },
-        { id: '5', name: 'Расходные материалы', description: 'Расх' },
-      ];
-    case 'nomenclatureGroup':
-      return [
-        { id: '1', name: 'Крепёж', accountingGroup: 'Материалы' },
-        { id: '2', name: 'Подшипники', accountingGroup: 'Запчасти' },
-        { id: '3', name: 'Ремни', accountingGroup: 'Запчасти' },
-        { id: '4', name: 'Смазки', accountingGroup: 'Расходные материалы' },
-        { id: '5', name: 'Электрика', accountingGroup: 'Запчасти' },
-        { id: '6', name: 'Уплотнения', accountingGroup: 'Материалы' },
-      ];
-    case 'nomenclatureType':
-      return [
-        { id: '1', name: 'Болт', nomenclatureGroup: 'Крепёж' },
-        { id: '2', name: 'Гайка', nomenclatureGroup: 'Крепёж' },
-        { id: '3', name: 'Шариковый', nomenclatureGroup: 'Подшипники' },
-        { id: '4', name: 'Роликовый', nomenclatureGroup: 'Подшипники' },
-        { id: '5', name: 'Клиновой', nomenclatureGroup: 'Ремни' },
-        { id: '6', name: 'Зубчатый', nomenclatureGroup: 'Ремни' },
-        { id: '7', name: 'Масло', nomenclatureGroup: 'Смазки' },
-      ];
     case 'unit':
       return [
         { id: '1', name: 'мм', description: 'Миллиметр' },
@@ -189,6 +174,15 @@ const convertBackendTree = (backendGroups: BackendGroup[]): TreeItem[] => {
   }));
 };
 
+const convertFlatReference = (items: FlatReferenceItem[]): TreeItem[] => {
+  return items.map(item => ({
+    id: item.uid,
+    name: item.typeName || '',
+    typeMaterialName: item.typeMaterialName || '',
+    typePurposeName: item.typePurposeName || '',
+  }));
+};
+
 const flattenGroups = (items: TreeItem[]): { uid: string; name: string }[] => {
   let result: { uid: string; name: string }[] = [];
   items.forEach(item => {
@@ -203,6 +197,7 @@ interface CatalogSelectPopupProps {
   onClose: () => void;
   onSelect?: (id: string, name: string) => void;
   popupType: PopupType;
+  filterParam?: string;
 }
 
 const ROW_HEIGHT = 58;
@@ -215,6 +210,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   onClose,
   onSelect,
   popupType,
+  filterParam,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
@@ -224,22 +220,50 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
+  // Для создания в плоских справочниках
+  const [showCreateFlatPopup, setShowCreateFlatPopup] = useState(false);
+  const [flatFormName, setFlatFormName] = useState('');
+  const [isCreatingFlat, setIsCreatingFlat] = useState(false);
+
   const config = getPopupConfig(popupType);
   const isCatalog = popupType === 'catalog';
+  const isFlatReference = popupType === 'nomenclatureGroup' || popupType === 'nomenclatureType';
 
   const loadData = async () => {
-    if (isCatalog) {
-      setIsLoading(true);
-      try {
+    setIsLoading(true);
+    try {
+      if (isCatalog) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-        setData(convertBackendTree(response.data));
-      } catch (error) {
-        console.error('Ошибка загрузки дерева:', error);
-      } finally {
-        setIsLoading(false);
+        const converted = convertBackendTree(response.data);
+        setData(converted);
+        if (converted.length > 0) {
+          setOpenFolders(new Set([converted[0].id]));
+        }
+      } else if (popupType === 'nomenclatureGroup' && filterParam) {
+        const response = await AxiosService.get(
+          `${ConstantInfo.restApiNomenclatureTypePurposes}?typeMaterialUid=${filterParam}`
+        );
+        setData(convertFlatReference(response.data));
+      } else if (popupType === 'nomenclatureGroup' && !filterParam) {
+        // Без фильтра — все группы номенклатуры
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypePurposes);
+        setData(convertFlatReference(response.data));
+      } else if (popupType === 'nomenclatureType' && filterParam) {
+        const response = await AxiosService.get(
+          `${ConstantInfo.restApiNomenclatureTypeProducts}?typePurposeUid=${filterParam}`
+        );
+        setData(convertFlatReference(response.data));
+      } else if (popupType === 'nomenclatureType' && !filterParam) {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeProducts);
+        setData(convertFlatReference(response.data));
+      } else {
+        setData(getStaticData(popupType));
       }
-    } else {
-      setData(getStaticData(popupType));
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      setData([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -248,7 +272,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       setOpenFolders(new Set());
       loadData();
     }
-  }, [isOpen, popupType]);
+  }, [isOpen, popupType, filterParam]);
 
   const toggleFolder = (folderId: string) => {
     setOpenFolders(prev => {
@@ -285,12 +309,13 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     onClose();
   };
 
+  // Создание группы в каталоге
   const handleCreateGroup = async (groupName: string, parentUid: string | null) => {
     setIsCreatingGroup(true);
     try {
       await AxiosService.post('/api/nomenclature/groups', {
         name: groupName,
-        parentUid: parentUid === '__current__' ? null : parentUid,
+        parentUid: parentUid,
       });
       const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
       setData(convertBackendTree(response.data));
@@ -302,7 +327,39 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     }
   };
 
+  // Открытие попапа создания для плоского справочника
+  const handleCreateFlatClick = () => {
+    setFlatFormName('');
+    setShowCreateFlatPopup(true);
+  };
+
+  // Создание в плоском справочнике
+  const handleCreateFlatSubmit = async () => {
+    if (!flatFormName.trim()) return;
+    setIsCreatingFlat(true);
+    try {
+      if (popupType === 'nomenclatureGroup') {
+        await AxiosService.post(ConstantInfo.restApiNomenclatureTypePurposes, {
+          name: flatFormName.trim(),
+          typeMaterialUid: filterParam || null,
+        });
+      } else if (popupType === 'nomenclatureType') {
+        await AxiosService.post(ConstantInfo.restApiNomenclatureTypeProducts, {
+          name: flatFormName.trim(),
+          typePurposeUid: filterParam || null,
+        });
+      }
+      await loadData();
+      setShowCreateFlatPopup(false);
+    } catch (error) {
+      console.error('Ошибка создания:', error);
+    } finally {
+      setIsCreatingFlat(false);
+    }
+  };
+
   const countRows = (items: TreeItem[]): number => {
+    if (config.isFlat) return items.length;
     let count = 0;
     items.forEach(item => {
       count += 1;
@@ -323,50 +380,33 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       result.push(
         <div
           key={item.id}
-          onClick={() => hasChildren && toggleFolder(item.id)}
+          onClick={() => hasChildren ? toggleFolder(item.id) : handleItemClick(item.id, item.name)}
           onDoubleClick={() => handleItemClick(item.id, item.name)}
           style={{
-            height: ROW_HEIGHT,
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: '#FFFFFF',
-            cursor: 'pointer',
-            userSelect: 'none',
-            boxSizing: 'border-box',
-            position: 'relative',
+            height: ROW_HEIGHT, display: 'flex', alignItems: 'center',
+            backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none',
+            boxSizing: 'border-box', position: 'relative',
             boxShadow: 'inset 0px -0.7px 0px 0px #666EFE',
-            paddingLeft: 20 + shift,
-            paddingRight: 40,
+            paddingLeft: 20 + shift, paddingRight: 40,
           }}
         >
           <img 
             src={hasChildren ? (isOpen ? Icon12 : Icon11) : Icon11} 
             alt="" 
-            style={{ 
-              width: hasChildren && isOpen ? 19 : 18, 
-              height: 16, 
-              flexShrink: 0,
-            }} 
+            style={{ width: hasChildren && isOpen ? 19 : 18, height: 16, flexShrink: 0 }} 
           />
           <span style={{
             fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059',
-            marginLeft: 10,
-            maxWidth: 400 - shift,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            marginLeft: 10, maxWidth: 400 - shift,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {item.name}
           </span>
           {config.columns.map(col => (
-            <span
-              key={col.key}
-              style={{
-                fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
-                position: 'absolute',
-                left: col.left,
-              }}
-            >
+            <span key={col.key} style={{
+              fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
+              position: 'absolute', left: col.left,
+            }}>
               {item[col.key] || ''}
             </span>
           ))}
@@ -378,6 +418,61 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       }
     });
     return result;
+  };
+
+  const renderFlatList = (items: TreeItem[]): React.ReactNode[] => {
+    const isNomenclatureGroup = popupType === 'nomenclatureGroup';
+    const isNomenclatureType = popupType === 'nomenclatureType';
+    
+    const iconLeft = 18;
+    const textLeft = 50;
+    
+    return items.map(item => (
+      <div
+        key={item.id}
+        onClick={() => handleItemClick(item.id, item.name)}
+        onDoubleClick={() => handleItemClick(item.id, item.name)}
+        style={{
+          height: ROW_HEIGHT, display: 'flex', alignItems: 'center',
+          backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none',
+          boxSizing: 'border-box', position: 'relative',
+          boxShadow: 'inset 0px -0.7px 0px 0px #666EFE',
+          paddingLeft: iconLeft, paddingRight: 40,
+        }}
+      >
+        {isNomenclatureGroup && (
+          <img src={Icon32} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
+        )}
+        {isNomenclatureType && (
+          <img src={Icon72} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
+        )}
+        {!isNomenclatureGroup && !isNomenclatureType && (
+          <span style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {item.name}
+          </span>
+        )}
+        {(isNomenclatureGroup || isNomenclatureType) && (
+          <span style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+            marginLeft: textLeft - iconLeft - (isNomenclatureGroup ? 14.5 : 16),
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {item.name}
+          </span>
+        )}
+        {config.columns.map(col => (
+          <span key={col.key} style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
+            position: 'absolute', left: col.left,
+          }}>
+            {item[col.key] || ''}
+          </span>
+        ))}
+      </div>
+    ));
   };
 
   const totalRows = countRows(data);
@@ -393,7 +488,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         style={{
           position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
           backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)', zIndex: 9999,
+          WebkitBackdropFilter: 'blur(8px)', zIndex: 10002,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
@@ -417,21 +512,29 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
             {config.title}
           </h2>
 
-          {isCatalog && (
+          {(isCatalog || isFlatReference) && (
             <div style={{ display: 'flex', alignItems: 'center', marginTop: 30, paddingLeft: 45, paddingRight: 45 }}>
               <button style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', border: '2px solid #666EFE', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
                 <img src={Icon1} alt="" style={{ width: 18, height: 18 }} />
               </button>
               <div style={{ display: 'flex', gap: 15, marginLeft: 'auto' }}>
-                <button onClick={() => setShowCreateGroup(true)} style={{ width: 189, height: 40, backgroundColor: '#FFFFFF', border: '2px solid #666EFE', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
+                <button 
+                  onClick={() => { 
+                    if (isCatalog) setShowCreateGroup(true); 
+                    else if (isFlatReference) handleCreateFlatClick();
+                  }} 
+                  style={{ width: 220, height: 40, backgroundColor: '#FFFFFF', border: '2px solid #666EFE', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                >
                   <img src={Icon5} alt="" style={{ width: 22, height: 20, marginLeft: 15 }} />
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать группу</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>
+                    {config.createButtonLabel || 'Создать'}
+                  </span>
                 </button>
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', marginTop: isCatalog ? 15 : 60, alignSelf: 'center', position: 'relative', width: 992, height: TABLE_HEIGHT }}>
+          <div style={{ display: 'flex', marginTop: (isCatalog || isFlatReference) ? 15 : 60, alignSelf: 'center', position: 'relative', width: 992, height: TABLE_HEIGHT }}>
             <div style={{ width: '100%', height: '100%', backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '2px solid #666EFE', boxSizing: 'border-box' }}>
               <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, boxSizing: 'border-box', position: 'relative' }}>
                 <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
@@ -448,7 +551,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
                   </div>
                 ) : (
                   <>
-                    {renderTree(data)}
+                    {config.isFlat ? renderFlatList(data) : renderTree(data)}
                     {Array.from({ length: emptyRows }).map((_, i) => (
                       <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', boxShadow: 'inset 0px -0.7px 0px 0px #666EFE' }} />
                     ))}
@@ -465,15 +568,44 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         </motion.div>
       </motion.div>
 
+      {/* Попап создания группы в каталоге */}
       {isCatalog && (
         <CreateGroupPopup
           isOpen={showCreateGroup}
           currentParentName={null}
+          currentParentUid={null}
           groups={flattenGroups(data)}
           onClose={() => setShowCreateGroup(false)}
           onSubmit={handleCreateGroup}
           isLoading={isCreatingGroup}
         />
+      )}
+
+      {/* Попап создания для плоских справочников */}
+      {showCreateFlatPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10003, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateFlatPopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>
+              {popupType === 'nomenclatureGroup' ? 'Создание группы номенклатуры' : 'Создание вида номенклатуры'}
+            </h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
+              <input 
+                type="text" 
+                value={flatFormName} 
+                onChange={e => setFlatFormName(e.target.value)} 
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateFlatSubmit(); else if (e.key === 'Escape') setShowCreateFlatPopup(false); }} 
+                placeholder="Введите название" 
+                autoFocus 
+                style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box' }} 
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowCreateFlatPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleCreateFlatSubmit} disabled={isCreatingFlat || !flatFormName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: flatFormName.trim() && !isCreatingFlat ? '#666EFE' : '#BCC8FF', cursor: flatFormName.trim() && !isCreatingFlat ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isCreatingFlat ? 'Сохранение...' : 'Создать'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

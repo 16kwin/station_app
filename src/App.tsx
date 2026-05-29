@@ -108,6 +108,7 @@ const AppContent = () => {
                 <Route path="references" element={<ReferencesPage />} />
                 <Route path="references/nomenclature" element={<NomenclaturePage />} />
                 <Route path="references/nomenclature/create/:uid/:code" element={<NomenclatureCreatePage />} />
+                <Route path="references/nomenclature/edit/:uid/:code" element={<NomenclatureCreatePage />} />
                 <Route path="references/accounting-groups" element={<AccountingGroupsPage />} />
                 <Route path="references/nomenclature-groups" element={<NomenclatureGroupsPage />} />
                 <Route path="references/nomenclature-types" element={<NomenclatureTypesPage />} />

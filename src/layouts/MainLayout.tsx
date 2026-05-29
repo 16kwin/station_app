@@ -28,6 +28,7 @@ import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
 const stationInfoCache: Map<string, { name: string; workshop: string; section: string }> = new Map();
+const nomenclatureInfoCache: Map<string, string> = new Map();
 
 const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: string; section: string }> => {
   if (stationInfoCache.has(uid)) {
@@ -48,6 +49,22 @@ const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: 
     const fallback = { name: uid, workshop: '', section: '' };
     stationInfoCache.set(uid, fallback);
     return fallback;
+  }
+};
+
+const fetchNomenclatureName = async (uid: string): Promise<string> => {
+  if (nomenclatureInfoCache.has(uid)) {
+    return nomenclatureInfoCache.get(uid)!;
+  }
+  
+  try {
+    const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(uid));
+    const name = response.data?.name || uid;
+    nomenclatureInfoCache.set(uid, name);
+    return name;
+  } catch {
+    nomenclatureInfoCache.set(uid, uid);
+    return uid;
   }
 };
 
@@ -76,6 +93,10 @@ const getComponentByPath = (path: string): React.ReactNode => {
   if (staticComponents[path] !== undefined) return staticComponents[path];
   
   if (path.startsWith('/references/nomenclature/create/')) {
+    return <NomenclatureCreatePage />;
+  }
+  
+  if (path.startsWith('/references/nomenclature/edit/')) {
     return <NomenclatureCreatePage />;
   }
   
@@ -114,6 +135,15 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/references/nomenclature/create/')) {
     const code = path.split('/').pop();
     return `Номенклатура: ${code}`;
+  }
+  
+  if (path.startsWith('/references/nomenclature/edit/')) {
+    const uid = path.split('/').slice(-2, -1)[0];
+    const cached = nomenclatureInfoCache.get(uid);
+    if (cached) {
+      return cached;
+    }
+    return 'Номенклатура';
   }
   
   if (path.startsWith('/documents/schablon/')) {
@@ -196,6 +226,14 @@ const MainLayout = () => {
       const uid = path.replace('/documents/schablon/', '');
       fetchStationInfo(uid).then(info => {
         updateTabLabel(newTabId, `Шаблон - ${info.name}`);
+      });
+    }
+    
+    if (path.startsWith('/references/nomenclature/edit/')) {
+      const segments = path.split('/');
+      const uid = segments[segments.length - 2];
+      fetchNomenclatureName(uid).then(name => {
+        updateTabLabel(newTabId, name);
       });
     }
   }, [location.pathname, isLoaded]);

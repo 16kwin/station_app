@@ -1,4 +1,4 @@
-// components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage.tsx
+// NomenclatureCreatePage.tsx — полный файл с иконками
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'react-router-dom';
@@ -8,6 +8,8 @@ import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from './CatalogSelectPopup';
 import type { PopupType } from './CatalogSelectPopup';
+import Icon8 from '../../../assets/References/NomenclatureCreatePage/Icon8.svg';
+import Icon9 from '../../../assets/References/NomenclatureCreatePage/Icon9.svg';
 import Icon11 from '../../../assets/References/NomenclatureCreatePage/Icon11.svg';
 import Icon12 from '../../../assets/References/NomenclatureCreatePage/Icon12.svg';
 import Icon21 from '../../../assets/References/NomenclatureCreatePage/Icon21.svg';
@@ -18,6 +20,10 @@ import Icon41 from '../../../assets/References/NomenclatureCreatePage/Icon41.svg
 import Icon42 from '../../../assets/References/NomenclatureCreatePage/Icon42.svg';
 import Icon51 from '../../../assets/References/NomenclatureCreatePage/Icon51.svg';
 import Icon52 from '../../../assets/References/NomenclatureCreatePage/Icon52.svg';
+import Icon61 from '../../../assets/References/NomenclatureCreatePage/Icon61.svg';
+import Icon62 from '../../../assets/References/NomenclatureCreatePage/Icon62.svg';
+import Icon71 from '../../../assets/References/NomenclatureCreatePage/Icon71.svg';
+import Icon72 from '../../../assets/References/NomenclatureCreatePage/Icon72.svg';
 import Icon6 from '../../../assets/References/NomenclatureCreatePage/Icon6.svg';
 import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 
@@ -39,6 +45,11 @@ interface FolderItem {
   date?: string;
 }
 
+interface TypeMaterialOption {
+  uid: string;
+  typeName: string;
+}
+
 const NomenclatureCreatePage = () => {
   const { uid, code } = useParams<{ uid: string; code: string }>();
   const { tabs, activeTabId, closeTab } = useTabs();
@@ -51,16 +62,32 @@ const NomenclatureCreatePage = () => {
   const [article, setArticle] = useState('');
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
 
   const [nameFocused, setNameFocused] = useState(false);
   const [articleFocused, setArticleFocused] = useState(false);
   const [descriptionFocused, setDescriptionFocused] = useState(false);
 
+  // Каталог (дерево групп)
   const [selectedCatalog, setSelectedCatalog] = useState('');
   const [selectedCatalogId, setSelectedCatalogId] = useState('');
+
+  // Группа учета — выпадающий список
+  const [typeMaterials, setTypeMaterials] = useState<TypeMaterialOption[]>([]);
   const [selectedAccountingGroup, setSelectedAccountingGroup] = useState('');
+  const [selectedAccountingGroupId, setSelectedAccountingGroupId] = useState('');
+  const [accountingGroupOpen, setAccountingGroupOpen] = useState(false);
+
+  // Группа номенклатуры
   const [selectedNomenclatureGroup, setSelectedNomenclatureGroup] = useState('');
+  const [selectedNomenclatureGroupId, setSelectedNomenclatureGroupId] = useState('');
+
+  // Вид номенклатуры
   const [selectedNomenclatureType, setSelectedNomenclatureType] = useState('');
+  const [selectedNomenclatureTypeId, setSelectedNomenclatureTypeId] = useState('');
+
+  // Остальные поля
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedManufacturer, setSelectedManufacturer] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
@@ -69,6 +96,7 @@ const NomenclatureCreatePage = () => {
 
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupType, setPopupType] = useState<PopupType>('catalog');
+  const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
   const [showClosePopup, setShowClosePopup] = useState(false);
 
   const [folders, setFolders] = useState<Folder[]>([
@@ -114,6 +142,80 @@ const NomenclatureCreatePage = () => {
     'Интеграция',
   ];
 
+  // Загрузка групп учета при монтировании
+  useEffect(() => {
+    const loadTypeMaterials = async () => {
+      try {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials);
+        setTypeMaterials(response.data || []);
+      } catch (error) {
+        console.error('Ошибка загрузки групп учета:', error);
+      }
+    };
+    loadTypeMaterials();
+  }, []);
+
+  // Режим редактирования / создания
+  useEffect(() => {
+    const currentPath = window.location.pathname;
+    setIsEdit(currentPath.includes('/edit/'));
+
+    if (uid && currentPath.includes('/edit/')) {
+      loadMaterialData(uid);
+    }
+    
+    if (uid && currentPath.includes('/create/')) {
+      const saved = sessionStorage.getItem('nomenclature_preselected_group');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.groupUid) {
+            setSelectedCatalogId(parsed.groupUid);
+            setSelectedCatalog(parsed.groupName || 'Выбрано из меню');
+          }
+        } catch (e) {
+          console.error('Ошибка парсинга preselected group:', e);
+        }
+        sessionStorage.removeItem('nomenclature_preselected_group');
+      }
+    }
+  }, [uid]);
+
+  const loadMaterialData = async (materialUid: string) => {
+    setIsLoading(true);
+    try {
+      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(materialUid));
+      const data = response.data;
+      setName(data.name || '');
+      setArticle(data.article || '');
+      setDescription(data.description || '');
+      
+      if (data.groupUid) {
+        setSelectedCatalogId(data.groupUid);
+        setSelectedCatalog(data.groupName || '');
+      }
+      
+      if (data.typeMainUid) {
+        setSelectedAccountingGroupId(data.typeMainUid);
+        setSelectedAccountingGroup(data.typeMainName || '');
+      }
+      
+      if (data.typePurposeUid) {
+        setSelectedNomenclatureGroupId(data.typePurposeUid);
+        setSelectedNomenclatureGroup(data.typePurposeName || '');
+      }
+      
+      if (data.typeProductUid) {
+        setSelectedNomenclatureTypeId(data.typeProductUid);
+        setSelectedNomenclatureType(data.typeProductName || '');
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки материала:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!uid || !code) return;
     setIsSaving(true);
@@ -125,6 +227,9 @@ const NomenclatureCreatePage = () => {
         article,
         description,
         groupUid: selectedCatalogId || null,
+        typeMainUid: selectedAccountingGroupId || null,
+        typePurposeUid: selectedNomenclatureGroupId || null,
+        typeProductUid: selectedNomenclatureTypeId || null,
       });
       console.log('Черновик сохранён');
       return true;
@@ -152,8 +257,30 @@ const NomenclatureCreatePage = () => {
     handleClose();
   };
 
+  const handleAccountingGroupSelect = (option: TypeMaterialOption) => {
+    setSelectedAccountingGroup(option.typeName);
+    setSelectedAccountingGroupId(option.uid);
+    setAccountingGroupOpen(false);
+    setSelectedNomenclatureGroup('');
+    setSelectedNomenclatureGroupId('');
+    setSelectedNomenclatureType('');
+    setSelectedNomenclatureTypeId('');
+  };
+
   const openPopup = (type: PopupType) => {
+    if (type === 'nomenclatureGroup' && !selectedAccountingGroupId) return;
+    if (type === 'nomenclatureType' && !selectedNomenclatureGroupId) return;
+
     setPopupType(type);
+
+    if (type === 'nomenclatureGroup') {
+      setPopupFilterParam(selectedAccountingGroupId);
+    } else if (type === 'nomenclatureType') {
+      setPopupFilterParam(selectedNomenclatureGroupId);
+    } else {
+      setPopupFilterParam(undefined);
+    }
+
     setPopupOpen(true);
   };
 
@@ -163,9 +290,16 @@ const NomenclatureCreatePage = () => {
         setSelectedCatalog(name);
         setSelectedCatalogId(id);
         break;
-      case 'accountingGroup': setSelectedAccountingGroup(name); break;
-      case 'nomenclatureGroup': setSelectedNomenclatureGroup(name); break;
-      case 'nomenclatureType': setSelectedNomenclatureType(name); break;
+      case 'nomenclatureGroup':
+        setSelectedNomenclatureGroup(name);
+        setSelectedNomenclatureGroupId(id);
+        setSelectedNomenclatureType('');
+        setSelectedNomenclatureTypeId('');
+        break;
+      case 'nomenclatureType':
+        setSelectedNomenclatureType(name);
+        setSelectedNomenclatureTypeId(id);
+        break;
       case 'unit': setSelectedUnit(name); break;
       case 'manufacturer': setSelectedManufacturer(name); break;
       case 'brand': setSelectedBrand(name); break;
@@ -219,9 +353,11 @@ const NomenclatureCreatePage = () => {
     width: 388, height: 44, borderRadius: 10,
     border: hasValue ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
     backgroundColor: '#FFFFFF', marginTop: 11,
-    display: 'flex', alignItems: 'center', paddingLeft: 12,
+    display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13,
     fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
     color: hasValue ? '#666EFE' : '#9CA3AF', cursor: 'pointer',
+    position: 'relative' as const,
+    boxSizing: 'border-box',
   });
 
   const selectFieldStyleSmall = (hasValue: boolean): React.CSSProperties => ({
@@ -232,6 +368,12 @@ const NomenclatureCreatePage = () => {
     fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
     color: hasValue ? '#666EFE' : '#9CA3AF', cursor: 'pointer',
   });
+
+  // Общий стиль для иконки-стрелки справа в ячейке
+  const arrowIconStyle: React.CSSProperties = {
+    width: 18, height: 18, flexShrink: 0,
+    transition: 'transform 0.3s ease',
+  };
 
   const toggleFolder = (folderId: number) => {
     setFolders(prev => prev.map(f => f.id === folderId ? { ...f, isOpen: !f.isOpen } : f));
@@ -261,6 +403,19 @@ const NomenclatureCreatePage = () => {
     };
   }, []);
 
+  // Закрытие выпадающего списка группы учета при клике вне
+  useEffect(() => {
+    if (!accountingGroupOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.accounting-group-dropdown')) {
+        setAccountingGroupOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [accountingGroupOpen]);
+
   const renderContent = () => {
     const contentStyle: React.CSSProperties = {
       position: 'absolute', top: 164, left: 30, right: 30, bottom: 111,
@@ -270,6 +425,7 @@ const NomenclatureCreatePage = () => {
       case 0:
         return (
           <div style={{ ...contentStyle, display: 'flex', gap: 30 }}>
+            {/* === ЛЕВЫЙ БЛОК: Код, Артикул, Наименование, Каталог, Описание === */}
             <div style={{ ...blockStyle, width: 792, height: 565, flexShrink: 0, position: 'relative' }}>
               <div style={{ position: 'absolute', top: 40, left: 30 }}>
                 <span style={labelStyle}>Код:</span>
@@ -397,25 +553,147 @@ const NomenclatureCreatePage = () => {
               </div>
             </div>
 
+            {/* === СРЕДНИЙ БЛОК: Группа учета, Группа номенклатуры, Вид номенклатуры, Чекбоксы === */}
             <div style={{ ...blockStyle, width: 475, height: 565, flexShrink: 0, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 40, left: 57, right: 30 }}>
-                <span style={labelStyle}>Группа учета:</span>
-                <div onClick={() => openPopup('accountingGroup')} style={selectFieldStyle(!!selectedAccountingGroup)}>
-                  {selectedAccountingGroup || 'Выбрать группу учета'}
+              
+              {/* Группа учета */}
+              <div style={{ position: 'absolute', top: 40, left: 30, right: 30 }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                  <span style={{ ...labelStyle, marginLeft: 9 }}>Группа учета:</span>
+                </div>
+                <div className="accounting-group-dropdown" style={{ position: 'relative' }}>
+                  <div 
+                    onClick={() => setAccountingGroupOpen(!accountingGroupOpen)} 
+                    style={selectFieldStyle(!!selectedAccountingGroup)}
+                  >
+                    <img 
+                      src={selectedAccountingGroup ? Icon62 : Icon61} 
+                      alt="" 
+                      style={{ width: 16, height: 16, flexShrink: 0 }} 
+                    />
+                    <span style={{ 
+                      marginLeft: 14, flex: 1, overflow: 'hidden', 
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      color: selectedAccountingGroup ? '#666EFE' : '#9CA3AF',
+                    }}>
+                      {selectedAccountingGroup || 'Выбрать группу учета'}
+                    </span>
+                    <motion.img 
+                      src={Icon9} 
+                      alt="" 
+                      style={{
+                        ...arrowIconStyle,
+                        transform: accountingGroupOpen ? 'rotateX(180deg)' : 'rotateX(0deg)',
+                      }}
+                    />
+                  </div>
+                  <AnimatePresence>
+                    {accountingGroupOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.2 }}
+                        style={{
+                          position: 'absolute', top: 48, left: 0, width: 388,
+                          backgroundColor: '#FFFFFF', borderRadius: 10,
+                          border: '1px solid rgba(102, 110, 254, 0.15)',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                          zIndex: 1000, overflow: 'hidden',
+                        }}
+                      >
+                        {typeMaterials.map(option => (
+                          <div
+                            key={option.uid}
+                            onClick={() => handleAccountingGroupSelect(option)}
+                            style={{
+                              height: 44, display: 'flex', alignItems: 'center', paddingLeft: 44,
+                              fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+                              color: '#2D4059', cursor: 'pointer',
+                              backgroundColor: selectedAccountingGroupId === option.uid ? '#F0F1FF' : '#FFFFFF',
+                            }}
+                            onMouseEnter={(e) => { if (selectedAccountingGroupId !== option.uid) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }}
+                            onMouseLeave={(e) => { if (selectedAccountingGroupId !== option.uid) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}
+                          >
+                            {option.typeName}
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
-              <div style={{ position: 'absolute', top: 145, left: 57, right: 30 }}>
-                <span style={labelStyle}>Группа номенклатуры:</span>
-                <div onClick={() => openPopup('nomenclatureGroup')} style={selectFieldStyle(!!selectedNomenclatureGroup)}>
-                  {selectedNomenclatureGroup || 'Выбрать группу'}
+
+              {/* Группа номенклатуры */}
+              <div style={{ position: 'absolute', top: 145, left: 30, right: 30 }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                  <span style={{ ...labelStyle, marginLeft: 9 }}>Группа номенклатуры:</span>
+                </div>
+                <div 
+                  onClick={() => openPopup('nomenclatureGroup')} 
+                  style={{
+                    ...selectFieldStyle(!!selectedNomenclatureGroup),
+                    opacity: selectedAccountingGroupId ? 1 : 0.5,
+                    cursor: selectedAccountingGroupId ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <img 
+                    src={selectedNomenclatureGroup ? Icon32 : Icon31} 
+                    alt="" 
+                    style={{ width: 14.5, height: 18, flexShrink: 0 }} 
+                  />
+                  <span style={{ 
+                    marginLeft: 15.5, flex: 1, overflow: 'hidden', 
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    color: selectedNomenclatureGroup ? '#666EFE' : '#9CA3AF',
+                  }}>
+                    {selectedNomenclatureGroup || (selectedAccountingGroupId ? 'Выбрать группу' : 'Сначала выберите группу учета')}
+                  </span>
+                  <img 
+                    src={selectedNomenclatureGroup ? Icon42 : Icon41} 
+                    alt="" 
+                    style={{ width: 18, height: 18, flexShrink: 0 }} 
+                  />
                 </div>
               </div>
-              <div style={{ position: 'absolute', top: 250, left: 57, right: 30 }}>
-                <span style={labelStyle}>Вид номенклатуры:</span>
-                <div onClick={() => openPopup('nomenclatureType')} style={selectFieldStyle(!!selectedNomenclatureType)}>
-                  {selectedNomenclatureType || 'Выбрать вид'}
+
+              {/* Вид номенклатуры */}
+              <div style={{ position: 'absolute', top: 250, left: 30, right: 30 }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                  <span style={{ ...labelStyle, marginLeft: 9 }}>Вид номенклатуры:</span>
+                </div>
+                <div 
+                  onClick={() => openPopup('nomenclatureType')} 
+                  style={{
+                    ...selectFieldStyle(!!selectedNomenclatureType),
+                    opacity: selectedNomenclatureGroupId ? 1 : 0.5,
+                    cursor: selectedNomenclatureGroupId ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <img 
+                    src={selectedNomenclatureType ? Icon72 : Icon71} 
+                    alt="" 
+                    style={{ width: 16, height: 16, flexShrink: 0 }} 
+                  />
+                  <span style={{ 
+                    marginLeft: 14, flex: 1, overflow: 'hidden', 
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    color: selectedNomenclatureType ? '#666EFE' : '#9CA3AF',
+                  }}>
+                    {selectedNomenclatureType || (selectedNomenclatureGroupId ? 'Выбрать вид' : 'Сначала выберите группу номенклатуры')}
+                  </span>
+                  <img 
+                    src={selectedNomenclatureType ? Icon42 : Icon41} 
+                    alt="" 
+                    style={{ width: 18, height: 18, flexShrink: 0 }} 
+                  />
                 </div>
               </div>
+
+              {/* Чекбоксы */}
               <div style={{ position: 'absolute', top: 345, left: 30 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: 415, height: 24 }}>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>Многократное использование</span>
@@ -432,6 +710,7 @@ const NomenclatureCreatePage = () => {
               </div>
             </div>
 
+            {/* === ПРАВЫЙ БЛОК: Изображение, Штрихкод === */}
             <div style={{ ...blockStyle, width: 413, height: 565, flexShrink: 0, position: 'relative' }}>
               <div style={{ position: 'absolute', top: 30, left: 30, right: 30 }}>
                 <span style={labelStyle}>Изображение:</span>
@@ -671,10 +950,20 @@ const NomenclatureCreatePage = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
       <div style={{ position: 'absolute', top: 35, left: 60, right: 35, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>Справочник: Номенклатура (Создание)</h1>
+        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>
+          {isEdit ? name || 'Номенклатура' : 'Справочник: Номенклатура (Создание)'}
+        </h1>
         <button
           onClick={() => setShowClosePopup(true)}
           style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
@@ -704,9 +993,14 @@ const NomenclatureCreatePage = () => {
         <button style={{ ...bottomButtonStyle, width: 116 }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
       </div>
       
-      <CatalogSelectPopup isOpen={popupOpen} onClose={() => setPopupOpen(false)} onSelect={handlePopupSelect} popupType={popupType} />
+      <CatalogSelectPopup 
+        isOpen={popupOpen} 
+        onClose={() => setPopupOpen(false)} 
+        onSelect={handlePopupSelect} 
+        popupType={popupType} 
+        filterParam={popupFilterParam}
+      />
 
-      {/* Попап закрытия */}
       {showClosePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClosePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>

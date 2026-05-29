@@ -1,5 +1,10 @@
-// CreateGroupPopup.tsx
-import React, { useState } from 'react';
+// CreateGroupPopup.tsx — полный файл
+import React, { useState, useEffect } from 'react';
+import CatalogSelectPopup from './CatalogSelectPopup';
+import Icon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
+import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
+import Icon41 from '../../../assets/References/NomenclatureCreatePage/Icon41.svg';
+import Icon42 from '../../../assets/References/NomenclatureCreatePage/Icon42.svg';
 
 interface GroupOption {
   uid: string;
@@ -9,36 +14,46 @@ interface GroupOption {
 interface CreateGroupPopupProps {
   isOpen: boolean;
   currentParentName: string | null;
+  currentParentUid?: string | null;
   groups: GroupOption[];
   onClose: () => void;
   onSubmit: (name: string, parentUid: string | null) => void;
   isLoading: boolean;
 }
 
-const CreateGroupPopup: React.FC<CreateGroupPopupProps> = ({ isOpen, currentParentName, groups, onClose, onSubmit, isLoading }) => {
+let globalZIndex = 10000;
+
+const getNextZIndex = () => {
+  globalZIndex += 1;
+  return globalZIndex;
+};
+
+const CreateGroupPopup: React.FC<CreateGroupPopupProps> = ({ isOpen, currentParentName, currentParentUid, groups, onClose, onSubmit, isLoading }) => {
   const [name, setName] = useState('');
-  const [parentType, setParentType] = useState<'current' | 'root' | 'other'>('current');
-  const [selectedOtherUid, setSelectedOtherUid] = useState<string | null>(null);
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
+  const [selectedParentName, setSelectedParentName] = useState<string>('');
+  const [showCatalogSelect, setShowCatalogSelect] = useState(false);
+  const [zIndex, setZIndex] = useState(10001);
+
+  useEffect(() => {
+    if (isOpen) {
+      setZIndex(getNextZIndex());
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    setSelectedParentId(currentParentUid || null);
+    setSelectedParentName(currentParentName || '');
+  }, [currentParentUid, currentParentName]);
 
   if (!isOpen) return null;
 
   const handleSubmit = () => {
     if (!name.trim()) return;
-
-    let parentUid: string | null = null;
-
-    if (parentType === 'current' && currentParentName) {
-      // Будет взято из openPath на уровне NomenclaturePage
-      parentUid = '__current__'; // маркер — использовать текущий openPath
-    } else if (parentType === 'other' && selectedOtherUid) {
-      parentUid = selectedOtherUid;
-    }
-    // parentType === 'root' или нет текущей — parentUid остаётся null
-
-    onSubmit(name.trim(), parentUid);
+    onSubmit(name.trim(), selectedParentId);
     setName('');
-    setParentType('current');
-    setSelectedOtherUid(null);
+    setSelectedParentId(currentParentUid || null);
+    setSelectedParentName(currentParentName || '');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -46,126 +61,129 @@ const CreateGroupPopup: React.FC<CreateGroupPopupProps> = ({ isOpen, currentPare
     else if (e.key === 'Escape') onClose();
   };
 
+  const handleCatalogSelect = (id: string, catalogName: string) => {
+    setSelectedParentId(id);
+    setSelectedParentName(catalogName);
+    setShowCatalogSelect(false);
+  };
+
+  const popupWidth = 500;
+  const horizontalPadding = 35;
+  const fieldWidth = 430;
+
   return (
-    <div
-      style={{
-        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-        backgroundColor: 'rgba(0, 0, 0, 0.3)', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', zIndex: 10000,
-      }}
-      onClick={onClose}
-    >
+    <>
       <div
         style={{
-          width: '500px', backgroundColor: '#FFFFFF', borderRadius: '20px', padding: '30px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)', display: 'flex', flexDirection: 'column', gap: '20px',
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.3)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex,
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={onClose}
       >
-        <h2 style={{ fontFamily: 'Roboto, sans-serif', fontSize: '22px', fontWeight: 'bold', color: '#2D4059', margin: 0 }}>
-          Создание группы
-        </h2>
+        <div
+          style={{
+            width: `${popupWidth}px`, backgroundColor: '#FFFFFF', borderRadius: '20px',
+            padding: '30px 35px', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+            display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 style={{
+            fontFamily: 'Inter, sans-serif', fontSize: '17px', fontWeight: 700,
+            color: '#2D4059', margin: '0 0 30px 0', textAlign: 'center',
+          }}>
+            Создание каталога
+          </h2>
 
-        {/* Выбор родительской группы */}
-        <div>
-          <label style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 600, color: '#2D4059', display: 'block', marginBottom: '8px' }}>
-            Родительская группа
-          </label>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {currentParentName && (
-              <button
-                onClick={() => setParentType('current')}
-                style={{
-                  height: '36px', paddingLeft: '14px', paddingRight: '14px', borderRadius: '8px',
-                  border: parentType === 'current' ? '2px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                  backgroundColor: parentType === 'current' ? '#E8E9FF' : '#FFFFFF',
-                  cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '13px', fontWeight: 400, color: '#2D4059',
-                }}
-              >
-                Текущая: {currentParentName}
-              </button>
-            )}
-            <button
-              onClick={() => setParentType('root')}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500,
+              color: '#2D4059', display: 'block', marginBottom: '7px',
+            }}>
+              Название каталога
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Введите название"
+              autoFocus
               style={{
-                height: '36px', paddingLeft: '14px', paddingRight: '14px', borderRadius: '8px',
-                border: parentType === 'root' ? '2px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                backgroundColor: parentType === 'root' ? '#E8E9FF' : '#FFFFFF',
-                cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '13px', fontWeight: 400, color: '#2D4059',
-              }}
-            >
-              Корневая
-            </button>
-            <button
-              onClick={() => setParentType('other')}
-              style={{
-                height: '36px', paddingLeft: '14px', paddingRight: '14px', borderRadius: '8px',
-                border: parentType === 'other' ? '2px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                backgroundColor: parentType === 'other' ? '#E8E9FF' : '#FFFFFF',
-                cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '13px', fontWeight: 400, color: '#2D4059',
-              }}
-            >
-              Выбрать другую
-            </button>
-          </div>
-
-          {parentType === 'other' && (
-            <select
-              value={selectedOtherUid || ''}
-              onChange={(e) => setSelectedOtherUid(e.target.value || null)}
-              style={{
-                width: '100%', height: '40px', borderRadius: '10px',
+                width: `${fieldWidth}px`, height: '44px', borderRadius: '10px',
                 border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
                 paddingLeft: '12px', paddingRight: '12px', fontFamily: 'Inter, sans-serif',
-                fontSize: '14px', color: '#2D4059', outline: 'none', marginTop: '8px', boxSizing: 'border-box',
+                fontSize: '14px', fontWeight: 500, color: '#2D4059', outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '30px' }}>
+            <label style={{
+              fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500,
+              color: '#2D4059', display: 'block', marginBottom: '7px',
+            }}>
+              Выбрать родительский каталог
+            </label>
+            <div
+              onClick={() => setShowCatalogSelect(true)}
+              style={{
+                width: `${fieldWidth}px`, height: '44px', borderRadius: '10px',
+                border: selectedParentId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
+                backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center',
+                paddingLeft: '12px', paddingRight: '12px', cursor: 'pointer',
+                boxSizing: 'border-box',
               }}
             >
-              <option value="">Выберите группу</option>
-              {groups.map(group => (
-                <option key={group.uid} value={group.uid}>{group.name}</option>
-              ))}
-            </select>
-          )}
+              <img src={selectedParentId ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
+              <span style={{
+                marginLeft: '12px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: '14px',
+                fontWeight: 500, color: selectedParentId ? '#666EFE' : '#A0A3BD',
+              }}>
+                {selectedParentName || 'Выберите каталог'}
+              </span>
+              <img src={selectedParentId ? Icon42 : Icon41} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+            </div>
+          </div>
 
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#6B7280', margin: '8px 0 0 0' }}>
-            {parentType === 'current' && currentParentName ? `Создать в: ${currentParentName}` :
-             parentType === 'root' ? 'Создать в корне' :
-             parentType === 'other' && selectedOtherUid ? `Создать в: ${groups.find(g => g.uid === selectedOtherUid)?.name}` :
-             'Создать в корне'}
-          </p>
-        </div>
-
-        {/* Название */}
-        <div>
-          <label style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 600, color: '#2D4059', display: 'block', marginBottom: '8px' }}>
-            Название группы
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Введите название"
-            autoFocus
-            style={{
-              width: '100%', height: '44px', borderRadius: '10px',
-              border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
-              paddingLeft: '12px', paddingRight: '12px', fontFamily: 'Inter, sans-serif',
-              fontSize: '15px', color: '#2D4059', outline: 'none', boxSizing: 'border-box',
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px' }}>
-          <button onClick={onClose} style={{ height: '40px', paddingLeft: '24px', paddingRight: '24px', borderRadius: '10px', border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 400, color: '#2D4059' }}>
-            Отмена
-          </button>
-          <button onClick={handleSubmit} disabled={isLoading || !name.trim()} style={{ height: '40px', paddingLeft: '24px', paddingRight: '24px', borderRadius: '10px', border: 'none', backgroundColor: name.trim() && !isLoading ? '#666EFE' : '#BCC8FF', cursor: name.trim() && !isLoading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 400, color: '#FFFFFF' }}>
-            {isLoading ? 'Создание...' : 'Создать'}
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button
+              onClick={onClose}
+              style={{
+                height: '40px', paddingLeft: '24px', paddingRight: '24px', borderRadius: '10px',
+                border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
+                cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '15px',
+                fontWeight: 400, color: '#2D4059',
+              }}
+            >
+              Отмена
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isLoading || !name.trim()}
+              style={{
+                height: '40px', paddingLeft: '24px', paddingRight: '24px', borderRadius: '10px',
+                border: 'none', backgroundColor: name.trim() && !isLoading ? '#666EFE' : '#BCC8FF',
+                cursor: name.trim() && !isLoading ? 'pointer' : 'not-allowed',
+                fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 500, color: '#FFFFFF',
+              }}
+            >
+              {isLoading ? 'Создание...' : 'Создать'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      <CatalogSelectPopup
+        isOpen={showCatalogSelect}
+        onClose={() => setShowCatalogSelect(false)}
+        onSelect={handleCatalogSelect}
+        popupType="catalog"
+      />
+    </>
   );
 };
 
