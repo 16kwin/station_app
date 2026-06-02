@@ -78,6 +78,20 @@ const ConstantInfo = {
   restApiNomenclatureTypeMaterials: '/api/nomenclature/type-materials',
   restApiNomenclatureTypePurposes: '/api/nomenclature/type-purposes',
   restApiNomenclatureTypeProducts: '/api/nomenclature/type-products',
+  restApiNomenclatureMeasures: '/api/nomenclature/measures',
+  restApiNomenclatureManufacturers: '/api/nomenclature/manufacturers',
+  restApiNomenclatureBrands: '/api/nomenclature/brands',
+  restApiNomenclatureModels: '/api/nomenclature/models',
+  restApiNomenclatureCountries: '/api/nomenclature/countries',
+  restApiNomenclatureImages: (materialUid: string) => `/api/nomenclature/${materialUid}/images`,
+  restApiNomenclatureDeleteImage: (uid: string) => `/api/nomenclature/images/${uid}`,
+  restApiNomenclatureBlueprints: (materialUid: string) => `/api/nomenclature/${materialUid}/blueprints`,
+  restApiNomenclatureDeleteBlueprint: (uid: string) => `/api/nomenclature/blueprints/${uid}`,
+  restApiNomenclatureQrcodes: (materialUid: string) => `/api/nomenclature/${materialUid}/qrcodes`,
+  restApiNomenclatureDeleteQrcode: (uid: string) => `/api/nomenclature/qrcodes/${uid}`,
+  restApiNomenclaturePrices: (materialUid: string) => `/api/nomenclature/${materialUid}/prices`,
+  restApiNomenclatureDeletePrice: (priceUid: string) => `/api/nomenclature/prices/${priceUid}`,
+  restApiNomenclatureSuppliers: '/api/nomenclature/suppliers',
 };
 
 export default ConstantInfo;

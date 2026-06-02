@@ -1,115 +1,469 @@
-// components/ReferencesPage/ModelsPage/ModelsPage.tsx
 import React, { useRef, useState, useEffect } from 'react';
+import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
+import AxiosService from '../../../services/AxiosService';
+import ConstantInfo from '../../../info/ConstantInfo';
 import Icon1 from '../../../assets/References/Icon1.svg';
 import Icon2 from '../../../assets/References/Icon2.svg';
 import Icon3 from '../../../assets/References/Icon3.svg';
 import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon5 from '../../../assets/References/Icon5.svg';
-import Icon6 from '../../../assets/References/Icon6.svg';
 import Icon7 from '../../../assets/References/Icon7.svg';
 import Icon8 from '../../../assets/References/Icon8.svg';
 import Icon9 from '../../../assets/References/Icon9.svg';
 import Icon10 from '../../../assets/References/Icon10.svg';
+import Icon19 from '../../../assets/References/Icon19.svg';
 
-interface Model {
+interface ModelItem {
   uid: string;
   name: string;
-  brand?: string;
-  manufacturer?: string;
+  description: string;
+  brandUid: string;
+  brandName: string;
+  manufacturerName: string;
+}
+
+interface BrandOption {
+  uid: string;
+  name: string;
+}
+
+interface ManufacturerOption {
+  uid: string;
+  name: string;
 }
 
 const ModelsPage = () => {
+  const { activeTabId } = useTabs();
+  const tabIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<Model[]>([]);
+  const [data, setData] = useState<ModelItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCreatePopup, setShowCreatePopup] = useState(false);
+  const [showEditPopup, setShowEditPopup] = useState(false);
+  const [editItem, setEditItem] = useState<ModelItem | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formManufacturerUid, setFormManufacturerUid] = useState('');
+  const [formBrandUid, setFormBrandUid] = useState('');
+  const [manufacturers, setManufacturers] = useState<ManufacturerOption[]>([]);
+  const [allBrands, setAllBrands] = useState<BrandOption[]>([]);
+  const [filteredBrands, setFilteredBrands] = useState<BrandOption[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
+
   const TABLE_WIDTH = 1720;
-  const TABLE_HEIGHT = 638;
+  const ROW_HEIGHT = 54;
+  const HEADER_HEIGHT = 54;
+  const VISIBLE_ROWS = 10;
+  const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
+  const COL_BRAND = 550;
+  const COL_MANUFACTURER = 850;
+  const COL_DESCRIPTION = 1150;
+
+  useEffect(() => { tabIdRef.current = activeTabId; }, []);
+
+  const fetchData = async () => {
+    try {
+      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureModels);
+      setData(response.data || []);
+    } catch (error) {
+      console.error('Ошибка загрузки:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadReferences = async () => {
+    try {
+      const [mRes, bRes] = await Promise.all([
+        AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers),
+        AxiosService.get(ConstantInfo.restApiNomenclatureBrands),
+      ]);
+      setManufacturers(mRes.data || []);
+      setAllBrands(bRes.data || []);
+    } catch (error) {
+      console.error('Ошибка загрузки справочников:', error);
+    }
+  };
+
+  useEffect(() => { fetchData(); loadReferences(); }, []);
+  useEffect(() => {
+    if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) fetchData();
+  }, [activeTabId]);
 
   useEffect(() => {
-    setData([
-      { uid: '1', name: '6204-2RS', brand: 'SKF', manufacturer: 'SKF Group' },
-      { uid: '2', name: '6205-C3', brand: 'FAG', manufacturer: 'Schaeffler' },
-      { uid: '3', name: '6306-ZZ', brand: 'NSK', manufacturer: 'NSK Ltd' },
-      { uid: '4', name: 'A-1000', brand: 'Gates', manufacturer: 'Gates Corp' },
-      { uid: '5', name: 'Mobilux EP2', brand: 'Mobil', manufacturer: 'ExxonMobil' },
-    ]);
-    setIsLoading(false);
-  }, []);
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [contextMenu]);
+
+  const handleManufacturerChange = (uid: string) => {
+    setFormManufacturerUid(uid);
+    setFormBrandUid('');
+    if (uid) {
+      setFilteredBrands(allBrands.filter(b => (b as any).manufacturerUid === uid));
+    } else {
+      setFilteredBrands([]);
+    }
+  };
 
   const checkScroll = () => {
-    const c = scrollContainerRef.current;
-    if (!c) return;
-    setHasVerticalScroll(c.scrollHeight > c.clientHeight);
-    setHasHorizontalScroll(c.scrollWidth > c.clientWidth);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    setHasVerticalScroll(container.scrollHeight > container.clientHeight);
+    setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
   };
-  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [data]);
+
+  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [data]);
   useEffect(() => {
-    const c = scrollContainerRef.current;
-    if (!c) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
     checkScroll();
-    c.addEventListener('scroll', checkScroll);
+    container.addEventListener('scroll', checkScroll);
     const ro = new ResizeObserver(checkScroll);
-    ro.observe(c);
-    return () => { c.removeEventListener('scroll', checkScroll); ro.disconnect(); };
+    ro.observe(container);
+    return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, []);
 
-  const sb: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const mb: React.CSSProperties = { height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
-  const cbs = '0.7px solid #666EFE';
-  const tbs = '2px solid #666EFE';
+  const toggleSelectItem = (uid: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  };
 
-  if (isLoading) return <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>;
+  const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.uid));
+  const toggleSelectAll = () => {
+    if (isAllSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(data.map(item => item.uid)));
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, uid, name });
+  };
+
+  const handleCreateClick = () => {
+    setFormName('');
+    setFormDescription('');
+    setFormManufacturerUid('');
+    setFormBrandUid('');
+    setFilteredBrands([]);
+    setEditItem(null);
+    setShowCreatePopup(true);
+  };
+
+  const handleCreateSubmit = async () => {
+    if (!formName.trim()) return;
+    setIsSaving(true);
+    try {
+      await AxiosService.post(ConstantInfo.restApiNomenclatureModels, {
+        name: formName.trim(),
+        description: formDescription.trim(),
+        brandUid: formBrandUid || null,
+      });
+      await fetchData();
+      setShowCreatePopup(false);
+    } catch (error) {
+      console.error('Ошибка создания:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditClick = () => {
+    if (!contextMenu) return;
+    const item = data.find(d => d.uid === contextMenu.uid);
+    if (item) {
+      setEditItem(item);
+      setFormName(item.name);
+      setFormDescription(item.description || '');
+      
+      const brand = allBrands.find(b => b.uid === item.brandUid);
+      const manufacturerUid = brand ? (brand as any).manufacturerUid || '' : '';
+      
+      setFormManufacturerUid(manufacturerUid);
+      setFormBrandUid(item.brandUid || '');
+      
+      if (manufacturerUid) {
+        setFilteredBrands(allBrands.filter(b => (b as any).manufacturerUid === manufacturerUid));
+      } else {
+        setFilteredBrands([]);
+      }
+      
+      setShowEditPopup(true);
+    }
+    setContextMenu(null);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editItem || !formName.trim()) return;
+    setIsSaving(true);
+    try {
+      await AxiosService.patch(`${ConstantInfo.restApiNomenclatureModels}/${editItem.uid}`, {
+        name: formName.trim(),
+        description: formDescription.trim(),
+        brandUid: formBrandUid || null,
+      });
+      await fetchData();
+      setShowEditPopup(false);
+      setEditItem(null);
+    } catch (error) {
+      console.error('Ошибка редактирования:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      for (const uid of selectedIds) {
+        await AxiosService.delete(`${ConstantInfo.restApiNomenclatureModels}/${uid}`);
+      }
+      await fetchData();
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Ошибка удаления:', error);
+    }
+  };
+
+  const handleContextDelete = () => {
+    if (!contextMenu) return;
+    setSelectedIds(new Set([contextMenu.uid]));
+    setContextMenu(null);
+    setTimeout(() => setShowDeleteConfirm(true), 50);
+  };
+
+  const emptyRows = Math.max(0, VISIBLE_ROWS - data.length);
+
+  const smallButtonStyle: React.CSSProperties = {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
+    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 0, flexShrink: 0,
+  };
+
+  const mediumButtonStyle: React.CSSProperties = {
+    height: 40, borderRadius: 10,
+    backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
+    cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0,
+  };
+
+  const tableBorderStyle = '2px solid #666EFE';
+  const rowBoxShadow = 'inset 0px -0.7px 0px 0px #666EFE, inset 2px 0px 0px 0px #666EFE, inset -2px 0px 0px 0px #666EFE';
+
+  const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
+    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
+    </div>
+  );
+
+  const HeaderEmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
+    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #FFFFFF', flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
+    </div>
+  );
+
+  const contextMenuButtonStyle: React.CSSProperties = {
+    width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', paddingLeft: 20,
+    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', height: 44, borderRadius: 10,
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    paddingLeft: 12, paddingRight: 12,
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+    color: '#2D4059', outline: 'none', boxSizing: 'border-box',
+    backgroundColor: '#FFFFFF',
+  };
+
+  const selectStyle: React.CSSProperties = {
+    width: '100%', height: 44, borderRadius: 10,
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    paddingLeft: 12, paddingRight: 12,
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+    color: '#2D4059', outline: 'none', boxSizing: 'border-box',
+    backgroundColor: '#FFFFFF',
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
-      <div style={{ paddingTop: 35, paddingLeft: 60 }}><h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>Справочник: Модели</h1></div>
+      <div style={{ paddingTop: 35, paddingLeft: 60 }}>
+        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>Справочник: Модели</h1>
+      </div>
+
       <div style={{ position: 'absolute', top: 104, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 15 }}>
-          <button style={sb}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={sb}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
-          <button style={sb}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
+          <button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
         </div>
         <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mb, width: 124 }}><img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} /></button>
-          <button style={{ ...mb, width: 186 }}><img src={Icon5} alt="" style={{ width: 22, height: 20, marginLeft: 15 }} /></button>
-          <button style={sb}><img src={Icon6} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={sb}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateClick}>
+            <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
+          </button>
+          <button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={sb}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={sb}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button style={sb}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
+          <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
         </div>
       </div>
+
       <div style={{ position: 'absolute', top: 159, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: tbs }}>
-          <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 52, paddingRight: 40 }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: 500 }}>БРЕНД</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: 700 }}>ПРОИЗВОДИТЕЛЬ</span>
+        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: tableBorderStyle }}>
+          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
+            <HeaderEmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_BRAND }}>БРЕНД</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_MANUFACTURER }}>ПРОИЗВОДИТЕЛЬ</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_DESCRIPTION }}>ОПИСАНИЕ</span>
           </div>
           <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {data.map(item => (
-              <div key={item.uid} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, borderTop: cbs, backgroundColor: '#FFFFFF', cursor: 'pointer', position: 'relative' }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                  <rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/>
-                  <line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15, width: 350 }}>{item.name}</span>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: 500 }}>{item.brand || '—'}</span>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: 700 }}>{item.manufacturer || '—'}</span>
-              </div>
+            {data.map(item => {
+              const isSelected = selectedIds.has(item.uid);
+              return (
+                <div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', boxShadow: rowBoxShadow }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.name)}>
+                  <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
+                    <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} />
+                  </div>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 67, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_BRAND - 120 }}>{item.name}</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_BRAND, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_MANUFACTURER - COL_BRAND - 20 }}>{item.brandName || '—'}</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_MANUFACTURER, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DESCRIPTION - COL_MANUFACTURER - 20 }}>{item.manufacturerName || '—'}</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_DESCRIPTION, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: TABLE_WIDTH - COL_DESCRIPTION - 60 }}>{item.description || '—'}</span>
+                </div>
+              );
+            })}
+            {Array.from({ length: emptyRows }).map((_, i) => (
+              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, boxShadow: rowBoxShadow }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
             ))}
           </div>
         </div>
-        {hasVerticalScroll && <div style={{ position: 'absolute', right: -25, top: 54, height: TABLE_HEIGHT - 54, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - 54} /></div>}
-        {hasHorizontalScroll && <div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>}
+        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
+        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
       </div>
+
+      {contextMenu && (
+        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button>
+          <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
+        </div>
+      )}
+
+      {showCreatePopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание модели</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
+              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Производитель</label>
+              <select value={formManufacturerUid} onChange={e => handleManufacturerChange(e.target.value)} style={selectStyle}>
+                <option value="">Выберите производителя</option>
+                {manufacturers.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Бренд</label>
+              <select 
+                value={formBrandUid} 
+                onChange={e => setFormBrandUid(e.target.value)} 
+                style={{ ...selectStyle, opacity: formManufacturerUid ? 1 : 0.5, cursor: formManufacturerUid ? 'pointer' : 'not-allowed' }}
+                disabled={!formManufacturerUid}
+              >
+                <option value="">{formManufacturerUid ? 'Выберите бренд' : 'Сначала выберите производителя'}</option>
+                {filteredBrands.map(b => <option key={b.uid} value={b.uid}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label>
+              <input type="text" value={formDescription} onChange={e => setFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите описание" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование модели</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
+              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Производитель</label>
+              <select value={formManufacturerUid} onChange={e => handleManufacturerChange(e.target.value)} style={selectStyle}>
+                <option value="">Выберите производителя</option>
+                {manufacturers.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Бренд</label>
+              <select 
+                value={formBrandUid} 
+                onChange={e => setFormBrandUid(e.target.value)} 
+                style={{ ...selectStyle, opacity: formManufacturerUid ? 1 : 0.5, cursor: formManufacturerUid ? 'pointer' : 'not-allowed' }}
+                disabled={!formManufacturerUid}
+              >
+                <option value="">{formManufacturerUid ? 'Выберите бренд' : 'Сначала выберите производителя'}</option>
+                {filteredBrands.map(b => <option key={b.uid} value={b.uid}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label>
+              <input type="text" value={formDescription} onChange={e => setFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите описание" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleEditSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

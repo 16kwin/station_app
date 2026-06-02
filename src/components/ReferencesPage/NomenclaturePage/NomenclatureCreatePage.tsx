@@ -1,40 +1,30 @@
-// NomenclatureCreatePage.tsx — полный файл с иконками
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+// NomenclatureCreatePage.tsx — исправленный (убраны fetchSuppliers, supplierUid)
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
-import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from './CatalogSelectPopup';
+import ProgressBar from './ProgressBar';
 import type { PopupType } from './CatalogSelectPopup';
-import Icon8 from '../../../assets/References/NomenclatureCreatePage/Icon8.svg';
-import Icon9 from '../../../assets/References/NomenclatureCreatePage/Icon9.svg';
-import Icon11 from '../../../assets/References/NomenclatureCreatePage/Icon11.svg';
-import Icon12 from '../../../assets/References/NomenclatureCreatePage/Icon12.svg';
-import Icon21 from '../../../assets/References/NomenclatureCreatePage/Icon21.svg';
-import Icon22 from '../../../assets/References/NomenclatureCreatePage/Icon22.svg';
-import Icon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
-import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
-import Icon41 from '../../../assets/References/NomenclatureCreatePage/Icon41.svg';
-import Icon42 from '../../../assets/References/NomenclatureCreatePage/Icon42.svg';
-import Icon51 from '../../../assets/References/NomenclatureCreatePage/Icon51.svg';
-import Icon52 from '../../../assets/References/NomenclatureCreatePage/Icon52.svg';
-import Icon61 from '../../../assets/References/NomenclatureCreatePage/Icon61.svg';
-import Icon62 from '../../../assets/References/NomenclatureCreatePage/Icon62.svg';
-import Icon71 from '../../../assets/References/NomenclatureCreatePage/Icon71.svg';
-import Icon72 from '../../../assets/References/NomenclatureCreatePage/Icon72.svg';
-import Icon6 from '../../../assets/References/NomenclatureCreatePage/Icon6.svg';
+import MainTab from './MainTab';
+import CharacteristicsTab from './CharacteristicsTab';
+import DocumentsTab from './DocumentsTab';
+import SuppliersTab from './SuppliersTab';
+import PriceHistoryTab from './PriceHistoryTab';
+import AnalogsTab from './AnalogsTab';
+import RatingTab from './RatingTab';
+import IntegrationTab from './IntegrationTab';
 import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 
-interface Folder {
+export interface Folder {
   id: number;
   name: string;
   isOpen: boolean;
   items: FolderItem[];
 }
 
-interface FolderItem {
+export interface FolderItem {
   id: number;
   characteristic?: string;
   designation?: string;
@@ -45,19 +35,160 @@ interface FolderItem {
   date?: string;
 }
 
-interface TypeMaterialOption {
+export interface TypeMaterialOption {
   uid: string;
   typeName: string;
+}
+
+export interface ImageItem {
+  uid: string;
+  url: string;
+  originalName: string;
+}
+
+export interface PriceItem {
+  uid: string;
+  price: number;
+  priceDate: string;
+  supplierName: string;
+  previousPrice: number | null;
+  priceChange: number | null;
+}
+
+export interface SupplierOption {
+  uid: string;
+  name: string;
+}
+
+export interface CommonProps {
+  uid?: string;
+  code?: string;
+  name: string;
+  article: string;
+  description: string;
+  isEdit: boolean;
+  isSaving: boolean;
+  isUploading: boolean;
+  isUploadingBlueprint: boolean;
+  isUploadingBarcode: boolean;
+  barcode: string;
+  barcodeCode: string;
+  barcodeImage: ImageItem | null;
+  images: ImageItem[];
+  blueprints: ImageItem[];
+  prices: PriceItem[];
+  suppliers: SupplierOption[];
+  selectedImageIndex: number;
+  selectedBlueprintIndex: number;
+  selectedCatalog: string;
+  selectedCatalogId: string;
+  selectedAccountingGroup: string;
+  selectedAccountingGroupId: string;
+  accountingGroupOpen: boolean;
+  selectedNomenclatureGroup: string;
+  selectedNomenclatureGroupId: string;
+  selectedNomenclatureType: string;
+  selectedNomenclatureTypeId: string;
+  selectedUnit: string;
+  selectedUnitId: string;
+  selectedManufacturer: string;
+  selectedManufacturerId: string;
+  selectedBrand: string;
+  selectedBrandId: string;
+  selectedModel: string;
+  selectedModelId: string;
+  selectedCountry: string;
+  selectedCountryId: string;
+  usage: boolean;
+  wasteMaterial: boolean;
+  recycleMaterial: boolean;
+  nameFocused: boolean;
+  articleFocused: boolean;
+  descriptionFocused: boolean;
+  showBarcodePopup: boolean;
+  showAddPricePopup: boolean;
+  newPrice: string;
+  newPriceDate: string;
+  newPriceSupplierUid: string;
+  fullscreenImage: boolean;
+  fullscreenBlueprint: boolean;
+  isLoading: boolean;
+  isLoadingPrices: boolean;
+  typeMaterials: TypeMaterialOption[];
+  fileInputRef: React.RefObject<HTMLInputElement>;
+  blueprintInputRef: React.RefObject<HTMLInputElement>;
+  barcodeImageInputRef: React.RefObject<HTMLInputElement>;
+  setName: (v: string) => void;
+  setArticle: (v: string) => void;
+  setDescription: (v: string) => void;
+  setNameFocused: (v: boolean) => void;
+  setArticleFocused: (v: boolean) => void;
+  setDescriptionFocused: (v: boolean) => void;
+  toggleUsage: () => void;
+  toggleWasteMaterial: () => void;
+  toggleRecycleMaterial: () => void;
+  setSelectedCatalog: (v: string) => void;
+  setSelectedCatalogId: (v: string) => void;
+  setSelectedAccountingGroup: (v: string) => void;
+  setSelectedAccountingGroupId: (v: string) => void;
+  setAccountingGroupOpen: (v: boolean) => void;
+  setSelectedNomenclatureGroup: (v: string) => void;
+  setSelectedNomenclatureGroupId: (v: string) => void;
+  setSelectedNomenclatureType: (v: string) => void;
+  setSelectedNomenclatureTypeId: (v: string) => void;
+  setSelectedUnit: (v: string) => void;
+  setSelectedUnitId: (v: string) => void;
+  setSelectedManufacturer: (v: string) => void;
+  setSelectedManufacturerId: (v: string) => void;
+  setSelectedBrand: (v: string) => void;
+  setSelectedBrandId: (v: string) => void;
+  setSelectedModel: (v: string) => void;
+  setSelectedModelId: (v: string) => void;
+  setSelectedCountry: (v: string) => void;
+  setSelectedCountryId: (v: string) => void;
+  setImages: (v: ImageItem[]) => void;
+  setSelectedImageIndex: (v: number | ((p: number) => number)) => void;
+  setIsUploading: (v: boolean) => void;
+  setFullscreenImage: (v: boolean) => void;
+  setBlueprints: (v: ImageItem[]) => void;
+  setSelectedBlueprintIndex: (v: number | ((p: number) => number)) => void;
+  setIsUploadingBlueprint: (v: boolean) => void;
+  setFullscreenBlueprint: (v: boolean) => void;
+  setBarcode: (v: string) => void;
+  setShowBarcodePopup: (v: boolean) => void;
+  setBarcodeImage: (v: ImageItem | null) => void;
+  setBarcodeCode: (v: string) => void;
+  setIsUploadingBarcode: (v: boolean) => void;
+  setPrices: (v: PriceItem[]) => void;
+  setShowAddPricePopup: (v: boolean) => void;
+  setNewPrice: (v: string) => void;
+  setNewPriceDate: (v: string) => void;
+  setNewPriceSupplierUid: (v: string) => void;
+  setSuppliers: (v: SupplierOption[]) => void;
+  handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleDeleteImage: (uid: string) => void;
+  handleBlueprintUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleDeleteBlueprint: (uid: string) => void;
+  fetchBarcodeData: () => void;
+  handleBarcodeSave: () => void;
+  handleBarcodeImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleDeleteBarcodeImage: () => void;
+  fetchPrices: () => void;
+  handleAddPrice: () => void;
+  handleDeletePrice: (uid: string) => void;
+  openPopup: (type: PopupType) => void;
+  handleAccountingGroupSelect: (o: TypeMaterialOption) => void;
 }
 
 const NomenclatureCreatePage = () => {
   const { uid, code } = useParams<{ uid: string; code: string }>();
   const { tabs, activeTabId, closeTab } = useTabs();
-  
+
   const [activeTab, setActiveTab] = useState(0);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasScroll, setHasScroll] = useState(false);
-  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const blueprintInputRef = useRef<HTMLInputElement>(null);
+  const barcodeImageInputRef = useRef<HTMLInputElement>(null);
+
   const [name, setName] = useState('');
   const [article, setArticle] = useState('');
   const [description, setDescription] = useState('');
@@ -69,151 +200,276 @@ const NomenclatureCreatePage = () => {
   const [articleFocused, setArticleFocused] = useState(false);
   const [descriptionFocused, setDescriptionFocused] = useState(false);
 
-  // Каталог (дерево групп)
+  const [usage, setUsage] = useState(false);
+  const [wasteMaterial, setWasteMaterial] = useState(false);
+  const [recycleMaterial, setRecycleMaterial] = useState(false);
+
+  const toggleUsage = useCallback(() => setUsage(prev => !prev), []);
+  const toggleWasteMaterial = useCallback(() => setWasteMaterial(prev => !prev), []);
+  const toggleRecycleMaterial = useCallback(() => setRecycleMaterial(prev => !prev), []);
+
   const [selectedCatalog, setSelectedCatalog] = useState('');
   const [selectedCatalogId, setSelectedCatalogId] = useState('');
 
-  // Группа учета — выпадающий список
   const [typeMaterials, setTypeMaterials] = useState<TypeMaterialOption[]>([]);
   const [selectedAccountingGroup, setSelectedAccountingGroup] = useState('');
   const [selectedAccountingGroupId, setSelectedAccountingGroupId] = useState('');
   const [accountingGroupOpen, setAccountingGroupOpen] = useState(false);
 
-  // Группа номенклатуры
   const [selectedNomenclatureGroup, setSelectedNomenclatureGroup] = useState('');
   const [selectedNomenclatureGroupId, setSelectedNomenclatureGroupId] = useState('');
 
-  // Вид номенклатуры
   const [selectedNomenclatureType, setSelectedNomenclatureType] = useState('');
   const [selectedNomenclatureTypeId, setSelectedNomenclatureTypeId] = useState('');
 
-  // Остальные поля
   const [selectedUnit, setSelectedUnit] = useState('');
+  const [selectedUnitId, setSelectedUnitId] = useState('');
+
   const [selectedManufacturer, setSelectedManufacturer] = useState('');
+  const [selectedManufacturerId, setSelectedManufacturerId] = useState('');
+
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedBrandId, setSelectedBrandId] = useState('');
+
   const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModelId, setSelectedModelId] = useState('');
+
   const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedCountryId, setSelectedCountryId] = useState('');
 
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupType, setPopupType] = useState<PopupType>('catalog');
   const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
   const [showClosePopup, setShowClosePopup] = useState(false);
 
-  const [folders, setFolders] = useState<Folder[]>([
-    {
-      id: 1,
-      name: 'Габаритные характеристики',
-      isOpen: false,
-      items: [
-        { id: 1, characteristic: 'Длина', designation: 'L', unit: 'мм', value: '1200' },
-        { id: 2, characteristic: 'Ширина', designation: 'W', unit: 'мм', value: '800' },
-        { id: 3, characteristic: 'Высота', designation: 'H', unit: 'мм', value: '450' },
-      ],
-    },
-    {
-      id: 2,
-      name: 'Весовые характеристики',
-      isOpen: false,
-      items: [
-        { id: 4, characteristic: 'Масса нетто', designation: 'M_net', unit: 'кг', value: '25.5' },
-        { id: 5, characteristic: 'Масса брутто', designation: 'M_gross', unit: 'кг', value: '28.0' },
-      ],
-    },
-    {
-      id: 3,
-      name: 'Электрические характеристики',
-      isOpen: false,
-      items: [
-        { id: 6, characteristic: 'Напряжение', designation: 'U', unit: 'В', value: '220' },
-        { id: 7, characteristic: 'Мощность', designation: 'P', unit: 'кВт', value: '5.5' },
-        { id: 8, characteristic: 'Частота', designation: 'f', unit: 'Гц', value: '50' },
-      ],
-    },
-  ]);
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState(false);
 
-  const tabs_list = [
-    'Основное',
-    'Характеристики',
-    'Документы',
-    'Поставщики',
-    'История цен',
-    'Аналоги',
-    'Рейтинг',
-    'Интеграция',
-  ];
+  const [blueprints, setBlueprints] = useState<ImageItem[]>([]);
+  const [selectedBlueprintIndex, setSelectedBlueprintIndex] = useState(0);
+  const [isUploadingBlueprint, setIsUploadingBlueprint] = useState(false);
+  const [fullscreenBlueprint, setFullscreenBlueprint] = useState(false);
 
-  // Загрузка групп учета при монтировании
+  const [barcode, setBarcode] = useState('');
+  const [showBarcodePopup, setShowBarcodePopup] = useState(false);
+  const [barcodeImage, setBarcodeImage] = useState<ImageItem | null>(null);
+  const [barcodeCode, setBarcodeCode] = useState('');
+  const [isUploadingBarcode, setIsUploadingBarcode] = useState(false);
+
+  const [prices, setPrices] = useState<PriceItem[]>([]);
+  const [showAddPricePopup, setShowAddPricePopup] = useState(false);
+  const [newPrice, setNewPrice] = useState('');
+  const [newPriceDate, setNewPriceDate] = useState(new Date().toISOString().slice(0, 16));
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+
+  const tabs_list = ['Основное', 'Характеристики', 'Документы', 'Поставщики', 'История цен', 'Аналоги', 'Рейтинг', 'Интеграция'];
+
   useEffect(() => {
-    const loadTypeMaterials = async () => {
+    (async () => {
       try {
-        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials);
-        setTypeMaterials(response.data || []);
-      } catch (error) {
-        console.error('Ошибка загрузки групп учета:', error);
-      }
-    };
-    loadTypeMaterials();
+        const r = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials);
+        setTypeMaterials(r.data || []);
+      } catch (e) { console.error(e); }
+    })();
   }, []);
 
-  // Режим редактирования / создания
   useEffect(() => {
-    const currentPath = window.location.pathname;
-    setIsEdit(currentPath.includes('/edit/'));
-
-    if (uid && currentPath.includes('/edit/')) {
-      loadMaterialData(uid);
-    }
-    
-    if (uid && currentPath.includes('/create/')) {
-      const saved = sessionStorage.getItem('nomenclature_preselected_group');
-      if (saved) {
+    const cp = window.location.pathname;
+    setIsEdit(cp.includes('/edit/'));
+    if (uid && cp.includes('/edit/')) loadMaterialData(uid);
+    if (uid && cp.includes('/create/')) {
+      const s = sessionStorage.getItem('nomenclature_preselected_group');
+      if (s) {
         try {
-          const parsed = JSON.parse(saved);
-          if (parsed.groupUid) {
-            setSelectedCatalogId(parsed.groupUid);
-            setSelectedCatalog(parsed.groupName || 'Выбрано из меню');
+          const p = JSON.parse(s);
+          if (p.groupUid) {
+            setSelectedCatalogId(p.groupUid);
+            setSelectedCatalog(p.groupName || 'Выбрано из меню');
           }
-        } catch (e) {
-          console.error('Ошибка парсинга preselected group:', e);
-        }
+        } catch (e) {}
         sessionStorage.removeItem('nomenclature_preselected_group');
       }
     }
   }, [uid]);
 
-  const loadMaterialData = async (materialUid: string) => {
+  useEffect(() => {
+    if (uid && isEdit) {
+      fetchImages();
+      fetchBlueprints();
+      fetchBarcodeData();
+      fetchPrices();
+    }
+  }, [uid, isEdit]);
+
+  const fetchImages = async () => {
+    if (!uid) return;
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid));
+      setImages((r.data || []).map((img: any) => ({
+        ...img,
+        url: ConstantInfo.fileDir + img.url.replace(/^\//, ''),
+      })));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f || !uid) return;
+    setIsUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd);
+      await fetchImages();
+    } catch (er) { console.error(er); } finally { setIsUploading(false); }
+  };
+
+  const handleDeleteImage = async (imageUid: string) => {
+    try {
+      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteImage(imageUid));
+      await fetchImages();
+    } catch (er) { console.error(er); }
+  };
+
+  const fetchBlueprints = async () => {
+    if (!uid) return;
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid));
+      setBlueprints((r.data || []).map((bp: any) => ({
+        ...bp,
+        url: ConstantInfo.fileDir + bp.url.replace(/^\//, ''),
+      })));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleBlueprintUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f || !uid) return;
+    setIsUploadingBlueprint(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd);
+      await fetchBlueprints();
+    } catch (er) { console.error(er); } finally { setIsUploadingBlueprint(false); }
+  };
+
+  const handleDeleteBlueprint = async (bpUid: string) => {
+    try {
+      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteBlueprint(bpUid));
+      await fetchBlueprints();
+    } catch (er) { console.error(er); }
+  };
+
+  const fetchBarcodeData = async () => {
+    if (!uid) return;
+    try {
+      const [qrRes, matRes] = await Promise.all([
+        AxiosService.get(ConstantInfo.restApiNomenclatureQrcodes(uid)),
+        AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(uid)),
+      ]);
+      const qrs = (qrRes.data || []).map((qr: any) => ({
+        ...qr,
+        url: ConstantInfo.fileDir + qr.url.replace(/^\//, ''),
+      }));
+      if (qrs.length > 0) setBarcodeImage(qrs[0]);
+      if (matRes.data.barcode) {
+        setBarcodeCode(matRes.data.barcode);
+        setBarcode(matRes.data.barcode);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleBarcodeSave = async () => {
+    if (!uid) return;
+    setIsUploadingBarcode(true);
+    try {
+      await AxiosService.post(ConstantInfo.restApiNomenclatureDraft, {
+        uid, code: parseInt(code || '0'), name, article, description,
+        groupUid: selectedCatalogId || null,
+        typeMainUid: selectedAccountingGroupId || null,
+        typePurposeUid: selectedNomenclatureGroupId || null,
+        typeProductUid: selectedNomenclatureTypeId || null,
+        usage, wasteMaterial, recycleMaterial,
+        measureUid: selectedUnitId || null,
+        manufacturerUid: selectedManufacturerId || null,
+        brandUid: selectedBrandId || null,
+        modelOfBrandUid: selectedModelId || null,
+        countryUid: selectedCountryId || null,
+        barcode: barcodeCode,
+      });
+      setBarcode(barcodeCode);
+      setShowBarcodePopup(false);
+    } catch (e) { console.error(e); } finally { setIsUploadingBarcode(false); }
+  };
+
+  const handleBarcodeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f || !uid) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      await AxiosService.post(ConstantInfo.restApiNomenclatureQrcodes(uid), fd);
+      await fetchBarcodeData();
+    } catch (er) { console.error(er); }
+  };
+
+  const handleDeleteBarcodeImage = async () => {
+    if (!barcodeImage) return;
+    try {
+      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteQrcode(barcodeImage.uid));
+      setBarcodeImage(null);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchPrices = async () => {
+    if (!uid) return;
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiNomenclaturePrices(uid));
+      setPrices(r.data || []);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleAddPrice = async () => {
+    if (!uid || !newPrice) return;
+    try {
+      await AxiosService.post(ConstantInfo.restApiNomenclaturePrices(uid), {
+        price: parseFloat(newPrice),
+        priceDate: newPriceDate,
+      });
+      await fetchPrices();
+      setShowAddPricePopup(false);
+      setNewPrice('');
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDeletePrice = async (priceUid: string) => {
+    try {
+      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeletePrice(priceUid));
+      await fetchPrices();
+    } catch (e) { console.error(e); }
+  };
+
+  const loadMaterialData = async (muid: string) => {
     setIsLoading(true);
     try {
-      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(materialUid));
-      const data = response.data;
-      setName(data.name || '');
-      setArticle(data.article || '');
-      setDescription(data.description || '');
-      
-      if (data.groupUid) {
-        setSelectedCatalogId(data.groupUid);
-        setSelectedCatalog(data.groupName || '');
-      }
-      
-      if (data.typeMainUid) {
-        setSelectedAccountingGroupId(data.typeMainUid);
-        setSelectedAccountingGroup(data.typeMainName || '');
-      }
-      
-      if (data.typePurposeUid) {
-        setSelectedNomenclatureGroupId(data.typePurposeUid);
-        setSelectedNomenclatureGroup(data.typePurposeName || '');
-      }
-      
-      if (data.typeProductUid) {
-        setSelectedNomenclatureTypeId(data.typeProductUid);
-        setSelectedNomenclatureType(data.typeProductName || '');
-      }
-    } catch (error) {
-      console.error('Ошибка загрузки материала:', error);
-    } finally {
-      setIsLoading(false);
-    }
+      const r = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(muid));
+      const d = r.data;
+      setName(d.name || ''); setArticle(d.article || ''); setDescription(d.description || '');
+      setUsage(d.usage || false); setWasteMaterial(d.wasteMaterial || false); setRecycleMaterial(d.recycleMaterial || false);
+      if (d.groupUid) { setSelectedCatalogId(d.groupUid); setSelectedCatalog(d.groupName || ''); }
+      if (d.typeMainUid) { setSelectedAccountingGroupId(d.typeMainUid); setSelectedAccountingGroup(d.typeMainName || ''); }
+      if (d.typePurposeUid) { setSelectedNomenclatureGroupId(d.typePurposeUid); setSelectedNomenclatureGroup(d.typePurposeName || ''); }
+      if (d.typeProductUid) { setSelectedNomenclatureTypeId(d.typeProductUid); setSelectedNomenclatureType(d.typeProductName || ''); }
+      if (d.measureUid) { setSelectedUnitId(d.measureUid); setSelectedUnit(d.measureName || ''); }
+      if (d.manufacturerUid) { setSelectedManufacturerId(d.manufacturerUid); setSelectedManufacturer(d.manufacturerName || ''); }
+      if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); }
+      if (d.modelOfBrandUid) { setSelectedModelId(d.modelOfBrandUid); setSelectedModel(d.modelOfBrandName || ''); }
+      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); }
+      if (d.barcode) { setBarcode(d.barcode); setBarcodeCode(d.barcode); }
+    } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
   const handleSave = async () => {
@@ -221,45 +477,30 @@ const NomenclatureCreatePage = () => {
     setIsSaving(true);
     try {
       await AxiosService.post(ConstantInfo.restApiNomenclatureDraft, {
-        uid,
-        code: parseInt(code),
-        name,
-        article,
-        description,
+        uid, code: parseInt(code), name, article, description,
         groupUid: selectedCatalogId || null,
         typeMainUid: selectedAccountingGroupId || null,
         typePurposeUid: selectedNomenclatureGroupId || null,
         typeProductUid: selectedNomenclatureTypeId || null,
+        usage, wasteMaterial, recycleMaterial,
+        measureUid: selectedUnitId || null,
+        manufacturerUid: selectedManufacturerId || null,
+        brandUid: selectedBrandId || null,
+        modelOfBrandUid: selectedModelId || null,
+        countryUid: selectedCountryId || null,
+        barcode: barcodeCode,
       });
-      console.log('Черновик сохранён');
       return true;
-    } catch (error) {
-      console.error('Ошибка сохранения:', error);
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e) { console.error(e); return false; } finally { setIsSaving(false); }
   };
 
-  const handleClose = () => {
-    const currentTab = tabs.find(tab => tab.id === activeTabId);
-    if (currentTab) {
-      closeTab(currentTab.id);
-    }
-  };
+  const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); };
+  const handleSaveAndClose = async () => { await handleSave(); handleClose(); };
+  const handleCloseWithoutSaving = () => { handleClose(); };
 
-  const handleSaveAndClose = async () => {
-    await handleSave();
-    handleClose();
-  };
-
-  const handleCloseWithoutSaving = () => {
-    handleClose();
-  };
-
-  const handleAccountingGroupSelect = (option: TypeMaterialOption) => {
-    setSelectedAccountingGroup(option.typeName);
-    setSelectedAccountingGroupId(option.uid);
+  const handleAccountingGroupSelect = (o: TypeMaterialOption) => {
+    setSelectedAccountingGroup(o.typeName);
+    setSelectedAccountingGroupId(o.uid);
     setAccountingGroupOpen(false);
     setSelectedNomenclatureGroup('');
     setSelectedNomenclatureGroupId('');
@@ -270,41 +511,27 @@ const NomenclatureCreatePage = () => {
   const openPopup = (type: PopupType) => {
     if (type === 'nomenclatureGroup' && !selectedAccountingGroupId) return;
     if (type === 'nomenclatureType' && !selectedNomenclatureGroupId) return;
-
+    if (type === 'brand' && !selectedManufacturerId) return;
+    if (type === 'model' && !selectedBrandId) return;
     setPopupType(type);
-
-    if (type === 'nomenclatureGroup') {
-      setPopupFilterParam(selectedAccountingGroupId);
-    } else if (type === 'nomenclatureType') {
-      setPopupFilterParam(selectedNomenclatureGroupId);
-    } else {
-      setPopupFilterParam(undefined);
-    }
-
+    if (type === 'nomenclatureGroup') setPopupFilterParam(selectedAccountingGroupId);
+    else if (type === 'nomenclatureType') setPopupFilterParam(selectedNomenclatureGroupId);
+    else if (type === 'brand') setPopupFilterParam(selectedManufacturerId);
+    else if (type === 'model') setPopupFilterParam(selectedBrandId);
+    else setPopupFilterParam(undefined);
     setPopupOpen(true);
   };
 
-  const handlePopupSelect = (id: string, name: string) => {
+  const handlePopupSelect = (id: string, nm: string) => {
     switch (popupType) {
-      case 'catalog':
-        setSelectedCatalog(name);
-        setSelectedCatalogId(id);
-        break;
-      case 'nomenclatureGroup':
-        setSelectedNomenclatureGroup(name);
-        setSelectedNomenclatureGroupId(id);
-        setSelectedNomenclatureType('');
-        setSelectedNomenclatureTypeId('');
-        break;
-      case 'nomenclatureType':
-        setSelectedNomenclatureType(name);
-        setSelectedNomenclatureTypeId(id);
-        break;
-      case 'unit': setSelectedUnit(name); break;
-      case 'manufacturer': setSelectedManufacturer(name); break;
-      case 'brand': setSelectedBrand(name); break;
-      case 'model': setSelectedModel(name); break;
-      case 'country': setSelectedCountry(name); break;
+      case 'catalog': setSelectedCatalog(nm); setSelectedCatalogId(id); break;
+      case 'nomenclatureGroup': setSelectedNomenclatureGroup(nm); setSelectedNomenclatureGroupId(id); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); break;
+      case 'nomenclatureType': setSelectedNomenclatureType(nm); setSelectedNomenclatureTypeId(id); break;
+      case 'unit': setSelectedUnit(nm); setSelectedUnitId(id); break;
+      case 'manufacturer': setSelectedManufacturer(nm); setSelectedManufacturerId(id); setSelectedBrand(''); setSelectedBrandId(''); setSelectedModel(''); setSelectedModelId(''); break;
+      case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setSelectedModel(''); setSelectedModelId(''); break;
+      case 'model': setSelectedModel(nm); setSelectedModelId(id); break;
+      case 'country': setSelectedCountry(nm); setSelectedCountryId(id); break;
     }
   };
 
@@ -329,624 +556,80 @@ const NomenclatureCreatePage = () => {
     fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
   };
 
-  const labelStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059',
+  const getProgressStep = useCallback((): number => {
+    const hbf = !!(name && selectedCatalogId);
+    const hag = !!selectedAccountingGroupId;
+    const hng = !!selectedNomenclatureGroupId;
+    const hnt = !!selectedNomenclatureTypeId;
+    if (hbf && hag && hng && hnt) return 4;
+    if (hbf && hag && hng) return 3;
+    if (hbf && hag) return 2;
+    if (hbf) return 1;
+    return 0;
+  }, [name, selectedCatalogId, selectedAccountingGroupId, selectedNomenclatureGroupId, selectedNomenclatureTypeId]);
+
+  const currentStep = getProgressStep();
+
+  const commonProps: CommonProps = {
+    uid, code, name, article, description, isEdit, isSaving, isUploading, isUploadingBlueprint,
+    isUploadingBarcode, barcode, barcodeCode, barcodeImage,
+    images, blueprints, prices, suppliers,
+    selectedImageIndex, selectedBlueprintIndex,
+    selectedCatalog, selectedCatalogId,
+    selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen,
+    selectedNomenclatureGroup, selectedNomenclatureGroupId,
+    selectedNomenclatureType, selectedNomenclatureTypeId,
+    selectedUnit, selectedUnitId,
+    selectedManufacturer, selectedManufacturerId,
+    selectedBrand, selectedBrandId,
+    selectedModel, selectedModelId,
+    selectedCountry, selectedCountryId,
+    usage, wasteMaterial, recycleMaterial,
+    nameFocused, articleFocused, descriptionFocused,
+    showBarcodePopup, showAddPricePopup,
+    newPrice, newPriceDate, newPriceSupplierUid: '',
+    fullscreenImage, fullscreenBlueprint,
+    isLoading, isLoadingPrices: false,
+    typeMaterials,
+    fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>,
+    blueprintInputRef: blueprintInputRef as React.RefObject<HTMLInputElement>,
+    barcodeImageInputRef: barcodeImageInputRef as React.RefObject<HTMLInputElement>,
+    setName, setArticle, setDescription,
+    setNameFocused, setArticleFocused, setDescriptionFocused,
+    toggleUsage, toggleWasteMaterial, toggleRecycleMaterial,
+    setSelectedCatalog, setSelectedCatalogId,
+    setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen,
+    setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId,
+    setSelectedNomenclatureType, setSelectedNomenclatureTypeId,
+    setSelectedUnit, setSelectedUnitId,
+    setSelectedManufacturer, setSelectedManufacturerId,
+    setSelectedBrand, setSelectedBrandId,
+    setSelectedModel, setSelectedModelId,
+    setSelectedCountry, setSelectedCountryId,
+    setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage,
+    setBlueprints, setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint,
+    setBarcode, setShowBarcodePopup, setBarcodeImage, setBarcodeCode, setIsUploadingBarcode,
+    setPrices, setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid: () => {}, setSuppliers,
+    handleImageUpload, handleDeleteImage,
+    handleBlueprintUpload, handleDeleteBlueprint,
+    fetchBarcodeData, handleBarcodeSave, handleBarcodeImageUpload, handleDeleteBarcodeImage,
+    fetchPrices, handleAddPrice, handleDeletePrice,
+    openPopup, handleAccountingGroupSelect,
   };
-
-  const smallButtonStyle: React.CSSProperties = {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: 0, flexShrink: 0,
-  };
-
-  const fieldBaseStyle: React.CSSProperties = {
-    width: 340, height: 44, borderRadius: 10,
-    marginTop: 11, display: 'flex', alignItems: 'center',
-    paddingLeft: 12, paddingRight: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    outline: 'none', border: '1px solid rgba(102, 110, 254, 0.15)',
-    backgroundColor: '#FFFFFF', position: 'relative',
-  };
-
-  const selectFieldStyle = (hasValue: boolean): React.CSSProperties => ({
-    width: 388, height: 44, borderRadius: 10,
-    border: hasValue ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-    backgroundColor: '#FFFFFF', marginTop: 11,
-    display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    color: hasValue ? '#666EFE' : '#9CA3AF', cursor: 'pointer',
-    position: 'relative' as const,
-    boxSizing: 'border-box',
-  });
-
-  const selectFieldStyleSmall = (hasValue: boolean): React.CSSProperties => ({
-    width: 300, height: 44, borderRadius: 10,
-    border: hasValue ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-    backgroundColor: '#FFFFFF', marginTop: 11,
-    display: 'flex', alignItems: 'center', paddingLeft: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    color: hasValue ? '#666EFE' : '#9CA3AF', cursor: 'pointer',
-  });
-
-  // Общий стиль для иконки-стрелки справа в ячейке
-  const arrowIconStyle: React.CSSProperties = {
-    width: 18, height: 18, flexShrink: 0,
-    transition: 'transform 0.3s ease',
-  };
-
-  const toggleFolder = (folderId: number) => {
-    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, isOpen: !f.isOpen } : f));
-  };
-
-  const checkScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    setHasScroll(container.scrollHeight > container.clientHeight);
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(checkScroll, 350);
-    return () => clearTimeout(timer);
-  }, [folders]);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    checkScroll();
-    container.addEventListener('scroll', checkScroll);
-    const ro = new ResizeObserver(checkScroll);
-    ro.observe(container);
-    return () => {
-      container.removeEventListener('scroll', checkScroll);
-      ro.disconnect();
-    };
-  }, []);
-
-  // Закрытие выпадающего списка группы учета при клике вне
-  useEffect(() => {
-    if (!accountingGroupOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.accounting-group-dropdown')) {
-        setAccountingGroupOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [accountingGroupOpen]);
 
   const renderContent = () => {
-    const contentStyle: React.CSSProperties = {
-      position: 'absolute', top: 164, left: 30, right: 30, bottom: 111,
-    };
+    const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
 
     switch (activeTab) {
-      case 0:
-        return (
-          <div style={{ ...contentStyle, display: 'flex', gap: 30 }}>
-            {/* === ЛЕВЫЙ БЛОК: Код, Артикул, Наименование, Каталог, Описание === */}
-            <div style={{ ...blockStyle, width: 792, height: 565, flexShrink: 0, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 40, left: 30 }}>
-                <span style={labelStyle}>Код:</span>
-                <div style={{
-                  ...fieldBaseStyle,
-                  backgroundColor: '#F5F6FA',
-                  border: '1px solid rgba(102, 110, 254, 0.5)',
-                  cursor: 'not-allowed',
-                }}>
-                  <img src={code ? Icon12 : Icon11} alt="" style={{ width: 20, height: 40, position: 'absolute', left: 12 }} />
-                  <span style={{ marginLeft: 44, color: '#666EFE', opacity: 0.5 }}>
-                    {code || 'Код'}
-                  </span>
-                </div>
-                <div style={{ marginTop: 25 }}>
-                  <span style={labelStyle}>Артикул:</span>
-                  <div style={{
-                    ...fieldBaseStyle,
-                    border: (article || articleFocused) ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                  }}>
-                    <img src={article ? Icon12 : Icon11} alt="" style={{ width: 20, height: 40, position: 'absolute', left: 12 }} />
-                    <input
-                      style={{
-                        width: 'calc(100% - 50px)', height: '100%', border: 'none', outline: 'none',
-                        marginLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-                        color: article ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent',
-                      }}
-                      value={article}
-                      onChange={e => setArticle(e.target.value)}
-                      onFocus={() => setArticleFocused(true)}
-                      onBlur={() => setArticleFocused(false)}
-                      placeholder="Артикул"
-                    />
-                    {article && (
-                      <button
-                        onClick={() => setArticle('')}
-                        style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
-                      >
-                        <img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div style={{ position: 'absolute', top: 40, right: 52 }}>
-                <span style={labelStyle}>Наименование:</span>
-                <div style={{
-                  ...fieldBaseStyle,
-                  border: (name || nameFocused) ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                }}>
-                  <img src={name ? Icon22 : Icon21} alt="" style={{ width: 16, height: 16, position: 'absolute', left: 14 }} />
-                  <input
-                    style={{
-                      width: 'calc(100% - 50px)', height: '100%', border: 'none', outline: 'none',
-                      marginLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-                      color: name ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent',
-                    }}
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    onFocus={() => setNameFocused(true)}
-                    onBlur={() => setNameFocused(false)}
-                    placeholder="Введите название номенклатуры"
-                  />
-                  {name && (
-                    <button
-                      onClick={() => setName('')}
-                      style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
-                    >
-                      <img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} />
-                    </button>
-                  )}
-                </div>
-                <div style={{ marginTop: 25 }}>
-                  <span style={labelStyle}>Каталог:</span>
-                  <div style={{
-                    ...fieldBaseStyle,
-                    cursor: 'pointer',
-                    border: selectedCatalog ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                  }} onClick={() => openPopup('catalog')}>
-                    <img src={selectedCatalog ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, position: 'absolute', left: 15 }} />
-                    <span style={{ marginLeft: 44, color: selectedCatalog ? '#666EFE' : '#A0A3BD' }}>
-                      {selectedCatalog || 'Выберите группу'}
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openPopup('catalog'); }}
-                      style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
-                    >
-                      <img src={selectedCatalog ? Icon42 : Icon41} alt="Открыть" style={{ width: 18, height: 18 }} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div style={{ position: 'absolute', top: 268, left: 30, right: 30 }}>
-                <span style={labelStyle}>Описание:</span>
-                <div style={{
-                  width: 732, height: 263, borderRadius: 10,
-                  border: (description || descriptionFocused) ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                  backgroundColor: '#FFFFFF', marginTop: 11, position: 'relative',
-                }}>
-                  <img src={description ? Icon52 : Icon51} alt="" style={{ width: 16, height: 16, position: 'absolute', top: 15, left: 15 }} />
-                  <textarea
-                    style={{
-                      width: '100%', height: '100%', border: 'none', outline: 'none',
-                      paddingTop: 15, paddingLeft: 44, paddingRight: 40, paddingBottom: 15,
-                      fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-                      color: description ? '#666EFE' : '#A0A3BD',
-                      backgroundColor: 'transparent', resize: 'none',
-                      borderRadius: 10, boxSizing: 'border-box',
-                    }}
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    onFocus={() => setDescriptionFocused(true)}
-                    onBlur={() => setDescriptionFocused(false)}
-                    placeholder="Введите описание номенклатуры"
-                  />
-                  {description && (
-                    <button
-                      onClick={() => setDescription('')}
-                      style={{ position: 'absolute', top: 15, right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
-                    >
-                      <img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* === СРЕДНИЙ БЛОК: Группа учета, Группа номенклатуры, Вид номенклатуры, Чекбоксы === */}
-            <div style={{ ...blockStyle, width: 475, height: 565, flexShrink: 0, position: 'relative' }}>
-              
-              {/* Группа учета */}
-              <div style={{ position: 'absolute', top: 40, left: 30, right: 30 }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-                  <span style={{ ...labelStyle, marginLeft: 9 }}>Группа учета:</span>
-                </div>
-                <div className="accounting-group-dropdown" style={{ position: 'relative' }}>
-                  <div 
-                    onClick={() => setAccountingGroupOpen(!accountingGroupOpen)} 
-                    style={selectFieldStyle(!!selectedAccountingGroup)}
-                  >
-                    <img 
-                      src={selectedAccountingGroup ? Icon62 : Icon61} 
-                      alt="" 
-                      style={{ width: 16, height: 16, flexShrink: 0 }} 
-                    />
-                    <span style={{ 
-                      marginLeft: 14, flex: 1, overflow: 'hidden', 
-                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      color: selectedAccountingGroup ? '#666EFE' : '#9CA3AF',
-                    }}>
-                      {selectedAccountingGroup || 'Выбрать группу учета'}
-                    </span>
-                    <motion.img 
-                      src={Icon9} 
-                      alt="" 
-                      style={{
-                        ...arrowIconStyle,
-                        transform: accountingGroupOpen ? 'rotateX(180deg)' : 'rotateX(0deg)',
-                      }}
-                    />
-                  </div>
-                  <AnimatePresence>
-                    {accountingGroupOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.2 }}
-                        style={{
-                          position: 'absolute', top: 48, left: 0, width: 388,
-                          backgroundColor: '#FFFFFF', borderRadius: 10,
-                          border: '1px solid rgba(102, 110, 254, 0.15)',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
-                          zIndex: 1000, overflow: 'hidden',
-                        }}
-                      >
-                        {typeMaterials.map(option => (
-                          <div
-                            key={option.uid}
-                            onClick={() => handleAccountingGroupSelect(option)}
-                            style={{
-                              height: 44, display: 'flex', alignItems: 'center', paddingLeft: 44,
-                              fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-                              color: '#2D4059', cursor: 'pointer',
-                              backgroundColor: selectedAccountingGroupId === option.uid ? '#F0F1FF' : '#FFFFFF',
-                            }}
-                            onMouseEnter={(e) => { if (selectedAccountingGroupId !== option.uid) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }}
-                            onMouseLeave={(e) => { if (selectedAccountingGroupId !== option.uid) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}
-                          >
-                            {option.typeName}
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-
-              {/* Группа номенклатуры */}
-              <div style={{ position: 'absolute', top: 145, left: 30, right: 30 }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-                  <span style={{ ...labelStyle, marginLeft: 9 }}>Группа номенклатуры:</span>
-                </div>
-                <div 
-                  onClick={() => openPopup('nomenclatureGroup')} 
-                  style={{
-                    ...selectFieldStyle(!!selectedNomenclatureGroup),
-                    opacity: selectedAccountingGroupId ? 1 : 0.5,
-                    cursor: selectedAccountingGroupId ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  <img 
-                    src={selectedNomenclatureGroup ? Icon32 : Icon31} 
-                    alt="" 
-                    style={{ width: 14.5, height: 18, flexShrink: 0 }} 
-                  />
-                  <span style={{ 
-                    marginLeft: 15.5, flex: 1, overflow: 'hidden', 
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    color: selectedNomenclatureGroup ? '#666EFE' : '#9CA3AF',
-                  }}>
-                    {selectedNomenclatureGroup || (selectedAccountingGroupId ? 'Выбрать группу' : 'Сначала выберите группу учета')}
-                  </span>
-                  <img 
-                    src={selectedNomenclatureGroup ? Icon42 : Icon41} 
-                    alt="" 
-                    style={{ width: 18, height: 18, flexShrink: 0 }} 
-                  />
-                </div>
-              </div>
-
-              {/* Вид номенклатуры */}
-              <div style={{ position: 'absolute', top: 250, left: 30, right: 30 }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-                  <span style={{ ...labelStyle, marginLeft: 9 }}>Вид номенклатуры:</span>
-                </div>
-                <div 
-                  onClick={() => openPopup('nomenclatureType')} 
-                  style={{
-                    ...selectFieldStyle(!!selectedNomenclatureType),
-                    opacity: selectedNomenclatureGroupId ? 1 : 0.5,
-                    cursor: selectedNomenclatureGroupId ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  <img 
-                    src={selectedNomenclatureType ? Icon72 : Icon71} 
-                    alt="" 
-                    style={{ width: 16, height: 16, flexShrink: 0 }} 
-                  />
-                  <span style={{ 
-                    marginLeft: 14, flex: 1, overflow: 'hidden', 
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    color: selectedNomenclatureType ? '#666EFE' : '#9CA3AF',
-                  }}>
-                    {selectedNomenclatureType || (selectedNomenclatureGroupId ? 'Выбрать вид' : 'Сначала выберите группу номенклатуры')}
-                  </span>
-                  <img 
-                    src={selectedNomenclatureType ? Icon42 : Icon41} 
-                    alt="" 
-                    style={{ width: 18, height: 18, flexShrink: 0 }} 
-                  />
-                </div>
-              </div>
-
-              {/* Чекбоксы */}
-              <div style={{ position: 'absolute', top: 345, left: 30 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: 415, height: 24 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>Многократное использование</span>
-                  <div style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(102, 110, 254, 0.3)', backgroundColor: '#FFFFFF', flexShrink: 0 }} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: 415, height: 24, marginTop: 15 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>Сдача в лом (отходы)</span>
-                  <div style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(102, 110, 254, 0.3)', backgroundColor: '#FFFFFF', flexShrink: 0 }} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: 415, height: 24, marginTop: 15 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>Сдача на переточку</span>
-                  <div style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(102, 110, 254, 0.3)', backgroundColor: '#FFFFFF', flexShrink: 0 }} />
-                </div>
-              </div>
-            </div>
-
-            {/* === ПРАВЫЙ БЛОК: Изображение, Штрихкод === */}
-            <div style={{ ...blockStyle, width: 413, height: 565, flexShrink: 0, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 30, left: 30, right: 30 }}>
-                <span style={labelStyle}>Изображение:</span>
-                <div style={{ width: 353, height: 353, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', marginTop: 11 }} />
-                <div style={{ marginTop: 25 }}>
-                  <span style={labelStyle}>Штрихкод:</span>
-                  <div style={{ width: 353, height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', marginTop: 11 }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 1:
-        return (
-          <div style={{ ...contentStyle, display: 'flex', flexDirection: 'column', gap: 15 }}>
-            <div style={{ ...blockStyle, width: 1740, height: 132, flexShrink: 0, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 30, left: 30, display: 'flex', gap: 45 }}>
-                <div><span style={labelStyle}>Единица измерения:</span><div onClick={() => openPopup('unit')} style={selectFieldStyleSmall(!!selectedUnit)}>{selectedUnit || 'Выбрать'}</div></div>
-                <div><span style={labelStyle}>Производитель:</span><div onClick={() => openPopup('manufacturer')} style={selectFieldStyleSmall(!!selectedManufacturer)}>{selectedManufacturer || 'Выбрать'}</div></div>
-                <div><span style={labelStyle}>Бренд:</span><div onClick={() => openPopup('brand')} style={selectFieldStyleSmall(!!selectedBrand)}>{selectedBrand || 'Выбрать'}</div></div>
-                <div><span style={labelStyle}>Модель:</span><div onClick={() => openPopup('model')} style={selectFieldStyleSmall(!!selectedModel)}>{selectedModel || 'Выбрать'}</div></div>
-                <div><span style={labelStyle}>Страна происхождения:</span><div onClick={() => openPopup('country')} style={selectFieldStyleSmall(!!selectedCountry)}>{selectedCountry || 'Выбрать'}</div></div>
-              </div>
-            </div>
-            <div style={{ ...blockStyle, width: 1740, height: 418, flexShrink: 0, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 15, left: 64, width: 518, height: 259, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF' }} />
-              <div style={{ position: 'absolute', top: 15, left: 649, display: 'flex', gap: 15 }}><div style={smallButtonStyle} /><div style={smallButtonStyle} /></div>
-              <div style={{ position: 'absolute', top: 64, left: 634, display: 'flex', gap: 10 }}>
-                <div style={{ width: 1056, height: 324, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
-                  <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20 }}>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 300 }}>ХАРАКТЕРИСТИКА</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 200 }}>ОБОЗНАЧЕНИЕ</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 150 }}>ЕД.ИЗМ.</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>ЗНАЧЕНИЕ</span>
-                  </div>
-                  <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    {folders.map((folder) => (
-                      <React.Fragment key={folder.id}>
-                        <div onClick={() => toggleFolder(folder.id)} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                          <svg width="15" height="18" viewBox="0 0 15 18" fill="none" style={{ flexShrink: 0 }}><path d="M0 2C0 0.895431 0.895431 0 2 0H5.17157C5.70201 0 6.21071 0.210714 6.58579 0.585786L7.41421 1.41421C7.78929 1.78929 8.29799 2 8.82843 2H13C14.1046 2 15 2.89543 15 4V16C15 17.1046 14.1046 18 13 18H2C0.895431 18 0 17.1046 0 16V2Z" fill="#666EFE"/></svg>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 18 }}>{folder.name}</span>
-                          <motion.svg width="10" height="6" viewBox="0 0 10 6" fill="none" animate={{ rotate: folder.isOpen ? 90 : 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ flexShrink: 0, marginLeft: 12 }}><path d="M1 1L5 5L9 1" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></motion.svg>
-                        </div>
-                        <AnimatePresence>
-                          {folder.isOpen && folder.items.map((item) => (
-                            <motion.div key={item.id} initial={{ height: 0, opacity: 0 }} animate={{ height: 54, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ overflow: 'hidden' }}>
-                              <div style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15, width: 280 }}>{item.characteristic}</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', width: 200 }}>{item.designation}</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', width: 150 }}>{item.unit}</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>{item.value}</span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-                {hasScroll && (<div style={{ width: 10, height: 324, paddingTop: 54 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={324 - 54} /></div>)}
-              </div>
-            </div>
-          </div>
-        );
-      case 2: case 3: case 5:
-        return (
-          <div style={contentStyle}>
-            <div style={{ ...blockStyle, width: 1740, height: 565, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 34, left: 40, display: 'flex', gap: 15 }}><div style={smallButtonStyle} /><div style={smallButtonStyle} /><div style={smallButtonStyle} /></div>
-              <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 10 }}>
-                <div style={{ width: 1665, height: 450, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
-                  <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 52, paddingRight: 40 }}>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: 600 }}>СТАТУС</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 'auto' }}>ДАТА ВРЕМЯ</span>
-                  </div>
-                  <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    {folders.map((folder) => (
-                      <React.Fragment key={folder.id}>
-                        <div onClick={() => toggleFolder(folder.id)} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                          <svg width="15" height="18" viewBox="0 0 15 18" fill="none" style={{ flexShrink: 0 }}><path d="M0 2C0 0.895431 0.895431 0 2 0H5.17157C5.70201 0 6.21071 0.210714 6.58579 0.585786L7.41421 1.41421C7.78929 1.78929 8.29799 2 8.82843 2H13C14.1046 2 15 2.89543 15 4V16C15 17.1046 14.1046 18 13 18H2C0.895431 18 0 17.1046 0 16V2Z" fill="#666EFE"/></svg>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 18 }}>{folder.name}</span>
-                          <motion.svg width="10" height="6" viewBox="0 0 10 6" fill="none" animate={{ rotate: folder.isOpen ? 90 : 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ flexShrink: 0, marginLeft: 12 }}><path d="M1 1L5 5L9 1" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></motion.svg>
-                        </div>
-                        <AnimatePresence>
-                          {folder.isOpen && folder.items.map((item) => (
-                            <motion.div key={item.id} initial={{ height: 0, opacity: 0 }} animate={{ height: 54, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ overflow: 'hidden' }}>
-                              <div style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 40, paddingRight: 40, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer', position: 'relative' }}>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15 }}>{item.characteristic}</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: 600 }}>-</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', marginLeft: 'auto' }}>2026-05-14 12:00</span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-                {hasScroll && (<div style={{ width: 10, height: 450, paddingTop: 54 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={450 - 54} /></div>)}
-              </div>
-            </div>
-          </div>
-        );
-      case 4:
-        return (
-          <div style={contentStyle}>
-            <div style={{ ...blockStyle, width: 1740, height: 565, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 34, left: 40, display: 'flex', gap: 15 }}><div style={smallButtonStyle} /><div style={smallButtonStyle} /><div style={smallButtonStyle} /></div>
-              <div style={{ position: 'absolute', top: '50%', left: 73, transform: 'translateY(-50%)', width: 490, height: 220, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#9CA3AF' }}>В разработке</span>
-              </div>
-              <div style={{ position: 'absolute', top: '50%', right: 40, transform: 'translateY(-50%)', display: 'flex', gap: 10 }}>
-                <div style={{ width: 1054, height: 432, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
-                  <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20 }}>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 250 }}>ДАТА</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 200 }}>ЦЕНА</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 200 }}>ПОСТАВЩИК</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>СТАТУС</span>
-                  </div>
-                  <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    {folders.map((folder) => (
-                      <React.Fragment key={folder.id}>
-                        <div onClick={() => toggleFolder(folder.id)} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                          <svg width="15" height="18" viewBox="0 0 15 18" fill="none" style={{ flexShrink: 0 }}><path d="M0 2C0 0.895431 0.895431 0 2 0H5.17157C5.70201 0 6.21071 0.210714 6.58579 0.585786L7.41421 1.41421C7.78929 1.78929 8.29799 2 8.82843 2H13C14.1046 2 15 2.89543 15 4V16C15 17.1046 14.1046 18 13 18H2C0.895431 18 0 17.1046 0 16V2Z" fill="#666EFE"/></svg>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 18 }}>{folder.name}</span>
-                          <motion.svg width="10" height="6" viewBox="0 0 10 6" fill="none" animate={{ rotate: folder.isOpen ? 90 : 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ flexShrink: 0, marginLeft: 12 }}><path d="M1 1L5 5L9 1" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></motion.svg>
-                        </div>
-                        <AnimatePresence>
-                          {folder.isOpen && folder.items.map((item) => (
-                            <motion.div key={item.id} initial={{ height: 0, opacity: 0 }} animate={{ height: 54, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ overflow: 'hidden' }}>
-                              <div style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15, width: 250 }}>2026-05-14</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', width: 200 }}>12 500 ₽</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', width: 200 }}>ООО "Поставщик"</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>Активен</span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-                {hasScroll && (<div style={{ width: 10, height: 432, paddingTop: 54 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={432 - 54} /></div>)}
-              </div>
-            </div>
-          </div>
-        );
-      case 6:
-        return (
-          <div style={{ ...contentStyle, display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ ...blockStyle, width: 1740, height: 72, flexShrink: 0 }} />
-            <div style={{ ...blockStyle, width: 1740, height: 477, flexShrink: 0, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 34, left: 40, display: 'flex', gap: 15 }}><div style={smallButtonStyle} /><div style={smallButtonStyle} /><div style={smallButtonStyle} /></div>
-              <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 10 }}>
-                <div style={{ width: 1665, height: 378, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
-                  <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 52, paddingRight: 40 }}>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: 600 }}>СТАТУС</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 'auto' }}>ДАТА ВРЕМЯ</span>
-                  </div>
-                  <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    {folders.map((folder) => (
-                      <React.Fragment key={folder.id}>
-                        <div onClick={() => toggleFolder(folder.id)} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                          <svg width="15" height="18" viewBox="0 0 15 18" fill="none" style={{ flexShrink: 0 }}><path d="M0 2C0 0.895431 0.895431 0 2 0H5.17157C5.70201 0 6.21071 0.210714 6.58579 0.585786L7.41421 1.41421C7.78929 1.78929 8.29799 2 8.82843 2H13C14.1046 2 15 2.89543 15 4V16C15 17.1046 14.1046 18 13 18H2C0.895431 18 0 17.1046 0 16V2Z" fill="#666EFE"/></svg>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 18 }}>{folder.name}</span>
-                          <motion.svg width="10" height="6" viewBox="0 0 10 6" fill="none" animate={{ rotate: folder.isOpen ? 90 : 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ flexShrink: 0, marginLeft: 12 }}><path d="M1 1L5 5L9 1" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></motion.svg>
-                        </div>
-                        <AnimatePresence>
-                          {folder.isOpen && folder.items.map((item) => (
-                            <motion.div key={item.id} initial={{ height: 0, opacity: 0 }} animate={{ height: 54, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ overflow: 'hidden' }}>
-                              <div style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 40, paddingRight: 40, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer', position: 'relative' }}>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15 }}>{item.characteristic}</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: 600 }}>-</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', marginLeft: 'auto' }}>2026-05-14 12:00</span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-                {hasScroll && (<div style={{ width: 10, height: 378, paddingTop: 54 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={378 - 54} /></div>)}
-              </div>
-            </div>
-          </div>
-        );
-      case 7:
-        return (
-          <div style={contentStyle}>
-            <div style={{ ...blockStyle, width: 1740, height: 565, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 39, left: 25, display: 'flex', gap: 10 }}>
-                <div style={{ width: 1665, height: 486, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
-                  <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 52, paddingRight: 40 }}>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: 600 }}>СТАТУС</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 'auto' }}>ДАТА ВРЕМЯ</span>
-                  </div>
-                  <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    {folders.map((folder) => (
-                      <React.Fragment key={folder.id}>
-                        <div onClick={() => toggleFolder(folder.id)} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-                          <svg width="15" height="18" viewBox="0 0 15 18" fill="none" style={{ flexShrink: 0 }}><path d="M0 2C0 0.895431 0.895431 0 2 0H5.17157C5.70201 0 6.21071 0.210714 6.58579 0.585786L7.41421 1.41421C7.78929 1.78929 8.29799 2 8.82843 2H13C14.1046 2 15 2.89543 15 4V16C15 17.1046 14.1046 18 13 18H2C0.895431 18 0 17.1046 0 16V2Z" fill="#666EFE"/></svg>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 18 }}>{folder.name}</span>
-                          <motion.svg width="10" height="6" viewBox="0 0 10 6" fill="none" animate={{ rotate: folder.isOpen ? 90 : 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ flexShrink: 0, marginLeft: 12 }}><path d="M1 1L5 5L9 1" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></motion.svg>
-                        </div>
-                        <AnimatePresence>
-                          {folder.isOpen && folder.items.map((item) => (
-                            <motion.div key={item.id} initial={{ height: 0, opacity: 0 }} animate={{ height: 54, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ overflow: 'hidden' }}>
-                              <div style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 40, paddingRight: 40, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer', position: 'relative' }}>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15 }}>{item.characteristic}</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: 600 }}>-</span>
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', marginLeft: 'auto' }}>2026-05-14 12:00</span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-                {hasScroll && (<div style={{ width: 10, height: 486, paddingTop: 54 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={486 - 54} /></div>)}
-              </div>
-            </div>
-          </div>
-        );
-      default:
-        return null;
+      case 0: return <MainTab {...commonProps} />;
+      case 1: return <CharacteristicsTab {...commonProps} />;
+      case 2: return <DocumentsTab {...commonProps} />;
+      case 3: return <SuppliersTab {...commonProps} />;
+      case 4: return <PriceHistoryTab {...commonProps} />;
+      case 5: return <AnalogsTab {...commonProps} />;
+      case 6: return <RatingTab {...commonProps} />;
+      case 7: return <IntegrationTab {...commonProps} />;
+      default: return null;
     }
   };
 
@@ -964,17 +647,14 @@ const NomenclatureCreatePage = () => {
         <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>
           {isEdit ? name || 'Номенклатура' : 'Справочник: Номенклатура (Создание)'}
         </h1>
-        <button
-          onClick={() => setShowClosePopup(true)}
-          style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
-        >
+        <button onClick={() => setShowClosePopup(true)} style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>
           <img src={Icon7} alt="Закрыть" style={{ width: 14, height: 14 }} />
         </button>
       </div>
       <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25 }}>
-          {tabs_list.map((tab, index) => (
-            <button key={index} onClick={() => setActiveTab(index)} style={buttonStyle(activeTab === index)}>{tab}</button>
+          {tabs_list.map((tab, i) => (
+            <button key={i} onClick={() => setActiveTab(i)} style={buttonStyle(activeTab === i)}>{tab}</button>
           ))}
         </div>
         <div style={{ marginLeft: 'auto' }}>
@@ -982,22 +662,22 @@ const NomenclatureCreatePage = () => {
         </div>
       </div>
       {renderContent()}
+      <div style={{ position: 'absolute', bottom: 25, left: 45, display: 'flex', alignItems: 'flex-end' }}>
+        <ProgressBar/>
+      </div>
       <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-        <div style={{ width: 400, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#9CA3AF', flexShrink: 0 }}>
-          В разработке
-        </div>
         <button style={{ ...bottomButtonStyle, width: 234 }}>Синхронизировать</button>
         <button style={{ ...bottomButtonStyle, width: 121, opacity: isSaving ? 0.6 : 1 }} onClick={handleSave} disabled={isSaving}>
           {isSaving ? 'Сохранение...' : 'Записать'}
         </button>
         <button style={{ ...bottomButtonStyle, width: 116 }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
       </div>
-      
-      <CatalogSelectPopup 
-        isOpen={popupOpen} 
-        onClose={() => setPopupOpen(false)} 
-        onSelect={handlePopupSelect} 
-        popupType={popupType} 
+
+      <CatalogSelectPopup
+        isOpen={popupOpen}
+        onClose={() => setPopupOpen(false)}
+        onSelect={handlePopupSelect}
+        popupType={popupType}
         filterParam={popupFilterParam}
       />
 

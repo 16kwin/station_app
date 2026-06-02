@@ -26,13 +26,18 @@ import Icon16 from '../../../assets/References/Icon16.svg';
 import Icon17 from '../../../assets/References/Icon17.svg';
 import Icon18 from '../../../assets/References/Icon18.svg';
 import Icon19 from '../../../assets/References/Icon19.svg';
+import Icon20 from '../../../assets/References/Icon20.svg';
+import Icon21 from '../../../assets/References/Icon21.svg';
+import Icon22 from '../../../assets/References/Icon22.svg';
+import Icon23 from '../../../assets/References/Icon23.svg';
+import Icon24 from '../../../assets/References/Icon24.svg';
+import Icon25 from '../../../assets/References/Icon25.svg';
 
 interface MaterialItem {
   uid: string;
   name: string;
   article: string;
   code: number | null;
-  // Новые поля
   typeMainName?: string;
   typePurposeName?: string;
   typeProductName?: string;
@@ -90,17 +95,14 @@ const NomenclaturePage = () => {
   const HEADER_HEIGHT = 58;
   const VISIBLE_ROWS = 10;
 
-  // 6 колонок — расширенные
   const COL_CODE = 360;
   const COL_ARTICLE = 530;
   const COL_ACCOUNT_GROUP = 720;
   const COL_NOMENCLATURE_GROUP = 960;
   const COL_NOMENCLATURE_TYPE = 1200;
-  // ИСПОЛЬЗ убран
 
   const MAX_BREADCRUMBS_WIDTH = 500;
 
-  // Сохраняем id текущей вкладки при монтировании
   useEffect(() => {
     tabIdRef.current = activeTabId;
   }, []);
@@ -276,18 +278,6 @@ const NomenclaturePage = () => {
 
   const isMultipleSelected = (uid: string): boolean => {
     return selectedIds.size > 1 && selectedIds.has(uid);
-  };
-
-  const handleContextSelect = () => {
-    if (!contextMenu) return;
-    const { uid, type } = contextMenu;
-    if (type === 'folder') {
-      const folder = findNodeById(treeData, uid);
-      if (folder) toggleSelectNode(folder);
-    } else {
-      toggleSelectItem(uid);
-    }
-    setContextMenu(null);
   };
 
   const handleContextMove = () => {
@@ -634,9 +624,8 @@ const NomenclaturePage = () => {
   );
 
   const rowBoxShadow = 'inset 0px -0.7px 0px 0px #666EFE, inset 2px 0px 0px 0px #666EFE, inset -2px 0px 0px 0px #666EFE';
-  const contextMenuButtonStyle: React.CSSProperties = { width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
+  const contextMenuButtonStyle: React.CSSProperties = { height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
 
-  // Стиль для текста в колонках с троеточием
   const cellTextStyle: React.CSSProperties = {
     fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
     position: 'absolute',
@@ -691,15 +680,10 @@ const NomenclaturePage = () => {
             <img src={Icon13} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, maxWidth: 310 - shift, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{material.name || '—'}</span>
           </div>
-          {/* КОД */}
           <span style={{ ...cellTextStyle, left: COL_CODE, maxWidth: COL_ARTICLE - COL_CODE - 20 }}>{material.code || '—'}</span>
-          {/* АРТИКУЛ */}
           <span style={{ ...cellTextStyle, left: COL_ARTICLE, maxWidth: COL_ACCOUNT_GROUP - COL_ARTICLE - 20 }}>{material.article || '—'}</span>
-          {/* ГРУППА УЧЕТА */}
           <span style={{ ...cellTextStyle, left: COL_ACCOUNT_GROUP, maxWidth: COL_NOMENCLATURE_GROUP - COL_ACCOUNT_GROUP - 20 }}>{material.typeMainName || '—'}</span>
-          {/* ГРУППА НОМ. */}
           <span style={{ ...cellTextStyle, left: COL_NOMENCLATURE_GROUP, maxWidth: COL_NOMENCLATURE_TYPE - COL_NOMENCLATURE_GROUP - 20 }}>{material.typePurposeName || '—'}</span>
-          {/* ВИД НОМ. */}
           <span style={{ ...cellTextStyle, left: COL_NOMENCLATURE_TYPE, maxWidth: TABLE_WIDTH - COL_NOMENCLATURE_TYPE - 60 }}>{material.typeProductName || '—'}</span>
         </div>
       );
@@ -873,30 +857,79 @@ const NomenclaturePage = () => {
       />
 
       {contextMenu && (
-        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+        <div style={{ 
+          position: 'fixed', 
+          top: contextMenu.y, 
+          left: contextMenu.x, 
+          width: contextMenu.type === 'folder' && !isMultipleSelected(contextMenu.uid) ? 244 : 174, 
+          backgroundColor: '#FFFFFF', 
+          borderRadius: 6, 
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', 
+          zIndex: 10001, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          padding: '8px 0' 
+        }} onClick={e => e.stopPropagation()}>
           {isMultipleSelected(contextMenu.uid) ? (
             <>
-              <button style={contextMenuButtonStyle} onClick={handleContextMove}>Переместить</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextCopy}>Скопировать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
+              <button style={contextMenuButtonStyle} onClick={handleContextMove}>
+                <img src={Icon22} alt="" style={{ width: 16, height: 14, marginRight: 17 }} />
+                Переместить
+              </button>
+              <button style={contextMenuButtonStyle} onClick={handleContextCopy}>
+                <img src={Icon24} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
+                Скопировать
+              </button>
+              <button style={contextMenuButtonStyle} onClick={handleContextDelete}>
+                <img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+                Удалить
+              </button>
             </>
           ) : contextMenu.type === 'folder' ? (
             <>
-              <button style={contextMenuButtonStyle} onClick={handleContextCreateNomenclature}>Создать номенклатуру</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextCreateGroup}>Создать каталог</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextSelect}>Выбрать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextRename}>Переименовать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextMove}>Переместить</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextCopy}>Скопировать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
+              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextCreateNomenclature}>
+                <img src={Icon20} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+                Создать номенклатуру
+              </button>
+              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextCreateGroup}>
+                <img src={Icon21} alt="" style={{ width: 16, height: 14, marginRight: 17 }} />
+                Создать каталог
+              </button>
+              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextMove}>
+                <img src={Icon22} alt="" style={{ width: 16, height: 14, marginRight: 17 }} />
+                Переместить
+              </button>
+              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextRename}>
+                <img src={Icon23} alt="" style={{ width: 16, height: 15, marginRight: 17 }} />
+                Переименовать
+              </button>
+              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextCopy}>
+                <img src={Icon24} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
+                Скопировать
+              </button>
+              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextDelete}>
+                <img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+                Удалить
+              </button>
             </>
           ) : (
             <>
-              <button style={contextMenuButtonStyle} onClick={handleContextOpen}>Открыть</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextSelect}>Выбрать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextMove}>Переместить</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextCopy}>Скопировать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
+              <button style={contextMenuButtonStyle} onClick={handleContextOpen}>
+                <img src={Icon20} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+                Открыть
+              </button>
+              <button style={contextMenuButtonStyle} onClick={handleContextMove}>
+                <img src={Icon22} alt="" style={{ width: 16, height: 14, marginRight: 17 }} />
+                Переместить
+              </button>
+              <button style={contextMenuButtonStyle} onClick={handleContextCopy}>
+                <img src={Icon24} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
+                Скопировать
+              </button>
+              <button style={contextMenuButtonStyle} onClick={handleContextDelete}>
+                <img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+                Удалить
+              </button>
             </>
           )}
         </div>

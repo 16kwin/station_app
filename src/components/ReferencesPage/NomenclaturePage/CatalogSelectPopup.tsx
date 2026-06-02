@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — полный файл с созданием для nomenclatureGroup и nomenclatureType
+// CatalogSelectPopup.tsx — полный файл с API-загрузкой для всех справочников
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -41,6 +41,7 @@ interface PopupConfig {
   columns: Column[];
   createButtonLabel?: string;
   isFlat?: boolean;
+  hasCreateButton?: boolean;
 }
 
 const getPopupConfig = (type: PopupType): PopupConfig => {
@@ -51,6 +52,7 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         columns: [{ key: 'groupCode', title: 'КОД ГРУППЫ', left: 500 }],
         createButtonLabel: 'Создать каталог',
         isFlat: false,
+        hasCreateButton: true,
       };
     case 'nomenclatureGroup':
       return {
@@ -58,6 +60,7 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         columns: [{ key: 'typeMaterialName', title: 'ГРУППА УЧЕТА', left: 500 }],
         createButtonLabel: 'Создать группу номенклатуры',
         isFlat: true,
+        hasCreateButton: true,
       };
     case 'nomenclatureType':
       return {
@@ -65,37 +68,52 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         columns: [{ key: 'typePurposeName', title: 'ГРУППА НОМЕНКЛАТУРЫ', left: 500 }],
         createButtonLabel: 'Создать вид номенклатуры',
         isFlat: true,
+        hasCreateButton: true,
       };
     case 'unit':
       return {
         title: 'Справочник: Единицы измерения (Выбор)',
         columns: [{ key: 'description', title: 'ОПИСАНИЕ', left: 500 }],
+        isFlat: true,
+        hasCreateButton: false,
       };
     case 'manufacturer':
       return {
         title: 'Справочник: Производители (Выбор)',
         columns: [{ key: 'description', title: 'ОПИСАНИЕ', left: 500 }],
+        isFlat: true,
+        hasCreateButton: false,
       };
     case 'brand':
       return {
         title: 'Справочник: Бренды (Выбор)',
-        columns: [{ key: 'manufacturer', title: 'ПРОИЗВОДИТЕЛЬ', left: 500 }],
+        columns: [
+          { key: 'manufacturerName', title: 'ПРОИЗВОДИТЕЛЬ', left: 500 },
+          { key: 'description', title: 'ОПИСАНИЕ', left: 700 },
+        ],
+        isFlat: true,
+        hasCreateButton: false,
       };
     case 'model':
       return {
         title: 'Справочник: Модели (Выбор)',
         columns: [
-          { key: 'brand', title: 'БРЕНД', left: 500 },
-          { key: 'manufacturer', title: 'ПРОИЗВОДИТЕЛЬ', left: 700 },
+          { key: 'brandName', title: 'БРЕНД', left: 450 },
+          { key: 'manufacturerName', title: 'ПРОИЗВОДИТЕЛЬ', left: 650 },
+          { key: 'description', title: 'ОПИСАНИЕ', left: 850 },
         ],
+        isFlat: true,
+        hasCreateButton: false,
       };
     case 'country':
       return {
         title: 'Справочник: Страны (Выбор)',
         columns: [],
+        isFlat: true,
+        hasCreateButton: false,
       };
     default:
-      return { title: '', columns: [] };
+      return { title: '', columns: [], isFlat: true, hasCreateButton: false };
   }
 };
 
@@ -112,58 +130,6 @@ interface FlatReferenceItem {
   typeMaterialName?: string;
   typePurposeName?: string;
 }
-
-const getStaticData = (type: PopupType): TreeItem[] => {
-  switch (type) {
-    case 'unit':
-      return [
-        { id: '1', name: 'мм', description: 'Миллиметр' },
-        { id: '2', name: 'см', description: 'Сантиметр' },
-        { id: '3', name: 'м', description: 'Метр' },
-        { id: '4', name: 'шт', description: 'Штука' },
-        { id: '5', name: 'кг', description: 'Килограмм' },
-        { id: '6', name: 'л', description: 'Литр' },
-        { id: '7', name: 'компл', description: 'Комплект' },
-      ];
-    case 'manufacturer':
-      return [
-        { id: '1', name: 'ООО "СтанкоДеталь"', description: 'Производство оснастки' },
-        { id: '2', name: 'АО "ПромТех"', description: 'Промышленное оборудование' },
-        { id: '3', name: 'ИП Иванов', description: 'Метизы' },
-        { id: '4', name: 'ООО "СмазТех"', description: 'Смазочные материалы' },
-        { id: '5', name: 'АО "ЭлектроПром"', description: 'Электрооборудование' },
-      ];
-    case 'brand':
-      return [
-        { id: '1', name: 'SKF', manufacturer: 'SKF Group' },
-        { id: '2', name: 'FAG', manufacturer: 'Schaeffler' },
-        { id: '3', name: 'NSK', manufacturer: 'NSK Ltd' },
-        { id: '4', name: 'Gates', manufacturer: 'Gates Corp' },
-        { id: '5', name: 'Mobil', manufacturer: 'ExxonMobil' },
-        { id: '6', name: 'Shell', manufacturer: 'Shell PLC' },
-      ];
-    case 'model':
-      return [
-        { id: '1', name: '6204-2RS', brand: 'SKF', manufacturer: 'SKF Group' },
-        { id: '2', name: '6205-C3', brand: 'FAG', manufacturer: 'Schaeffler' },
-        { id: '3', name: '6306-ZZ', brand: 'NSK', manufacturer: 'NSK Ltd' },
-        { id: '4', name: 'A-1000', brand: 'Gates', manufacturer: 'Gates Corp' },
-        { id: '5', name: 'Mobilux EP2', brand: 'Mobil', manufacturer: 'ExxonMobil' },
-      ];
-    case 'country':
-      return [
-        { id: '1', name: 'Россия' },
-        { id: '2', name: 'Германия' },
-        { id: '3', name: 'Япония' },
-        { id: '4', name: 'США' },
-        { id: '5', name: 'Китай' },
-        { id: '6', name: 'Италия' },
-        { id: '7', name: 'Франция' },
-      ];
-    default:
-      return [];
-  }
-};
 
 const convertBackendTree = (backendGroups: BackendGroup[]): TreeItem[] => {
   return backendGroups.map(g => ({
@@ -220,7 +186,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
-  // Для создания в плоских справочниках
   const [showCreateFlatPopup, setShowCreateFlatPopup] = useState(false);
   const [flatFormName, setFlatFormName] = useState('');
   const [isCreatingFlat, setIsCreatingFlat] = useState(false);
@@ -228,6 +193,17 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const config = getPopupConfig(popupType);
   const isCatalog = popupType === 'catalog';
   const isFlatReference = popupType === 'nomenclatureGroup' || popupType === 'nomenclatureType';
+
+  const convertGenericFlat = (items: any[]): TreeItem[] => {
+    return items.map(item => ({
+      id: item.uid,
+      name: item.name,
+      description: item.description || '',
+      manufacturerName: item.manufacturerName || '',
+      brandName: item.brandName || '',
+      manufacturerUid: item.manufacturerUid || '',
+    }));
+  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -245,7 +221,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         );
         setData(convertFlatReference(response.data));
       } else if (popupType === 'nomenclatureGroup' && !filterParam) {
-        // Без фильтра — все группы номенклатуры
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypePurposes);
         setData(convertFlatReference(response.data));
       } else if (popupType === 'nomenclatureType' && filterParam) {
@@ -256,8 +231,27 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'nomenclatureType' && !filterParam) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeProducts);
         setData(convertFlatReference(response.data));
-      } else {
-        setData(getStaticData(popupType));
+      } else if (popupType === 'unit') {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureMeasures);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'manufacturer') {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'brand') {
+        const url = filterParam 
+          ? `${ConstantInfo.restApiNomenclatureBrands}?manufacturerUid=${filterParam}`
+          : ConstantInfo.restApiNomenclatureBrands;
+        const response = await AxiosService.get(url);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'model') {
+        const url = filterParam
+          ? `${ConstantInfo.restApiNomenclatureModels}?brandUid=${filterParam}`
+          : ConstantInfo.restApiNomenclatureModels;
+        const response = await AxiosService.get(url);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'country') {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureCountries);
+        setData(convertGenericFlat(response.data));
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
@@ -309,7 +303,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     onClose();
   };
 
-  // Создание группы в каталоге
   const handleCreateGroup = async (groupName: string, parentUid: string | null) => {
     setIsCreatingGroup(true);
     try {
@@ -327,13 +320,11 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     }
   };
 
-  // Открытие попапа создания для плоского справочника
   const handleCreateFlatClick = () => {
     setFlatFormName('');
     setShowCreateFlatPopup(true);
   };
 
-  // Создание в плоском справочнике
   const handleCreateFlatSubmit = async () => {
     if (!flatFormName.trim()) return;
     setIsCreatingFlat(true);
@@ -447,12 +438,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
           <img src={Icon72} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
         )}
         {!isNomenclatureGroup && !isNomenclatureType && (
-          <span style={{
-            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {item.name}
-          </span>
+           <img src={Icon11}  style={{ width: 18, height: 16, flexShrink: 0 }} />
         )}
         {(isNomenclatureGroup || isNomenclatureType) && (
           <span style={{
@@ -463,10 +449,22 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
             {item.name}
           </span>
         )}
+        {!isNomenclatureGroup && !isNomenclatureType && (
+          <span style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+            marginLeft: 10,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: (config.columns[0]?.left || 500) - iconLeft - 50,
+          }}>
+            {item.name}
+          </span>
+        )}
         {config.columns.map(col => (
           <span key={col.key} style={{
             fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
             position: 'absolute', left: col.left,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: 200,
           }}>
             {item[col.key] || ''}
           </span>
@@ -568,7 +566,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         </motion.div>
       </motion.div>
 
-      {/* Попап создания группы в каталоге */}
       {isCatalog && (
         <CreateGroupPopup
           isOpen={showCreateGroup}
@@ -581,7 +578,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         />
       )}
 
-      {/* Попап создания для плоских справочников */}
       {showCreateFlatPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10003, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateFlatPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
