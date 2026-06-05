@@ -1,3 +1,4 @@
+// ReferencesPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React from 'react';
 import { useTabs } from '../../context/TabContext';
 
@@ -55,6 +56,14 @@ const ReferencesPage = () => {
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}
         >
           <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Виды номенклатуры</span>
+        </button>
+        <button
+          onClick={() => openTab('/references/attribute-types', 'Справочник: Виды характеристик', null)}
+          style={buttonStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5559E0'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}
+        >
+          <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Виды характеристик</span>
         </button>
         <button
           onClick={() => openTab('/references/units', 'Справочник: Единицы измерения', null)}

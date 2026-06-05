@@ -1,4 +1,4 @@
-// MainLayout.tsx
+// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -18,6 +18,7 @@ import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePag
 import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
 import NomenclatureGroupsPage from '../components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage';
 import NomenclatureTypesPage from '../components/ReferencesPage/NomenclatureTypesPage/NomenclatureTypesPage';
+import AttributeTypesPage from '../components/ReferencesPage/AttributeTypesPage/AttributeTypesPage';
 import UnitsPage from '../components/ReferencesPage/UnitsPage/UnitsPage';
 import BrandsPage from '../components/ReferencesPage/BrandsPage/BrandsPage';
 import ModelsPage from '../components/ReferencesPage/ModelsPage/ModelsPage';
@@ -81,6 +82,7 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/references/accounting-groups': <AccountingGroupsPage />,
   '/references/nomenclature-groups': <NomenclatureGroupsPage />,
   '/references/nomenclature-types': <NomenclatureTypesPage />,
+  '/references/attribute-types': <AttributeTypesPage />,
   '/references/units': <UnitsPage />,
   '/references/brands': <BrandsPage />,
   '/references/models': <ModelsPage />,
@@ -122,6 +124,7 @@ const getLabelByPath = (path: string): string => {
     '/references/accounting-groups': 'Справочник: Группы учета',
     '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
     '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
+    '/references/attribute-types': 'Справочник: Виды характеристик',
     '/references/units': 'Справочник: Единицы измерения',
     '/references/brands': 'Справочник: Бренды',
     '/references/models': 'Справочник: Модели',

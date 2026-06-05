@@ -1,4 +1,3 @@
-// SuppliersPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -14,25 +13,27 @@ import Icon9 from '../../../assets/References/Icon9.svg';
 import Icon10 from '../../../assets/References/Icon10.svg';
 import Icon19 from '../../../assets/References/Icon19.svg';
 
-interface SupplierItem {
+interface AttributeTypeItem {
   uid: string;
   name: string;
+  designation: string;
 }
 
-const SuppliersPage = () => {
+const AttributeTypesPage = () => {
   const { activeTabId } = useTabs();
   const tabIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<SupplierItem[]>([]);
+  const [data, setData] = useState<AttributeTypeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
-  const [editItem, setEditItem] = useState<SupplierItem | null>(null);
+  const [editItem, setEditItem] = useState<AttributeTypeItem | null>(null);
   const [formName, setFormName] = useState('');
+  const [formDesignation, setFormDesignation] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
 
@@ -41,12 +42,13 @@ const SuppliersPage = () => {
   const HEADER_HEIGHT = 54;
   const VISIBLE_ROWS = 10;
   const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
+  const COL_DESIGNATION = 700;
 
   useEffect(() => { tabIdRef.current = activeTabId; }, []);
 
   const fetchData = async () => {
     try {
-      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliersCRUD);
+      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes);
       setData(response.data || []);
     } catch (error) {
       console.error('Ошибка загрузки:', error);
@@ -106,6 +108,7 @@ const SuppliersPage = () => {
 
   const handleCreateClick = () => {
     setFormName('');
+    setFormDesignation('');
     setEditItem(null);
     setShowCreatePopup(true);
   };
@@ -114,8 +117,9 @@ const SuppliersPage = () => {
     if (!formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiNomenclatureSuppliersCRUD, {
+      await AxiosService.post(ConstantInfo.restApiNomenclatureTypeAttributes, {
         name: formName.trim(),
+        designation: formDesignation.trim(),
       });
       await fetchData();
       setShowCreatePopup(false);
@@ -132,6 +136,7 @@ const SuppliersPage = () => {
     if (item) {
       setEditItem(item);
       setFormName(item.name);
+      setFormDesignation(item.designation || '');
       setShowEditPopup(true);
     }
     setContextMenu(null);
@@ -141,8 +146,9 @@ const SuppliersPage = () => {
     if (!editItem || !formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.patch(ConstantInfo.restApiNomenclatureSupplier(editItem.uid), {
+      await AxiosService.patch(`${ConstantInfo.restApiNomenclatureTypeAttributes}/${editItem.uid}`, {
         name: formName.trim(),
+        designation: formDesignation.trim(),
       });
       await fetchData();
       setShowEditPopup(false);
@@ -162,7 +168,7 @@ const SuppliersPage = () => {
   const confirmDelete = async () => {
     try {
       for (const uid of selectedIds) {
-        await AxiosService.delete(ConstantInfo.restApiNomenclatureSupplier(uid));
+        await AxiosService.delete(`${ConstantInfo.restApiNomenclatureTypeAttributes}/${uid}`);
       }
       await fetchData();
       setSelectedIds(new Set());
@@ -235,7 +241,7 @@ const SuppliersPage = () => {
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
       <div style={{ paddingTop: 35, paddingLeft: 60 }}>
-        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>Справочник: Поставщики</h1>
+        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>Справочник: Виды характеристик</h1>
       </div>
 
       <div style={{ position: 'absolute', top: 104, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
@@ -263,6 +269,7 @@ const SuppliersPage = () => {
           <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
             <HeaderEmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_DESIGNATION }}>ОБОЗНАЧЕНИЕ</span>
           </div>
           <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {data.map(item => {
@@ -272,7 +279,8 @@ const SuppliersPage = () => {
                   <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
                     <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} />
                   </div>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 67, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 67, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DESIGNATION - 120 }}>{item.name}</span>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_DESIGNATION, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: TABLE_WIDTH - COL_DESIGNATION - 60 }}>{item.designation || '—'}</span>
                 </div>
               );
             })}
@@ -295,10 +303,14 @@ const SuppliersPage = () => {
       {showCreatePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание поставщика</h3>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание вида характеристики</h3>
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
               <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обозначение</label>
+              <input type="text" value={formDesignation} onChange={e => setFormDesignation(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите обозначение" style={inputStyle} />
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
@@ -311,10 +323,14 @@ const SuppliersPage = () => {
       {showEditPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование поставщика</h3>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование вида характеристики</h3>
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
               <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обозначение</label>
+              <input type="text" value={formDesignation} onChange={e => setFormDesignation(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите обозначение" style={inputStyle} />
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
@@ -340,4 +356,4 @@ const SuppliersPage = () => {
   );
 };
 
-export default SuppliersPage;
+export default AttributeTypesPage;

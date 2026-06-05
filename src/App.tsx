@@ -1,4 +1,4 @@
-// App.tsx
+// App.tsx — ПОЛНЫЙ ФАЙЛ
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ import NomenclatureCreatePage from './components/ReferencesPage/NomenclaturePage
 import AccountingGroupsPage from './components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
 import NomenclatureGroupsPage from './components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage';
 import NomenclatureTypesPage from './components/ReferencesPage/NomenclatureTypesPage/NomenclatureTypesPage';
+import AttributeTypesPage from './components/ReferencesPage/AttributeTypesPage/AttributeTypesPage';
 import UnitsPage from './components/ReferencesPage/UnitsPage/UnitsPage';
 import BrandsPage from './components/ReferencesPage/BrandsPage/BrandsPage';
 import ModelsPage from './components/ReferencesPage/ModelsPage/ModelsPage';
@@ -112,6 +113,7 @@ const AppContent = () => {
                 <Route path="references/accounting-groups" element={<AccountingGroupsPage />} />
                 <Route path="references/nomenclature-groups" element={<NomenclatureGroupsPage />} />
                 <Route path="references/nomenclature-types" element={<NomenclatureTypesPage />} />
+                <Route path="references/attribute-types" element={<AttributeTypesPage />} />
                 <Route path="references/units" element={<UnitsPage />} />
                 <Route path="references/brands" element={<BrandsPage />} />
                 <Route path="references/models" element={<ModelsPage />} />

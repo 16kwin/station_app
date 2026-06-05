@@ -1,13 +1,15 @@
-// PriceHistoryTab.tsx — все месяцы снизу
+// PriceHistoryTab.tsx — полный файл
 import React from 'react';
-import CustomScrollbar from '../../../components/CustomScrollbar';
 import type { CommonProps } from './NomenclatureCreatePage';
+import IconUp from '../../../assets/References/NomenclatureCreatePage/IconUp.svg';
+import IconDown from '../../../assets/References/NomenclatureCreatePage/IconDown.svg';
+import IconRavno from '../../../assets/References/NomenclatureCreatePage/IconRavno.svg';
 
 const PriceHistoryTab: React.FC<CommonProps> = (props) => {
   const {
-    prices, showAddPricePopup,
-    newPrice, newPriceDate,
-    setShowAddPricePopup, setNewPrice, setNewPriceDate,
+    prices, suppliers, showAddPricePopup,
+    newPrice, newPriceDate, newPriceSupplierUid,
+    setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid,
     handleAddPrice, handleDeletePrice,
   } = props;
 
@@ -28,7 +30,6 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
     const lastTime = lastDate.getTime();
     const timeRange = lastTime - firstTime || 1;
 
-    // Все точки
     const allPts = sortedPrices.map(p => {
       const t = new Date(p.priceDate).getTime();
       return {
@@ -37,22 +38,6 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
       };
     });
 
-    // Точки по месяцам (ближайшая к 1 числу)
-    const monthlyPoints = () => {
-      const months = new Map<string, typeof sortedPrices[0]>();
-      sortedPrices.forEach(p => {
-        const d = new Date(p.priceDate);
-        const key = `${d.getFullYear()}-${d.getMonth()}`;
-        if (!months.has(key) || Math.abs(d.getDate() - 1) < Math.abs(new Date(months.get(key)!.priceDate).getDate() - 1)) {
-          months.set(key, p);
-        }
-      });
-      return Array.from(months.values()).sort((a, b) => new Date(a.priceDate).getTime() - new Date(b.priceDate).getTime());
-    };
-
-    const monthPts = monthlyPoints();
-
-    // Все месяцы в диапазоне
     const allMonths: { x: number; label: string }[] = [];
     const startMonth = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
     const endMonth = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1);
@@ -64,21 +49,26 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
       });
     }
 
-    // Плавная кривая
-    let smoothPath = '';
-    if (allPts.length === 1) {
-      smoothPath = `M ${allPts[0].x} ${allPts[0].y}`;
-    } else if (allPts.length === 2) {
-      smoothPath = `M ${allPts[0].x} ${allPts[0].y} L ${allPts[1].x} ${allPts[1].y}`;
-    } else {
-      smoothPath = `M ${allPts[0].x} ${allPts[0].y}`;
-      for (let i = 1; i < allPts.length - 1; i++) {
-        const xc = (allPts[i].x + allPts[i + 1].x) / 2;
-        const yc = (allPts[i].y + allPts[i + 1].y) / 2;
-        smoothPath += ` Q ${allPts[i].x} ${allPts[i].y} ${xc} ${yc}`;
+    const catmullRomToBezier = (pts: { x: number; y: number }[]) => {
+      if (pts.length === 0) return '';
+      if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+      if (pts.length === 2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+      let d = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(i - 1, 0)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(i + 2, pts.length - 1)];
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+        d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`;
       }
-      smoothPath += ` L ${allPts[allPts.length - 1].x} ${allPts[allPts.length - 1].y}`;
-    }
+      return d;
+    };
+
+    const smoothPath = catmullRomToBezier(allPts);
 
     const gradientId = `pg-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -92,19 +82,20 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
         </defs>
         <path d={`${smoothPath} L ${allPts[allPts.length - 1].x} ${ch - pad.bottom} L ${allPts[0].x} ${ch - pad.bottom} Z`} fill={`url(#${gradientId})`} />
         <path d={smoothPath} fill="none" stroke="#666EFE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Точки данных по месяцам */}
-        {monthPts.map((p, i) => {
-          const t = new Date(p.priceDate).getTime();
-          const x = pad.left + ((t - firstTime) / timeRange) * pw;
-          const y = pad.top + ph - ((p.price - minP) / range) * ph;
-          return <circle key={`pt-${i}`} cx={x} cy={y} r="4" fill="#666EFE" />;
-        })}
-        {/* Подписи всех месяцев */}
+        {allPts.map((pt, i) => (
+          <circle key={`pt-${i}`} cx={pt.x} cy={pt.y} r="4" fill="#666EFE" />
+        ))}
         {allMonths.map((m, i) => (
           <text key={`m-${i}`} x={m.x} y={ch - 3} textAnchor="middle" fontSize="10" fill="#2D4059">{m.label}</text>
         ))}
       </svg>
     );
+  };
+
+  const getDynamicsIcon = (change: number | null) => {
+    if (change === null || change === 0) return <img src={IconRavno} alt="=" style={{ width: 22, height: 4 }} />;
+    if (change > 0) return <img src={IconUp} alt="▲" style={{ width: 44, height: 15 }} />;
+    return <img src={IconDown} alt="▼" style={{ width: 44, height: 15 }} />;
   };
 
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
@@ -131,26 +122,22 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
           <div style={{ width: 1054, height: 432, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
             <div style={{ height: 54, minHeight: 54, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20 }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 250 }}>ДАТА</span>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 100 }}>ДИНАМИКА</span>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 200 }}>ЦЕНА</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 100, textAlign: 'center', paddingRight: 16 }}>ДИНАМИКА</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 160 }}>ЦЕНА</span>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', flex: 1 }}>ПОСТАВЩИК</span>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {sortedPrices.length > 0 ? sortedPrices.map((p, i) => {
                 const prev = i > 0 ? sortedPrices[i - 1].price : null;
                 const change = prev !== null ? p.price - prev : null;
-                const isLast = i === sortedPrices.length - 1;
                 return (
-                  <div key={p.uid} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, borderTop: '0.7px solid #666EFE', backgroundColor: isLast ? '#F0F1FF' : '#FFFFFF', position: 'relative' }}>
+                  <div key={p.uid} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', width: 250 }}>{new Date(p.priceDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                    <span style={{ width: 100, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: change === null ? '#9CA3AF' : change > 0 ? '#22C55E' : change < 0 ? '#EF4444' : '#9CA3AF' }}>
-                      {change === null ? '—' : change > 0 ? `▲ +${change.toFixed(2)}` : change < 0 ? `▼ ${change.toFixed(2)}` : '—'}
+                    <span style={{ width: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, paddingRight: 16 }}>
+                      {getDynamicsIcon(change)}
                     </span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', width: 200 }}>{p.price.toFixed(2)} ₽</span>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', width: 160 }}>{p.price.toFixed(2)} ₽</span>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', flex: 1 }}>{p.supplierName || '—'}</span>
-                    <button onClick={() => handleDeletePrice(p.uid)} style={{ position: 'absolute', right: 10, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, opacity: 0.5 }}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="3" y1="3" x2="11" y2="11" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round"/><line x1="11" y1="3" x2="3" y2="11" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                    </button>
                   </div>
                 );
               }) : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#9CA3AF' }}>Нет данных</span></div>}
@@ -169,6 +156,13 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Дата</label>
               <input type="datetime-local" value={newPriceDate} onChange={e => setNewPriceDate(e.target.value)} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Поставщик</label>
+              <select value={newPriceSupplierUid} onChange={e => setNewPriceSupplierUid(e.target.value)} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}>
+                <option value="">Без поставщика</option>
+                {suppliers.map(s => <option key={s.uid} value={s.uid}>{s.name}</option>)}
+              </select>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowAddPricePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>

@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — полный файл с API-загрузкой для всех справочников
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ с исправленным renderTree
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -9,6 +9,7 @@ import Icon1 from '../../../assets/References/Icon1.svg';
 import Icon5 from '../../../assets/References/Icon5.svg';
 import Icon11 from '../../../assets/References/Icon11.svg';
 import Icon12 from '../../../assets/References/Icon12.svg';
+import Icon13 from '../../../assets/References/Icon13.svg';
 import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
 import Icon72 from '../../../assets/References/NomenclatureCreatePage/Icon72.svg';
 
@@ -22,6 +23,8 @@ export interface TreeItem {
   id: string;
   name: string;
   children?: TreeItem[];
+  materials?: TreeItem[];
+  isMaterial?: boolean;
   [key: string]: any;
 }
 
@@ -30,11 +33,14 @@ export type PopupType =
   | 'accountingGroup'
   | 'nomenclatureGroup'
   | 'nomenclatureType'
+  | 'attributeType'
   | 'unit'
   | 'manufacturer'
   | 'brand'
   | 'model'
-  | 'country';
+  | 'country'
+  | 'supplier'
+  | 'analogSelect';
 
 interface PopupConfig {
   title: string;
@@ -54,6 +60,13 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         isFlat: false,
         hasCreateButton: true,
       };
+    case 'analogSelect':
+      return {
+        title: 'Выбор материала для аналога',
+        columns: [],
+        isFlat: false,
+        hasCreateButton: false,
+      };
     case 'nomenclatureGroup':
       return {
         title: 'Справочник: Группы номенклатуры (Выбор)',
@@ -69,6 +82,13 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         createButtonLabel: 'Создать вид номенклатуры',
         isFlat: true,
         hasCreateButton: true,
+      };
+    case 'attributeType':
+      return {
+        title: 'Справочник: Виды характеристик (Выбор)',
+        columns: [{ key: 'designation', title: 'ОБОЗНАЧЕНИЕ', left: 500 }],
+        isFlat: true,
+        hasCreateButton: false,
       };
     case 'unit':
       return {
@@ -112,6 +132,13 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         isFlat: true,
         hasCreateButton: false,
       };
+    case 'supplier':
+      return {
+        title: 'Справочник: Поставщики (Выбор)',
+        columns: [],
+        isFlat: true,
+        hasCreateButton: false,
+      };
     default:
       return { title: '', columns: [], isFlat: true, hasCreateButton: false };
   }
@@ -140,6 +167,27 @@ const convertBackendTree = (backendGroups: BackendGroup[]): TreeItem[] => {
   }));
 };
 
+const convertBackendTreeWithMaterials = (backendGroups: BackendGroup[]): TreeItem[] => {
+  return backendGroups.map(g => {
+    const materialItems: TreeItem[] = (g.materials || []).map((m: any) => ({
+      id: m.uid,
+      name: m.name || 'Без названия',
+      isMaterial: true,
+    }));
+
+    const childGroups = g.children && g.children.length > 0 
+      ? convertBackendTreeWithMaterials(g.children) 
+      : [];
+
+    return {
+      id: g.uid,
+      name: g.name,
+      groupCode: '',
+      children: [...childGroups, ...materialItems],
+    };
+  });
+};
+
 const convertFlatReference = (items: FlatReferenceItem[]): TreeItem[] => {
   return items.map(item => ({
     id: item.uid,
@@ -152,8 +200,10 @@ const convertFlatReference = (items: FlatReferenceItem[]): TreeItem[] => {
 const flattenGroups = (items: TreeItem[]): { uid: string; name: string }[] => {
   let result: { uid: string; name: string }[] = [];
   items.forEach(item => {
-    result.push({ uid: item.id, name: item.name });
-    if (item.children) result = result.concat(flattenGroups(item.children));
+    if (!item.isMaterial) {
+      result.push({ uid: item.id, name: item.name });
+      if (item.children) result = result.concat(flattenGroups(item.children));
+    }
   });
   return result;
 };
@@ -192,6 +242,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
 
   const config = getPopupConfig(popupType);
   const isCatalog = popupType === 'catalog';
+  const isAnalogSelect = popupType === 'analogSelect';
   const isFlatReference = popupType === 'nomenclatureGroup' || popupType === 'nomenclatureType';
 
   const convertGenericFlat = (items: any[]): TreeItem[] => {
@@ -199,6 +250,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       id: item.uid,
       name: item.name,
       description: item.description || '',
+      designation: item.designation || '',
       manufacturerName: item.manufacturerName || '',
       brandName: item.brandName || '',
       manufacturerUid: item.manufacturerUid || '',
@@ -211,6 +263,13 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       if (isCatalog) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
         const converted = convertBackendTree(response.data);
+        setData(converted);
+        if (converted.length > 0) {
+          setOpenFolders(new Set([converted[0].id]));
+        }
+      } else if (isAnalogSelect) {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
+        const converted = convertBackendTreeWithMaterials(response.data);
         setData(converted);
         if (converted.length > 0) {
           setOpenFolders(new Set([converted[0].id]));
@@ -231,8 +290,14 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'nomenclatureType' && !filterParam) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeProducts);
         setData(convertFlatReference(response.data));
+      } else if (popupType === 'attributeType') {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes);
+        setData(convertGenericFlat(response.data));
       } else if (popupType === 'unit') {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureMeasures);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'supplier') {
+        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliersCRUD);
         setData(convertGenericFlat(response.data));
       } else if (popupType === 'manufacturer') {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers);
@@ -311,7 +376,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         parentUid: parentUid,
       });
       const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-      setData(convertBackendTree(response.data));
+      setData(isAnalogSelect ? convertBackendTreeWithMaterials(response.data) : convertBackendTree(response.data));
       setShowCreateGroup(false);
     } catch (error) {
       console.error('Ошибка создания группы:', error);
@@ -367,12 +432,25 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       const hasChildren = item.children && item.children.length > 0;
       const isOpen = openFolders.has(item.id);
       const shift = depth * 20;
+      const isMaterial = item.isMaterial === true;
 
       result.push(
         <div
           key={item.id}
-          onClick={() => hasChildren ? toggleFolder(item.id) : handleItemClick(item.id, item.name)}
-          onDoubleClick={() => handleItemClick(item.id, item.name)}
+          onClick={() => {
+            if (isMaterial) {
+              handleItemClick(item.id, item.name);
+            } else if (hasChildren) {
+              toggleFolder(item.id);
+            }
+          }}
+          onDoubleClick={() => {
+            if (isMaterial) {
+              handleItemClick(item.id, item.name);
+            } else {
+              handleItemClick(item.id, item.name);
+            }
+          }}
           style={{
             height: ROW_HEIGHT, display: 'flex', alignItems: 'center',
             backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none',
@@ -381,19 +459,23 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
             paddingLeft: 20 + shift, paddingRight: 40,
           }}
         >
-          <img 
-            src={hasChildren ? (isOpen ? Icon12 : Icon11) : Icon11} 
-            alt="" 
-            style={{ width: hasChildren && isOpen ? 19 : 18, height: 16, flexShrink: 0 }} 
-          />
+          {isMaterial ? (
+            <img src={Icon13} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
+          ) : (
+            <img 
+              src={hasChildren ? (isOpen ? Icon12 : Icon11) : Icon11} 
+              alt="" 
+              style={{ width: hasChildren && isOpen ? 19 : 18, height: 16, flexShrink: 0 }} 
+            />
+          )}
           <span style={{
-            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059',
-            marginLeft: 10, maxWidth: 400 - shift,
+            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: isMaterial ? 400 : 700, color: '#2D4059',
+            marginLeft: 10, maxWidth: isMaterial ? 600 : (400 - shift),
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {item.name}
           </span>
-          {config.columns.map(col => (
+          {!isAnalogSelect && config.columns.map(col => (
             <span key={col.key} style={{
               fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
               position: 'absolute', left: col.left,

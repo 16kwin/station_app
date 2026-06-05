@@ -92,6 +92,28 @@ const ConstantInfo = {
   restApiNomenclaturePrices: (materialUid: string) => `/api/nomenclature/${materialUid}/prices`,
   restApiNomenclatureDeletePrice: (priceUid: string) => `/api/nomenclature/prices/${priceUid}`,
   restApiNomenclatureSuppliers: '/api/nomenclature/suppliers',
+    restApiNomenclatureCharacteristics: (materialUid: string) => `/api/nomenclature/${materialUid}/characteristics`,
+  restApiNomenclatureAddCharacteristic: (materialUid: string) => `/api/nomenclature/${materialUid}/characteristics`,
+  restApiNomenclatureUpdateCharacteristic: (uid: string) => `/api/nomenclature/characteristics/${uid}`,
+  restApiNomenclatureDeleteCharacteristic: (uid: string) => `/api/nomenclature/characteristics/${uid}`,
+  restApiNomenclatureTypeAttributes: '/api/nomenclature/type-attributes',
+  restApiNomenclatureDocuments: (materialUid: string) => `/api/nomenclature/${materialUid}/documents`,
+restApiNomenclatureDeleteDocument: (uid: string) => `/api/nomenclature/documents/${uid}`,
+restApiNomenclatureSuppliersCRUD: '/api/nomenclature/suppliers',
+restApiNomenclatureSupplier: (uid: string) => `/api/nomenclature/suppliers/${uid}`,
+restApiNomenclatureSupply: (materialUid: string) => `/api/nomenclature/${materialUid}/supply`,
+restApiNomenclatureDeleteSupply: (uid: string) => `/api/nomenclature/supply/${uid}`,
+restApiNomenclatureAnalogs: (materialUid: string) => `/api/nomenclature/${materialUid}/analogs`,
+restApiNomenclatureCalculateCompatibility: '/api/nomenclature/calculate-compatibility',
+restApiNomenclatureDeleteAnalog: (uid: string) => `/api/nomenclature/analogs/${uid}`,
+restApiNomenclatureRatings: (materialUid: string) => `/api/nomenclature/${materialUid}/ratings`,
+restApiNomenclatureRatingsAverage: (materialUid: string) => `/api/nomenclature/${materialUid}/ratings/average`,
+restApiNomenclatureDeleteRating: (uid: string) => `/api/nomenclature/ratings/${uid}`,
+restApiNomenclatureIntegrations: (materialUid: string) => `/api/nomenclature/${materialUid}/integrations`,
+restApiNomenclatureDeleteIntegration: (uid: string) => `/api/nomenclature/integrations/${uid}`,
+// Добавить:
+restApiNomenclatureCodes: (materialUid: string) => `/api/nomenclature/${materialUid}/codes`,
+restApiNomenclatureDeleteCode: (uid: string) => `/api/nomenclature/codes/${uid}`,
 };
 
 export default ConstantInfo;
