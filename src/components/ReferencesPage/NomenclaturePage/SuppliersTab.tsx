@@ -1,10 +1,10 @@
-// SuppliersTab.tsx — ПОЛНЫЙ ФАЙЛ (работает с локальными поставщиками)
+// SuppliersTab.tsx — ПОЛНЫЙ ФАЙЛ (без локалки, сразу на сервер)
 import React, { useState, useRef, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import CatalogSelectPopup from './CatalogSelectPopup';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import type { CommonProps, LocalSupply } from './NomenclatureCreatePage';
+import type { CommonProps } from './NomenclatureCreatePage';
 
 interface SupplyItem {
   uid: string;
@@ -16,11 +16,10 @@ interface SupplyItem {
   filePath: string;
   originalName: string;
   fileUrl: string;
-  isLocal?: boolean;
 }
 
 const SuppliersTab: React.FC<CommonProps> = (props) => {
-  const { uid, isEdit, localSupplies, setLocalSupplies } = props;
+  const { uid, isEdit } = props;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
@@ -61,25 +60,15 @@ const SuppliersTab: React.FC<CommonProps> = (props) => {
     if (uid && isEdit) fetchSupplies();
   }, [uid, isEdit]);
 
-  // Объединяем серверные и локальные поставки
-  const allSupplies: SupplyItem[] = [
-    ...supplies,
-    ...localSupplies.map(s => ({
-      uid: s.localId,
-      materialUid: uid || '',
-      supplierUid: s.supplierUid,
-      supplierName: s.supplierName,
-      supplyDate: s.supplyDate,
-      documentName: s.documentName || '',
-      filePath: '',
-      originalName: s.file ? s.file.name : '',
-      fileUrl: s.file ? URL.createObjectURL(s.file) : '',
-      isLocal: true,
-    }))
-  ];
+  // Обновляем при возврате на вкладку
+  useEffect(() => {
+    const handler = () => { if (uid) fetchSupplies(); };
+    window.addEventListener('refreshSupplies', handler);
+    return () => window.removeEventListener('refreshSupplies', handler);
+  }, [uid]);
 
   const checkScroll = () => { const c = scrollContainerRef.current; if (c) setHasScroll(c.scrollHeight > c.clientHeight); };
-  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [supplies, localSupplies]);
+  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [supplies]);
   useEffect(() => { const c = scrollContainerRef.current; if (!c) return; checkScroll(); c.addEventListener('scroll', checkScroll); return () => c.removeEventListener('scroll', checkScroll); }, []);
 
   const formatDate = (dateStr: string) => {
@@ -99,30 +88,33 @@ const SuppliersTab: React.FC<CommonProps> = (props) => {
     setShowAddPopup(true);
   };
 
-  const handleAddSubmit = () => {
-    if (!newSupplierUid) return;
-    
-    const newSupply: LocalSupply = {
-      localId: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      supplierUid: newSupplierUid,
-      supplierName: newSupplierName,
-      supplyDate: newSupplyDate,
-      documentName: newDocumentName.trim(),
-      file: selectedFile,
-    };
-    
-    setLocalSupplies(prev => [...prev, newSupply]);
-    setShowAddPopup(false);
+  const handleAddSubmit = async () => {
+    if (!uid || !newSupplierUid) return;
+    setIsAdding(true);
+    try {
+      const fd = new FormData();
+      fd.append('supplierUid', newSupplierUid);
+      if (newSupplyDate) fd.append('supplyDate', newSupplyDate + ':00');
+      if (newDocumentName.trim()) fd.append('documentName', newDocumentName.trim());
+      if (selectedFile) fd.append('file', selectedFile);
+      await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd);
+      await fetchSupplies();
+      setShowAddPopup(false);
+      window.dispatchEvent(new CustomEvent('refreshSupplies'));
+    } catch (e) {
+      console.error('Ошибка добавления поставщика:', e);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
-  const handleDelete = (supplyUid: string, isLocal: boolean) => {
+  const handleDelete = async (supplyUid: string) => {
     if (!confirm('Удалить привязку поставщика?')) return;
-    if (isLocal) {
-      setLocalSupplies(prev => prev.filter(s => s.localId !== supplyUid));
-    } else {
-      AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteSupply(supplyUid))
-        .then(() => fetchSupplies())
-        .catch(e => console.error('Ошибка удаления:', e));
+    try {
+      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteSupply(supplyUid));
+      await fetchSupplies();
+    } catch (e) {
+      console.error('Ошибка удаления:', e);
     }
   };
 
@@ -165,13 +157,13 @@ const SuppliersTab: React.FC<CommonProps> = (props) => {
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span>
                 </div>
-              ) : allSupplies.length === 0 ? (
+              ) : supplies.length === 0 ? (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Нет поставщиков</span>
                 </div>
               ) : (
-                allSupplies.map(s => (
-                  <div key={s.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: s.isLocal ? '#F0F1FF' : '#FFFFFF', position: 'relative' }}>
+                supplies.map(s => (
+                  <div key={s.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', position: 'relative' }}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
                       <rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/>
                       <line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
@@ -188,7 +180,7 @@ const SuppliersTab: React.FC<CommonProps> = (props) => {
                       ) : (s.documentName || '—')}
                     </span>
                     <button
-                      onClick={() => handleDelete(s.uid, !!s.isLocal)}
+                      onClick={() => handleDelete(s.uid)}
                       style={{ width: 32, height: 32, borderRadius: 6, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -258,7 +250,7 @@ const SuppliersTab: React.FC<CommonProps> = (props) => {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleAddSubmit} disabled={!newSupplierUid} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newSupplierUid ? '#666EFE' : '#BCC8FF', cursor: newSupplierUid ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Добавить</button>
+              <button onClick={handleAddSubmit} disabled={!newSupplierUid || isAdding} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newSupplierUid && !isAdding ? '#666EFE' : '#BCC8FF', cursor: newSupplierUid && !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>
             </div>
           </div>
         </div>

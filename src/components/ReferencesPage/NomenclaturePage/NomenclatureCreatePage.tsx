@@ -1,4 +1,4 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (localImages/locabarcodes/localSkus подняты сюда)
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -16,6 +16,7 @@ import PriceHistoryTab from './PriceHistoryTab';
 import AnalogsTab from './AnalogsTab';
 import RatingTab from './RatingTab';
 import IntegrationTab from './IntegrationTab';
+import EventLogTab from './EventLogTab';
 import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
@@ -32,6 +33,7 @@ export interface LocalSupply { localId: string; supplierUid: string; supplierNam
 export interface LocalCharacteristic { localId: string; uid: string | null; attributeTypeUid: string | null; attributeName: string | null; customName: string | null; value: string; measureUid: string | null; measureName: string | null; isCustom: boolean; isRequired: boolean; }
 export interface LocalImageItem { file: File; url: string; }
 export interface LocalCode { codeType: string; codeValue: string; codeKind: string; file: File | null; preview: string | null; }
+export interface ServerCode { uid: string; codeType: string; codeValue: string; codeKind: string; fileUrl: string | null; originalName: string | null; }
 
 export interface CommonProps {
   uid?: string; code?: string; name: string; article: string; description: string; isEdit: boolean; isSaving: boolean; isUploading: boolean; isUploadingBlueprint: boolean;
@@ -49,8 +51,11 @@ export interface CommonProps {
   localDocuments: LocalDocument[]; setLocalDocuments: React.Dispatch<React.SetStateAction<LocalDocument[]>>;
   localSupplies: LocalSupply[]; setLocalSupplies: React.Dispatch<React.SetStateAction<LocalSupply[]>>;
   localImages: LocalImageItem[]; setLocalImages: React.Dispatch<React.SetStateAction<LocalImageItem[]>>;
+  localBlueprints: LocalImageItem[]; setLocalBlueprints: React.Dispatch<React.SetStateAction<LocalImageItem[]>>;
   localBarcodes: LocalCode[]; setLocalBarcodes: React.Dispatch<React.SetStateAction<LocalCode[]>>;
   localSkus: LocalCode[]; setLocalSkus: React.Dispatch<React.SetStateAction<LocalCode[]>>;
+  localQrCodes: LocalCode[]; setLocalQrCodes: React.Dispatch<React.SetStateAction<LocalCode[]>>;
+  serverBarcodes: ServerCode[]; serverSkus: ServerCode[];
   setName: (v: string) => void; setArticle: (v: string) => void; setDescription: (v: string) => void;
   setNameFocused: (v: boolean) => void; setArticleFocused: (v: boolean) => void; setDescriptionFocused: (v: boolean) => void;
   toggleUsage: () => void; toggleWasteMaterial: () => void; toggleRecycleMaterial: () => void;
@@ -71,6 +76,10 @@ export interface CommonProps {
   handleDocumentUpload: (documentName: string, file: File) => void; handleDeleteDocument: (uid: string) => void;
   fetchPrices: () => void; handleAddPrice: () => void; handleDeletePrice: (uid: string) => void; fetchSuppliers: () => void;
   openPopup: (type: PopupType) => void; handleAccountingGroupSelect: (o: TypeMaterialOption) => void;
+  isDataSaved: boolean;
+  validationErrors: Set<string>;
+  setValidationErrors: React.Dispatch<React.SetStateAction<Set<string>>>;
+  isFinishedProduct: boolean;
 }
 
 const REQUIRED_ATTRIBUTES = ['Длина', 'Ширина', 'Высота', 'Масса'];
@@ -104,11 +113,13 @@ const NomenclatureCreatePage = () => {
   const [typeAttributesMap, setTypeAttributesMap] = useState<Map<string, string>>(new Map());
   const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
   const [localSupplies, setLocalSupplies] = useState<LocalSupply[]>([]);
-  
-  // Поднимаем сюда из MainTab
   const [localImages, setLocalImages] = useState<LocalImageItem[]>([]);
+  const [localBlueprints, setLocalBlueprints] = useState<LocalImageItem[]>([]);
   const [localBarcodes, setLocalBarcodes] = useState<LocalCode[]>([]);
+  const [localQrCodes, setLocalQrCodes] = useState<LocalCode[]>([]);
   const [localSkus, setLocalSkus] = useState<LocalCode[]>([]);
+  const [serverBarcodes, setServerBarcodes] = useState<ServerCode[]>([]);
+  const [serverSkus, setServerSkus] = useState<ServerCode[]>([]);
   
   const [popupOpen, setPopupOpen] = useState(false); const [popupType, setPopupType] = useState<PopupType>('catalog'); const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
   const [showClosePopup, setShowClosePopup] = useState(false);
@@ -118,28 +129,70 @@ const NomenclatureCreatePage = () => {
   const [prices, setPrices] = useState<PriceItem[]>([]); const [showAddPricePopup, setShowAddPricePopup] = useState(false); const [newPrice, setNewPrice] = useState(''); const [newPriceDate, setNewPriceDate] = useState(new Date().toISOString().slice(0, 16)); const [newPriceSupplierUid, setNewPriceSupplierUid] = useState('');
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
-  const tabs_list = ['Основное', 'Характеристики', 'Документы', 'Остатки', 'Поставщики', 'История цен', 'Аналоги', 'Рейтинг', 'Интеграция'];
+  const [isDataSaved, setIsDataSaved] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
+  const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
+
+  const isFinishedProduct = selectedAccountingGroup === 'Готовая деталь';
+
+  const allTabs = ['Основное', 'Характеристики', 'Документы', 'Остатки', 'Поставщики', 'История цен', 'Аналоги', 'Рейтинг', 'Интеграция'];
+  
+  const tabs_list = isFinishedProduct 
+    ? ['Основное', 'Характеристики', 'Документы', 'На складе', 'Интеграция']
+    : allTabs;
+
+  const EVENT_LOG_TAB = tabs_list.length;
+
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   const fetchTypeAttributes = async () => { try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes); const data = res.data || []; const map = new Map<string, string>(); data.forEach((item: any) => map.set(item.name, item.uid)); setTypeAttributesMap(map); return map; } catch (e) { console.error(e); return new Map(); } };
 
-  useEffect(() => { if (uid && !isEdit && localCharacteristics.length === 0) { const initChars = async () => { const attrMap = await fetchTypeAttributes(); setLocalCharacteristics(REQUIRED_ATTRIBUTES.map(name => ({ localId: generateLocalId(), uid: null, attributeTypeUid: attrMap.get(name) || null, attributeName: name, customName: null, value: '', measureUid: null, measureName: null, isCustom: false, isRequired: true }))); }; initChars(); } }, [uid, isEdit]);
+  const fetchCodes = useCallback(async () => { 
+    if (!uid) return; 
+    try { 
+      const res = await AxiosService.get(ConstantInfo.restApiNomenclatureCodes(uid)); 
+      const all: ServerCode[] = (res.data || []).map((c: any) => ({ ...c, fileUrl: c.fileUrl ? ConstantInfo.fileDir + c.fileUrl.replace(/^\//, '') : null })); 
+      setServerBarcodes(all.filter(c => c.codeKind === 'BARCODE')); 
+      setServerSkus(all.filter(c => c.codeKind === 'SKU')); 
+    } catch (e) { console.error(e); } 
+  }, [uid]);
 
-  const fetchCharacteristics = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureCharacteristics(uid)); setLocalCharacteristics((res.data || []).map((c: any) => ({ localId: generateLocalId(), uid: c.uid, attributeTypeUid: c.attributeTypeUid, attributeName: c.attributeName, customName: c.customName, value: c.value || '', measureUid: c.measureUid, measureName: c.measureName, isCustom: c.isCustom, isRequired: c.attributeName && REQUIRED_ATTRIBUTES.includes(c.attributeName) }))); } catch (e) { console.error(e); } };
+  const fetchCharacteristics = async () => { 
+    if (!uid) return; 
+    try { 
+      const res = await AxiosService.get(ConstantInfo.restApiNomenclatureCharacteristics(uid));
+      const serverChars = res.data || [];
+      setLocalCharacteristics(serverChars.map((c: any) => ({
+        localId: generateLocalId(), uid: c.uid, attributeTypeUid: c.attributeTypeUid, attributeName: c.attributeName,
+        customName: c.customName, value: c.value || '', measureUid: c.measureUid, measureName: c.measureName,
+        isCustom: c.isCustom, isRequired: c.attributeName && REQUIRED_ATTRIBUTES.includes(c.attributeName),
+      })));
+    } catch (e) { console.error(e); } 
+  };
 
   useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
   useEffect(() => { (async () => { try { setTypeMaterials((await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials)).data || []); } catch (e) { console.error(e); } })(); }, []);
-  useEffect(() => { const cp = window.location.pathname; setIsEdit(cp.includes('/edit/')); if (uid && cp.includes('/edit/')) { loadMaterialData(uid); fetchCharacteristics(); fetchTypeAttributes(); } if (uid && cp.includes('/create/')) { fetchTypeAttributes(); const s = sessionStorage.getItem('nomenclature_preselected_group'); if (s) { try { const p = JSON.parse(s); if (p.groupUid) { setSelectedCatalogId(p.groupUid); setSelectedCatalog(p.groupName || 'Выбрано из меню'); } } catch (e) {} sessionStorage.removeItem('nomenclature_preselected_group'); } } }, [uid]);
-  useEffect(() => { if (uid && isEdit) { fetchImages(); fetchBlueprints(); fetchDocuments(); fetchPrices(); fetchSuppliers(); } }, [uid, isEdit]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const cp = window.location.pathname;
+    const isEditMode = cp.includes('/edit/');
+    setIsEdit(isEditMode);
+    if (isEditMode) { setIsDataSaved(true); loadMaterialData(uid); fetchCharacteristics(); fetchTypeAttributes(); fetchImages(); fetchBlueprints(); fetchDocuments(); fetchPrices(); fetchSuppliers(); fetchCodes(); }
+    else { setIsDataSaved(false); fetchTypeAttributes(); const s = sessionStorage.getItem('nomenclature_preselected_group'); if (s) { try { const p = JSON.parse(s); if (p.groupUid) { setSelectedCatalogId(p.groupUid); setSelectedCatalog(p.groupName || 'Выбрано из меню'); } } catch (e) {} sessionStorage.removeItem('nomenclature_preselected_group'); } }
+  }, [uid]);
+
+  useEffect(() => { if (uid && !isEdit && localCharacteristics.length === 0) { const initChars = async () => { const attrMap = await fetchTypeAttributes(); setLocalCharacteristics(REQUIRED_ATTRIBUTES.map(name => ({ localId: generateLocalId(), uid: null, attributeTypeUid: attrMap.get(name) || null, attributeName: name, customName: null, value: '', measureUid: null, measureName: null, isCustom: false, isRequired: true }))); }; initChars(); } }, [uid, isEdit]);
+  useEffect(() => { if (isFinishedProduct && activeTab >= tabs_list.length) { setActiveTab(0); } }, [isFinishedProduct]);
 
   const fetchSuppliers = async () => { try { setSuppliers((await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliers)).data || []); } catch (e) { console.error(e); } };
-  const fetchImages = async () => { if (!uid) return; try { setImages(((await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid))).data || []).map((img: any) => ({ ...img, url: ConstantInfo.fileDir + img.url.replace(/^\//, '') }))); } catch (e) { console.error(e); } };
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (!f || !uid) return; setIsUploading(true); try { const fd = new FormData(); fd.append('file', f); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); await fetchImages(); } catch (er) { console.error(er); } finally { setIsUploading(false); } };
+  const fetchImages = async () => { if (!uid) return; try { setImages(((await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid))).data || []).map((img: any) => ({ uid: img.uid, url: img.url ? ConstantInfo.fileDir + img.url.replace(/^\//, '') : '', originalName: img.originalName || '' }))); } catch (e) { console.error(e); } };
+  const fetchBlueprints = async () => { if (!uid) return; try { setBlueprints(((await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid))).data || []).map((bp: any) => ({ uid: bp.uid, url: bp.url ? ConstantInfo.fileDir + bp.url.replace(/^\//, '') : '', originalName: bp.originalName || '' }))); } catch (e) { console.error(e); } };
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
-  const fetchBlueprints = async () => { if (!uid) return; try { setBlueprints(((await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid))).data || []).map((bp: any) => ({ ...bp, url: ConstantInfo.fileDir + bp.url.replace(/^\//, '') }))); } catch (e) { console.error(e); } };
-  const handleBlueprintUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (!f || !uid) return; setIsUploadingBlueprint(true); try { const fd = new FormData(); fd.append('file', f); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); await fetchBlueprints(); } catch (er) { console.error(er); } finally { setIsUploadingBlueprint(false); } };
+  const handleBlueprintUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
   const handleDeleteBlueprint = async (bpUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteBlueprint(bpUid)); await fetchBlueprints(); } catch (er) { console.error(er); } };
-  const fetchDocuments = async () => { if (!uid) return; try { setDocuments(((await AxiosService.get(ConstantInfo.restApiNomenclatureDocuments(uid))).data || []).map((doc: any) => ({ ...doc, url: ConstantInfo.fileDir + doc.url.replace(/^\//, '') }))); } catch (e) { console.error(e); } };
+  const fetchDocuments = async () => { if (!uid) return; try { setDocuments(((await AxiosService.get(ConstantInfo.restApiNomenclatureDocuments(uid))).data || []).map((doc: any) => ({ ...doc, url: doc.url ? ConstantInfo.fileDir + doc.url.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
   const handleDocumentUpload = (documentName: string, file: File) => { setLocalDocuments(prev => [...prev, { localId: generateLocalId(), documentName, file }]); };
   const handleDeleteDocument = (uid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== uid)); if (uid && !uid.startsWith('local_')) { AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(uid)).then(() => fetchDocuments()).catch(e => console.error(e)); } };
   const fetchPrices = async () => { if (!uid) return; try { setPrices((await AxiosService.get(ConstantInfo.restApiNomenclaturePrices(uid))).data || []); } catch (e) { console.error(e); } };
@@ -153,10 +206,16 @@ const NomenclatureCreatePage = () => {
     try { existingChars = (await AxiosService.get(ConstantInfo.restApiNomenclatureCharacteristics(uid))).data || []; } catch (e) { console.error(e); }
     for (const char of localCharacteristics) {
       try {
-        let existingChar = char.uid ? existingChars.find((c: any) => c.uid === char.uid) : null;
-        if (!existingChar && char.attributeName) existingChar = existingChars.find((c: any) => c.attributeName === char.attributeName);
+        let existingChar = null;
+        if (char.uid) existingChar = existingChars.find((c: any) => c.uid === char.uid);
+        if (!existingChar && char.attributeTypeUid && !char.isCustom) existingChar = existingChars.find((c: any) => c.attributeTypeUid === char.attributeTypeUid);
+        if (!existingChar && char.attributeName && !char.isCustom) existingChar = existingChars.find((c: any) => c.attributeName === char.attributeName);
         if (existingChar) {
-          await AxiosService.patch(ConstantInfo.restApiNomenclatureUpdateCharacteristic(existingChar.uid), { value: char.value || '', measureUid: char.measureUid || null });
+          const serverValue = existingChar.value || '';
+          const localValue = char.value || '';
+          if (serverValue !== localValue) {
+            await AxiosService.patch(ConstantInfo.restApiNomenclatureUpdateCharacteristic(existingChar.uid), { value: localValue, measureUid: char.measureUid || null });
+          }
         } else {
           const createData: any = { value: char.value || '', measureUid: char.measureUid || null };
           if (char.isCustom) { createData.attributeTypeUid = null; createData.customName = char.customName || char.attributeName; }
@@ -167,77 +226,40 @@ const NomenclatureCreatePage = () => {
     }
   };
 
-  const handleSave = async () => {
-    if (!uid || !code) return;
-    setIsSaving(true);
-    try {
-      await AxiosService.post(ConstantInfo.restApiNomenclatureDraft, { uid, code: parseInt(code), name, article, description, groupUid: selectedCatalogId || null, typeMainUid: selectedAccountingGroupId || null, typePurposeUid: selectedNomenclatureGroupId || null, typeProductUid: selectedNomenclatureTypeId || null, usage, wasteMaterial, recycleMaterial, measureUid: selectedUnitId || null, manufacturerUid: selectedManufacturerId || null, brandUid: selectedBrandId || null, modelOfBrandUid: selectedModelId || null, countryUid: selectedCountryId || null });
-      await saveCharacteristics();
-      
-      // Отправляем все локальные данные
-      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); }
-      for (const bc of localBarcodes) { const fd = new FormData(); fd.append('codeType', bc.codeType); fd.append('codeValue', bc.codeValue); fd.append('codeKind', bc.codeKind); if (bc.file) fd.append('file', bc.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); }
-      for (const sku of localSkus) { const fd = new FormData(); fd.append('codeType', sku.codeType); fd.append('codeValue', sku.codeValue); fd.append('codeKind', sku.codeKind); if (sku.file) fd.append('file', sku.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); }
-      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); }
-      for (const supply of localSupplies) { const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supply.supplyDate) fd.append('supplyDate', supply.supplyDate + ':00'); if (supply.documentName.trim()) fd.append('documentName', supply.documentName.trim()); if (supply.file) fd.append('file', supply.file); await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd); }
-      
-      setLocalImages([]); setLocalBarcodes([]); setLocalSkus([]); setLocalDocuments([]); setLocalSupplies([]);
-      await fetchImages(); await fetchDocuments(); await fetchCharacteristics();
-      return true;
-    } catch (e) { console.error(e); return false; } finally { setIsSaving(false); }
-  };
+  const areRequiredAttrsFilled = useCallback(() => REQUIRED_ATTRIBUTES.every(name => { const char = localCharacteristics.find(c => c.attributeName === name); return char && char.value && char.value.trim() !== ''; }), [localCharacteristics]);
+  const getTotalImagesCount = useCallback((): number => images.length + localImages.length, [images, localImages]);
+  const getTotalDocumentsCount = useCallback((): number => documents.length + localDocuments.length, [documents, localDocuments]);
+  const getTotalSuppliesCount = useCallback((): number => localSupplies.length, [localSupplies]);
+  const getProgressStep = useCallback((): number => { const a = !!(name && article && selectedCatalogId); const b = a && !!(selectedAccountingGroupId && selectedNomenclatureGroupId && selectedNomenclatureTypeId && selectedUnitId && selectedManufacturerId && selectedBrandId && selectedModelId && selectedCountryId && areRequiredAttrsFilled()); if (!a) return 0; if (!b) return 1; if (getTotalImagesCount() > 0 && !!(description && description.trim()) && getTotalDocumentsCount() > 0 && getTotalSuppliesCount() > 0) return 3; return 2; }, [name, article, selectedCatalogId, selectedAccountingGroupId, selectedNomenclatureGroupId, selectedNomenclatureTypeId, selectedUnitId, selectedManufacturerId, selectedBrandId, selectedModelId, selectedCountryId, areRequiredAttrsFilled, description, getTotalImagesCount, getTotalDocumentsCount, getTotalSuppliesCount]);
+
+  const getMissingFields = (): Set<string> => { const m = new Set<string>(); if (!name.trim()) m.add('name'); if (!article.trim()) m.add('article'); if (!selectedCatalogId) m.add('catalog'); if (!selectedAccountingGroupId) m.add('accountingGroup'); if (!selectedNomenclatureGroupId) m.add('nomenclatureGroup'); if (!selectedNomenclatureTypeId) m.add('nomenclatureType'); if (!selectedUnitId) m.add('unit'); if (!selectedManufacturerId) m.add('manufacturer'); if (!selectedBrandId) m.add('brand'); if (!selectedModelId) m.add('model'); if (!selectedCountryId) m.add('country'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') m.add(`char_${n}`); }); return m; };
+  const getMissingFieldLabels = (): string[] => { const l: string[] = []; if (!name.trim()) l.push('Наименование'); if (!article.trim()) l.push('Артикул'); if (!selectedCatalogId) l.push('Каталог'); if (!selectedAccountingGroupId) l.push('Группа учета'); if (!selectedNomenclatureGroupId) l.push('Группа номенклатуры'); if (!selectedNomenclatureTypeId) l.push('Вид номенклатуры'); if (!selectedUnitId) l.push('Единица измерения'); if (!selectedManufacturerId) l.push('Производитель'); if (!selectedBrandId) l.push('Бренд'); if (!selectedModelId) l.push('Модель'); if (!selectedCountryId) l.push('Страна происхождения'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') l.push(n); }); return l; };
+
+  const handleSave = async () => { if (!uid || !code) return; setIsSaving(true); try { await AxiosService.post(ConstantInfo.restApiNomenclatureDraft, { uid, code: parseInt(code), name, article, description, groupUid: selectedCatalogId || null, typeMainUid: selectedAccountingGroupId || null, typePurposeUid: selectedNomenclatureGroupId || null, typeProductUid: selectedNomenclatureTypeId || null, usage, wasteMaterial, recycleMaterial, measureUid: selectedUnitId || null, manufacturerUid: selectedManufacturerId || null, brandUid: selectedBrandId || null, modelOfBrandUid: selectedModelId || null, countryUid: selectedCountryId || null, author: 'Оператор' }); await saveCharacteristics(); for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); } for (const bp of localBlueprints) { const fd = new FormData(); fd.append('file', bp.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); } for (const bc of localBarcodes) { const fd = new FormData(); fd.append('codeType', bc.codeType); fd.append('codeValue', bc.codeValue); fd.append('codeKind', 'BARCODE'); fd.append('author', 'Оператор'); if (bc.file) fd.append('file', bc.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } for (const qr of localQrCodes) { const fd = new FormData(); fd.append('codeType', qr.codeType); fd.append('codeValue', qr.codeValue); fd.append('codeKind', 'QR'); fd.append('author', 'Оператор'); if (qr.file) fd.append('file', qr.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } for (const sku of localSkus) { const fd = new FormData(); fd.append('codeType', sku.codeType); fd.append('codeValue', sku.codeValue); fd.append('codeKind', 'SKU'); fd.append('author', 'Оператор'); if (sku.file) fd.append('file', sku.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); } for (const supply of localSupplies) { const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supply.supplyDate) fd.append('supplyDate', supply.supplyDate + ':00'); if (supply.documentName.trim()) fd.append('documentName', supply.documentName.trim()); if (supply.file) fd.append('file', supply.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd); } setLocalImages([]); setLocalBlueprints([]); setLocalBarcodes([]); setLocalQrCodes([]); setLocalSkus([]); setLocalDocuments([]); setLocalSupplies([]); await fetchImages(); await fetchBlueprints(); await fetchDocuments(); await fetchCharacteristics(); await fetchCodes(); setIsDataSaved(true); setValidationErrors(new Set()); window.dispatchEvent(new CustomEvent('refreshEvents')); return true; } catch (e) { console.error(e); return false; } finally { setIsSaving(false); } };
 
   const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); };
   const handleSaveAndClose = async () => { if (await handleSave()) handleClose(); };
   const handleCloseWithoutSaving = () => { handleClose(); };
-  const handleAccountingGroupSelect = (o: TypeMaterialOption) => { setSelectedAccountingGroup(o.typeName); setSelectedAccountingGroupId(o.uid); setAccountingGroupOpen(false); setSelectedNomenclatureGroup(''); setSelectedNomenclatureGroupId(''); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); };
-  const handleTabChange = (index: number) => { setActiveTab(index); if (index === 4 || index === 5) fetchSuppliers(); };
+  const handleAccountingGroupSelect = (o: TypeMaterialOption) => { setSelectedAccountingGroup(o.typeName); setSelectedAccountingGroupId(o.uid); setAccountingGroupOpen(false); setSelectedNomenclatureGroup(''); setSelectedNomenclatureGroupId(''); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); setValidationErrors(prev => { const n = new Set(prev); n.delete('accountingGroup'); return n; }); };
+  const handleTabChange = (index: number) => { if (!isDataSaved && index > 1) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(index); if (!isFinishedProduct && (index === 4 || index === 5)) fetchSuppliers(); };
+  const handleEventLogClick = () => { if (!isDataSaved) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(EVENT_LOG_TAB); };
   const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
   const openPopup = (type: PopupType) => { if (type === 'nomenclatureGroup' && !selectedAccountingGroupId) return; if (type === 'nomenclatureType' && !selectedNomenclatureGroupId) return; if (type === 'brand' && !selectedManufacturerId) return; if (type === 'model' && !selectedBrandId) return; setPopupType(type); if (type === 'nomenclatureGroup') setPopupFilterParam(selectedAccountingGroupId); else if (type === 'nomenclatureType') setPopupFilterParam(selectedNomenclatureGroupId); else if (type === 'brand') setPopupFilterParam(selectedManufacturerId); else if (type === 'model') setPopupFilterParam(selectedBrandId); else setPopupFilterParam(undefined); setPopupOpen(true); };
-  const handlePopupSelect = (id: string, nm: string) => { switch (popupType) { case 'catalog': setSelectedCatalog(nm); setSelectedCatalogId(id); break; case 'nomenclatureGroup': setSelectedNomenclatureGroup(nm); setSelectedNomenclatureGroupId(id); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); break; case 'nomenclatureType': setSelectedNomenclatureType(nm); setSelectedNomenclatureTypeId(id); break; case 'unit': setSelectedUnit(nm); setSelectedUnitId(id); break; case 'manufacturer': setSelectedManufacturer(nm); setSelectedManufacturerId(id); setSelectedBrand(''); setSelectedBrandId(''); setSelectedModel(''); setSelectedModelId(''); break; case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setSelectedModel(''); setSelectedModelId(''); break; case 'model': setSelectedModel(nm); setSelectedModelId(id); break; case 'country': setSelectedCountry(nm); setSelectedCountryId(id); break; } };
+  const handlePopupSelect = (id: string, nm: string) => { switch (popupType) { case 'catalog': setSelectedCatalog(nm); setSelectedCatalogId(id); setValidationErrors(p => { const n = new Set(p); n.delete('catalog'); return n; }); break; case 'nomenclatureGroup': setSelectedNomenclatureGroup(nm); setSelectedNomenclatureGroupId(id); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); setValidationErrors(p => { const n = new Set(p); n.delete('nomenclatureGroup'); return n; }); break; case 'nomenclatureType': setSelectedNomenclatureType(nm); setSelectedNomenclatureTypeId(id); setValidationErrors(p => { const n = new Set(p); n.delete('nomenclatureType'); return n; }); break; case 'unit': setSelectedUnit(nm); setSelectedUnitId(id); setValidationErrors(p => { const n = new Set(p); n.delete('unit'); return n; }); break; case 'manufacturer': setSelectedManufacturer(nm); setSelectedManufacturerId(id); setSelectedBrand(''); setSelectedBrandId(''); setSelectedModel(''); setSelectedModelId(''); setValidationErrors(p => { const n = new Set(p); n.delete('manufacturer'); return n; }); break; case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setSelectedModel(''); setSelectedModelId(''); setValidationErrors(p => { const n = new Set(p); n.delete('brand'); return n; }); break; case 'model': setSelectedModel(nm); setSelectedModelId(id); setValidationErrors(p => { const n = new Set(p); n.delete('model'); return n; }); break; case 'country': setSelectedCountry(nm); setSelectedCountryId(id); setValidationErrors(p => { const n = new Set(p); n.delete('country'); return n; }); break; } };
 
-  const buttonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden' });
+  const canSave = getProgressStep() >= 2;
+  const cef = ['unit', 'manufacturer', 'brand', 'model', 'country', 'char_Длина', 'char_Ширина', 'char_Высота', 'char_Масса'];
+  const hasCharacteristicsErrors = cef.some(f => validationErrors.has(f));
+
+  const buttonStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : isDisabled ? '#BCC8FF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden', opacity: isDisabled ? 0.5 : 1 });
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
   const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const rightButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
-  const areRequiredFilled = () => REQUIRED_ATTRIBUTES.every(name => { const char = localCharacteristics.find(c => c.attributeName === name); return char && char.value && char.value.trim() !== ''; });
-  const getTotalImagesCount = (): number => images.length + localImages.length;
-  const getTotalDocumentsCount = (): number => documents.length + localDocuments.length;
-  const getTotalSuppliesCount = (): number => localSupplies.length;
+  const commonProps: CommonProps = { uid, code, name, article, description, isEdit, isSaving, isUploading, isUploadingBlueprint, images, blueprints, documents, prices, suppliers, selectedImageIndex, selectedBlueprintIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedUnit, selectedUnitId, selectedManufacturer, selectedManufacturerId, selectedBrand, selectedBrandId, selectedModel, selectedModelId, selectedCountry, selectedCountryId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, showAddPricePopup, newPrice, newPriceDate, newPriceSupplierUid, fullscreenImage, fullscreenBlueprint, isLoading, isLoadingPrices: false, typeMaterials, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, blueprintInputRef: blueprintInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localCharacteristics, setLocalCharacteristics, localDocuments, setLocalDocuments, localSupplies, setLocalSupplies, localImages, setLocalImages, localBlueprints, setLocalBlueprints, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, localQrCodes, setLocalQrCodes, serverBarcodes, serverSkus, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setSelectedUnit, setSelectedUnitId, setSelectedManufacturer, setSelectedManufacturerId, setSelectedBrand, setSelectedBrandId, setSelectedModel, setSelectedModelId, setSelectedCountry, setSelectedCountryId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, setBlueprints, setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint, setDocuments, setPrices, setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid, setSuppliers, handleImageUpload, handleDeleteImage, handleBlueprintUpload, handleDeleteBlueprint, handleDocumentUpload, handleDeleteDocument, fetchPrices, handleAddPrice, handleDeletePrice, fetchSuppliers, openPopup, handleAccountingGroupSelect, isDataSaved, validationErrors, setValidationErrors, isFinishedProduct };
 
-  const getProgressStep = useCallback((): number => {
-    const hasBasic = !!(name && article && selectedCatalogId);
-    const hasGroups = !!(selectedAccountingGroupId && selectedNomenclatureGroupId && selectedNomenclatureTypeId);
-    if (!hasBasic || !hasGroups || !areRequiredFilled()) return hasBasic ? 1 : 0;
-    if (getTotalImagesCount() > 0 && !!(description && description.trim()) && getTotalDocumentsCount() > 0 && getTotalSuppliesCount() > 0) return 3;
-    return 2;
-  }, [name, article, selectedCatalogId, selectedAccountingGroupId, selectedNomenclatureGroupId, selectedNomenclatureTypeId, localCharacteristics, description, images, localImages, localDocuments, localSupplies, documents]);
+  const isEventLogActive = activeTab === EVENT_LOG_TAB;
 
-  const currentStep = getProgressStep();
-  const canSave = currentStep >= 2;
-
-  const commonProps: CommonProps = {
-    uid, code, name, article, description, isEdit, isSaving, isUploading, isUploadingBlueprint, images, blueprints, documents, prices, suppliers,
-    selectedImageIndex, selectedBlueprintIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen,
-    selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedUnit, selectedUnitId,
-    selectedManufacturer, selectedManufacturerId, selectedBrand, selectedBrandId, selectedModel, selectedModelId, selectedCountry, selectedCountryId,
-    usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, showAddPricePopup, newPrice, newPriceDate, newPriceSupplierUid,
-    fullscreenImage, fullscreenBlueprint, isLoading, isLoadingPrices: false, typeMaterials,
-    fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, blueprintInputRef: blueprintInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>,
-    localCharacteristics, setLocalCharacteristics, localDocuments, setLocalDocuments, localSupplies, setLocalSupplies,
-    localImages, setLocalImages, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus,
-    setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial,
-    setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen,
-    setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId,
-    setSelectedUnit, setSelectedUnitId, setSelectedManufacturer, setSelectedManufacturerId, setSelectedBrand, setSelectedBrandId, setSelectedModel, setSelectedModelId, setSelectedCountry, setSelectedCountryId,
-    setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, setBlueprints, setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint,
-    setDocuments, setPrices, setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid, setSuppliers,
-    handleImageUpload, handleDeleteImage, handleBlueprintUpload, handleDeleteBlueprint, handleDocumentUpload, handleDeleteDocument,
-    fetchPrices, handleAddPrice, handleDeletePrice, fetchSuppliers, openPopup, handleAccountingGroupSelect,
-  };
-
-  const renderContent = () => { switch (activeTab) { case 0: return <MainTab {...commonProps} />; case 1: return <CharacteristicsTab {...commonProps} />; case 2: return <DocumentsTab {...commonProps} />; case 3: return <div style={{ position: 'absolute', top: 164, left: 30, right: 30, bottom: 111, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Остатки</span></div>; case 4: return <SuppliersTab {...commonProps} />; case 5: return <PriceHistoryTab {...commonProps} />; case 6: return <AnalogsTab {...commonProps} />; case 7: return <RatingTab {...commonProps} />; case 8: return <IntegrationTab {...commonProps} />; default: return null; } };
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   return (
@@ -246,33 +268,67 @@ const NomenclatureCreatePage = () => {
       <button onClick={() => setShowClosePopup(true)} style={{ position: 'absolute', top: 40, right: 40, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon7} alt="Закрыть" style={{ width: 18, height: 18 }} /></button>
       <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
-          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0)}><span>Основное</span>
+          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0)}>
+            <span>Основное</span>
             <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3, ease: 'easeInOut' }} />
             </button>
           </button>
-          <AnimatePresence>{!tabsCollapsed && tabs_list.slice(1).map((tab, i) => (<motion.button key={i + 1} onClick={() => handleTabChange(i + 1)} style={buttonStyle(activeTab === i + 1)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}><motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span></motion.button>))}</AnimatePresence>
+          <AnimatePresence>
+            {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => {
+              const tabIndex = i + 1;
+              const isBlocked = !isDataSaved && tabIndex > 1;
+              const isCharacteristicsTab = tabIndex === 1;
+              return (
+                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={{ ...buttonStyle(activeTab === tabIndex, isBlocked), outline: isCharacteristicsTab && hasCharacteristicsErrors && validationErrors.size > 0 ? '2px solid #FF3052' : 'none', outlineOffset: -2 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
+                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
+                </motion.button>
+              );
+            })}
+          </AnimatePresence>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}><button style={rightButtonStyle} /><button style={rightButtonStyle} /></div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
+          <button style={rightButtonStyle} onClick={handleEventLogClick}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="16" height="16" rx="3" stroke="#666EFE" strokeWidth="2"/><line x1="5" y1="5" x2="13" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="9" x2="13" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="13" x2="10" y2="13" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </button>
+          <button style={rightButtonStyle} />
+        </div>
       </div>
-      {renderContent()}
-      <div style={{ position: 'absolute', bottom: 25, left: 45, display: 'flex', alignItems: 'flex-end' }}><ProgressBar currentStep={currentStep} /></div>
-      <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-        <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
-        <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
-        <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
-      </div>
+
+      {isEventLogActive ? <EventLogTab {...commonProps} /> : (
+        <>
+          {(() => {
+            if (isFinishedProduct) { switch (activeTab) { case 0: return <MainTab {...commonProps} />; case 1: return <CharacteristicsTab {...commonProps} />; case 2: return <DocumentsTab {...commonProps} />; case 3: return <div style={{ position: 'absolute', top: 164, left: 30, right: 30, bottom: 111, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>На складе</span></div>; case 4: return <IntegrationTab {...commonProps} />; default: return null; } }
+            switch (activeTab) { case 0: return <MainTab {...commonProps} />; case 1: return <CharacteristicsTab {...commonProps} />; case 2: return <DocumentsTab {...commonProps} />; case 3: return <div style={{ position: 'absolute', top: 164, left: 30, right: 30, bottom: 111, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Остатки</span></div>; case 4: return <SuppliersTab {...commonProps} />; case 5: return <PriceHistoryTab {...commonProps} />; case 6: return <AnalogsTab {...commonProps} />; case 7: return <RatingTab {...commonProps} />; case 8: return <IntegrationTab {...commonProps} />; default: return null; }
+          })()}
+          <div style={{ position: 'absolute', bottom: 25, left: 45, display: 'flex', alignItems: 'flex-end' }}><ProgressBar currentStep={getProgressStep()} /></div>
+          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
+            <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
+            <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
+            <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
+          </div>
+        </>
+      )}
+
       <CatalogSelectPopup isOpen={popupOpen} onClose={() => setPopupOpen(false)} onSelect={handlePopupSelect} popupType={popupType} filterParam={popupFilterParam} />
+
+      {showBlockedTabWarning && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBlockedTabWarning(false)}>
+          <div style={{ width: 500, maxHeight: '80vh', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Основные данные еще не записаны</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Для доступа к остальным вкладкам необходимо заполнить все обязательные поля и сохранить данные.</p>
+            <div><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#FF3052' }}>Незаполненные поля:</span><div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>{getMissingFieldLabels().map((f, i) => (<div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#FF3052', flexShrink: 0 }} /><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>{f}</span></div>))}</div></div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => { setShowBlockedTabWarning(false); setActiveTab(0); }} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Перейти к основному</button><button onClick={() => setShowBlockedTabWarning(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button></div>
+          </div>
+        </div>
+      )}
+
       {showClosePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClosePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}
-              <button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button>
-              <button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
           </div>
         </div>
       )}

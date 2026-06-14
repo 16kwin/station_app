@@ -1,4 +1,4 @@
-// SuppliersPage.tsx — ПОЛНЫЙ ФАЙЛ
+// SuppliersPage.tsx — ПОЛНЫЙ ФАЙЛ (исправленный)
 import React, { useRef, useState, useEffect } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -17,10 +17,11 @@ import Icon19 from '../../../assets/References/Icon19.svg';
 interface SupplierItem {
   uid: string;
   name: string;
+  code?: number;
 }
 
 const SuppliersPage = () => {
-  const { activeTabId } = useTabs();
+  const { activeTabId, openTab } = useTabs();
   const tabIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
@@ -29,11 +30,6 @@ const SuppliersPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showCreatePopup, setShowCreatePopup] = useState(false);
-  const [showEditPopup, setShowEditPopup] = useState(false);
-  const [editItem, setEditItem] = useState<SupplierItem | null>(null);
-  const [formName, setFormName] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
 
   const TABLE_WIDTH = 1720;
@@ -46,7 +42,7 @@ const SuppliersPage = () => {
 
   const fetchData = async () => {
     try {
-      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliersCRUD);
+      const response = await AxiosService.get(ConstantInfo.restApiSuppliersList);
       setData(response.data || []);
     } catch (error) {
       console.error('Ошибка загрузки:', error);
@@ -104,54 +100,22 @@ const SuppliersPage = () => {
     setContextMenu({ x: e.clientX, y: e.clientY, uid, name });
   };
 
-  const handleCreateClick = () => {
-    setFormName('');
-    setEditItem(null);
-    setShowCreatePopup(true);
-  };
-
-  const handleCreateSubmit = async () => {
-    if (!formName.trim()) return;
-    setIsSaving(true);
+  const handleCreateClick = async () => {
     try {
-      await AxiosService.post(ConstantInfo.restApiNomenclatureSuppliersCRUD, {
-        name: formName.trim(),
-      });
-      await fetchData();
-      setShowCreatePopup(false);
+      const response = await AxiosService.get(ConstantInfo.restApiSupplierGenerate);
+      const { uid } = response.data;
+      openTab(`/references/suppliers/create/${uid}`, 'Поставщик (новый)', null);
     } catch (error) {
-      console.error('Ошибка создания:', error);
-    } finally {
-      setIsSaving(false);
+      const newUid = crypto.randomUUID();
+      openTab(`/references/suppliers/create/${newUid}`, 'Поставщик (новый)', null);
     }
   };
 
-  const handleEditClick = () => {
+  const handleContextOpen = () => {
     if (!contextMenu) return;
-    const item = data.find(d => d.uid === contextMenu.uid);
-    if (item) {
-      setEditItem(item);
-      setFormName(item.name);
-      setShowEditPopup(true);
-    }
+    const { uid } = contextMenu;
     setContextMenu(null);
-  };
-
-  const handleEditSubmit = async () => {
-    if (!editItem || !formName.trim()) return;
-    setIsSaving(true);
-    try {
-      await AxiosService.patch(ConstantInfo.restApiNomenclatureSupplier(editItem.uid), {
-        name: formName.trim(),
-      });
-      await fetchData();
-      setShowEditPopup(false);
-      setEditItem(null);
-    } catch (error) {
-      console.error('Ошибка редактирования:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    openTab(`/references/suppliers/edit/${uid}`, 'Поставщик', null);
   };
 
   const handleDeleteClick = () => {
@@ -162,7 +126,7 @@ const SuppliersPage = () => {
   const confirmDelete = async () => {
     try {
       for (const uid of selectedIds) {
-        await AxiosService.delete(ConstantInfo.restApiNomenclatureSupplier(uid));
+        await AxiosService.delete(ConstantInfo.restApiSupplierDelete(uid));
       }
       await fetchData();
       setSelectedIds(new Set());
@@ -213,15 +177,6 @@ const SuppliersPage = () => {
     width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
     display: 'flex', alignItems: 'center', paddingLeft: 20,
     fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', height: 44, borderRadius: 10,
-    border: '1px solid rgba(102, 110, 254, 0.15)',
-    paddingLeft: 12, paddingRight: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    color: '#2D4059', outline: 'none', boxSizing: 'border-box',
-    backgroundColor: '#FFFFFF',
   };
 
   if (isLoading) {
@@ -287,40 +242,8 @@ const SuppliersPage = () => {
 
       {contextMenu && (
         <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
-          <button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button>
+          <button style={contextMenuButtonStyle} onClick={handleContextOpen}>Открыть</button>
           <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
-        </div>
-      )}
-
-      {showCreatePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание поставщика</h3>
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
-              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEditPopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование поставщика</h3>
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
-              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleEditSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button>
-            </div>
-          </div>
         </div>
       )}
 

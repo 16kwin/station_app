@@ -1,48 +1,67 @@
-// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (работает с локальными документами)
+// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (без локалки, сразу на сервер)
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
-import type { CommonProps, DocumentItem, LocalDocument } from './NomenclatureCreatePage';
+import AxiosService from '../../../services/AxiosService';
+import ConstantInfo from '../../../info/ConstantInfo';
+import type { CommonProps } from './NomenclatureCreatePage';
+
+interface DocumentItem {
+  uid: string;
+  materialUid: string;
+  documentName: string;
+  filePath: string;
+  originalName: string;
+  url: string;
+  createdAt: string;
+}
 
 const DocumentsTab: React.FC<CommonProps> = (props) => {
-  const {
-    uid, isEdit,
-    documents,
-    localDocuments,
-    setLocalDocuments,
-    handleDocumentUpload, handleDeleteDocument,
-    documentInputRef,
-  } = props;
+  const { uid, isEdit } = props;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
   const [showAddDocPopup, setShowAddDocPopup] = useState(false);
   const [newDocName, setNewDocName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileLocalRef = useRef<HTMLInputElement>(null);
 
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
 
-  // Объединяем серверные и локальные документы
-  const allDocuments = [
-    ...documents,
-    ...localDocuments.map(doc => ({
-      uid: doc.localId,
-      materialUid: uid || '',
-      documentName: doc.documentName,
-      filePath: '',
-      originalName: doc.file.name,
-      url: URL.createObjectURL(doc.file),
-      createdAt: new Date().toISOString(),
-      isLocal: true,
-    }))
-  ];
+  const fetchDocuments = async () => {
+    if (!uid) return;
+    setIsLoading(true);
+    try {
+      const res = await AxiosService.get(ConstantInfo.restApiNomenclatureDocuments(uid));
+      setDocuments((res.data || []).map((doc: any) => ({
+        ...doc,
+        url: doc.url ? ConstantInfo.fileDir + doc.url.replace(/^\//, '') : '',
+      })));
+    } catch (e) {
+      console.error('Ошибка загрузки документов:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (uid && isEdit) fetchDocuments();
+  }, [uid, isEdit]);
+
+  // Обновляем при возврате на вкладку
+  useEffect(() => {
+    const handler = () => { if (uid) fetchDocuments(); };
+    window.addEventListener('refreshDocuments', handler);
+    return () => window.removeEventListener('refreshDocuments', handler);
+  }, [uid]);
 
   const checkScroll = () => { const c = scrollContainerRef.current; if (c) setHasScroll(c.scrollHeight > c.clientHeight); };
-  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [documents, localDocuments]);
+  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [documents]);
   useEffect(() => { const c = scrollContainerRef.current; if (!c) return; checkScroll(); c.addEventListener('scroll', checkScroll); return () => c.removeEventListener('scroll', checkScroll); }, []);
 
   const formatDate = (dateStr: string) => {
@@ -64,18 +83,31 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     if (f) setSelectedFile(f);
   };
 
-  const handleAddDocSubmit = () => {
-    if (!newDocName.trim() || !selectedFile) return;
-    handleDocumentUpload(newDocName.trim(), selectedFile);
-    setShowAddDocPopup(false);
+  const handleAddDocSubmit = async () => {
+    if (!uid || !newDocName.trim() || !selectedFile) return;
+    setIsUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      fd.append('documentName', newDocName.trim());
+      await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd);
+      await fetchDocuments();
+      setShowAddDocPopup(false);
+      window.dispatchEvent(new CustomEvent('refreshDocuments'));
+    } catch (e) {
+      console.error('Ошибка загрузки документа:', e);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const handleDelete = (docUid: string, isLocal: boolean) => {
+  const handleDelete = async (docUid: string) => {
     if (!confirm('Удалить документ?')) return;
-    if (isLocal) {
-      setLocalDocuments(prev => prev.filter(d => d.localId !== docUid));
-    } else {
-      handleDeleteDocument(docUid);
+    try {
+      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(docUid));
+      await fetchDocuments();
+    } catch (e) {
+      console.error('Ошибка удаления документа:', e);
     }
   };
 
@@ -104,13 +136,17 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
               <span style={{ width: 40 }} />
             </div>
             <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {allDocuments.length === 0 ? (
+              {isLoading ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span>
+                </div>
+              ) : documents.length === 0 ? (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Нет документов</span>
                 </div>
               ) : (
-                allDocuments.map(doc => (
-                  <div key={doc.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: (doc as any).isLocal ? '#F0F1FF' : '#FFFFFF', position: 'relative' }}>
+                documents.map(doc => (
+                  <div key={doc.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', position: 'relative' }}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
                       <rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/>
                       <line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
@@ -121,7 +157,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', width: 335, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', flex: 1 }}>{formatDate(doc.createdAt)}</span>
                     <button
-                      onClick={() => handleDelete(doc.uid, !!(doc as any).isLocal)}
+                      onClick={() => handleDelete(doc.uid)}
                       style={{ width: 32, height: 32, borderRadius: 6, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -172,7 +208,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowAddDocPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleAddDocSubmit} disabled={!newDocName.trim() || !selectedFile} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newDocName.trim() && selectedFile ? '#666EFE' : '#BCC8FF', cursor: newDocName.trim() && selectedFile ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Добавить</button>
+              <button onClick={handleAddDocSubmit} disabled={!newDocName.trim() || !selectedFile || isUploading} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newDocName.trim() && selectedFile && !isUploading ? '#666EFE' : '#BCC8FF', cursor: newDocName.trim() && selectedFile && !isUploading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isUploading ? 'Загрузка...' : 'Добавить'}</button>
             </div>
           </div>
         </div>

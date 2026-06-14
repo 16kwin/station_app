@@ -114,6 +114,22 @@ restApiNomenclatureDeleteIntegration: (uid: string) => `/api/nomenclature/integr
 // Добавить:
 restApiNomenclatureCodes: (materialUid: string) => `/api/nomenclature/${materialUid}/codes`,
 restApiNomenclatureDeleteCode: (uid: string) => `/api/nomenclature/codes/${uid}`,
+restApiNomenclatureEvents: (materialUid: string) => `/api/nomenclature/${materialUid}/events`,
+restApiSupplierGenerate: '/api/suppliers/generate',
+restApiSupplierDraft: '/api/suppliers/draft',
+restApiSuppliersList: '/api/suppliers',
+restApiSupplierGet: (uid: string) => `/api/suppliers/${uid}`,
+restApiSupplierDelete: (uid: string) => `/api/suppliers/${uid}`,
+restApiSupplierImages: (supplierUid: string) => `/api/suppliers/${supplierUid}/images`,
+restApiSupplierDeleteImage: (uid: string) => `/api/suppliers/images/${uid}`,
+restApiSupplierDocuments: (supplierUid: string) => `/api/suppliers/${supplierUid}/documents`,
+restApiSupplierDeleteDocument: (uid: string) => `/api/suppliers/documents/${uid}`,
+restApiSupplierRatings: (supplierUid: string) => `/api/suppliers/${supplierUid}/ratings`,
+restApiSupplierRatingsAverage: (supplierUid: string) => `/api/suppliers/${supplierUid}/ratings/average`,
+restApiSupplierDeleteRating: (uid: string) => `/api/suppliers/ratings/${uid}`,
+restApiSupplierIntegrations: (supplierUid: string) => `/api/suppliers/${supplierUid}/integrations`,
+restApiSupplierDeleteIntegration: (uid: string) => `/api/suppliers/integrations/${uid}`,
+restApiSupplierDescriptionTypes: '/api/suppliers/description-types',
 };
 
 export default ConstantInfo;

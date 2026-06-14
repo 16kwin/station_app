@@ -25,11 +25,13 @@ import ModelsPage from '../components/ReferencesPage/ModelsPage/ModelsPage';
 import CountriesPage from '../components/ReferencesPage/CountriesPage/CountriesPage';
 import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/ManufacturersPage';
 import SuppliersPage from '../components/ReferencesPage/SuppliersPage/SuppliersPage';
+import SupplierCreatePage from '../components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
 const stationInfoCache: Map<string, { name: string; workshop: string; section: string }> = new Map();
 const nomenclatureInfoCache: Map<string, string> = new Map();
+const supplierInfoCache: Map<string, string> = new Map();
 
 const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: string; section: string }> => {
   if (stationInfoCache.has(uid)) {
@@ -69,6 +71,22 @@ const fetchNomenclatureName = async (uid: string): Promise<string> => {
   }
 };
 
+const fetchSupplierName = async (uid: string): Promise<string> => {
+  if (supplierInfoCache.has(uid)) {
+    return supplierInfoCache.get(uid)!;
+  }
+  
+  try {
+    const response = await AxiosService.get(ConstantInfo.restApiNomenclatureSupplier(uid));
+    const name = response.data?.name || uid;
+    supplierInfoCache.set(uid, name);
+    return name;
+  } catch {
+    supplierInfoCache.set(uid, uid);
+    return uid;
+  }
+};
+
 const staticComponents: Record<string, React.ReactNode> = {
   '/main': <MainPage />,
   '/stations': <StationsPage />,
@@ -100,6 +118,14 @@ const getComponentByPath = (path: string): React.ReactNode => {
   
   if (path.startsWith('/references/nomenclature/edit/')) {
     return <NomenclatureCreatePage />;
+  }
+  
+  if (path.startsWith('/references/suppliers/create/')) {
+    return <SupplierCreatePage />;
+  }
+  
+  if (path.startsWith('/references/suppliers/edit/')) {
+    return <SupplierCreatePage />;
   }
   
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
@@ -147,6 +173,19 @@ const getLabelByPath = (path: string): string => {
       return cached;
     }
     return 'Номенклатура';
+  }
+  
+  if (path.startsWith('/references/suppliers/create/')) {
+    return 'Поставщик (новый)';
+  }
+  
+  if (path.startsWith('/references/suppliers/edit/')) {
+    const uid = path.split('/').slice(-2, -1)[0];
+    const cached = supplierInfoCache.get(uid);
+    if (cached) {
+      return cached;
+    }
+    return 'Поставщик';
   }
   
   if (path.startsWith('/documents/schablon/')) {
@@ -236,6 +275,14 @@ const MainLayout = () => {
       const segments = path.split('/');
       const uid = segments[segments.length - 2];
       fetchNomenclatureName(uid).then(name => {
+        updateTabLabel(newTabId, name);
+      });
+    }
+    
+    if (path.startsWith('/references/suppliers/edit/')) {
+      const segments = path.split('/');
+      const uid = segments[segments.length - 2];
+      fetchSupplierName(uid).then(name => {
         updateTabLabel(newTabId, name);
       });
     }

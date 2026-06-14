@@ -20,6 +20,7 @@ import ModelsPage from './components/ReferencesPage/ModelsPage/ModelsPage';
 import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPage';
 import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/ManufacturersPage';
 import SuppliersPage from './components/ReferencesPage/SuppliersPage/SuppliersPage';
+import SupplierCreatePage from './components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -120,6 +121,8 @@ const AppContent = () => {
                 <Route path="references/countries" element={<CountriesPage />} />
                 <Route path="references/manufacturers" element={<ManufacturersPage />} />
                 <Route path="references/suppliers" element={<SuppliersPage />} />
+                <Route path="references/suppliers/create/:uid" element={<SupplierCreatePage />} />
+                <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />

@@ -1,11 +1,11 @@
-// CharacteristicsTab.tsx — ПОЛНЫЙ ФАЙЛ (исправленный, работает с локальными характеристиками)
-import React, { useState, useEffect } from 'react';
+// CharacteristicsTab.tsx — ПОЛНЫЙ ФАЙЛ (самостоятельная загрузка при редактировании)
+import React, { useState, useEffect, useRef } from 'react';
 import Icon10 from '../../../assets/References/NomenclatureCreatePage/Icon10.svg';
 import Icon101 from '../../../assets/References/NomenclatureCreatePage/Icon101.svg';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from './CatalogSelectPopup';
-import type { CommonProps, LocalCharacteristic } from './NomenclatureCreatePage';
+import type { CommonProps, LocalCharacteristic, LocalImageItem } from './NomenclatureCreatePage';
 
 interface MeasureOption {
   uid: string;
@@ -24,17 +24,22 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
     selectedModel, selectedModelId,
     selectedCountry, selectedCountryId,
     fullscreenBlueprint,
-    blueprintInputRef,
     localCharacteristics,
     setLocalCharacteristics,
-    setSelectedBlueprintIndex, setFullscreenBlueprint,
-    handleBlueprintUpload, handleDeleteBlueprint,
+    localBlueprints,
+    setLocalBlueprints,
+    setBlueprints,
+    setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint,
+    handleDeleteBlueprint,
     openPopup,
+    validationErrors,
+    setValidationErrors,
   } = props;
 
   const [measures, setMeasures] = useState<MeasureOption[]>([]);
   const [editingCustomName, setEditingCustomName] = useState<string | null>(null);
   const [customNameInput, setCustomNameInput] = useState('');
+  const [isLoadingChars, setIsLoadingChars] = useState(false);
 
   const [showAddCharPopup, setShowAddCharPopup] = useState(false);
   const [showAttributeTypePopup, setShowAttributeTypePopup] = useState(false);
@@ -45,17 +50,41 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
   const [newCharMeasureName, setNewCharMeasureName] = useState('');
   const [newCharValue, setNewCharValue] = useState('');
 
+  const localBlueprintInputRef = useRef<HTMLInputElement>(null);
+  const [localBlueprintSelectedIndex, setLocalBlueprintSelectedIndex] = useState(0);
+  const [localBlueprintContextMenu, setLocalBlueprintContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+
   const labelStyle: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' };
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const selectFieldStyleSmall = (hv: boolean): React.CSSProperties => ({ width: 300, height: 44, borderRadius: 10, border: hv ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', marginTop: 11, display: 'flex', alignItems: 'center', paddingLeft: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: hv ? '#666EFE' : '#9CA3AF', cursor: 'pointer' });
 
-  const prevBp = (e: React.MouseEvent) => { e.stopPropagation(); setSelectedBlueprintIndex((p: number) => p > 0 ? p - 1 : blueprints.length - 1); };
-  const nextBp = (e: React.MouseEvent) => { e.stopPropagation(); setSelectedBlueprintIndex((p: number) => p < blueprints.length - 1 ? p + 1 : 0); };
+  const clearFieldError = (fieldKey: string) => {
+    setValidationErrors(prev => { const next = new Set(prev); next.delete(fieldKey); return next; });
+  };
+
+  const getSelectBorder = (fieldKey: string, isFilled: boolean): string => {
+    if (validationErrors.has(fieldKey)) return '2px solid #FF3052';
+    if (isFilled) return '1px solid #666EFE';
+    return '1px solid rgba(102, 110, 254, 0.15)';
+  };
+
+  const selectFieldStyleSmall = (hv: boolean, fieldKey: string): React.CSSProperties => ({
+    width: 300, height: 44, borderRadius: 10,
+    border: getSelectBorder(fieldKey, hv),
+    backgroundColor: '#FFFFFF', marginTop: 11, display: 'flex', alignItems: 'center', paddingLeft: 12,
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+    color: hv ? '#666EFE' : '#9CA3AF', cursor: 'pointer',
+    boxSizing: 'border-box',
+  });
 
   const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  const displayBlueprints = (localBlueprints && localBlueprints.length > 0) 
+    ? localBlueprints.map(bp => ({ uid: bp.url, url: bp.url, originalName: bp.file.name })) 
+    : blueprints;
+  const isLocalBlueprints = localBlueprints && localBlueprints.length > 0;
 
   const fetchMeasures = async () => {
     try {
@@ -66,11 +95,80 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
     }
   };
 
+  // Загружаем характеристики при монтировании, если режим редактирования и нет данных
+  useEffect(() => {
+    if (uid && isEdit) {
+      setIsLoadingChars(true);
+      AxiosService.get(ConstantInfo.restApiNomenclatureCharacteristics(uid))
+        .then(res => {
+          const serverChars = (res.data || []).map((c: any) => ({
+            localId: generateLocalId(),
+            uid: c.uid,
+            attributeTypeUid: c.attributeTypeUid,
+            attributeName: c.attributeName,
+            customName: c.customName,
+            value: c.value || '',
+            measureUid: c.measureUid,
+            measureName: c.measureName,
+            isCustom: c.isCustom,
+            isRequired: c.attributeName && REQUIRED_ATTRIBUTES.includes(c.attributeName),
+          }));
+          setLocalCharacteristics(serverChars);
+        })
+        .catch(e => console.error('Ошибка загрузки характеристик:', e))
+        .finally(() => setIsLoadingChars(false));
+    }
+  }, [uid, isEdit]);
+
   useEffect(() => {
     fetchMeasures();
   }, []);
 
+  useEffect(() => {
+    if (!localBlueprintContextMenu) return;
+    const h = () => setLocalBlueprintContextMenu(null);
+    document.addEventListener('click', h);
+    return () => document.removeEventListener('click', h);
+  }, [localBlueprintContextMenu]);
+
+  const handleLocalBlueprintUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const imgs: LocalImageItem[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      imgs.push({ file: f, url: URL.createObjectURL(f) });
+    }
+    setLocalBlueprints((p: LocalImageItem[]) => [...p, ...imgs]);
+    if (localBlueprintInputRef.current) localBlueprintInputRef.current.value = '';
+  };
+
+  const handleLocalDeleteBlueprint = (index: number) => {
+    setLocalBlueprints((p: LocalImageItem[]) => {
+      const n = [...p];
+      URL.revokeObjectURL(n[index].url);
+      n.splice(index, 1);
+      return n;
+    });
+    if (localBlueprintSelectedIndex >= displayBlueprints.length - 1) {
+      setLocalBlueprintSelectedIndex(Math.max(0, displayBlueprints.length - 2));
+    }
+  };
+
+  const prevBp = (e: React.MouseEvent) => { e.stopPropagation(); setLocalBlueprintSelectedIndex((p: number) => p > 0 ? p - 1 : displayBlueprints.length - 1); };
+  const nextBp = (e: React.MouseEvent) => { e.stopPropagation(); setLocalBlueprintSelectedIndex((p: number) => p < displayBlueprints.length - 1 ? p + 1 : 0); };
+
+  const handleBlueprintContextMenu = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setLocalBlueprintContextMenu({ x: e.clientX, y: e.clientY, index });
+  };
+
   const handleValueChange = (charLocalId: string, newValue: string) => {
+    const char = localCharacteristics.find(c => c.localId === charLocalId);
+    if (char && char.attributeName) {
+      clearFieldError(`char_${char.attributeName}`);
+    }
     setLocalCharacteristics(prev => prev.map(c => c.localId === charLocalId ? { ...c, value: newValue } : c));
   };
 
@@ -159,11 +257,11 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
     <div style={{ ...cs, display: 'flex', flexDirection: 'column', gap: 15 }}>
       <div style={{ ...blockStyle, width: 1740, height: 132, flexShrink: 0, position: 'relative' }}>
         <div style={{ position: 'absolute', top: 30, left: 30, display: 'flex', gap: 45 }}>
-          <div><span style={labelStyle}>Единица измерения:</span><div onClick={() => openPopup('unit')} style={selectFieldStyleSmall(!!selectedUnit)}>{selectedUnit || 'Выбрать'}</div></div>
-          <div><span style={labelStyle}>Производитель:</span><div onClick={() => openPopup('manufacturer')} style={selectFieldStyleSmall(!!selectedManufacturer)}>{selectedManufacturer || 'Выбрать'}</div></div>
-          <div><span style={labelStyle}>Бренд:</span><div onClick={() => openPopup('brand')} style={{ ...selectFieldStyleSmall(!!selectedBrand), opacity: selectedManufacturerId ? 1 : 0.5, cursor: selectedManufacturerId ? 'pointer' : 'not-allowed' }}>{selectedBrand || (selectedManufacturerId ? 'Выбрать' : 'Сначала выберите производителя')}</div></div>
-          <div><span style={labelStyle}>Модель:</span><div onClick={() => openPopup('model')} style={{ ...selectFieldStyleSmall(!!selectedModel), opacity: selectedBrandId ? 1 : 0.5, cursor: selectedBrandId ? 'pointer' : 'not-allowed' }}>{selectedModel || (selectedBrandId ? 'Выбрать' : 'Сначала выберите бренд')}</div></div>
-          <div><span style={labelStyle}>Страна происхождения:</span><div onClick={() => openPopup('country')} style={selectFieldStyleSmall(!!selectedCountry)}>{selectedCountry || 'Выбрать'}</div></div>
+          <div><span style={labelStyle}>Единица измерения:</span><div onClick={() => { clearFieldError('unit'); openPopup('unit'); }} style={selectFieldStyleSmall(!!selectedUnit, 'unit')}>{selectedUnit || 'Выбрать'}</div></div>
+          <div><span style={labelStyle}>Производитель:</span><div onClick={() => { clearFieldError('manufacturer'); openPopup('manufacturer'); }} style={selectFieldStyleSmall(!!selectedManufacturer, 'manufacturer')}>{selectedManufacturer || 'Выбрать'}</div></div>
+          <div><span style={labelStyle}>Бренд:</span><div onClick={() => { clearFieldError('brand'); openPopup('brand'); }} style={{ ...selectFieldStyleSmall(!!selectedBrand, 'brand'), opacity: selectedManufacturerId ? 1 : 0.5, cursor: selectedManufacturerId ? 'pointer' : 'not-allowed' }}>{selectedBrand || (selectedManufacturerId ? 'Выбрать' : 'Сначала выберите производителя')}</div></div>
+          <div><span style={labelStyle}>Модель:</span><div onClick={() => { clearFieldError('model'); openPopup('model'); }} style={{ ...selectFieldStyleSmall(!!selectedModel, 'model'), opacity: selectedBrandId ? 1 : 0.5, cursor: selectedBrandId ? 'pointer' : 'not-allowed' }}>{selectedModel || (selectedBrandId ? 'Выбрать' : 'Сначала выберите бренд')}</div></div>
+          <div><span style={labelStyle}>Страна происхождения:</span><div onClick={() => { clearFieldError('country'); openPopup('country'); }} style={selectFieldStyleSmall(!!selectedCountry, 'country')}>{selectedCountry || 'Выбрать'}</div></div>
         </div>
       </div>
 
@@ -171,23 +269,28 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
         <div style={{ position: 'absolute', top: 15, left: 64 }}>
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>Чертеж</span>
           <div style={{ marginTop: 12, width: 518, height: 311, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ width: 516, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => blueprintInputRef?.current?.click()}><img src={Icon10} alt="Добавить" style={{ width: 21, height: 21 }} /></div>
+            <div style={{ width: 516, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => localBlueprintInputRef.current?.click()}>
+              <img src={Icon10} alt="Добавить" style={{ width: 21, height: 21 }} />
+            </div>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', backgroundColor: '#FAFBFC' }}>
-              {blueprints.length > 1 && <button onClick={prevBp} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 13, height: 19, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, zIndex: 1 }}><img src={Icon101} alt="" style={{ width: 13, height: 19, transform: 'scaleX(-1)' }} /></button>}
-              {blueprints.length > 0 && blueprints[selectedBlueprintIndex] ? (
-                <div onClick={() => setFullscreenBlueprint(true)} style={{ width: 231, height: 193, backgroundColor: '#FFFFFF', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}><img src={blueprints[selectedBlueprintIndex].url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
+              {displayBlueprints.length > 1 && <button onClick={prevBp} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 13, height: 19, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, zIndex: 1 }}><img src={Icon101} alt="" style={{ width: 13, height: 19, transform: 'scaleX(-1)' }} /></button>}
+              {displayBlueprints.length > 0 && displayBlueprints[localBlueprintSelectedIndex] ? (
+                <div onContextMenu={(e) => handleBlueprintContextMenu(e, localBlueprintSelectedIndex)} style={{ width: 231, height: 193, backgroundColor: '#FFFFFF', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }} onClick={() => setFullscreenBlueprint(true)}>
+                  <img src={displayBlueprints[localBlueprintSelectedIndex].url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
               ) : <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9CA3AF' }}>{isUploadingBlueprint ? 'Загрузка...' : 'Нет чертежей'}</span>}
-              {blueprints.length > 1 && <button onClick={nextBp} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 13, height: 19, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, zIndex: 1 }}><img src={Icon101} alt="" style={{ width: 13, height: 19 }} /></button>}
+              {displayBlueprints.length > 1 && <button onClick={nextBp} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 13, height: 19, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, zIndex: 1 }}><img src={Icon101} alt="" style={{ width: 13, height: 19 }} /></button>}
             </div>
             <div style={{ width: 516, height: 47, display: 'flex', alignItems: 'center', paddingLeft: 8, gap: 6, borderTop: '1px solid rgba(230, 232, 248, 0.44)', overflowX: 'auto' }}>
-              {blueprints.map((bp, idx) => (
-                <div key={bp.uid} onClick={() => setSelectedBlueprintIndex(idx)} style={{ width: 43, height: 36, borderRadius: 4, border: idx === selectedBlueprintIndex ? '2px solid #666EFE' : '2px solid transparent', flexShrink: 0, cursor: 'pointer', overflow: 'hidden', position: 'relative', backgroundColor: '#F5F6FA' }}>
+              {displayBlueprints.map((bp, idx) => (
+                <div key={bp.uid || idx} onClick={() => setLocalBlueprintSelectedIndex(idx)} onContextMenu={(e) => handleBlueprintContextMenu(e, idx)} style={{ width: 43, height: 36, borderRadius: 4, border: idx === localBlueprintSelectedIndex ? '2px solid #666EFE' : '2px solid transparent', flexShrink: 0, cursor: 'pointer', overflow: 'hidden', position: 'relative', backgroundColor: '#F5F6FA' }}>
                   <img src={bp.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button onClick={(e) => { e.stopPropagation(); handleDeleteBlueprint(bp.uid); }} style={{ position: 'absolute', top: 1, right: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(255, 48, 82, 0.9)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}><svg width="6" height="6" viewBox="0 0 6 6" fill="none"><line x1="1" y1="1" x2="5" y2="5" stroke="white" strokeWidth="1.2" strokeLinecap="round"/><line x1="5" y1="1" x2="1" y2="5" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg></button>
+                  <button onClick={(e) => { e.stopPropagation(); isLocalBlueprints ? handleLocalDeleteBlueprint(idx) : handleDeleteBlueprint(bp.uid); }} style={{ position: 'absolute', top: 1, right: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(255, 48, 82, 0.9)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}><svg width="6" height="6" viewBox="0 0 6 6" fill="none"><line x1="1" y1="1" x2="5" y2="5" stroke="white" strokeWidth="1.2" strokeLinecap="round"/><line x1="5" y1="1" x2="1" y2="5" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg></button>
                 </div>
               ))}
             </div>
           </div>
+          <input ref={localBlueprintInputRef} type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }} onChange={handleLocalBlueprintUpload} />
         </div>
 
         <div style={{ position: 'absolute', top: 15, left: 649, display: 'flex', gap: 15 }}>
@@ -204,15 +307,19 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
               <span style={{ width: 40 }} />
             </div>
             <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {localCharacteristics.length === 0 ? (
+              {isLoadingChars ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span></div>
+              ) : localCharacteristics.length === 0 ? (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Нет характеристик</span></div>
               ) : (
                 localCharacteristics.map((char) => {
                   const isRequired = char.isRequired;
                   const isEmpty = !char.value || char.value.trim() === '';
+                  const fieldKey = `char_${char.attributeName}`;
+                  const hasError = validationErrors.has(fieldKey);
                   
                   return (
-                    <div key={char.localId} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: isRequired && isEmpty ? '#FFF8F0' : '#FFFFFF' }}>
+                    <div key={char.localId} style={{ height: 54, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: hasError ? '#FFF0F0' : '#FFFFFF' }}>
                       <div style={{ width: 250, display: 'flex', alignItems: 'center' }}>
                         {char.isCustom ? (
                           editingCustomName === char.localId ? (
@@ -228,7 +335,7 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: isRequired ? 600 : 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: isRequired ? 600 : 400, color: hasError ? '#FF3052' : '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {char.attributeName || 'Характеристика'}
                               {isRequired && <span style={{ color: '#FF3052', marginLeft: 2 }}>*</span>}
                             </span>
@@ -245,7 +352,7 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
 
                       <div style={{ flex: 1 }}>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                          <input type="text" value={char.value || ''} onChange={(e) => handleValueChange(char.localId, e.target.value)} placeholder={isRequired ? 'Обязательно для заполнения' : 'Введите значение'} style={{ width: '100%', height: 36, borderRadius: 8, border: isRequired && isEmpty ? '1px solid #FF3052' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', paddingLeft: 12, paddingRight: 40, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', outline: 'none' }} />
+                          <input type="text" value={char.value || ''} onChange={(e) => handleValueChange(char.localId, e.target.value)} onFocus={() => clearFieldError(fieldKey)} placeholder={isRequired ? 'Обязательно для заполнения' : 'Введите значение'} style={{ width: '100%', height: 36, borderRadius: 8, border: hasError ? '2px solid #FF3052' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', paddingLeft: 12, paddingRight: 40, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', outline: 'none' }} />
                         </div>
                       </div>
 
@@ -261,9 +368,16 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
         </div>
       </div>
 
-      <input ref={blueprintInputRef as React.RefObject<HTMLInputElement>} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleBlueprintUpload} />
-      {fullscreenBlueprint && blueprints[selectedBlueprintIndex] && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setFullscreenBlueprint(false)}><img src={blueprints[selectedBlueprintIndex].url} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }} /></div>
+      {localBlueprintContextMenu && (
+        <div style={{ position: 'fixed', top: localBlueprintContextMenu.y, left: localBlueprintContextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button onClick={() => { isLocalBlueprints ? handleLocalDeleteBlueprint(localBlueprintContextMenu.index) : handleDeleteBlueprint(displayBlueprints[localBlueprintContextMenu.index]?.uid); setLocalBlueprintContextMenu(null); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Удалить</button>
+        </div>
+      )}
+
+      {fullscreenBlueprint && displayBlueprints[localBlueprintSelectedIndex] && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setFullscreenBlueprint(false)}>
+          <img src={displayBlueprints[localBlueprintSelectedIndex].url} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }} />
+        </div>
       )}
 
       {showAddCharPopup && (
