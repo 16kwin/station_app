@@ -34,18 +34,11 @@ const nomenclatureInfoCache: Map<string, string> = new Map();
 const supplierInfoCache: Map<string, string> = new Map();
 
 const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: string; section: string }> => {
-  if (stationInfoCache.has(uid)) {
-    return stationInfoCache.get(uid)!;
-  }
-  
+  if (stationInfoCache.has(uid)) return stationInfoCache.get(uid)!;
   try {
     const response = await AxiosService.get(`${ConstantInfo.restApiStationsStatic}/${uid}`);
     const data = response.data;
-    const info = {
-      name: data?.name || uid,
-      workshop: data?.workshop || '',
-      section: data?.section || '',
-    };
+    const info = { name: data?.name || uid, workshop: data?.workshop || '', section: data?.section || '' };
     stationInfoCache.set(uid, info);
     return info;
   } catch {
@@ -56,10 +49,7 @@ const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: 
 };
 
 const fetchNomenclatureName = async (uid: string): Promise<string> => {
-  if (nomenclatureInfoCache.has(uid)) {
-    return nomenclatureInfoCache.get(uid)!;
-  }
-  
+  if (nomenclatureInfoCache.has(uid)) return nomenclatureInfoCache.get(uid)!;
   try {
     const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(uid));
     const name = response.data?.name || uid;
@@ -72,12 +62,9 @@ const fetchNomenclatureName = async (uid: string): Promise<string> => {
 };
 
 const fetchSupplierName = async (uid: string): Promise<string> => {
-  if (supplierInfoCache.has(uid)) {
-    return supplierInfoCache.get(uid)!;
-  }
-  
+  if (supplierInfoCache.has(uid)) return supplierInfoCache.get(uid)!;
   try {
-    const response = await AxiosService.get(ConstantInfo.restApiNomenclatureSupplier(uid));
+    const response = await AxiosService.get(ConstantInfo.restApiSupplierGet(uid));
     const name = response.data?.name || uid;
     supplierInfoCache.set(uid, name);
     return name;
@@ -111,92 +98,32 @@ const staticComponents: Record<string, React.ReactNode> = {
 
 const getComponentByPath = (path: string): React.ReactNode => {
   if (staticComponents[path] !== undefined) return staticComponents[path];
-  
-  if (path.startsWith('/references/nomenclature/create/')) {
-    return <NomenclatureCreatePage />;
-  }
-  
-  if (path.startsWith('/references/nomenclature/edit/')) {
-    return <NomenclatureCreatePage />;
-  }
-  
-  if (path.startsWith('/references/suppliers/create/')) {
-    return <SupplierCreatePage />;
-  }
-  
-  if (path.startsWith('/references/suppliers/edit/')) {
-    return <SupplierCreatePage />;
-  }
-  
+  if (path.startsWith('/references/nomenclature/create/')) return <NomenclatureCreatePage />;
+  if (path.startsWith('/references/nomenclature/edit/')) return <NomenclatureCreatePage />;
+  if (path.startsWith('/references/suppliers/create/')) return <SupplierCreatePage />;
+  if (path.startsWith('/references/suppliers/edit/')) return <SupplierCreatePage />;
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
-  if (schablonMatch) {
-    return <SchablonPage />;
-  }
-  
+  if (schablonMatch) return <SchablonPage />;
   return null;
 };
 
 const getLabelByPath = (path: string): string => {
   const staticLabels: Record<string, string> = {
-    '/main': 'Главная',
-    '/stations': 'Станции',
-    '/references': 'Справочники',
-    '/documents': 'Документы',
-    '/reports': 'Отчеты',
-    '/analytics': 'Аналитика',
-    '/settings': 'Настройки',
-    '/account': 'Аккаунт',
-    '/references/nomenclature': 'Справочник: Номенклатура',
-    '/references/accounting-groups': 'Справочник: Группы учета',
-    '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
-    '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
-    '/references/attribute-types': 'Справочник: Виды характеристик',
-    '/references/units': 'Справочник: Единицы измерения',
-    '/references/brands': 'Справочник: Бренды',
-    '/references/models': 'Справочник: Модели',
-    '/references/countries': 'Справочник: Страны',
-    '/references/manufacturers': 'Справочник: Производители',
+    '/main': 'Главная', '/stations': 'Станции', '/references': 'Справочники', '/documents': 'Документы',
+    '/reports': 'Отчеты', '/analytics': 'Аналитика', '/settings': 'Настройки', '/account': 'Аккаунт',
+    '/references/nomenclature': 'Справочник: Номенклатура', '/references/accounting-groups': 'Справочник: Группы учета',
+    '/references/nomenclature-groups': 'Справочник: Группы номенклатуры', '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
+    '/references/attribute-types': 'Справочник: Виды характеристик', '/references/units': 'Справочник: Единицы измерения',
+    '/references/brands': 'Справочник: Бренды', '/references/models': 'Справочник: Модели',
+    '/references/countries': 'Справочник: Страны', '/references/manufacturers': 'Справочник: Производители',
     '/references/suppliers': 'Справочник: Поставщики',
   };
-  
   if (staticLabels[path]) return staticLabels[path];
-  
-  if (path.startsWith('/references/nomenclature/create/')) {
-    const code = path.split('/').pop();
-    return `Номенклатура: ${code}`;
-  }
-  
-  if (path.startsWith('/references/nomenclature/edit/')) {
-    const uid = path.split('/').slice(-2, -1)[0];
-    const cached = nomenclatureInfoCache.get(uid);
-    if (cached) {
-      return cached;
-    }
-    return 'Номенклатура';
-  }
-  
-  if (path.startsWith('/references/suppliers/create/')) {
-    return 'Поставщик (новый)';
-  }
-  
-  if (path.startsWith('/references/suppliers/edit/')) {
-    const uid = path.split('/').slice(-2, -1)[0];
-    const cached = supplierInfoCache.get(uid);
-    if (cached) {
-      return cached;
-    }
-    return 'Поставщик';
-  }
-  
-  if (path.startsWith('/documents/schablon/')) {
-    const uid = path.replace('/documents/schablon/', '');
-    const cached = stationInfoCache.get(uid);
-    if (cached) {
-      return `Шаблон - ${cached.name}`;
-    }
-    return `Шаблон - ${uid}`;
-  }
-  
+  if (path.startsWith('/references/nomenclature/create/')) { const code = path.split('/').pop(); return `Номенклатура: ${code}`; }
+  if (path.startsWith('/references/nomenclature/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return nomenclatureInfoCache.get(uid) || 'Номенклатура'; }
+  if (path.startsWith('/references/suppliers/create/')) { const code = path.split('/').pop(); return `Поставщик: ${code}`; }
+  if (path.startsWith('/references/suppliers/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return supplierInfoCache.get(uid) || 'Поставщик'; }
+  if (path.startsWith('/documents/schablon/')) { const uid = path.replace('/documents/schablon/', ''); const cached = stationInfoCache.get(uid); return cached ? `Шаблон - ${cached.name}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };
 
@@ -208,175 +135,63 @@ const MainLayout = () => {
   const location = useLocation();
   const prevPathRef = useRef('');
 
-  const MIN_WIDTH = 1920;
-  const MIN_HEIGHT = 900;
-  const MAX_WIDTH = 1920;
-  const MAX_HEIGHT = 1080;
+  const MIN_WIDTH = 1920; const MIN_HEIGHT = 900; const MAX_WIDTH = 1920; const MAX_HEIGHT = 1080;
 
   useEffect(() => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    
-    let finalWidth = width;
-    let finalHeight = height;
-    
-    if (width < MIN_WIDTH || height < MIN_HEIGHT) {
-      finalWidth = MIN_WIDTH;
-      finalHeight = MIN_HEIGHT;
-    }
-    
-    if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-      finalWidth = MAX_WIDTH;
-      finalHeight = MAX_HEIGHT;
-    }
-    
+    const width = window.innerWidth; const height = window.innerHeight;
+    let finalWidth = width; let finalHeight = height;
+    if (width < MIN_WIDTH || height < MIN_HEIGHT) { finalWidth = MIN_WIDTH; finalHeight = MIN_HEIGHT; }
+    if (width > MAX_WIDTH || height > MAX_HEIGHT) { finalWidth = MAX_WIDTH; finalHeight = MAX_HEIGHT; }
     setWindowSize({ width: finalWidth, height: finalHeight });
     setIsLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
-    
     const path = location.pathname;
-    
-    if (prevPathRef.current === path) {
-      return;
-    }
+    if (prevPathRef.current === path) return;
     prevPathRef.current = path;
-    
     const existingTab = tabs.find(tab => tab.path === path);
-    
     if (existingTab) {
-      if (activeTabId !== existingTab.id) {
-        switchTab(existingTab.id);
-      }
-      if (existingTab.component === null) {
-        const component = getComponentByPath(path);
-        if (component) {
-          updateTabComponent(existingTab.id, component);
-        }
-      }
+      if (activeTabId !== existingTab.id) switchTab(existingTab.id);
+      if (existingTab.component === null) { const component = getComponentByPath(path); if (component) updateTabComponent(existingTab.id, component); }
       return;
     }
-    
     const label = getLabelByPath(path);
     const component = getComponentByPath(path);
-    
     const newTabId = openTab(path, label, component);
-    
-    if (path.startsWith('/documents/schablon/')) {
-      const uid = path.replace('/documents/schablon/', '');
-      fetchStationInfo(uid).then(info => {
-        updateTabLabel(newTabId, `Шаблон - ${info.name}`);
-      });
-    }
-    
-    if (path.startsWith('/references/nomenclature/edit/')) {
-      const segments = path.split('/');
-      const uid = segments[segments.length - 2];
-      fetchNomenclatureName(uid).then(name => {
-        updateTabLabel(newTabId, name);
-      });
-    }
-    
-    if (path.startsWith('/references/suppliers/edit/')) {
-      const segments = path.split('/');
-      const uid = segments[segments.length - 2];
-      fetchSupplierName(uid).then(name => {
-        updateTabLabel(newTabId, name);
-      });
-    }
+    if (path.startsWith('/documents/schablon/')) { const uid = path.replace('/documents/schablon/', ''); fetchStationInfo(uid).then(info => updateTabLabel(newTabId, `Шаблон - ${info.name}`)); }
+    if (path.startsWith('/references/nomenclature/edit/')) { const segments = path.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
+    if (path.startsWith('/references/suppliers/edit/')) { const segments = path.split('/'); const uid = segments[segments.length - 1]; fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); }
   }, [location.pathname, isLoaded]);
 
-  useEffect(() => {
-    const currentPathExists = tabs.some(tab => tab.path === location.pathname);
-    if (!currentPathExists) {
-      prevPathRef.current = '';
-    }
-  }, [tabs, location.pathname]);
+  useEffect(() => { const currentPathExists = tabs.some(tab => tab.path === location.pathname); if (!currentPathExists) prevPathRef.current = ''; }, [tabs, location.pathname]);
 
   useEffect(() => {
     const handleResize = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      
-      const baseWidth = windowSize.width;
-      const baseHeight = windowSize.height;
-      
-      const scaleX = width / baseWidth;
-      const scaleY = height / baseHeight;
+      const width = window.innerWidth; const height = window.innerHeight;
+      const scaleX = width / windowSize.width; const scaleY = height / windowSize.height;
       const scale = Math.min(scaleX, scaleY);
-      
-      if (scale > 1) {
-        setPadding(60 * scale);
-      } else {
-        setPadding(60);
-      }
+      if (scale > 1) setPadding(60 * scale); else setPadding(60);
     };
-
-    if (isLoaded) {
-      handleResize();
-      window.addEventListener('resize', handleResize);
-    }
-    
+    if (isLoaded) { handleResize(); window.addEventListener('resize', handleResize); }
     return () => window.removeEventListener('resize', handleResize);
   }, [windowSize, isLoaded]);
 
-  if (!isLoaded) {
-    return null;
-  }
+  if (!isLoaded) return null;
 
-  const tabBarHeight = 35;
-  const topOffset = 20;
-  const gapBetweenTabBarAndWhiteBlock = 5;
+  const tabBarHeight = 35; const topOffset = 20; const gapBetweenTabBarAndWhiteBlock = 5;
 
   return (
-    <div 
-      className="w-full h-dvh relative overflow-auto"
-      style={{
-        minWidth: `${windowSize.width}px`,
-        minHeight: `${windowSize.height}px`,
-      }}
-    >
+    <div className="w-full h-dvh relative overflow-auto" style={{ minWidth: `${windowSize.width}px`, minHeight: `${windowSize.height}px` }}>
       <div className="w-full h-full flex items-center justify-center">
-        <div 
-          style={{ 
-            width: `${windowSize.width}px`,
-            height: `${windowSize.height}px`,
-          }} 
-          className="relative"
-        >
-          <div 
-            className="absolute left-0 right-0 flex justify-center"
-            style={{ 
-              top: `${topOffset}px`,
-            }}
-          >
-            <div style={{ width: `${windowSize.width - padding * 2}px` }}>
-              <TabBar />
-            </div>
+        <div style={{ width: `${windowSize.width}px`, height: `${windowSize.height}px` }} className="relative">
+          <div className="absolute left-0 right-0 flex justify-center" style={{ top: `${topOffset}px` }}>
+            <div style={{ width: `${windowSize.width - padding * 2}px` }}><TabBar /></div>
           </div>
-          
-          <div 
-            style={{ 
-              position: 'absolute',
-              left: `${padding}px`,
-              right: `${padding}px`,
-              top: `${topOffset + tabBarHeight + gapBetweenTabBarAndWhiteBlock}px`,
-              bottom: `${padding}px`,
-              backgroundColor: '#FAFBFC',
-            }}
-            className="rounded-[20px] shadow overflow-auto white-block relative"
-          >
+          <div style={{ position: 'absolute', left: `${padding}px`, right: `${padding}px`, top: `${topOffset + tabBarHeight + gapBetweenTabBarAndWhiteBlock}px`, bottom: `${padding}px`, backgroundColor: '#FAFBFC' }} className="rounded-[20px] shadow overflow-auto white-block relative">
             {tabs.map(tab => (
-              <div
-                key={tab.id}
-                style={{
-                  display: activeTabId === tab.id ? 'block' : 'none',
-                  height: '100%',
-                  overflow: 'auto',
-                }}
-              >
+              <div key={tab.id} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
                 {tab.component}
               </div>
             ))}

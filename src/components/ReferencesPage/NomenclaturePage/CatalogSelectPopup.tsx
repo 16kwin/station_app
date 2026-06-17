@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ с исправленным renderTree
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен excludeUids)
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -40,7 +40,8 @@ export type PopupType =
   | 'model'
   | 'country'
   | 'supplier'
-  | 'analogSelect';
+  | 'analogSelect'
+  | 'shortDescription';
 
 interface PopupConfig {
   title: string;
@@ -139,6 +140,13 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
         isFlat: true,
         hasCreateButton: false,
       };
+    case 'shortDescription':
+      return {
+        title: 'Справочник: Типы описаний (Выбор)',
+        columns: [],
+        isFlat: true,
+        hasCreateButton: false,
+      };
     default:
       return { title: '', columns: [], isFlat: true, hasCreateButton: false };
   }
@@ -167,16 +175,20 @@ const convertBackendTree = (backendGroups: BackendGroup[]): TreeItem[] => {
   }));
 };
 
-const convertBackendTreeWithMaterials = (backendGroups: BackendGroup[]): TreeItem[] => {
+const convertBackendTreeWithMaterials = (backendGroups: BackendGroup[], excludeUids: string[] = []): TreeItem[] => {
+  const excludeSet = new Set(excludeUids);
+  
   return backendGroups.map(g => {
-    const materialItems: TreeItem[] = (g.materials || []).map((m: any) => ({
-      id: m.uid,
-      name: m.name || 'Без названия',
-      isMaterial: true,
-    }));
+    const materialItems: TreeItem[] = (g.materials || [])
+      .filter((m: any) => !excludeSet.has(m.uid))
+      .map((m: any) => ({
+        id: m.uid,
+        name: m.name || 'Без названия',
+        isMaterial: true,
+      }));
 
     const childGroups = g.children && g.children.length > 0 
-      ? convertBackendTreeWithMaterials(g.children) 
+      ? convertBackendTreeWithMaterials(g.children, excludeUids) 
       : [];
 
     return {
@@ -214,6 +226,7 @@ interface CatalogSelectPopupProps {
   onSelect?: (id: string, name: string) => void;
   popupType: PopupType;
   filterParam?: string;
+  excludeUids?: string[];
 }
 
 const ROW_HEIGHT = 58;
@@ -227,6 +240,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   onSelect,
   popupType,
   filterParam,
+  excludeUids = [],
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
@@ -269,7 +283,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         }
       } else if (isAnalogSelect) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-        const converted = convertBackendTreeWithMaterials(response.data);
+        const converted = convertBackendTreeWithMaterials(response.data, excludeUids);
         setData(converted);
         if (converted.length > 0) {
           setOpenFolders(new Set([converted[0].id]));
@@ -297,7 +311,10 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureMeasures);
         setData(convertGenericFlat(response.data));
       } else if (popupType === 'supplier') {
-        const response = await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliersCRUD);
+        const response = await AxiosService.get(ConstantInfo.restApiSuppliersList);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'shortDescription') {
+        const response = await AxiosService.get(ConstantInfo.restApiSupplierDescriptionTypes);
         setData(convertGenericFlat(response.data));
       } else if (popupType === 'manufacturer') {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers);
@@ -331,7 +348,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       setOpenFolders(new Set());
       loadData();
     }
-  }, [isOpen, popupType, filterParam]);
+  }, [isOpen, popupType, filterParam, excludeUids.join(',')]);
 
   const toggleFolder = (folderId: string) => {
     setOpenFolders(prev => {
@@ -376,7 +393,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         parentUid: parentUid,
       });
       const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-      setData(isAnalogSelect ? convertBackendTreeWithMaterials(response.data) : convertBackendTree(response.data));
+      setData(isAnalogSelect ? convertBackendTreeWithMaterials(response.data, excludeUids) : convertBackendTree(response.data));
       setShowCreateGroup(false);
     } catch (error) {
       console.error('Ошибка создания группы:', error);

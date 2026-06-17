@@ -1,4 +1,4 @@
-// SuppliersPage.tsx — ПОЛНЫЙ ФАЙЛ (исправленный)
+// SuppliersPage.tsx — ПОЛНЫЙ ФАЙЛ (с генерацией кода)
 import React, { useRef, useState, useEffect } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -103,11 +103,11 @@ const SuppliersPage = () => {
   const handleCreateClick = async () => {
     try {
       const response = await AxiosService.get(ConstantInfo.restApiSupplierGenerate);
-      const { uid } = response.data;
-      openTab(`/references/suppliers/create/${uid}`, 'Поставщик (новый)', null);
+      const { uid, code } = response.data;
+      openTab(`/references/suppliers/create/${uid}/${code}`, 'Поставщик (новый)', null);
     } catch (error) {
       const newUid = crypto.randomUUID();
-      openTab(`/references/suppliers/create/${newUid}`, 'Поставщик (новый)', null);
+      openTab(`/references/suppliers/create/${newUid}/0`, 'Поставщик (новый)', null);
     }
   };
 

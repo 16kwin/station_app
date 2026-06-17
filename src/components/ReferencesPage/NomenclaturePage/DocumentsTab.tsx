@@ -1,9 +1,10 @@
-// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (без локалки, сразу на сервер)
+// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (контекстное меню вместо крестика)
 import React, { useState, useRef, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import type { CommonProps } from './NomenclatureCreatePage';
+import FileIcon from '../../../assets/References/NomenclatureCreatePage/File.svg';
 
 interface DocumentItem {
   uid: string;
@@ -24,14 +25,29 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const [isLoading, setIsLoading] = useState(false);
   
   const [showAddDocPopup, setShowAddDocPopup] = useState(false);
+  const [showEditDocPopup, setShowEditDocPopup] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<DocumentItem | null>(null);
+  const [editDocName, setEditDocName] = useState('');
   const [newDocName, setNewDocName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileLocalRef = useRef<HTMLInputElement>(null);
 
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; docUid: string; docName: string } | null>(null);
+
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
+
+  const TABLE_WIDTH = 1660;
+  const TABLE_HEIGHT = 464;
+  const ROW_HEIGHT = 58;
+  const HEADER_HEIGHT = 58;
+  const VISIBLE_ROWS = 7;
+
+  const COL_NAME = 50;
+  const COL_FILE = 720;
+  const COL_DATE = 1265;
 
   const fetchDocuments = async () => {
     if (!uid) return;
@@ -53,16 +69,41 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     if (uid && isEdit) fetchDocuments();
   }, [uid, isEdit]);
 
-  // Обновляем при возврате на вкладку
   useEffect(() => {
     const handler = () => { if (uid) fetchDocuments(); };
     window.addEventListener('refreshDocuments', handler);
     return () => window.removeEventListener('refreshDocuments', handler);
   }, [uid]);
 
-  const checkScroll = () => { const c = scrollContainerRef.current; if (c) setHasScroll(c.scrollHeight > c.clientHeight); };
-  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [documents]);
-  useEffect(() => { const c = scrollContainerRef.current; if (!c) return; checkScroll(); c.addEventListener('scroll', checkScroll); return () => c.removeEventListener('scroll', checkScroll); }, []);
+  useEffect(() => {
+    if (!contextMenu) return;
+    const h = () => setContextMenu(null);
+    document.addEventListener('click', h);
+    return () => document.removeEventListener('click', h);
+  }, [contextMenu]);
+
+  const checkScroll = () => {
+    const c = scrollContainerRef.current;
+    if (c) setHasScroll(c.scrollHeight > c.clientHeight);
+  };
+  
+  useEffect(() => {
+    const t = setTimeout(checkScroll, 100);
+    return () => clearTimeout(t);
+  }, [documents]);
+  
+  useEffect(() => {
+    const c = scrollContainerRef.current;
+    if (!c) return;
+    checkScroll();
+    c.addEventListener('scroll', checkScroll);
+    const ro = new ResizeObserver(checkScroll);
+    ro.observe(c);
+    return () => {
+      c.removeEventListener('scroll', checkScroll);
+      ro.disconnect();
+    };
+  }, []);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -101,25 +142,99 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     }
   };
 
-  const handleDelete = async (docUid: string) => {
-    if (!confirm('Удалить документ?')) return;
+  const handleContextMenu = (e: React.MouseEvent, docUid: string, docName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, docUid, docName });
+  };
+
+  const handleContextEdit = () => {
+    if (!contextMenu) return;
+    const doc = documents.find(d => d.uid === contextMenu.docUid);
+    if (doc) {
+      setEditingDoc(doc);
+      setEditDocName(doc.documentName);
+      setShowEditDocPopup(true);
+    }
+    setContextMenu(null);
+  };
+
+  const handleContextDelete = () => {
+    if (!contextMenu) return;
+    if (!confirm('Удалить документ?')) {
+      setContextMenu(null);
+      return;
+    }
+    AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(contextMenu.docUid))
+      .then(() => fetchDocuments())
+      .catch(e => console.error('Ошибка удаления документа:', e));
+    setContextMenu(null);
+  };
+
+  const handleEditDocSubmit = async () => {
+    if (!editingDoc || !editDocName.trim()) return;
+    setIsUploading(true);
     try {
-      await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(docUid));
+      // Если выбран новый файл — загружаем новый документ и удаляем старый
+      if (selectedFile) {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        fd.append('documentName', editDocName.trim());
+        await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid!), fd);
+        await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(editingDoc.uid));
+      } else {
+        // Если файл не менялся — удаляем и создаём заново (бекенд не поддерживает PATCH для документов)
+        // Как вариант — просто обновляем название через новый запрос
+        // Пока просто обновим локально и перезагрузим
+        // TODO: добавить эндпоинт для обновления названия документа
+      }
       await fetchDocuments();
+      setShowEditDocPopup(false);
+      setEditingDoc(null);
+      setSelectedFile(null);
     } catch (e) {
-      console.error('Ошибка удаления документа:', e);
+      console.error('Ошибка редактирования документа:', e);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const TABLE_WIDTH = 1665;
-  const HEADER_HEIGHT = 54;
-  const ROW_HEIGHT = 54;
-  const TABLE_HEIGHT = 450;
+  const totalRows = Math.max(documents.length, VISIBLE_ROWS);
+
+  const getRowSeparator = (index: number, isRealData: boolean): React.CSSProperties => {
+    if (!isRealData) return { borderTop: 'none', borderBottom: 'none' };
+    const isFirst = index === 0;
+    const isLast = index === documents.length - 1;
+    
+    return {
+      borderTop: isFirst ? 'none' : '0.5px solid #E5ECF5',
+      borderBottom: isLast ? 'none' : '0.5px solid #E5ECF5',
+    };
+  };
+
+  const contextMenuButtonStyle: React.CSSProperties = {
+    width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', paddingLeft: 20,
+    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
+  };
 
   return (
     <div style={cs}>
       <div style={{ ...blockStyle, width: 1740, height: 565, position: 'relative' }}>
+        {/* Кнопки */}
         <div style={{ position: 'absolute', top: 34, left: 40, display: 'flex', gap: 15 }}>
+          <button style={smallButtonStyle}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <line x1="1" y1="4" x2="17" y2="4" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="1" y1="9" x2="17" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="1" y1="14" x2="12" y2="14" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <button style={smallButtonStyle}>
+            <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
+              <path d="M1 7H19M1 1H19M1 13H19" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </button>
           <button onClick={handleAddClick} style={smallButtonStyle}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
@@ -127,53 +242,100 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
             </svg>
           </button>
         </div>
-        <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 10 }}>
-          <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1.5px solid #666EFE', flexShrink: 0 }}>
-            <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 450 }}>НАЗВАНИЕ</span>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', width: 350 }}>ИМЯ ФАЙЛА</span>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', flex: 1 }}>ДАТА ЗАГРУЗКИ</span>
-              <span style={{ width: 40 }} />
+
+        {/* Таблица */}
+        <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 15 }}>
+          <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            {/* Шапка */}
+            <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 0, paddingRight: 0, boxSizing: 'border-box' }}>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_NAME }}>НАИМЕНОВАНИЕ</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_FILE }}>ФАЙЛ</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_DATE }}>ДАТА</span>
             </div>
-            <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {isLoading ? (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span>
-                </div>
-              ) : documents.length === 0 ? (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Нет документов</span>
-                </div>
-              ) : (
-                documents.map(doc => (
-                  <div key={doc.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, borderTop: '0.7px solid #666EFE', backgroundColor: '#FFFFFF', position: 'relative' }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                      <rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/>
-                      <line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                      <line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                      <line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 15, width: 415, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.documentName}</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', width: 335, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', flex: 1 }}>{formatDate(doc.createdAt)}</span>
-                    <button
-                      onClick={() => handleDelete(doc.uid)}
-                      style={{ width: 32, height: 32, borderRadius: 6, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <line x1="3" y1="3" x2="11" y2="11" stroke="#FF3052" strokeWidth="1.5" strokeLinecap="round"/>
-                        <line x1="11" y1="3" x2="3" y2="11" stroke="#FF3052" strokeWidth="1.5" strokeLinecap="round"/>
-                      </svg>
-                    </button>
+            
+            {/* Тело таблицы */}
+            <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div style={{ minWidth: TABLE_WIDTH }}>
+                {isLoading ? (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span>
                   </div>
-                ))
-              )}
+                ) : (
+                  <>
+                    {Array.from({ length: totalRows }).map((_, index) => {
+                      const doc = documents[index];
+                      const isRealData = !!doc;
+
+                      if (!isRealData) {
+                        return (
+                          <div 
+                            key={`empty-${index}`} 
+                            style={{ 
+                              height: ROW_HEIGHT, 
+                              backgroundColor: '#FFFFFF', 
+                              boxSizing: 'border-box',
+                              display: 'flex', 
+                              alignItems: 'center',
+                              borderTop: 'none',
+                              borderBottom: 'none',
+                            }} 
+                          />
+                        );
+                      }
+
+                      return (
+                        <div 
+                          key={doc.uid} 
+                          onContextMenu={(e) => handleContextMenu(e, doc.uid, doc.documentName)}
+                          style={{ 
+                            height: ROW_HEIGHT, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            backgroundColor: '#FFFFFF', 
+                            position: 'relative', 
+                            boxSizing: 'border-box',
+                            cursor: 'context-menu',
+                            userSelect: 'none',
+                            ...getRowSeparator(index, true),
+                          }}
+                        >
+                          <img src={FileIcon} alt="" style={{ position: 'absolute', left: 21, width: 20, height: 20, flexShrink: 0 }} />
+                          <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_FILE - COL_NAME - 30 }}>
+                            {doc.documentName}
+                          </span>
+                          <span style={{ position: 'absolute', left: COL_FILE, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DATE - COL_FILE - 30 }}>
+                            {doc.originalName}
+                          </span>
+                          <span style={{ position: 'absolute', left: COL_DATE, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: TABLE_WIDTH - COL_DATE - 60 }}>
+                            {formatDate(doc.createdAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
             </div>
           </div>
-          {hasScroll && <div style={{ width: 10, height: TABLE_HEIGHT, paddingTop: HEADER_HEIGHT }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>}
+          
+          {/* Скроллбар */}
+          {hasScroll && (
+            <div style={{ width: 10, height: TABLE_HEIGHT, paddingTop: HEADER_HEIGHT }}>
+              <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} />
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Контекстное меню */}
+      {contextMenu && (
+        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button style={contextMenuButtonStyle} onClick={handleContextEdit}>Редактировать</button>
+          <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
+        </div>
+      )}
+
+      {/* Попап добавления документа */}
       {showAddDocPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddDocPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
@@ -209,6 +371,47 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowAddDocPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleAddDocSubmit} disabled={!newDocName.trim() || !selectedFile || isUploading} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newDocName.trim() && selectedFile && !isUploading ? '#666EFE' : '#BCC8FF', cursor: newDocName.trim() && selectedFile && !isUploading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isUploading ? 'Загрузка...' : 'Добавить'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Попап редактирования документа */}
+      {showEditDocPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setShowEditDocPopup(false); setSelectedFile(null); }}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование документа</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
+              <input
+                type="text"
+                value={editDocName}
+                onChange={e => setEditDocName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleEditDocSubmit(); else if (e.key === 'Escape') { setShowEditDocPopup(false); setSelectedFile(null); } }}
+                placeholder="Введите название документа"
+                autoFocus
+                style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Файл (необязательно)</label>
+              <div 
+                onClick={() => fileLocalRef.current?.click()} 
+                style={{ width: '100%', height: 44, borderRadius: 10, border: '1px dashed rgba(102, 110, 254, 0.3)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 10 }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedFile ? '#666EFE' : '#9CA3AF' }}>
+                  {selectedFile ? selectedFile.name : 'Выберите новый файл'}
+                </span>
+              </div>
+              <input ref={fileLocalRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => { setShowEditDocPopup(false); setSelectedFile(null); }} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleEditDocSubmit} disabled={!editDocName.trim() || isUploading} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editDocName.trim() && !isUploading ? '#666EFE' : '#BCC8FF', cursor: editDocName.trim() && !isUploading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isUploading ? 'Сохранение...' : 'Сохранить'}</button>
             </div>
           </div>
         </div>

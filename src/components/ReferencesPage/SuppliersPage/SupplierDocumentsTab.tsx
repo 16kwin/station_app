@@ -1,26 +1,15 @@
-// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ
+// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (как в DocumentsTab)
 import React, { useState, useRef, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import type { CommonSupplierProps } from './SupplierCreatePage';
 
-interface DocumentItem {
-  uid: string;
-  supplierUid: string;
-  documentName: string;
-  filePath: string;
-  originalName: string;
-  url: string;
-  createdAt: string;
-}
-
 const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
-  const { uid, isEdit } = props;
+  const { uid, isEdit, documents = [], setDocuments } = props;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const [showAddDocPopup, setShowAddDocPopup] = useState(false);
@@ -34,11 +23,12 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
   const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
 
   const fetchDocuments = async () => {
-    if (!uid) return;
+    if (!uid || !setDocuments) return;
     setIsLoading(true);
     try {
       const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid));
-      setDocuments((res.data || []).map((doc: any) => ({ ...doc, url: doc.url ? ConstantInfo.fileDir + doc.url.replace(/^\//, '') : '' })));
+      const docs = (res.data || []).map((doc: any) => ({ ...doc, url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '' }));
+      setDocuments(docs);
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
@@ -57,9 +47,12 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     if (!uid || !newDocName.trim() || !selectedFile) return;
     setIsUploading(true);
     try {
-      const fd = new FormData(); fd.append('file', selectedFile); fd.append('documentName', newDocName.trim());
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      fd.append('documentName', newDocName.trim());
       await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd);
-      await fetchDocuments(); setShowAddDocPopup(false);
+      await fetchDocuments();
+      setShowAddDocPopup(false);
     } catch (e) { console.error(e); } finally { setIsUploading(false); }
   };
 

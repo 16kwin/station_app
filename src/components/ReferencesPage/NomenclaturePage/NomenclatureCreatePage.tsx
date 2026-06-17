@@ -1,6 +1,6 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (кнопки меняют фон при активности)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
@@ -20,6 +20,9 @@ import EventLogTab from './EventLogTab';
 import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
+import IconOne from '../../../assets/References/NomenclatureCreatePage/IconOne.svg';
+import IconOne1 from '../../../assets/References/NomenclatureCreatePage/IconOne1.svg';
+import IconTwo from '../../../assets/References/NomenclatureCreatePage/IconTwo.svg';
 
 export interface Folder { id: number; name: string; isOpen: boolean; items: FolderItem[]; }
 export interface FolderItem { id: number; characteristic?: string; designation?: string; unit?: string; value?: string; name?: string; status?: string; date?: string; }
@@ -84,8 +87,71 @@ export interface CommonProps {
 
 const REQUIRED_ATTRIBUTES = ['Длина', 'Ширина', 'Высота', 'Масса'];
 
+const getDraftKey = (uid: string) => `nomenclature_draft_${uid}`;
+
+interface DraftData {
+  uid: string;
+  code: string;
+  name: string;
+  article: string;
+  description: string;
+  selectedCatalog: string;
+  selectedCatalogId: string;
+  selectedAccountingGroup: string;
+  selectedAccountingGroupId: string;
+  selectedNomenclatureGroup: string;
+  selectedNomenclatureGroupId: string;
+  selectedNomenclatureType: string;
+  selectedNomenclatureTypeId: string;
+  selectedUnit: string;
+  selectedUnitId: string;
+  selectedManufacturer: string;
+  selectedManufacturerId: string;
+  selectedBrand: string;
+  selectedBrandId: string;
+  selectedModel: string;
+  selectedModelId: string;
+  selectedCountry: string;
+  selectedCountryId: string;
+  usage: boolean;
+  wasteMaterial: boolean;
+  recycleMaterial: boolean;
+  localCharacteristics: LocalCharacteristic[];
+  isEdit: boolean;
+  timestamp: number;
+}
+
+const saveDraftToStorage = (uid: string, data: DraftData) => {
+  try {
+    localStorage.setItem(getDraftKey(uid), JSON.stringify(data));
+  } catch (e) {
+    console.error('Ошибка сохранения черновика:', e);
+  }
+};
+
+const loadDraftFromStorage = (uid: string): DraftData | null => {
+  try {
+    const raw = localStorage.getItem(getDraftKey(uid));
+    if (!raw) return null;
+    const data = JSON.parse(raw) as DraftData;
+    if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(getDraftKey(uid));
+      return null;
+    }
+    return data;
+  } catch (e) {
+    localStorage.removeItem(getDraftKey(uid));
+    return null;
+  }
+};
+
+const clearDraftStorage = (uid: string) => {
+  localStorage.removeItem(getDraftKey(uid));
+};
+
 const NomenclatureCreatePage = () => {
   const { uid, code } = useParams<{ uid: string; code: string }>();
+  const navigate = useNavigate();
   const { tabs, activeTabId, closeTab } = useTabs();
 
   const [activeTab, setActiveTab] = useState(0);
@@ -123,6 +189,7 @@ const NomenclatureCreatePage = () => {
   
   const [popupOpen, setPopupOpen] = useState(false); const [popupType, setPopupType] = useState<PopupType>('catalog'); const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
   const [showClosePopup, setShowClosePopup] = useState(false);
+  const [showDevPopup, setShowDevPopup] = useState(false);
   const [images, setImages] = useState<ImageItem[]>([]); const [selectedImageIndex, setSelectedImageIndex] = useState(0); const [isUploading, setIsUploading] = useState(false); const [fullscreenImage, setFullscreenImage] = useState(false);
   const [blueprints, setBlueprints] = useState<ImageItem[]>([]); const [selectedBlueprintIndex, setSelectedBlueprintIndex] = useState(0); const [isUploadingBlueprint, setIsUploadingBlueprint] = useState(false); const [fullscreenBlueprint, setFullscreenBlueprint] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -130,8 +197,11 @@ const NomenclatureCreatePage = () => {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
   const [isDataSaved, setIsDataSaved] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
   const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
+  
+  const hasInitializedChars = useRef(false);
 
   const isFinishedProduct = selectedAccountingGroup === 'Готовая деталь';
 
@@ -144,6 +214,63 @@ const NomenclatureCreatePage = () => {
   const EVENT_LOG_TAB = tabs_list.length;
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  const saveDraftToLocalStorage = useCallback(() => {
+    if (!uid || !isDataLoaded) return;
+    const draft: DraftData = {
+      uid,
+      code: code || '',
+      name,
+      article,
+      description,
+      selectedCatalog,
+      selectedCatalogId,
+      selectedAccountingGroup,
+      selectedAccountingGroupId,
+      selectedNomenclatureGroup,
+      selectedNomenclatureGroupId,
+      selectedNomenclatureType,
+      selectedNomenclatureTypeId,
+      selectedUnit,
+      selectedUnitId,
+      selectedManufacturer,
+      selectedManufacturerId,
+      selectedBrand,
+      selectedBrandId,
+      selectedModel,
+      selectedModelId,
+      selectedCountry,
+      selectedCountryId,
+      usage,
+      wasteMaterial,
+      recycleMaterial,
+      localCharacteristics,
+      isEdit,
+      timestamp: Date.now(),
+    };
+    saveDraftToStorage(uid, draft);
+  }, [
+    uid, code, name, article, description, isEdit, isDataLoaded,
+    selectedCatalog, selectedCatalogId,
+    selectedAccountingGroup, selectedAccountingGroupId,
+    selectedNomenclatureGroup, selectedNomenclatureGroupId,
+    selectedNomenclatureType, selectedNomenclatureTypeId,
+    selectedUnit, selectedUnitId,
+    selectedManufacturer, selectedManufacturerId,
+    selectedBrand, selectedBrandId,
+    selectedModel, selectedModelId,
+    selectedCountry, selectedCountryId,
+    usage, wasteMaterial, recycleMaterial,
+    localCharacteristics,
+  ]);
+
+  useEffect(() => {
+    if (!uid || !isDataLoaded) return;
+    const timer = setTimeout(() => {
+      saveDraftToLocalStorage();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [saveDraftToLocalStorage, uid, isDataLoaded]);
 
   const fetchTypeAttributes = async () => { try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes); const data = res.data || []; const map = new Map<string, string>(); data.forEach((item: any) => map.set(item.name, item.uid)); setTypeAttributesMap(map); return map; } catch (e) { console.error(e); return new Map(); } };
 
@@ -178,11 +305,121 @@ const NomenclatureCreatePage = () => {
     const cp = window.location.pathname;
     const isEditMode = cp.includes('/edit/');
     setIsEdit(isEditMode);
-    if (isEditMode) { setIsDataSaved(true); loadMaterialData(uid); fetchCharacteristics(); fetchTypeAttributes(); fetchImages(); fetchBlueprints(); fetchDocuments(); fetchPrices(); fetchSuppliers(); fetchCodes(); }
-    else { setIsDataSaved(false); fetchTypeAttributes(); const s = sessionStorage.getItem('nomenclature_preselected_group'); if (s) { try { const p = JSON.parse(s); if (p.groupUid) { setSelectedCatalogId(p.groupUid); setSelectedCatalog(p.groupName || 'Выбрано из меню'); } } catch (e) {} sessionStorage.removeItem('nomenclature_preselected_group'); } }
+    
+    if (isEditMode) { 
+      setIsDataSaved(true);
+      loadMaterialData(uid).then(() => {
+        fetchCharacteristics().then(() => {
+          const draft = loadDraftFromStorage(uid);
+          if (draft && draft.uid === uid && draft.isEdit) {
+            setName(draft.name);
+            setArticle(draft.article);
+            setDescription(draft.description);
+            setSelectedCatalog(draft.selectedCatalog);
+            setSelectedCatalogId(draft.selectedCatalogId);
+            setSelectedAccountingGroup(draft.selectedAccountingGroup);
+            setSelectedAccountingGroupId(draft.selectedAccountingGroupId);
+            setSelectedNomenclatureGroup(draft.selectedNomenclatureGroup);
+            setSelectedNomenclatureGroupId(draft.selectedNomenclatureGroupId);
+            setSelectedNomenclatureType(draft.selectedNomenclatureType);
+            setSelectedNomenclatureTypeId(draft.selectedNomenclatureTypeId);
+            setSelectedUnit(draft.selectedUnit);
+            setSelectedUnitId(draft.selectedUnitId);
+            setSelectedManufacturer(draft.selectedManufacturer);
+            setSelectedManufacturerId(draft.selectedManufacturerId);
+            setSelectedBrand(draft.selectedBrand);
+            setSelectedBrandId(draft.selectedBrandId);
+            setSelectedModel(draft.selectedModel);
+            setSelectedModelId(draft.selectedModelId);
+            setSelectedCountry(draft.selectedCountry);
+            setSelectedCountryId(draft.selectedCountryId);
+            setUsage(draft.usage);
+            setWasteMaterial(draft.wasteMaterial);
+            setRecycleMaterial(draft.recycleMaterial);
+            setLocalCharacteristics(draft.localCharacteristics || []);
+          }
+          setIsDataLoaded(true);
+        });
+      });
+      fetchTypeAttributes(); 
+      fetchImages(); 
+      fetchBlueprints(); 
+      fetchDocuments(); 
+      fetchPrices(); 
+      fetchSuppliers(); 
+      fetchCodes();
+    } else { 
+      const draft = loadDraftFromStorage(uid);
+      if (draft && draft.uid === uid) {
+        hasInitializedChars.current = true;
+        setName(draft.name);
+        setArticle(draft.article);
+        setDescription(draft.description);
+        setSelectedCatalog(draft.selectedCatalog);
+        setSelectedCatalogId(draft.selectedCatalogId);
+        setSelectedAccountingGroup(draft.selectedAccountingGroup);
+        setSelectedAccountingGroupId(draft.selectedAccountingGroupId);
+        setSelectedNomenclatureGroup(draft.selectedNomenclatureGroup);
+        setSelectedNomenclatureGroupId(draft.selectedNomenclatureGroupId);
+        setSelectedNomenclatureType(draft.selectedNomenclatureType);
+        setSelectedNomenclatureTypeId(draft.selectedNomenclatureTypeId);
+        setSelectedUnit(draft.selectedUnit);
+        setSelectedUnitId(draft.selectedUnitId);
+        setSelectedManufacturer(draft.selectedManufacturer);
+        setSelectedManufacturerId(draft.selectedManufacturerId);
+        setSelectedBrand(draft.selectedBrand);
+        setSelectedBrandId(draft.selectedBrandId);
+        setSelectedModel(draft.selectedModel);
+        setSelectedModelId(draft.selectedModelId);
+        setSelectedCountry(draft.selectedCountry);
+        setSelectedCountryId(draft.selectedCountryId);
+        setUsage(draft.usage);
+        setWasteMaterial(draft.wasteMaterial);
+        setRecycleMaterial(draft.recycleMaterial);
+        setLocalCharacteristics(draft.localCharacteristics || []);
+        setIsDataSaved(false);
+        setIsDataLoaded(true);
+      } else {
+        setIsDataSaved(false);
+        setIsDataLoaded(true);
+        const s = sessionStorage.getItem('nomenclature_preselected_group'); 
+        if (s) { 
+          try { 
+            const p = JSON.parse(s); 
+            if (p.groupUid) { 
+              setSelectedCatalogId(p.groupUid); 
+              setSelectedCatalog(p.groupName || 'Выбрано из меню'); 
+            } 
+          } catch (e) {} 
+          sessionStorage.removeItem('nomenclature_preselected_group'); 
+        }
+      }
+      fetchTypeAttributes();
+    }
   }, [uid]);
 
-  useEffect(() => { if (uid && !isEdit && localCharacteristics.length === 0) { const initChars = async () => { const attrMap = await fetchTypeAttributes(); setLocalCharacteristics(REQUIRED_ATTRIBUTES.map(name => ({ localId: generateLocalId(), uid: null, attributeTypeUid: attrMap.get(name) || null, attributeName: name, customName: null, value: '', measureUid: null, measureName: null, isCustom: false, isRequired: true }))); }; initChars(); } }, [uid, isEdit]);
+  useEffect(() => { 
+    if (uid && !isEdit && localCharacteristics.length === 0 && !hasInitializedChars.current) { 
+      hasInitializedChars.current = true;
+      const initChars = async () => { 
+        const attrMap = await fetchTypeAttributes(); 
+        setLocalCharacteristics(REQUIRED_ATTRIBUTES.map(name => ({ 
+          localId: generateLocalId(), 
+          uid: null, 
+          attributeTypeUid: attrMap.get(name) || null, 
+          attributeName: name, 
+          customName: null, 
+          value: '', 
+          measureUid: null, 
+          measureName: null, 
+          isCustom: false, 
+          isRequired: true 
+        }))); 
+      }; 
+      initChars(); 
+    } 
+  }, [uid, isEdit, localCharacteristics.length]);
+  
   useEffect(() => { if (isFinishedProduct && activeTab >= tabs_list.length) { setActiveTab(0); } }, [isFinishedProduct]);
 
   const fetchSuppliers = async () => { try { setSuppliers((await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliers)).data || []); } catch (e) { console.error(e); } };
@@ -198,7 +435,28 @@ const NomenclatureCreatePage = () => {
   const fetchPrices = async () => { if (!uid) return; try { setPrices((await AxiosService.get(ConstantInfo.restApiNomenclaturePrices(uid))).data || []); } catch (e) { console.error(e); } };
   const handleAddPrice = async () => { if (!uid || !newPrice) return; try { await AxiosService.post(ConstantInfo.restApiNomenclaturePrices(uid), { price: parseFloat(newPrice), priceDate: newPriceDate, supplierUid: newPriceSupplierUid || null }); await fetchPrices(); setShowAddPricePopup(false); setNewPrice(''); setNewPriceSupplierUid(''); } catch (e) { console.error(e); } };
   const handleDeletePrice = async (priceUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeletePrice(priceUid)); await fetchPrices(); } catch (e) { console.error(e); } };
-  const loadMaterialData = async (muid: string) => { setIsLoading(true); try { const d = (await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(muid))).data; setName(d.name || ''); setArticle(d.article || ''); setDescription(d.description || ''); setUsage(d.usage || false); setWasteMaterial(d.wasteMaterial || false); setRecycleMaterial(d.recycleMaterial || false); if (d.groupUid) { setSelectedCatalogId(d.groupUid); setSelectedCatalog(d.groupName || ''); } if (d.typeMainUid) { setSelectedAccountingGroupId(d.typeMainUid); setSelectedAccountingGroup(d.typeMainName || ''); } if (d.typePurposeUid) { setSelectedNomenclatureGroupId(d.typePurposeUid); setSelectedNomenclatureGroup(d.typePurposeName || ''); } if (d.typeProductUid) { setSelectedNomenclatureTypeId(d.typeProductUid); setSelectedNomenclatureType(d.typeProductName || ''); } if (d.measureUid) { setSelectedUnitId(d.measureUid); setSelectedUnit(d.measureName || ''); } if (d.manufacturerUid) { setSelectedManufacturerId(d.manufacturerUid); setSelectedManufacturer(d.manufacturerName || ''); } if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); } if (d.modelOfBrandUid) { setSelectedModelId(d.modelOfBrandUid); setSelectedModel(d.modelOfBrandName || ''); } if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } } catch (e) { console.error(e); } finally { setIsLoading(false); } };
+  
+  const loadMaterialData = async (muid: string): Promise<void> => { 
+    setIsLoading(true); 
+    try { 
+      const d = (await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(muid))).data; 
+      setName(d.name || ''); 
+      setArticle(d.article || ''); 
+      setDescription(d.description || ''); 
+      setUsage(d.usage || false); 
+      setWasteMaterial(d.wasteMaterial || false); 
+      setRecycleMaterial(d.recycleMaterial || false); 
+      if (d.groupUid) { setSelectedCatalogId(d.groupUid); setSelectedCatalog(d.groupName || ''); } else { setSelectedCatalogId(''); setSelectedCatalog(''); }
+      if (d.typeMainUid) { setSelectedAccountingGroupId(d.typeMainUid); setSelectedAccountingGroup(d.typeMainName || ''); } else { setSelectedAccountingGroupId(''); setSelectedAccountingGroup(''); }
+      if (d.typePurposeUid) { setSelectedNomenclatureGroupId(d.typePurposeUid); setSelectedNomenclatureGroup(d.typePurposeName || ''); } else { setSelectedNomenclatureGroupId(''); setSelectedNomenclatureGroup(''); }
+      if (d.typeProductUid) { setSelectedNomenclatureTypeId(d.typeProductUid); setSelectedNomenclatureType(d.typeProductName || ''); } else { setSelectedNomenclatureTypeId(''); setSelectedNomenclatureType(''); }
+      if (d.measureUid) { setSelectedUnitId(d.measureUid); setSelectedUnit(d.measureName || ''); } else { setSelectedUnitId(''); setSelectedUnit(''); }
+      if (d.manufacturerUid) { setSelectedManufacturerId(d.manufacturerUid); setSelectedManufacturer(d.manufacturerName || ''); } else { setSelectedManufacturerId(''); setSelectedManufacturer(''); }
+      if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); } else { setSelectedBrandId(''); setSelectedBrand(''); }
+      if (d.modelOfBrandUid) { setSelectedModelId(d.modelOfBrandUid); setSelectedModel(d.modelOfBrandName || ''); } else { setSelectedModelId(''); setSelectedModel(''); }
+      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } else { setSelectedCountryId(''); setSelectedCountry(''); }
+    } catch (e) { console.error(e); } finally { setIsLoading(false); } 
+  };
 
   const saveCharacteristics = async () => {
     if (!uid) return;
@@ -235,11 +493,63 @@ const NomenclatureCreatePage = () => {
   const getMissingFields = (): Set<string> => { const m = new Set<string>(); if (!name.trim()) m.add('name'); if (!article.trim()) m.add('article'); if (!selectedCatalogId) m.add('catalog'); if (!selectedAccountingGroupId) m.add('accountingGroup'); if (!selectedNomenclatureGroupId) m.add('nomenclatureGroup'); if (!selectedNomenclatureTypeId) m.add('nomenclatureType'); if (!selectedUnitId) m.add('unit'); if (!selectedManufacturerId) m.add('manufacturer'); if (!selectedBrandId) m.add('brand'); if (!selectedModelId) m.add('model'); if (!selectedCountryId) m.add('country'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') m.add(`char_${n}`); }); return m; };
   const getMissingFieldLabels = (): string[] => { const l: string[] = []; if (!name.trim()) l.push('Наименование'); if (!article.trim()) l.push('Артикул'); if (!selectedCatalogId) l.push('Каталог'); if (!selectedAccountingGroupId) l.push('Группа учета'); if (!selectedNomenclatureGroupId) l.push('Группа номенклатуры'); if (!selectedNomenclatureTypeId) l.push('Вид номенклатуры'); if (!selectedUnitId) l.push('Единица измерения'); if (!selectedManufacturerId) l.push('Производитель'); if (!selectedBrandId) l.push('Бренд'); if (!selectedModelId) l.push('Модель'); if (!selectedCountryId) l.push('Страна происхождения'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') l.push(n); }); return l; };
 
-  const handleSave = async () => { if (!uid || !code) return; setIsSaving(true); try { await AxiosService.post(ConstantInfo.restApiNomenclatureDraft, { uid, code: parseInt(code), name, article, description, groupUid: selectedCatalogId || null, typeMainUid: selectedAccountingGroupId || null, typePurposeUid: selectedNomenclatureGroupId || null, typeProductUid: selectedNomenclatureTypeId || null, usage, wasteMaterial, recycleMaterial, measureUid: selectedUnitId || null, manufacturerUid: selectedManufacturerId || null, brandUid: selectedBrandId || null, modelOfBrandUid: selectedModelId || null, countryUid: selectedCountryId || null, author: 'Оператор' }); await saveCharacteristics(); for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); } for (const bp of localBlueprints) { const fd = new FormData(); fd.append('file', bp.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); } for (const bc of localBarcodes) { const fd = new FormData(); fd.append('codeType', bc.codeType); fd.append('codeValue', bc.codeValue); fd.append('codeKind', 'BARCODE'); fd.append('author', 'Оператор'); if (bc.file) fd.append('file', bc.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } for (const qr of localQrCodes) { const fd = new FormData(); fd.append('codeType', qr.codeType); fd.append('codeValue', qr.codeValue); fd.append('codeKind', 'QR'); fd.append('author', 'Оператор'); if (qr.file) fd.append('file', qr.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } for (const sku of localSkus) { const fd = new FormData(); fd.append('codeType', sku.codeType); fd.append('codeValue', sku.codeValue); fd.append('codeKind', 'SKU'); fd.append('author', 'Оператор'); if (sku.file) fd.append('file', sku.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); } for (const supply of localSupplies) { const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supply.supplyDate) fd.append('supplyDate', supply.supplyDate + ':00'); if (supply.documentName.trim()) fd.append('documentName', supply.documentName.trim()); if (supply.file) fd.append('file', supply.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd); } setLocalImages([]); setLocalBlueprints([]); setLocalBarcodes([]); setLocalQrCodes([]); setLocalSkus([]); setLocalDocuments([]); setLocalSupplies([]); await fetchImages(); await fetchBlueprints(); await fetchDocuments(); await fetchCharacteristics(); await fetchCodes(); setIsDataSaved(true); setValidationErrors(new Set()); window.dispatchEvent(new CustomEvent('refreshEvents')); return true; } catch (e) { console.error(e); return false; } finally { setIsSaving(false); } };
+  const handleSave = async () => { 
+    if (!uid || !code) return; 
+    setIsSaving(true); 
+    try { 
+      await AxiosService.post(ConstantInfo.restApiNomenclatureDraft, { 
+        uid, code: parseInt(code), name, article, description, 
+        groupUid: selectedCatalogId || null, 
+        typeMainUid: selectedAccountingGroupId || null, 
+        typePurposeUid: selectedNomenclatureGroupId || null, 
+        typeProductUid: selectedNomenclatureTypeId || null, 
+        usage, wasteMaterial, recycleMaterial, 
+        measureUid: selectedUnitId || null, 
+        manufacturerUid: selectedManufacturerId || null, 
+        brandUid: selectedBrandId || null, 
+        modelOfBrandUid: selectedModelId || null, 
+        countryUid: selectedCountryId || null, 
+        author: 'Оператор' 
+      }); 
+      await saveCharacteristics(); 
+      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); } 
+      for (const bp of localBlueprints) { const fd = new FormData(); fd.append('file', bp.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); } 
+      for (const bc of localBarcodes) { const fd = new FormData(); fd.append('codeType', bc.codeType); fd.append('codeValue', bc.codeValue); fd.append('codeKind', 'BARCODE'); fd.append('author', 'Оператор'); if (bc.file) fd.append('file', bc.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } 
+      for (const qr of localQrCodes) { const fd = new FormData(); fd.append('codeType', qr.codeType); fd.append('codeValue', qr.codeValue); fd.append('codeKind', 'QR'); fd.append('author', 'Оператор'); if (qr.file) fd.append('file', qr.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } 
+      for (const sku of localSkus) { const fd = new FormData(); fd.append('codeType', sku.codeType); fd.append('codeValue', sku.codeValue); fd.append('codeKind', 'SKU'); fd.append('author', 'Оператор'); if (sku.file) fd.append('file', sku.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } 
+      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); } 
+      for (const supply of localSupplies) { const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supply.supplyDate) fd.append('supplyDate', supply.supplyDate + ':00'); if (supply.documentName.trim()) fd.append('documentName', supply.documentName.trim()); if (supply.file) fd.append('file', supply.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd); } 
+      setLocalImages([]); 
+      setLocalBlueprints([]); 
+      setLocalBarcodes([]); 
+      setLocalQrCodes([]); 
+      setLocalSkus([]); 
+      setLocalDocuments([]); 
+      setLocalSupplies([]); 
+      await fetchImages(); 
+      await fetchBlueprints(); 
+      await fetchDocuments(); 
+      await fetchCharacteristics(); 
+      await fetchCodes(); 
+      
+      clearDraftStorage(uid);
+      
+      setIsDataSaved(true); 
+      setValidationErrors(new Set()); 
+      window.dispatchEvent(new CustomEvent('refreshEvents')); 
+      
+      if (!isEdit) {
+        setIsEdit(true);
+        navigate(`/references/nomenclature/edit/${uid}/${code}`, { replace: true });
+      }
+      
+      return true; 
+    } catch (e) { console.error(e); return false; } finally { setIsSaving(false); } 
+  };
 
   const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); };
   const handleSaveAndClose = async () => { if (await handleSave()) handleClose(); };
-  const handleCloseWithoutSaving = () => { handleClose(); };
+  const handleCloseWithoutSaving = () => { if (uid) clearDraftStorage(uid); handleClose(); };
   const handleAccountingGroupSelect = (o: TypeMaterialOption) => { setSelectedAccountingGroup(o.typeName); setSelectedAccountingGroupId(o.uid); setAccountingGroupOpen(false); setSelectedNomenclatureGroup(''); setSelectedNomenclatureGroupId(''); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); setValidationErrors(prev => { const n = new Set(prev); n.delete('accountingGroup'); return n; }); };
   const handleTabChange = (index: number) => { if (!isDataSaved && index > 1) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(index); if (!isFinishedProduct && (index === 4 || index === 5)) fetchSuppliers(); };
   const handleEventLogClick = () => { if (!isDataSaved) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(EVENT_LOG_TAB); };
@@ -288,10 +598,24 @@ const NomenclatureCreatePage = () => {
           </AnimatePresence>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <button style={rightButtonStyle} onClick={handleEventLogClick}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="16" height="16" rx="3" stroke="#666EFE" strokeWidth="2"/><line x1="5" y1="5" x2="13" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="9" x2="13" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="13" x2="10" y2="13" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          <button 
+            onClick={handleEventLogClick} 
+            style={{ 
+              ...rightButtonStyle, 
+              backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF',
+            }}
+          >
+            <img src={isEventLogActive ? IconOne1 : IconOne} alt="" style={{ width: 20, height: 20 }} />
           </button>
-          <button style={rightButtonStyle} />
+          <button 
+            onClick={() => setShowDevPopup(true)} 
+            style={{ 
+              ...rightButtonStyle, 
+              backgroundColor: showDevPopup ? '#666EFE' : '#FFFFFF',
+            }}
+          >
+            <img src={IconTwo} alt="" style={{ width: 20, height: 20 }} />
+          </button>
         </div>
       </div>
 
@@ -329,6 +653,16 @@ const NomenclatureCreatePage = () => {
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
+          </div>
+        </div>
+      )}
+
+      {showDevPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDevPopup(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>В разработке</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Этот функционал находится в разработке</p>
+            <button onClick={() => setShowDevPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
           </div>
         </div>
       )}

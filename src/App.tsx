@@ -121,7 +121,7 @@ const AppContent = () => {
                 <Route path="references/countries" element={<CountriesPage />} />
                 <Route path="references/manufacturers" element={<ManufacturersPage />} />
                 <Route path="references/suppliers" element={<SuppliersPage />} />
-                <Route path="references/suppliers/create/:uid" element={<SupplierCreatePage />} />
+                <Route path="references/suppliers/create/:uid/:code" element={<SupplierCreatePage />} />
                 <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />

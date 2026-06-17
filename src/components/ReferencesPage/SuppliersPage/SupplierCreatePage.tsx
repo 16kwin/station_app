@@ -1,6 +1,6 @@
-// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлен fetchImages и fetchDocuments)
-import React, { useState, useRef, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (сначала сервер, потом localStorage перезаписывает)
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
@@ -14,6 +14,7 @@ import SupplierDeliveriesTab from './SupplierDeliveriesTab';
 import SupplierAssortmentTab from './SupplierAssortmentTab';
 import SupplierRatingTab from './SupplierRatingTab';
 import SupplierIntegrationTab from './SupplierIntegrationTab';
+import SupplierEventLogTab from './SupplierEventLogTab';
 import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
@@ -22,7 +23,6 @@ export interface ImageItem { uid: string; url: string; originalName: string; }
 export interface DocumentItem { uid: string; supplierUid: string; documentName: string; filePath: string; originalName: string; url: string; createdAt: string; }
 export interface LocalDocument { localId: string; documentName: string; file: File; }
 export interface LocalImageItem { file: File; url: string; }
-export interface SupplierOption { uid: string; name: string; }
 
 export interface CommonSupplierProps {
   uid?: string; name: string; isEdit: boolean; isSaving: boolean;
@@ -60,8 +60,129 @@ export interface CommonSupplierProps {
   averageRating?: number;
 }
 
+const getDraftKey = (uid: string) => `supplier_draft_${uid}`;
+
+interface DraftData {
+  uid: string;
+  code: number | undefined;
+  name: string;
+  selectedCountry: string;
+  selectedCountryId: string;
+  address: string;
+  selectedShortDescription: string;
+  selectedShortDescriptionId: string;
+  description: string;
+  email: string;
+  website: string;
+  phone: string;
+  selectedBrand: string;
+  selectedBrandId: string;
+  inn: string;
+  ogrn: string;
+  kpp: string;
+  contactPerson: string;
+  contactPosition: string;
+  contactPhone: string;
+  director: string;
+  directorPosition: string;
+  bankName: string;
+  bik: string;
+  correspondentAccount: string;
+  settlementAccount: string;
+  isEdit: boolean;
+  timestamp: number;
+}
+
+const saveDraftToStorage = (uid: string, data: DraftData) => {
+  try {
+    localStorage.setItem(getDraftKey(uid), JSON.stringify(data));
+  } catch (e) {
+    console.error('Ошибка сохранения черновика поставщика:', e);
+  }
+};
+
+const loadDraftFromStorage = (uid: string): DraftData | null => {
+  try {
+    const raw = localStorage.getItem(getDraftKey(uid));
+    if (!raw) return null;
+    const data = JSON.parse(raw) as DraftData;
+    if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(getDraftKey(uid));
+      return null;
+    }
+    return data;
+  } catch (e) {
+    localStorage.removeItem(getDraftKey(uid));
+    return null;
+  }
+};
+
+const clearDraftStorage = (uid: string) => {
+  localStorage.removeItem(getDraftKey(uid));
+};
+
+// Восстановление данных из черновика в стейт
+const applyDraftToState = (draft: DraftData, setters: {
+  setName: (v: string) => void;
+  setCode: (v: number | undefined) => void;
+  setSelectedCountry: (v: string) => void;
+  setSelectedCountryId: (v: string) => void;
+  setAddress: (v: string) => void;
+  setSelectedShortDescription: (v: string) => void;
+  setSelectedShortDescriptionId: (v: string) => void;
+  setDescription: (v: string) => void;
+  setEmail: (v: string) => void;
+  setWebsite: (v: string) => void;
+  setPhone: (v: string) => void;
+  setSelectedBrand: (v: string) => void;
+  setSelectedBrandId: (v: string) => void;
+  setInn: (v: string) => void;
+  setOgrn: (v: string) => void;
+  setKpp: (v: string) => void;
+  setContactPerson: (v: string) => void;
+  setContactPosition: (v: string) => void;
+  setContactPhone: (v: string) => void;
+  setDirector: (v: string) => void;
+  setDirectorPosition: (v: string) => void;
+  setBankName: (v: string) => void;
+  setBik: (v: string) => void;
+  setCorrespondentAccount: (v: string) => void;
+  setSettlementAccount: (v: string) => void;
+  setIsDataSaved: (v: boolean) => void;
+  setIsDataLoaded: (v: boolean) => void;
+}) => {
+  setters.setName(draft.name || '');
+  setters.setCode(draft.code);
+  setters.setSelectedCountry(draft.selectedCountry || '');
+  setters.setSelectedCountryId(draft.selectedCountryId || '');
+  setters.setAddress(draft.address || '');
+  setters.setSelectedShortDescription(draft.selectedShortDescription || '');
+  setters.setSelectedShortDescriptionId(draft.selectedShortDescriptionId || '');
+  setters.setDescription(draft.description || '');
+  setters.setEmail(draft.email || '');
+  setters.setWebsite(draft.website || '');
+  setters.setPhone(draft.phone || '');
+  setters.setSelectedBrand(draft.selectedBrand || '');
+  setters.setSelectedBrandId(draft.selectedBrandId || '');
+  setters.setInn(draft.inn || '');
+  setters.setOgrn(draft.ogrn || '');
+  setters.setKpp(draft.kpp || '');
+  setters.setContactPerson(draft.contactPerson || '');
+  setters.setContactPosition(draft.contactPosition || '');
+  setters.setContactPhone(draft.contactPhone || '');
+  setters.setDirector(draft.director || '');
+  setters.setDirectorPosition(draft.directorPosition || '');
+  setters.setBankName(draft.bankName || '');
+  setters.setBik(draft.bik || '');
+  setters.setCorrespondentAccount(draft.correspondentAccount || '');
+  setters.setSettlementAccount(draft.settlementAccount || '');
+  setters.setIsDataSaved(draft.isEdit);
+  setters.setIsDataLoaded(true);
+};
+
 const SupplierCreatePage = () => {
-  const { uid } = useParams<{ uid: string }>();
+  const { uid, code: codeParam } = useParams<{ uid: string; code: string }>();
+  const navigate = useNavigate();
   const { tabs, activeTabId, closeTab } = useTabs();
 
   const [activeTab, setActiveTab] = useState(0);
@@ -75,6 +196,7 @@ const SupplierCreatePage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedCountryId, setSelectedCountryId] = useState('');
@@ -119,156 +241,311 @@ const SupplierCreatePage = () => {
   const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
 
   const tabs_list = ['Основное', 'Реквизиты', 'Документы', 'Поставки', 'Ассортимент', 'Рейтинг', 'Интеграции'];
+  const EVENT_LOG_TAB = tabs_list.length;
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
+  const setters = {
+    setName, setCode,
+    setSelectedCountry, setSelectedCountryId,
+    setAddress,
+    setSelectedShortDescription, setSelectedShortDescriptionId,
+    setDescription, setEmail, setWebsite, setPhone,
+    setSelectedBrand, setSelectedBrandId,
+    setInn, setOgrn, setKpp,
+    setContactPerson, setContactPosition, setContactPhone,
+    setDirector, setDirectorPosition,
+    setBankName, setBik, setCorrespondentAccount, setSettlementAccount,
+    setIsDataSaved, setIsDataLoaded,
+  };
+
+  // Сохранение черновика в localStorage при изменении данных
+  const saveDraftToLocalStorage = useCallback(() => {
+    if (!uid || !isDataLoaded) return;
+    const draft: DraftData = {
+      uid,
+      code,
+      name,
+      selectedCountry,
+      selectedCountryId,
+      address,
+      selectedShortDescription,
+      selectedShortDescriptionId,
+      description,
+      email,
+      website,
+      phone,
+      selectedBrand,
+      selectedBrandId,
+      inn,
+      ogrn,
+      kpp,
+      contactPerson,
+      contactPosition,
+      contactPhone,
+      director,
+      directorPosition,
+      bankName,
+      bik,
+      correspondentAccount,
+      settlementAccount,
+      isEdit,
+      timestamp: Date.now(),
+    };
+    saveDraftToStorage(uid, draft);
+  }, [
+    uid, code, name, isEdit, isDataLoaded,
+    selectedCountry, selectedCountryId,
+    address,
+    selectedShortDescription, selectedShortDescriptionId,
+    description, email, website, phone,
+    selectedBrand, selectedBrandId,
+    inn, ogrn, kpp,
+    contactPerson, contactPosition, contactPhone,
+    director, directorPosition,
+    bankName, bik, correspondentAccount, settlementAccount,
+  ]);
+
+  // Автосохранение черновика при изменениях (дебаунс 500мс)
+  useEffect(() => {
+    if (!uid || !isDataLoaded) return;
+    const timer = setTimeout(() => {
+      saveDraftToLocalStorage();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [saveDraftToLocalStorage, uid, isDataLoaded]);
+
+  useEffect(() => { 
+    const handler = (e: Event) => { 
+      if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); 
+    }; 
+    window.addEventListener('navigateToTab', handler); 
+    return () => window.removeEventListener('navigateToTab', handler); 
+  }, []);
 
   useEffect(() => {
     if (!uid) return;
     const cp = window.location.pathname;
     const isEditMode = cp.includes('/edit/');
     setIsEdit(isEditMode);
-    if (isEditMode) { setIsDataSaved(true); loadSupplierData(uid); fetchImages(); fetchDocuments(); fetchAverageRating(); }
-    else { setIsDataSaved(false); }
+    
+    if (isEditMode) {
+      // Режим редактирования: сначала грузим с сервера, потом перезаписываем из черновика
+      setIsDataSaved(true);
+      loadSupplierData(uid).then(() => {
+        // После загрузки с сервера — проверяем черновик и перезаписываем
+        const draft = loadDraftFromStorage(uid);
+        if (draft && draft.uid === uid) {
+          applyDraftToState(draft, setters);
+        } else {
+          setIsDataLoaded(true);
+        }
+      });
+      fetchImages();
+      fetchDocuments();
+      fetchAverageRating();
+    } else {
+      // Режим создания — пробуем загрузить черновик
+      const draft = loadDraftFromStorage(uid);
+      if (draft && draft.uid === uid) {
+        applyDraftToState(draft, setters);
+      } else {
+        setIsDataSaved(false);
+        setIsDataLoaded(true);
+        if (codeParam) setCode(parseInt(codeParam));
+      }
+    }
   }, [uid]);
 
   const fetchAverageRating = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierRatingsAverage(uid)); setAverageRating(Math.round((res.data || 0) * 10) / 10); } catch (e) { console.error(e); } };
-  
-  const fetchImages = async () => { 
-    if (!uid) return; 
-    try { 
-      const res = await AxiosService.get(ConstantInfo.restApiSupplierImages(uid));
-      setImages((res.data || []).map((img: any) => ({ 
-        uid: img.uid, 
-        url: img.fileUrl ? ConstantInfo.fileDir + img.fileUrl.replace(/^\//, '') : '', 
-        originalName: img.originalName || '' 
-      })));
-    } catch (e) { console.error(e); } 
-  };
-  
-  const fetchDocuments = async () => { 
-    if (!uid) return; 
-    try { 
-      const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid));
-      setDocuments((res.data || []).map((doc: any) => ({ 
-        ...doc, 
-        url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '' 
-      })));
-    } catch (e) { console.error(e); } 
-  };
-
+  const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierImages(uid)); setImages((res.data || []).map((img: any) => ({ uid: img.uid, url: img.fileUrl ? ConstantInfo.fileDir + img.fileUrl.replace(/^\//, '') : '', originalName: img.originalName || '' }))); } catch (e) { console.error(e); } };
+  const fetchDocuments = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid)); setDocuments((res.data || []).map((doc: any) => ({ ...doc, url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiSupplierDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
   const handleDocumentUpload = (documentName: string, file: File) => { setLocalDocuments(prev => [...prev, { localId: generateLocalId(), documentName, file }]); };
   const handleDeleteDocument = (uid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== uid)); if (uid && !uid.startsWith('local_')) { AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(uid)).then(() => fetchDocuments()).catch(e => console.error(e)); } };
 
-  const loadSupplierData = async (suid: string) => {
-    setIsLoading(true);
-    try {
-      const d = (await AxiosService.get(ConstantInfo.restApiSupplierGet(suid))).data;
-      setName(d.name || '');
-      setCode(d.code);
-      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); }
-      setAddress(d.address || '');
-      if (d.shortDescriptionUid) { setSelectedShortDescriptionId(d.shortDescriptionUid); setSelectedShortDescription(d.shortDescriptionName || ''); }
-      setDescription(d.description || '');
-      setEmail(d.email || '');
-      setWebsite(d.website || '');
-      setPhone(d.phone || '');
-      if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); }
-      setInn(d.inn || '');
-      setOgrn(d.ogrn || '');
-      setKpp(d.kpp || '');
-      setContactPerson(d.contactPerson || '');
-      setContactPosition(d.contactPosition || '');
-      setContactPhone(d.contactPhone || '');
-      setDirector(d.director || '');
-      setDirectorPosition(d.directorPosition || '');
-      setBankName(d.bankName || '');
-      setBik(d.bik || '');
-      setCorrespondentAccount(d.correspondentAccount || '');
-      setSettlementAccount(d.settlementAccount || '');
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+  const loadSupplierData = async (suid: string): Promise<void> => { 
+    setIsLoading(true); 
+    try { 
+      const d = (await AxiosService.get(ConstantInfo.restApiSupplierGet(suid))).data; 
+      setName(d.name || ''); 
+      setCode(d.code); 
+      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } else { setSelectedCountryId(''); setSelectedCountry(''); }
+      setAddress(d.address || ''); 
+      if (d.shortDescriptionUid) { setSelectedShortDescriptionId(d.shortDescriptionUid); setSelectedShortDescription(d.shortDescriptionName || ''); } else { setSelectedShortDescriptionId(''); setSelectedShortDescription(''); }
+      setDescription(d.description || ''); 
+      setEmail(d.email || ''); 
+      setWebsite(d.website || ''); 
+      setPhone(d.phone || ''); 
+      if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); } else { setSelectedBrandId(''); setSelectedBrand(''); }
+      setInn(d.inn || ''); 
+      setOgrn(d.ogrn || ''); 
+      setKpp(d.kpp || ''); 
+      setContactPerson(d.contactPerson || ''); 
+      setContactPosition(d.contactPosition || ''); 
+      setContactPhone(d.contactPhone || ''); 
+      setDirector(d.director || ''); 
+      setDirectorPosition(d.directorPosition || ''); 
+      setBankName(d.bankName || ''); 
+      setBik(d.bik || ''); 
+      setCorrespondentAccount(d.correspondentAccount || ''); 
+      setSettlementAccount(d.settlementAccount || ''); 
+    } catch (e) { console.error(e); } finally { setIsLoading(false); } 
   };
 
-  const getMissingFields = (): Set<string> => { const m = new Set<string>(); if (!name.trim()) m.add('name'); return m; };
-  const getMissingFieldLabels = (): string[] => { const l: string[] = []; if (!name.trim()) l.push('Наименование'); return l; };
+  const getMissingFields = (): Set<string> => {
+    const m = new Set<string>();
+    if (!name.trim()) m.add('name');
+    if (!selectedCountryId) m.add('country');
+    if (!address.trim()) m.add('address');
+    if (!selectedShortDescriptionId) m.add('shortDescription');
+    if (!email.trim()) m.add('email');
+    if (!website.trim()) m.add('website');
+    if (!phone.trim()) m.add('phone');
+    if (!selectedBrandId) m.add('brand');
+    if (!inn.trim()) m.add('inn');
+    if (!ogrn.trim()) m.add('ogrn');
+    if (!kpp.trim()) m.add('kpp');
+    if (!contactPerson.trim()) m.add('contactPerson');
+    if (!director.trim()) m.add('director');
+    if (!bankName.trim()) m.add('bankName');
+    if (!bik.trim()) m.add('bik');
+    if (!correspondentAccount.trim()) m.add('correspondentAccount');
+    if (!settlementAccount.trim()) m.add('settlementAccount');
+    return m;
+  };
+
+  const getMissingFieldLabels = (): string[] => {
+    const l: string[] = [];
+    if (!name.trim()) l.push('Наименование');
+    if (!selectedCountryId) l.push('Страна');
+    if (!address.trim()) l.push('Адрес');
+    if (!selectedShortDescriptionId) l.push('Краткое описание');
+    if (!email.trim()) l.push('Email');
+    if (!website.trim()) l.push('Сайт');
+    if (!phone.trim()) l.push('Телефон');
+    if (!selectedBrandId) l.push('Бренд');
+    if (!inn.trim()) l.push('ИНН');
+    if (!ogrn.trim()) l.push('ОГРН');
+    if (!kpp.trim()) l.push('КПП');
+    if (!contactPerson.trim()) l.push('Контактное лицо');
+    if (!director.trim()) l.push('Руководитель');
+    if (!bankName.trim()) l.push('Банк');
+    if (!bik.trim()) l.push('БИК');
+    if (!correspondentAccount.trim()) l.push('Корр. счет');
+    if (!settlementAccount.trim()) l.push('Расч. счет');
+    return l;
+  };
 
   const handleSave = async () => {
     if (!uid) return;
     setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiSupplierDraft, {
-        uid, code, name,
-        countryUid: selectedCountryId || null,
-        address: address || null,
-        shortDescriptionUid: selectedShortDescriptionId || null,
-        description: description || null,
-        email: email || null,
-        website: website || null,
-        phone: phone || null,
-        brandUid: selectedBrandId || null,
-        inn: inn || null, ogrn: ogrn || null, kpp: kpp || null,
-        contactPerson: contactPerson || null, contactPosition: contactPosition || null, contactPhone: contactPhone || null,
-        director: director || null, directorPosition: directorPosition || null,
-        bankName: bankName || null, bik: bik || null,
-        correspondentAccount: correspondentAccount || null, settlementAccount: settlementAccount || null,
-        author: 'Оператор',
+      await AxiosService.post(ConstantInfo.restApiSupplierDraft, { 
+        uid, code, name, 
+        countryUid: selectedCountryId || null, 
+        address: address || null, 
+        shortDescriptionUid: selectedShortDescriptionId || null, 
+        description: description || null, 
+        email: email || null, 
+        website: website || null, 
+        phone: phone || null, 
+        brandUid: selectedBrandId || null, 
+        inn: inn || null, 
+        ogrn: ogrn || null, 
+        kpp: kpp || null, 
+        contactPerson: contactPerson || null, 
+        contactPosition: contactPosition || null, 
+        contactPhone: contactPhone || null, 
+        director: director || null, 
+        directorPosition: directorPosition || null, 
+        bankName: bankName || null, 
+        bik: bik || null, 
+        correspondentAccount: correspondentAccount || null, 
+        settlementAccount: settlementAccount || null, 
+        author: 'Оператор' 
       });
-      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); }
-      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); }
-      setLocalImages([]); setLocalDocuments([]);
-      await fetchImages(); await fetchDocuments();
-      setIsDataSaved(true); setValidationErrors(new Set());
+      for (const img of localImages) { 
+        const fd = new FormData(); 
+        fd.append('file', img.file); 
+        await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); 
+      }
+      for (const doc of localDocuments) { 
+        const fd = new FormData(); 
+        fd.append('file', doc.file); 
+        fd.append('documentName', doc.documentName); 
+        await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); 
+      }
+      setLocalImages([]); 
+      setLocalDocuments([]);
+      await fetchImages(); 
+      await fetchDocuments();
+      
+      // Чистим черновик
+      clearDraftStorage(uid);
+      
+      setIsDataSaved(true); 
+      setValidationErrors(new Set());
+      window.dispatchEvent(new CustomEvent('refreshSupplierEvents'));
+      
+      // Переключаем в режим редактирования если были в создании
+      if (!isEdit) {
+        setIsEdit(true);
+        navigate(`/references/suppliers/edit/${uid}/${code}`, { replace: true });
+      }
+      
       return true;
     } catch (e) { console.error(e); return false; } finally { setIsSaving(false); }
   };
 
   const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); };
   const handleSaveAndClose = async () => { if (await handleSave()) handleClose(); };
-  const handleCloseWithoutSaving = () => { handleClose(); };
-  const handleTabChange = (index: number) => { if (!isDataSaved && index > 1) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(index); };
-  const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
+  const handleCloseWithoutSaving = () => { if (uid) clearDraftStorage(uid); handleClose(); };
 
-  const canSave = !!name.trim();
-
-  const openPopup = (type: string) => {
-    setPopupType(type);
-    setPopupFilterParam(undefined);
-    setPopupOpen(true);
+  const handleTabChange = (index: number) => {
+    if (!isDataSaved && index > 1) {
+      const m = getMissingFields();
+      setValidationErrors(m);
+      setShowBlockedTabWarning(true);
+      return;
+    }
+    setActiveTab(index);
   };
 
-  const handlePopupSelect = (id: string, nm: string) => {
-    switch (popupType) {
-      case 'country': setSelectedCountry(nm); setSelectedCountryId(id); break;
-      case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); break;
-      case 'shortDescription': setSelectedShortDescription(nm); setSelectedShortDescriptionId(id); break;
+  const handleEventLogClick = () => {
+    if (!isDataSaved) {
+      const m = getMissingFields();
+      setValidationErrors(m);
+      setShowBlockedTabWarning(true);
+      return;
     }
+    setActiveTab(EVENT_LOG_TAB);
+  };
+
+  const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
+  const canSave = !!name.trim();
+
+  const openPopup = (type: string) => { setPopupType(type); setPopupFilterParam(undefined); setPopupOpen(true); };
+  const handlePopupSelect = (id: string, nm: string) => { 
+    switch (popupType) { 
+      case 'country': setSelectedCountry(nm); setSelectedCountryId(id); setValidationErrors(p => { const n = new Set(p); n.delete('country'); return n; }); break; 
+      case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setValidationErrors(p => { const n = new Set(p); n.delete('brand'); return n; }); break; 
+      case 'shortDescription': setSelectedShortDescription(nm); setSelectedShortDescriptionId(id); setValidationErrors(p => { const n = new Set(p); n.delete('shortDescription'); return n; }); break; 
+    } 
   };
 
   const buttonStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : isDisabled ? '#BCC8FF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden', opacity: isDisabled ? 0.5 : 1 });
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
   const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
+  const rightButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
-  const commonProps: CommonSupplierProps = {
-    uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading,
-    selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId,
-    description, email, website, phone, selectedBrand, selectedBrandId,
-    inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition,
-    bankName, bik, correspondentAccount, settlementAccount,
-    fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>,
-    localDocuments, setLocalDocuments, localImages, setLocalImages,
-    setName, setNameFocused,
-    setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId,
-    setDescription, setEmail, setWebsite, setPhone, setSelectedBrand, setSelectedBrandId,
-    setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition,
-    setBankName, setBik, setCorrespondentAccount, setSettlementAccount,
-    setImages, setDocuments,
-    handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument,
-    openPopup, isDataSaved, validationErrors, setValidationErrors,
-    fetchAverageRating, averageRating,
-  };
+  const cef = ['inn', 'ogrn', 'kpp', 'contactPerson', 'director', 'bankName', 'bik', 'correspondentAccount', 'settlementAccount'];
+  const hasRequisitesErrors = cef.some(f => validationErrors.has(f));
+
+  const isEventLogActive = activeTab === EVENT_LOG_TAB;
+
+  const commonProps: CommonSupplierProps = { uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setSelectedBrand, setSelectedBrandId, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setImages, setDocuments, handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors, fetchAverageRating, averageRating };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
@@ -288,34 +565,33 @@ const SupplierCreatePage = () => {
             {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => {
               const tabIndex = i + 1;
               const isBlocked = !isDataSaved && tabIndex > 1;
+              const isRequisitesTab = tabIndex === 1;
               return (
-                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={buttonStyle(activeTab === tabIndex, isBlocked)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
+                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={{ ...buttonStyle(activeTab === tabIndex, isBlocked), outline: isRequisitesTab && hasRequisitesErrors && validationErrors.size > 0 ? '2px solid #FF3052' : 'none', outlineOffset: -2 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
                   <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
                 </motion.button>
               );
             })}
           </AnimatePresence>
         </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
+          <button style={rightButtonStyle} onClick={handleEventLogClick}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="16" height="16" rx="3" stroke="#666EFE" strokeWidth="2"/><line x1="5" y1="5" x2="13" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="9" x2="13" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="13" x2="10" y2="13" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </button>
+          <button style={rightButtonStyle} />
+        </div>
       </div>
 
-      {(() => {
-        switch (activeTab) {
-          case 0: return <SupplierMainTab {...commonProps} />;
-          case 1: return <SupplierRequisitesTab {...commonProps} />;
-          case 2: return <SupplierDocumentsTab {...commonProps} />;
-          case 3: return <SupplierDeliveriesTab {...commonProps} />;
-          case 4: return <SupplierAssortmentTab {...commonProps} />;
-          case 5: return <SupplierRatingTab {...commonProps} />;
-          case 6: return <SupplierIntegrationTab {...commonProps} />;
-          default: return null;
-        }
-      })()}
-
-      <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-        <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
-        <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
-        <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
-      </div>
+      {isEventLogActive ? <SupplierEventLogTab {...commonProps} /> : (
+        <>
+          {(() => { switch (activeTab) { case 0: return <SupplierMainTab {...commonProps} />; case 1: return <SupplierRequisitesTab {...commonProps} />; case 2: return <SupplierDocumentsTab {...commonProps} />; case 3: return <SupplierDeliveriesTab {...commonProps} />; case 4: return <SupplierAssortmentTab {...commonProps} />; case 5: return <SupplierRatingTab {...commonProps} />; case 6: return <SupplierIntegrationTab {...commonProps} />; default: return null; } })()}
+          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
+            <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
+            <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
+            <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
+          </div>
+        </>
+      )}
 
       <CatalogSelectPopup isOpen={popupOpen} onClose={() => setPopupOpen(false)} onSelect={handlePopupSelect} popupType={popupType as PopupType} filterParam={popupFilterParam} />
 

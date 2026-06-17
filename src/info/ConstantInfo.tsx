@@ -130,6 +130,12 @@ restApiSupplierDeleteRating: (uid: string) => `/api/suppliers/ratings/${uid}`,
 restApiSupplierIntegrations: (supplierUid: string) => `/api/suppliers/${supplierUid}/integrations`,
 restApiSupplierDeleteIntegration: (uid: string) => `/api/suppliers/integrations/${uid}`,
 restApiSupplierDescriptionTypes: '/api/suppliers/description-types',
+restApiSupplierEvents: (supplierUid: string) => `/api/suppliers/${supplierUid}/events`,
+// ConstantInfo.ts — добавить эндпоинты:
+restApiSupplierDeliveries: (supplierUid: string) => `/api/suppliers/${supplierUid}/deliveries`,
+restApiSupplierDeleteDelivery: (uid: string) => `/api/suppliers/deliveries/${uid}`,
+restApiSupplierAssortment: (supplierUid: string) => `/api/suppliers/${supplierUid}/assortment`,
+
 };
 
 export default ConstantInfo;
