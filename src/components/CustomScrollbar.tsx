@@ -120,6 +120,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
   };
 
   const isVertical = orientation === 'vertical';
+  
   const thumbStyle: React.CSSProperties = isVertical
     ? {
         position: 'absolute',
@@ -164,7 +165,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
 
   const wrapperStyle: React.CSSProperties = isVertical
     ? {
-        width: '15px',
+        width: '10px',
         height: `${trackSize}px`,
         position: 'relative',
         flexShrink: 0,
@@ -173,7 +174,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
         alignItems: 'center',
       }
     : {
-        height: '15px',
+        height: '10px',
         width: `${trackSize}px`,
         position: 'relative',
         flexShrink: 0,

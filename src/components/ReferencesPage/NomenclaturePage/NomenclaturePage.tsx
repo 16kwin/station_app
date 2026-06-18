@@ -1,4 +1,4 @@
-// NomenclaturePage.tsx — полный файл с группами учета/ном./вида в строках
+// NomenclaturePage.tsx — иконка popup1, таблица как в EventLogTab
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -19,7 +19,6 @@ import Icon9 from '../../../assets/References/Icon9.svg';
 import Icon10 from '../../../assets/References/Icon10.svg';
 import Icon11 from '../../../assets/References/Icon11.svg';
 import Icon12 from '../../../assets/References/Icon12.svg';
-import Icon13 from '../../../assets/References/Icon13.svg';
 import Icon14 from '../../../assets/References/Icon14.svg';
 import Icon15 from '../../../assets/References/Icon15.svg';
 import Icon16 from '../../../assets/References/Icon16.svg';
@@ -32,6 +31,7 @@ import Icon22 from '../../../assets/References/Icon22.svg';
 import Icon23 from '../../../assets/References/Icon23.svg';
 import Icon24 from '../../../assets/References/Icon24.svg';
 import Icon25 from '../../../assets/References/Icon25.svg';
+import Popup1 from '../../../assets/References/popup1.svg';
 
 interface MaterialItem {
   uid: string;
@@ -623,13 +623,22 @@ const NomenclaturePage = () => {
     </div>
   );
 
-  const rowBoxShadow = 'inset 0px -0.7px 0px 0px #666EFE, inset 2px 0px 0px 0px #666EFE, inset -2px 0px 0px 0px #666EFE';
   const contextMenuButtonStyle: React.CSSProperties = { height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
 
   const cellTextStyle: React.CSSProperties = {
     fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
     position: 'absolute',
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  };
+
+  const getRowSeparator = (index: number, isRealData: boolean): React.CSSProperties => {
+    if (!isRealData) return { borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' };
+    const isFirst = index === 0;
+    const isLast = index === totalItems - 1;
+    return {
+      borderTop: isFirst ? 'none' : '0.5px solid #E5ECF5',
+      borderBottom: isLast ? 'none' : '0.5px solid #E5ECF5',
+    };
   };
 
   const renderCurrentLevel = () => {
@@ -641,7 +650,7 @@ const NomenclaturePage = () => {
     if (depth > 0) {
       const parentNode = currentNode;
       items.push(
-        <div key={parentNode.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', userSelect: 'none', boxSizing: 'border-box', position: 'relative', boxShadow: rowBoxShadow }} onContextMenu={(e) => handleContextMenu(e, parentNode.uid, parentNode.name, 'folder')}>
+        <div key={parentNode.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, parentNode.uid, parentNode.name, 'folder')}>
           <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
             <div style={{ width: 18, height: 18, flexShrink: 0 }} />
           </div>
@@ -659,7 +668,7 @@ const NomenclaturePage = () => {
     folders.forEach(folder => {
       const isSelected = selectedIds.has(folder.uid);
       items.push(
-        <div key={folder.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', position: 'relative', boxShadow: rowBoxShadow }} onContextMenu={(e) => handleContextMenu(e, folder.uid, folder.name, 'folder')}>
+        <div key={folder.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, folder.uid, folder.name, 'folder')}>
           <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}><EmptySquare isSelected={isSelected} onClick={() => toggleSelectNode(folder)} /></div>
           <div style={{ display: 'flex', alignItems: 'center', marginLeft: shift + 19 }} onClick={() => enterFolder(folder.uid)}>
             <img src={Icon11} alt="" style={{ width: 18, height: 16, flexShrink: 0 }} />
@@ -674,10 +683,10 @@ const NomenclaturePage = () => {
     materials.forEach(material => {
       const isSelected = selectedIds.has(material.uid);
       items.push(
-        <div key={material.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', position: 'relative', cursor: 'pointer', boxSizing: 'border-box', boxShadow: rowBoxShadow }} onContextMenu={(e) => handleContextMenu(e, material.uid, material.name || '', 'material')}>
+        <div key={material.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', position: 'relative', cursor: 'pointer', boxSizing: 'border-box', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, material.uid, material.name || '', 'material')}>
           <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}><EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(material.uid)} /></div>
           <div style={{ display: 'flex', alignItems: 'center', marginLeft: shift + 19 }}>
-            <img src={Icon13} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
+            <img src={Popup1} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, maxWidth: 310 - shift, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{material.name || '—'}</span>
           </div>
           <span style={{ ...cellTextStyle, left: COL_CODE, maxWidth: COL_ARTICLE - COL_CODE - 20 }}>{material.code || '—'}</span>
@@ -823,8 +832,8 @@ const NomenclaturePage = () => {
       </div>
 
       <div style={{ position: 'absolute', top: 162, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', outline: '2px solid #666EFE', outlineOffset: -1 }}>
-          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 20, paddingRight: 40, boxSizing: 'border-box', boxShadow: 'inset 0px -0.7px 0px 0px #666EFE' }}>
+        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 20, paddingRight: 40, boxSizing: 'border-box' }}>
             <EmptySquare isSelected={isHeaderSelected()} onClick={toggleSelectAll} isHeader />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_CODE }}>КОД</span>
@@ -837,7 +846,7 @@ const NomenclaturePage = () => {
             <div style={{ minWidth: TABLE_WIDTH - 40 }}>
               {renderCurrentLevel()}
               {Array.from({ length: emptyRows }).map((_, i) => (
-                <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, boxShadow: rowBoxShadow }}><EmptySquare /></div>
+                <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare /></div>
               ))}
             </div>
           </div>

@@ -1,10 +1,13 @@
-// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (контекстное меню вместо крестика)
+// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (выделение строк, удаление выделенных)
 import React, { useState, useRef, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import type { CommonProps } from './NomenclatureCreatePage';
 import FileIcon from '../../../assets/References/NomenclatureCreatePage/File.svg';
+import Button1 from '../../../assets/References/NomenclatureCreatePage/button1.svg';
+import Button4 from '../../../assets/References/NomenclatureCreatePage/button4.svg';
+import Button5 from '../../../assets/References/NomenclatureCreatePage/button5.svg';
 
 interface DocumentItem {
   uid: string;
@@ -23,7 +26,9 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const [hasScroll, setHasScroll] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+
   const [showAddDocPopup, setShowAddDocPopup] = useState(false);
   const [showEditDocPopup, setShowEditDocPopup] = useState(false);
   const [editingDoc, setEditingDoc] = useState<DocumentItem | null>(null);
@@ -34,6 +39,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const fileLocalRef = useRef<HTMLInputElement>(null);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; docUid: string; docName: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
@@ -86,12 +92,12 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     const c = scrollContainerRef.current;
     if (c) setHasScroll(c.scrollHeight > c.clientHeight);
   };
-  
+
   useEffect(() => {
     const t = setTimeout(checkScroll, 100);
     return () => clearTimeout(t);
   }, [documents]);
-  
+
   useEffect(() => {
     const c = scrollContainerRef.current;
     if (!c) return;
@@ -111,6 +117,56 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
       const d = new Date(dateStr);
       return d.toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     } catch { return dateStr; }
+  };
+
+  const toggleSelect = (docUid: string, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(docUid)) next.delete(docUid);
+        else next.add(docUid);
+        return next;
+      });
+    } else if (e.shiftKey && lastSelectedId) {
+      const allIds = documents.map(d => d.uid);
+      const lastIdx = allIds.indexOf(lastSelectedId);
+      const currentIdx = allIds.indexOf(docUid);
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        const rangeIds = allIds.slice(start, end + 1);
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          rangeIds.forEach(id => next.add(id));
+          return next;
+        });
+      }
+    } else {
+      if (selectedIds.has(docUid) && selectedIds.size === 1) {
+        setSelectedIds(new Set());
+      } else {
+        setSelectedIds(new Set([docUid]));
+      }
+    }
+    setLastSelectedId(docUid);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteSelected = async () => {
+    try {
+      for (const docUid of selectedIds) {
+        await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(docUid));
+      }
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      await fetchDocuments();
+    } catch (e) {
+      console.error('Ошибка удаления документов:', e);
+    }
   };
 
   const handleAddClick = () => {
@@ -145,6 +201,9 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const handleContextMenu = (e: React.MouseEvent, docUid: string, docName: string) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!selectedIds.has(docUid)) {
+      setSelectedIds(new Set([docUid]));
+    }
     setContextMenu({ x: e.clientX, y: e.clientY, docUid, docName });
   };
 
@@ -165,8 +224,14 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
       setContextMenu(null);
       return;
     }
-    AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(contextMenu.docUid))
-      .then(() => fetchDocuments())
+    const uidsToDelete = selectedIds.has(contextMenu.docUid) ? selectedIds : new Set([contextMenu.docUid]);
+    Promise.all(Array.from(uidsToDelete).map(uid => 
+      AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(uid))
+    ))
+      .then(() => {
+        setSelectedIds(new Set());
+        fetchDocuments();
+      })
       .catch(e => console.error('Ошибка удаления документа:', e));
     setContextMenu(null);
   };
@@ -175,18 +240,12 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     if (!editingDoc || !editDocName.trim()) return;
     setIsUploading(true);
     try {
-      // Если выбран новый файл — загружаем новый документ и удаляем старый
       if (selectedFile) {
         const fd = new FormData();
         fd.append('file', selectedFile);
         fd.append('documentName', editDocName.trim());
         await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid!), fd);
         await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(editingDoc.uid));
-      } else {
-        // Если файл не менялся — удаляем и создаём заново (бекенд не поддерживает PATCH для документов)
-        // Как вариант — просто обновляем название через новый запрос
-        // Пока просто обновим локально и перезагрузим
-        // TODO: добавить эндпоинт для обновления названия документа
       }
       await fetchDocuments();
       setShowEditDocPopup(false);
@@ -202,10 +261,9 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const totalRows = Math.max(documents.length, VISIBLE_ROWS);
 
   const getRowSeparator = (index: number, isRealData: boolean): React.CSSProperties => {
-    if (!isRealData) return { borderTop: 'none', borderBottom: 'none' };
+    if (!isRealData) return { borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' };
     const isFirst = index === 0;
     const isLast = index === documents.length - 1;
-    
     return {
       borderTop: isFirst ? 'none' : '0.5px solid #E5ECF5',
       borderBottom: isLast ? 'none' : '0.5px solid #E5ECF5',
@@ -224,27 +282,18 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
         {/* Кнопки */}
         <div style={{ position: 'absolute', top: 34, left: 40, display: 'flex', gap: 15 }}>
           <button style={smallButtonStyle}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <line x1="1" y1="4" x2="17" y2="4" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="1" y1="9" x2="17" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="1" y1="14" x2="12" y2="14" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <button style={smallButtonStyle}>
-            <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
-              <path d="M1 7H19M1 1H19M1 13H19" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            <img src={Button1} alt="" style={{ width: 18, height: 18 }} />
           </button>
           <button onClick={handleAddClick} style={smallButtonStyle}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            <img src={Button4} alt="" style={{ width: 14, height: 14 }} />
+          </button>
+          <button onClick={handleDeleteSelected} style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }}>
+            <img src={Button5} alt="" style={{ width: 18, height: 18 }} />
           </button>
         </div>
 
         {/* Таблица */}
-        <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 15 }}>
+        <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 10 }}>
           <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
             {/* Шапка */}
             <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 0, paddingRight: 0, boxSizing: 'border-box' }}>
@@ -265,6 +314,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
                     {Array.from({ length: totalRows }).map((_, index) => {
                       const doc = documents[index];
                       const isRealData = !!doc;
+                      const isSelected = doc && selectedIds.has(doc.uid);
 
                       if (!isRealData) {
                         return (
@@ -276,8 +326,8 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
                               boxSizing: 'border-box',
                               display: 'flex', 
                               alignItems: 'center',
-                              borderTop: 'none',
-                              borderBottom: 'none',
+                              borderTop: '0.5px solid #E5ECF5',
+                              borderBottom: '0.5px solid #E5ECF5',
                             }} 
                           />
                         );
@@ -286,15 +336,16 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
                       return (
                         <div 
                           key={doc.uid} 
+                          onClick={(e) => toggleSelect(doc.uid, e)}
                           onContextMenu={(e) => handleContextMenu(e, doc.uid, doc.documentName)}
                           style={{ 
                             height: ROW_HEIGHT, 
                             display: 'flex', 
                             alignItems: 'center', 
-                            backgroundColor: '#FFFFFF', 
+                            backgroundColor: isSelected ? '#DEEEFF' : '#FFFFFF', 
                             position: 'relative', 
                             boxSizing: 'border-box',
-                            cursor: 'context-menu',
+                            cursor: 'pointer',
                             userSelect: 'none',
                             ...getRowSeparator(index, true),
                           }}
@@ -412,6 +463,20 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => { setShowEditDocPopup(false); setSelectedFile(null); }} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditDocSubmit} disabled={!editDocName.trim() || isUploading} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editDocName.trim() && !isUploading ? '#666EFE' : '#BCC8FF', cursor: editDocName.trim() && !isUploading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isUploading ? 'Сохранение...' : 'Сохранить'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Попап подтверждения удаления */}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDeleteSelected} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>
           </div>
         </div>

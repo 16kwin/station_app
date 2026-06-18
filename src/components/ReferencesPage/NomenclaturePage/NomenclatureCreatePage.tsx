@@ -1,4 +1,4 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (кнопки меняют фон при активности)
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (попап не слетает через sessionStorage)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -87,6 +87,81 @@ export interface CommonProps {
 
 const REQUIRED_ATTRIBUTES = ['Длина', 'Ширина', 'Высота', 'Масса'];
 
+// ==================== IndexedDB хелпер ====================
+
+const DB_NAME = 'nomenclature_drafts_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'draft_files';
+
+const openDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveFileToIndexedDB = async (key: string, file: File): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(file, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+const getFileFromIndexedDB = async (key: string): Promise<File | null> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const deleteFileFromIndexedDB = async (key: string): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+const clearAllFilesForDraft = async (uid: string): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        if ((cursor.key as string).startsWith(`${uid}_`)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+// ==================== localStorage для метаданных ====================
+
 const getDraftKey = (uid: string) => `nomenclature_draft_${uid}`;
 
 interface DraftData {
@@ -117,6 +192,13 @@ interface DraftData {
   wasteMaterial: boolean;
   recycleMaterial: boolean;
   localCharacteristics: LocalCharacteristic[];
+  localImagesMeta: { key: string; fileName: string }[];
+  localBlueprintsMeta: { key: string; fileName: string }[];
+  localBarcodesMeta: { key: string; codeType: string; codeValue: string; codeKind: string; fileName: string | null }[];
+  localSkusMeta: { key: string; codeType: string; codeValue: string; codeKind: string; fileName: string | null }[];
+  localQrCodesMeta: { key: string; codeType: string; codeValue: string; codeKind: string; fileName: string | null }[];
+  localDocumentsMeta: { key: string; localId: string; documentName: string; fileName: string }[];
+  localSuppliesMeta: { key: string; localId: string; supplierUid: string; supplierName: string; supplyDate: string; documentName: string; fileName: string | null }[];
   isEdit: boolean;
   timestamp: number;
 }
@@ -135,18 +217,19 @@ const loadDraftFromStorage = (uid: string): DraftData | null => {
     if (!raw) return null;
     const data = JSON.parse(raw) as DraftData;
     if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(getDraftKey(uid));
+      clearDraftStorage(uid);
       return null;
     }
     return data;
   } catch (e) {
-    localStorage.removeItem(getDraftKey(uid));
+    clearDraftStorage(uid);
     return null;
   }
 };
 
-const clearDraftStorage = (uid: string) => {
+const clearDraftStorage = async (uid: string) => {
   localStorage.removeItem(getDraftKey(uid));
+  await clearAllFilesForDraft(uid);
 };
 
 const NomenclatureCreatePage = () => {
@@ -187,7 +270,12 @@ const NomenclatureCreatePage = () => {
   const [serverBarcodes, setServerBarcodes] = useState<ServerCode[]>([]);
   const [serverSkus, setServerSkus] = useState<ServerCode[]>([]);
   
-  const [popupOpen, setPopupOpen] = useState(false); const [popupType, setPopupType] = useState<PopupType>('catalog'); const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
+  const getPopupOpenKey = () => `nomenclature_popup_open_${uid}`;
+  const [popupOpen, setPopupOpen] = useState(() => {
+    return sessionStorage.getItem(getPopupOpenKey()) === 'true';
+  });
+  const [popupType, setPopupType] = useState<PopupType>('catalog'); 
+  const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
   const [showClosePopup, setShowClosePopup] = useState(false);
   const [showDevPopup, setShowDevPopup] = useState(false);
   const [images, setImages] = useState<ImageItem[]>([]); const [selectedImageIndex, setSelectedImageIndex] = useState(0); const [isUploading, setIsUploading] = useState(false); const [fullscreenImage, setFullscreenImage] = useState(false);
@@ -215,8 +303,46 @@ const NomenclatureCreatePage = () => {
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  const saveDraftToLocalStorage = useCallback(() => {
+  const saveDraftToLocalStorage = useCallback(async () => {
     if (!uid || !isDataLoaded) return;
+    
+    for (const img of localImages) {
+      const key = `${uid}_img_${img.url}`;
+      await saveFileToIndexedDB(key, img.file);
+    }
+    for (const bp of localBlueprints) {
+      const key = `${uid}_bp_${bp.url}`;
+      await saveFileToIndexedDB(key, bp.file);
+    }
+    for (const bc of localBarcodes) {
+      if (bc.file) {
+        const key = `${uid}_barcode_${bc.codeValue}`;
+        await saveFileToIndexedDB(key, bc.file);
+      }
+    }
+    for (const sku of localSkus) {
+      if (sku.file) {
+        const key = `${uid}_sku_${sku.codeValue}`;
+        await saveFileToIndexedDB(key, sku.file);
+      }
+    }
+    for (const qr of localQrCodes) {
+      if (qr.file) {
+        const key = `${uid}_qr_${qr.codeValue}`;
+        await saveFileToIndexedDB(key, qr.file);
+      }
+    }
+    for (const doc of localDocuments) {
+      const key = `${uid}_doc_${doc.localId}`;
+      await saveFileToIndexedDB(key, doc.file);
+    }
+    for (const sup of localSupplies) {
+      if (sup.file) {
+        const key = `${uid}_sup_${sup.localId}`;
+        await saveFileToIndexedDB(key, sup.file);
+      }
+    }
+    
     const draft: DraftData = {
       uid,
       code: code || '',
@@ -245,6 +371,29 @@ const NomenclatureCreatePage = () => {
       wasteMaterial,
       recycleMaterial,
       localCharacteristics,
+      localImagesMeta: localImages.map(img => ({ key: `${uid}_img_${img.url}`, fileName: img.file.name })),
+      localBlueprintsMeta: localBlueprints.map(bp => ({ key: `${uid}_bp_${bp.url}`, fileName: bp.file.name })),
+      localBarcodesMeta: localBarcodes.map(bc => ({ 
+        key: bc.file ? `${uid}_barcode_${bc.codeValue}` : '', 
+        codeType: bc.codeType, codeValue: bc.codeValue, codeKind: bc.codeKind, 
+        fileName: bc.file?.name || null 
+      })),
+      localSkusMeta: localSkus.map(sku => ({ 
+        key: sku.file ? `${uid}_sku_${sku.codeValue}` : '', 
+        codeType: sku.codeType, codeValue: sku.codeValue, codeKind: sku.codeKind, 
+        fileName: sku.file?.name || null 
+      })),
+      localQrCodesMeta: localQrCodes.map(qr => ({ 
+        key: qr.file ? `${uid}_qr_${qr.codeValue}` : '', 
+        codeType: qr.codeType, codeValue: qr.codeValue, codeKind: qr.codeKind, 
+        fileName: qr.file?.name || null 
+      })),
+      localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
+      localSuppliesMeta: localSupplies.map(sup => ({ 
+        key: sup.file ? `${uid}_sup_${sup.localId}` : '', 
+        localId: sup.localId, supplierUid: sup.supplierUid, supplierName: sup.supplierName, 
+        supplyDate: sup.supplyDate, documentName: sup.documentName, fileName: sup.file?.name || null 
+      })),
       isEdit,
       timestamp: Date.now(),
     };
@@ -262,6 +411,9 @@ const NomenclatureCreatePage = () => {
     selectedCountry, selectedCountryId,
     usage, wasteMaterial, recycleMaterial,
     localCharacteristics,
+    localImages, localBlueprints,
+    localBarcodes, localSkus, localQrCodes,
+    localDocuments, localSupplies,
   ]);
 
   useEffect(() => {
@@ -271,6 +423,106 @@ const NomenclatureCreatePage = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [saveDraftToLocalStorage, uid, isDataLoaded]);
+
+  const restoreLocalFiles = useCallback(async (draft: DraftData) => {
+    if (!uid) return;
+    
+    const restoredImages: LocalImageItem[] = [];
+    for (const imgMeta of (draft.localImagesMeta || [])) {
+      const file = await getFileFromIndexedDB(imgMeta.key);
+      if (file) {
+        restoredImages.push({ file, url: URL.createObjectURL(file) });
+      }
+    }
+    setLocalImages(restoredImages);
+    
+    const restoredBlueprints: LocalImageItem[] = [];
+    for (const bpMeta of (draft.localBlueprintsMeta || [])) {
+      const file = await getFileFromIndexedDB(bpMeta.key);
+      if (file) {
+        restoredBlueprints.push({ file, url: URL.createObjectURL(file) });
+      }
+    }
+    setLocalBlueprints(restoredBlueprints);
+    
+    const restoredBarcodes: LocalCode[] = [];
+    for (const bcMeta of (draft.localBarcodesMeta || [])) {
+      let file: File | null = null;
+      if (bcMeta.key) {
+        file = await getFileFromIndexedDB(bcMeta.key);
+      }
+      restoredBarcodes.push({
+        codeType: bcMeta.codeType,
+        codeValue: bcMeta.codeValue,
+        codeKind: bcMeta.codeKind,
+        file,
+        preview: file ? URL.createObjectURL(file) : null,
+      });
+    }
+    setLocalBarcodes(restoredBarcodes);
+    
+    const restoredSkus: LocalCode[] = [];
+    for (const skuMeta of (draft.localSkusMeta || [])) {
+      let file: File | null = null;
+      if (skuMeta.key) {
+        file = await getFileFromIndexedDB(skuMeta.key);
+      }
+      restoredSkus.push({
+        codeType: skuMeta.codeType,
+        codeValue: skuMeta.codeValue,
+        codeKind: skuMeta.codeKind,
+        file,
+        preview: file ? URL.createObjectURL(file) : null,
+      });
+    }
+    setLocalSkus(restoredSkus);
+    
+    const restoredQrCodes: LocalCode[] = [];
+    for (const qrMeta of (draft.localQrCodesMeta || [])) {
+      let file: File | null = null;
+      if (qrMeta.key) {
+        file = await getFileFromIndexedDB(qrMeta.key);
+      }
+      restoredQrCodes.push({
+        codeType: qrMeta.codeType,
+        codeValue: qrMeta.codeValue,
+        codeKind: qrMeta.codeKind,
+        file,
+        preview: file ? URL.createObjectURL(file) : null,
+      });
+    }
+    setLocalQrCodes(restoredQrCodes);
+    
+    const restoredDocuments: LocalDocument[] = [];
+    for (const docMeta of (draft.localDocumentsMeta || [])) {
+      const file = await getFileFromIndexedDB(docMeta.key);
+      if (file) {
+        restoredDocuments.push({
+          localId: docMeta.localId,
+          documentName: docMeta.documentName,
+          file,
+        });
+      }
+    }
+    setLocalDocuments(restoredDocuments);
+    
+    const restoredSupplies: LocalSupply[] = [];
+    for (const supMeta of (draft.localSuppliesMeta || [])) {
+      let file: File | null = null;
+      if (supMeta.key) {
+        file = await getFileFromIndexedDB(supMeta.key);
+      }
+      restoredSupplies.push({
+        localId: supMeta.localId,
+        supplierUid: supMeta.supplierUid,
+        supplierName: supMeta.supplierName,
+        supplyDate: supMeta.supplyDate,
+        documentName: supMeta.documentName,
+        file,
+      });
+    }
+    setLocalSupplies(restoredSupplies);
+  }, [uid]);
 
   const fetchTypeAttributes = async () => { try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes); const data = res.data || []; const map = new Map<string, string>(); data.forEach((item: any) => map.set(item.name, item.uid)); setTypeAttributesMap(map); return map; } catch (e) { console.error(e); return new Map(); } };
 
@@ -306,96 +558,102 @@ const NomenclatureCreatePage = () => {
     const isEditMode = cp.includes('/edit/');
     setIsEdit(isEditMode);
     
-    if (isEditMode) { 
-      setIsDataSaved(true);
-      loadMaterialData(uid).then(() => {
-        fetchCharacteristics().then(() => {
-          const draft = loadDraftFromStorage(uid);
-          if (draft && draft.uid === uid && draft.isEdit) {
-            setName(draft.name);
-            setArticle(draft.article);
-            setDescription(draft.description);
-            setSelectedCatalog(draft.selectedCatalog);
-            setSelectedCatalogId(draft.selectedCatalogId);
-            setSelectedAccountingGroup(draft.selectedAccountingGroup);
-            setSelectedAccountingGroupId(draft.selectedAccountingGroupId);
-            setSelectedNomenclatureGroup(draft.selectedNomenclatureGroup);
-            setSelectedNomenclatureGroupId(draft.selectedNomenclatureGroupId);
-            setSelectedNomenclatureType(draft.selectedNomenclatureType);
-            setSelectedNomenclatureTypeId(draft.selectedNomenclatureTypeId);
-            setSelectedUnit(draft.selectedUnit);
-            setSelectedUnitId(draft.selectedUnitId);
-            setSelectedManufacturer(draft.selectedManufacturer);
-            setSelectedManufacturerId(draft.selectedManufacturerId);
-            setSelectedBrand(draft.selectedBrand);
-            setSelectedBrandId(draft.selectedBrandId);
-            setSelectedModel(draft.selectedModel);
-            setSelectedModelId(draft.selectedModelId);
-            setSelectedCountry(draft.selectedCountry);
-            setSelectedCountryId(draft.selectedCountryId);
-            setUsage(draft.usage);
-            setWasteMaterial(draft.wasteMaterial);
-            setRecycleMaterial(draft.recycleMaterial);
-            setLocalCharacteristics(draft.localCharacteristics || []);
-          }
+    const init = async () => {
+      if (isEditMode) { 
+        setIsDataSaved(true);
+        await loadMaterialData(uid);
+        await fetchCharacteristics();
+        await fetchTypeAttributes(); 
+        await fetchImages(); 
+        await fetchBlueprints(); 
+        await fetchDocuments(); 
+        await fetchPrices(); 
+        await fetchSuppliers(); 
+        await fetchCodes();
+        
+        const draft = loadDraftFromStorage(uid);
+        if (draft && draft.uid === uid && draft.isEdit) {
+          setName(draft.name);
+          setArticle(draft.article);
+          setDescription(draft.description);
+          setSelectedCatalog(draft.selectedCatalog);
+          setSelectedCatalogId(draft.selectedCatalogId);
+          setSelectedAccountingGroup(draft.selectedAccountingGroup);
+          setSelectedAccountingGroupId(draft.selectedAccountingGroupId);
+          setSelectedNomenclatureGroup(draft.selectedNomenclatureGroup);
+          setSelectedNomenclatureGroupId(draft.selectedNomenclatureGroupId);
+          setSelectedNomenclatureType(draft.selectedNomenclatureType);
+          setSelectedNomenclatureTypeId(draft.selectedNomenclatureTypeId);
+          setSelectedUnit(draft.selectedUnit);
+          setSelectedUnitId(draft.selectedUnitId);
+          setSelectedManufacturer(draft.selectedManufacturer);
+          setSelectedManufacturerId(draft.selectedManufacturerId);
+          setSelectedBrand(draft.selectedBrand);
+          setSelectedBrandId(draft.selectedBrandId);
+          setSelectedModel(draft.selectedModel);
+          setSelectedModelId(draft.selectedModelId);
+          setSelectedCountry(draft.selectedCountry);
+          setSelectedCountryId(draft.selectedCountryId);
+          setUsage(draft.usage);
+          setWasteMaterial(draft.wasteMaterial);
+          setRecycleMaterial(draft.recycleMaterial);
+          setLocalCharacteristics(draft.localCharacteristics || []);
+          await restoreLocalFiles(draft);
+        }
+        setIsDataLoaded(true);
+      } else { 
+        await fetchTypeAttributes();
+        
+        const draft = loadDraftFromStorage(uid);
+        if (draft && draft.uid === uid) {
+          hasInitializedChars.current = true;
+          setName(draft.name);
+          setArticle(draft.article);
+          setDescription(draft.description);
+          setSelectedCatalog(draft.selectedCatalog);
+          setSelectedCatalogId(draft.selectedCatalogId);
+          setSelectedAccountingGroup(draft.selectedAccountingGroup);
+          setSelectedAccountingGroupId(draft.selectedAccountingGroupId);
+          setSelectedNomenclatureGroup(draft.selectedNomenclatureGroup);
+          setSelectedNomenclatureGroupId(draft.selectedNomenclatureGroupId);
+          setSelectedNomenclatureType(draft.selectedNomenclatureType);
+          setSelectedNomenclatureTypeId(draft.selectedNomenclatureTypeId);
+          setSelectedUnit(draft.selectedUnit);
+          setSelectedUnitId(draft.selectedUnitId);
+          setSelectedManufacturer(draft.selectedManufacturer);
+          setSelectedManufacturerId(draft.selectedManufacturerId);
+          setSelectedBrand(draft.selectedBrand);
+          setSelectedBrandId(draft.selectedBrandId);
+          setSelectedModel(draft.selectedModel);
+          setSelectedModelId(draft.selectedModelId);
+          setSelectedCountry(draft.selectedCountry);
+          setSelectedCountryId(draft.selectedCountryId);
+          setUsage(draft.usage);
+          setWasteMaterial(draft.wasteMaterial);
+          setRecycleMaterial(draft.recycleMaterial);
+          setLocalCharacteristics(draft.localCharacteristics || []);
+          await restoreLocalFiles(draft);
+          setIsDataSaved(false);
           setIsDataLoaded(true);
-        });
-      });
-      fetchTypeAttributes(); 
-      fetchImages(); 
-      fetchBlueprints(); 
-      fetchDocuments(); 
-      fetchPrices(); 
-      fetchSuppliers(); 
-      fetchCodes();
-    } else { 
-      const draft = loadDraftFromStorage(uid);
-      if (draft && draft.uid === uid) {
-        hasInitializedChars.current = true;
-        setName(draft.name);
-        setArticle(draft.article);
-        setDescription(draft.description);
-        setSelectedCatalog(draft.selectedCatalog);
-        setSelectedCatalogId(draft.selectedCatalogId);
-        setSelectedAccountingGroup(draft.selectedAccountingGroup);
-        setSelectedAccountingGroupId(draft.selectedAccountingGroupId);
-        setSelectedNomenclatureGroup(draft.selectedNomenclatureGroup);
-        setSelectedNomenclatureGroupId(draft.selectedNomenclatureGroupId);
-        setSelectedNomenclatureType(draft.selectedNomenclatureType);
-        setSelectedNomenclatureTypeId(draft.selectedNomenclatureTypeId);
-        setSelectedUnit(draft.selectedUnit);
-        setSelectedUnitId(draft.selectedUnitId);
-        setSelectedManufacturer(draft.selectedManufacturer);
-        setSelectedManufacturerId(draft.selectedManufacturerId);
-        setSelectedBrand(draft.selectedBrand);
-        setSelectedBrandId(draft.selectedBrandId);
-        setSelectedModel(draft.selectedModel);
-        setSelectedModelId(draft.selectedModelId);
-        setSelectedCountry(draft.selectedCountry);
-        setSelectedCountryId(draft.selectedCountryId);
-        setUsage(draft.usage);
-        setWasteMaterial(draft.wasteMaterial);
-        setRecycleMaterial(draft.recycleMaterial);
-        setLocalCharacteristics(draft.localCharacteristics || []);
-        setIsDataSaved(false);
-        setIsDataLoaded(true);
-      } else {
-        setIsDataSaved(false);
-        setIsDataLoaded(true);
-        const s = sessionStorage.getItem('nomenclature_preselected_group'); 
-        if (s) { 
-          try { 
-            const p = JSON.parse(s); 
-            if (p.groupUid) { 
-              setSelectedCatalogId(p.groupUid); 
-              setSelectedCatalog(p.groupName || 'Выбрано из меню'); 
-            } 
-          } catch (e) {} 
-          sessionStorage.removeItem('nomenclature_preselected_group'); 
+        } else {
+          setIsDataSaved(false);
+          setIsDataLoaded(true);
+          const s = sessionStorage.getItem('nomenclature_preselected_group'); 
+          if (s) { 
+            try { 
+              const p = JSON.parse(s); 
+              if (p.groupUid) { 
+                setSelectedCatalogId(p.groupUid); 
+                setSelectedCatalog(p.groupName || 'Выбрано из меню'); 
+              } 
+            } catch (e) {} 
+            sessionStorage.removeItem('nomenclature_preselected_group'); 
+          }
         }
       }
-      fetchTypeAttributes();
-    }
+    };
+    
+    init();
   }, [uid]);
 
   useEffect(() => { 
@@ -532,7 +790,8 @@ const NomenclatureCreatePage = () => {
       await fetchCharacteristics(); 
       await fetchCodes(); 
       
-      clearDraftStorage(uid);
+      await clearDraftStorage(uid);
+      if (uid) sessionStorage.removeItem(getPopupOpenKey());
       
       setIsDataSaved(true); 
       setValidationErrors(new Set()); 
@@ -547,15 +806,54 @@ const NomenclatureCreatePage = () => {
     } catch (e) { console.error(e); return false; } finally { setIsSaving(false); } 
   };
 
-  const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); };
+  const handleClose = () => { 
+    const t = tabs.find(tab => tab.id === activeTabId); 
+    if (t) closeTab(t.id); 
+    if (uid) sessionStorage.removeItem(getPopupOpenKey());
+  };
   const handleSaveAndClose = async () => { if (await handleSave()) handleClose(); };
-  const handleCloseWithoutSaving = () => { if (uid) clearDraftStorage(uid); handleClose(); };
+  const handleCloseWithoutSaving = async () => { 
+    if (uid) {
+      await clearDraftStorage(uid); 
+      sessionStorage.removeItem(getPopupOpenKey());
+    }
+    handleClose(); 
+  };
   const handleAccountingGroupSelect = (o: TypeMaterialOption) => { setSelectedAccountingGroup(o.typeName); setSelectedAccountingGroupId(o.uid); setAccountingGroupOpen(false); setSelectedNomenclatureGroup(''); setSelectedNomenclatureGroupId(''); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); setValidationErrors(prev => { const n = new Set(prev); n.delete('accountingGroup'); return n; }); };
   const handleTabChange = (index: number) => { if (!isDataSaved && index > 1) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(index); if (!isFinishedProduct && (index === 4 || index === 5)) fetchSuppliers(); };
   const handleEventLogClick = () => { if (!isDataSaved) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; } setActiveTab(EVENT_LOG_TAB); };
   const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
-  const openPopup = (type: PopupType) => { if (type === 'nomenclatureGroup' && !selectedAccountingGroupId) return; if (type === 'nomenclatureType' && !selectedNomenclatureGroupId) return; if (type === 'brand' && !selectedManufacturerId) return; if (type === 'model' && !selectedBrandId) return; setPopupType(type); if (type === 'nomenclatureGroup') setPopupFilterParam(selectedAccountingGroupId); else if (type === 'nomenclatureType') setPopupFilterParam(selectedNomenclatureGroupId); else if (type === 'brand') setPopupFilterParam(selectedManufacturerId); else if (type === 'model') setPopupFilterParam(selectedBrandId); else setPopupFilterParam(undefined); setPopupOpen(true); };
-  const handlePopupSelect = (id: string, nm: string) => { switch (popupType) { case 'catalog': setSelectedCatalog(nm); setSelectedCatalogId(id); setValidationErrors(p => { const n = new Set(p); n.delete('catalog'); return n; }); break; case 'nomenclatureGroup': setSelectedNomenclatureGroup(nm); setSelectedNomenclatureGroupId(id); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); setValidationErrors(p => { const n = new Set(p); n.delete('nomenclatureGroup'); return n; }); break; case 'nomenclatureType': setSelectedNomenclatureType(nm); setSelectedNomenclatureTypeId(id); setValidationErrors(p => { const n = new Set(p); n.delete('nomenclatureType'); return n; }); break; case 'unit': setSelectedUnit(nm); setSelectedUnitId(id); setValidationErrors(p => { const n = new Set(p); n.delete('unit'); return n; }); break; case 'manufacturer': setSelectedManufacturer(nm); setSelectedManufacturerId(id); setSelectedBrand(''); setSelectedBrandId(''); setSelectedModel(''); setSelectedModelId(''); setValidationErrors(p => { const n = new Set(p); n.delete('manufacturer'); return n; }); break; case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setSelectedModel(''); setSelectedModelId(''); setValidationErrors(p => { const n = new Set(p); n.delete('brand'); return n; }); break; case 'model': setSelectedModel(nm); setSelectedModelId(id); setValidationErrors(p => { const n = new Set(p); n.delete('model'); return n; }); break; case 'country': setSelectedCountry(nm); setSelectedCountryId(id); setValidationErrors(p => { const n = new Set(p); n.delete('country'); return n; }); break; } };
+  const openPopup = (type: PopupType) => { 
+    if (type === 'nomenclatureGroup' && !selectedAccountingGroupId) return; 
+    if (type === 'nomenclatureType' && !selectedNomenclatureGroupId) return; 
+    if (type === 'brand' && !selectedManufacturerId) return; 
+    if (type === 'model' && !selectedBrandId) return; 
+    setPopupType(type); 
+    if (type === 'nomenclatureGroup') setPopupFilterParam(selectedAccountingGroupId); 
+    else if (type === 'nomenclatureType') setPopupFilterParam(selectedNomenclatureGroupId); 
+    else if (type === 'brand') setPopupFilterParam(selectedManufacturerId); 
+    else if (type === 'model') setPopupFilterParam(selectedBrandId); 
+    else setPopupFilterParam(undefined); 
+    setPopupOpen(true); 
+    if (uid) sessionStorage.setItem(getPopupOpenKey(), 'true'); 
+  };
+  const handlePopupSelect = (id: string, nm: string) => { 
+    switch (popupType) { 
+      case 'catalog': setSelectedCatalog(nm); setSelectedCatalogId(id); setValidationErrors(p => { const n = new Set(p); n.delete('catalog'); return n; }); break; 
+      case 'nomenclatureGroup': setSelectedNomenclatureGroup(nm); setSelectedNomenclatureGroupId(id); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); setValidationErrors(p => { const n = new Set(p); n.delete('nomenclatureGroup'); return n; }); break; 
+      case 'nomenclatureType': setSelectedNomenclatureType(nm); setSelectedNomenclatureTypeId(id); setValidationErrors(p => { const n = new Set(p); n.delete('nomenclatureType'); return n; }); break; 
+      case 'unit': setSelectedUnit(nm); setSelectedUnitId(id); setValidationErrors(p => { const n = new Set(p); n.delete('unit'); return n; }); break; 
+      case 'manufacturer': setSelectedManufacturer(nm); setSelectedManufacturerId(id); setSelectedBrand(''); setSelectedBrandId(''); setSelectedModel(''); setSelectedModelId(''); setValidationErrors(p => { const n = new Set(p); n.delete('manufacturer'); return n; }); break; 
+      case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setSelectedModel(''); setSelectedModelId(''); setValidationErrors(p => { const n = new Set(p); n.delete('brand'); return n; }); break; 
+      case 'model': setSelectedModel(nm); setSelectedModelId(id); setValidationErrors(p => { const n = new Set(p); n.delete('model'); return n; }); break; 
+      case 'country': setSelectedCountry(nm); setSelectedCountryId(id); setValidationErrors(p => { const n = new Set(p); n.delete('country'); return n; }); break; 
+    } 
+  };
+
+  const handlePopupClose = () => {
+    setPopupOpen(false);
+    if (uid) sessionStorage.removeItem(getPopupOpenKey());
+  };
 
   const canSave = getProgressStep() >= 2;
   const cef = ['unit', 'manufacturer', 'brand', 'model', 'country', 'char_Длина', 'char_Ширина', 'char_Высота', 'char_Масса'];
@@ -634,7 +932,13 @@ const NomenclatureCreatePage = () => {
         </>
       )}
 
-      <CatalogSelectPopup isOpen={popupOpen} onClose={() => setPopupOpen(false)} onSelect={handlePopupSelect} popupType={popupType} filterParam={popupFilterParam} />
+      <CatalogSelectPopup 
+        isOpen={popupOpen} 
+        onClose={handlePopupClose} 
+        onSelect={handlePopupSelect} 
+        popupType={popupType} 
+        filterParam={popupFilterParam} 
+      />
 
       {showBlockedTabWarning && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBlockedTabWarning(false)}>

@@ -1,4 +1,4 @@
-// PriceHistoryTab.tsx — ПОЛНЫЙ ФАЙЛ (кнопки над таблицей)
+// PriceHistoryTab.tsx — ПОЛНЫЙ ФАЙЛ (выделение строк, удаление выделенных, кнопки button1/button4/button5)
 import React, { useState, useRef, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
@@ -7,6 +7,9 @@ import type { CommonProps } from './NomenclatureCreatePage';
 import IconUp from '../../../assets/References/NomenclatureCreatePage/IconUp.svg';
 import IconDown from '../../../assets/References/NomenclatureCreatePage/IconDown.svg';
 import IconRavno from '../../../assets/References/NomenclatureCreatePage/IconRavno.svg';
+import Button1 from '../../../assets/References/NomenclatureCreatePage/button1.svg';
+import Button4 from '../../../assets/References/NomenclatureCreatePage/button4.svg';
+import Button5 from '../../../assets/References/NomenclatureCreatePage/button5.svg';
 
 const PriceHistoryTab: React.FC<CommonProps> = (props) => {
   const {
@@ -18,6 +21,8 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
 
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editingPriceUid, setEditingPriceUid] = useState('');
@@ -26,6 +31,7 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
   const [editPriceSupplierUid, setEditPriceSupplierUid] = useState('');
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; priceUid: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Сортировка: самая последняя (новая) вверху
   const sortedPrices = [...prices].sort((a, b) => new Date(b.priceDate).getTime() - new Date(a.priceDate).getTime());
@@ -166,9 +172,61 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
     } catch { return dateStr; }
   };
 
+  const toggleSelect = (priceUid: string, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(priceUid)) next.delete(priceUid);
+        else next.add(priceUid);
+        return next;
+      });
+    } else if (e.shiftKey && lastSelectedId) {
+      const allIds = sortedPrices.map(p => p.uid);
+      const lastIdx = allIds.indexOf(lastSelectedId);
+      const currentIdx = allIds.indexOf(priceUid);
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        const rangeIds = allIds.slice(start, end + 1);
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          rangeIds.forEach(id => next.add(id));
+          return next;
+        });
+      }
+    } else {
+      if (selectedIds.has(priceUid) && selectedIds.size === 1) {
+        setSelectedIds(new Set());
+      } else {
+        setSelectedIds(new Set([priceUid]));
+      }
+    }
+    setLastSelectedId(priceUid);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteSelected = async () => {
+    try {
+      for (const priceUid of selectedIds) {
+        handleDeletePrice(priceUid);
+      }
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+    } catch (e) {
+      console.error('Ошибка удаления цен:', e);
+    }
+  };
+
   const handleContextMenu = (e: React.MouseEvent, priceUid: string) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!selectedIds.has(priceUid)) {
+      setSelectedIds(new Set([priceUid]));
+    }
     setContextMenu({ x: e.clientX, y: e.clientY, priceUid });
   };
 
@@ -191,7 +249,9 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
       setContextMenu(null);
       return;
     }
-    handleDeletePrice(contextMenu.priceUid);
+    const uidsToDelete = selectedIds.has(contextMenu.priceUid) ? selectedIds : new Set([contextMenu.priceUid]);
+    uidsToDelete.forEach(uid => handleDeletePrice(uid));
+    setSelectedIds(new Set());
     setContextMenu(null);
   };
 
@@ -216,10 +276,9 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
   const totalRows = Math.max(sortedPrices.length, VISIBLE_ROWS);
 
   const getRowSeparator = (index: number, isRealData: boolean): React.CSSProperties => {
-    if (!isRealData) return { borderTop: 'none', borderBottom: 'none' };
+    if (!isRealData) return { borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' };
     const isFirst = index === 0;
     const isLast = index === sortedPrices.length - 1;
-    
     return {
       borderTop: isFirst ? 'none' : '0.5px solid #E5ECF5',
       borderBottom: isLast ? 'none' : '0.5px solid #E5ECF5',
@@ -245,26 +304,17 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
           {/* Кнопки над таблицей */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 15, marginBottom: 8, paddingLeft: 0, justifyContent: 'flex-start' }}>
             <button style={smallButtonStyle}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <line x1="1" y1="4" x2="17" y2="4" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                <line x1="1" y1="9" x2="17" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-                <line x1="1" y1="14" x2="12" y2="14" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </button>
-            <button style={smallButtonStyle}>
-              <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
-                <path d="M1 7H19M1 1H19M1 13H19" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
+              <img src={Button1} alt="" style={{ width: 18, height: 18 }} />
             </button>
             <button onClick={() => setShowAddPricePopup(true)} style={smallButtonStyle}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-                <line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
+              <img src={Button4} alt="" style={{ width: 14, height: 14 }} />
+            </button>
+            <button onClick={handleDeleteSelected} style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }}>
+              <img src={Button5} alt="" style={{ width: 18, height: 18 }} />
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 15 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
               {/* Шапка */}
               <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 0, paddingRight: 0, boxSizing: 'border-box' }}>
@@ -286,6 +336,7 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
                       {Array.from({ length: totalRows }).map((_, index) => {
                         const price = sortedPrices[index];
                         const isRealData = !!price;
+                        const isSelected = price && selectedIds.has(price.uid);
 
                         if (!isRealData) {
                           return (
@@ -297,8 +348,8 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
                                 boxSizing: 'border-box',
                                 display: 'flex', 
                                 alignItems: 'center',
-                                borderTop: 'none',
-                                borderBottom: 'none',
+                                borderTop: '0.5px solid #E5ECF5',
+                                borderBottom: '0.5px solid #E5ECF5',
                               }} 
                             />
                           );
@@ -310,15 +361,16 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
                         return (
                           <div 
                             key={price.uid} 
+                            onClick={(e) => toggleSelect(price.uid, e)}
                             onContextMenu={(e) => handleContextMenu(e, price.uid)}
                             style={{ 
                               height: ROW_HEIGHT, 
                               display: 'flex', 
                               alignItems: 'center', 
-                              backgroundColor: '#FFFFFF', 
+                              backgroundColor: isSelected ? '#DEEEFF' : '#FFFFFF', 
                               position: 'relative', 
                               boxSizing: 'border-box',
-                              cursor: 'context-menu',
+                              cursor: 'pointer',
                               userSelect: 'none',
                               ...getRowSeparator(index, true),
                             }}
@@ -413,6 +465,20 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditSubmit} disabled={!editPrice} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editPrice ? '#666EFE' : '#BCC8FF', cursor: editPrice ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Попап подтверждения удаления */}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDeleteSelected} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (правый блок с иконками CODE, CODE1, CODE2)
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (увеличенный попап, поле Данные кода всегда видно)
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
@@ -72,46 +72,123 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [localSelectedIndex, setLocalSelectedIndex] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const [fullscreenCode, setFullscreenCode] = useState<string | null>(null);
+  const [fullscreenCodeContextMenu, setFullscreenCodeContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const currentBarcode = (localBarcodes && localBarcodes[0]) || serverBarcodes[0] || null;
   const currentSku = (localSkus && localSkus[0]) || serverSkus[0] || null;
 
+  // Штрихкод
   const [showBarcodePopup, setShowBarcodePopup] = useState(false);
-  const [barcodeGenerationMode, setBarcodeGenerationMode] = useState(false);
+  const [barcodeGenerationMode, setBarcodeGenerationMode] = useState(true);
   const [barcodeValue, setBarcodeValue] = useState(''); 
   const [barcodeType, setBarcodeType] = useState('code128');
   const [barcodePreview, setBarcodePreview] = useState<string | null>(null);
   const [barcodeUploadedFile, setBarcodeUploadedFile] = useState<File | null>(null);
   const [barcodeUploadedPreview, setBarcodeUploadedPreview] = useState<string | null>(null);
   const [barcodeTypeOpen, setBarcodeTypeOpen] = useState(false);
+  const [barcodeUploadContextMenu, setBarcodeUploadContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  // SKU
   const [showSkuPopup, setShowSkuPopup] = useState(false);
-  const [skuGenerationMode, setSkuGenerationMode] = useState(false);
+  const [skuGenerationMode, setSkuGenerationMode] = useState(true);
   const [skuValue, setSkuValue] = useState(''); 
-  const [skuType, setSkuType] = useState('QR_CODE');
   const [skuPreview, setSkuPreview] = useState<string | null>(null);
   const [skuUploadedFile, setSkuUploadedFile] = useState<File | null>(null);
   const [skuUploadedPreview, setSkuUploadedPreview] = useState<string | null>(null);
+  const [skuUploadContextMenu, setSkuUploadContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const fetchAverageRating = async () => { if (!uid || isFinishedProduct) return; try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureRatingsAverage(uid)); setAverageRating(Math.round((res.data || 0) * 10) / 10); } catch (e) { console.error(e); } };
 
   useEffect(() => { if (uid && isEdit) { fetchAverageRating(); } }, [uid, isEdit]);
   useEffect(() => { if (!contextMenu) return; const h = () => setContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [contextMenu]);
+  useEffect(() => { if (!fullscreenCodeContextMenu) return; const h = () => setFullscreenCodeContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [fullscreenCodeContextMenu]);
+  useEffect(() => { if (!barcodeUploadContextMenu) return; const h = () => setBarcodeUploadContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [barcodeUploadContextMenu]);
+  useEffect(() => { if (!skuUploadContextMenu) return; const h = () => setSkuUploadContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [skuUploadContextMenu]);
   useEffect(() => { if (fullscreenCode) { document.body.style.overflow = 'hidden'; } else { document.body.style.overflow = ''; } return () => { document.body.style.overflow = ''; }; }, [fullscreenCode]);
 
   const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const files = e.target.files; if (!files) return; const imgs: LocalImageItem[] = []; for (let i = 0; i < files.length; i++) { const f = files[i]; imgs.push({ file: f, url: URL.createObjectURL(f) }); } setLocalImages((p: LocalImageItem[]) => [...p, ...imgs]); if (localFileInputRef.current) localFileInputRef.current.value = ''; };
   const handleLocalDeleteImage = (index: number) => { setLocalImages((p: LocalImageItem[]) => { const n = [...p]; URL.revokeObjectURL(n[index].url); n.splice(index, 1); return n; }); if (localSelectedIndex >= (localImages || []).length - 1) setLocalSelectedIndex(Math.max(0, (localImages || []).length - 2)); };
   const handleImageContextMenu = (e: React.MouseEvent, index: number) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, index }); };
 
-  useEffect(() => { if (!barcodeValue.trim() || !barcodeGenerationMode || !showBarcodePopup) { setBarcodePreview(null); return; } const t = setTimeout(() => { try { const canvas = document.createElement('canvas'); /* @ts-ignore */ bwipjs.toCanvas(canvas, { bcid: barcodeType, text: barcodeValue, scale: 3, height: 10, includetext: true, textxalign: 'center' }); setBarcodePreview(canvas.toDataURL('image/png')); } catch { setBarcodePreview(null); } }, 150); return () => clearTimeout(t); }, [barcodeValue, barcodeType, barcodeGenerationMode, showBarcodePopup]);
+  // Генерация штрихкода — только в режиме генерации и при открытом попапе
+  useEffect(() => { 
+    if (!barcodeValue.trim() || !barcodeGenerationMode || !showBarcodePopup) { setBarcodePreview(null); return; } 
+    const t = setTimeout(() => { 
+      try { 
+        const canvas = document.createElement('canvas'); 
+        /* @ts-ignore */ 
+        bwipjs.toCanvas(canvas, { bcid: barcodeType, text: barcodeValue, scale: 3, height: 10, includetext: true, textxalign: 'center' }); 
+        setBarcodePreview(canvas.toDataURL('image/png')); 
+      } catch { setBarcodePreview(null); } 
+    }, 150); 
+    return () => clearTimeout(t); 
+  }, [barcodeValue, barcodeType, barcodeGenerationMode, showBarcodePopup]);
   
-  useEffect(() => { if (!skuValue.trim() || !skuGenerationMode || !showSkuPopup) { setSkuPreview(null); return; } const t = setTimeout(async () => { try { const canvas = document.createElement('canvas'); await QRCode.toCanvas(canvas, skuValue, { width: 200, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } }); setSkuPreview(canvas.toDataURL('image/png')); } catch { setSkuPreview(null); } }, 150); return () => clearTimeout(t); }, [skuValue, skuGenerationMode, showSkuPopup]);
+  // Генерация QR — только в режиме генерации и при открытом попапе
+  useEffect(() => { 
+    if (!skuValue.trim() || !skuGenerationMode || !showSkuPopup) { setSkuPreview(null); return; } 
+    const t = setTimeout(async () => { 
+      try { 
+        const canvas = document.createElement('canvas'); 
+        await QRCode.toCanvas(canvas, skuValue, { width: 200, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } }); 
+        setSkuPreview(canvas.toDataURL('image/png')); 
+      } catch { setSkuPreview(null); } 
+    }, 150); 
+    return () => clearTimeout(t); 
+  }, [skuValue, skuGenerationMode, showSkuPopup]);
 
-  const handleBarcodeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (!f) return; setBarcodeUploadedFile(f); setBarcodeUploadedPreview(URL.createObjectURL(f)); setBarcodePreview(null); };
-  const handleSkuFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (!f) return; setSkuUploadedFile(f); setSkuUploadedPreview(URL.createObjectURL(f)); setSkuPreview(null); };
-  const clearBarcodeUpload = () => { if (barcodeUploadedPreview) URL.revokeObjectURL(barcodeUploadedPreview); setBarcodeUploadedFile(null); setBarcodeUploadedPreview(null); };
-  const clearSkuUpload = () => { if (skuUploadedPreview) URL.revokeObjectURL(skuUploadedPreview); setSkuUploadedFile(null); setSkuUploadedPreview(null); };
-  const dataUrlToFile = (dataUrl: string, filename: string): File => { if (!dataUrl) return new File([], filename); const arr = dataUrl.split(','); const mime = arr[0].match(/:(.*?);/)![1]; const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n); while (n--) u8arr[n] = bstr.charCodeAt(n); return new File([u8arr], filename, { type: mime }); };
+  const handleBarcodeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { 
+    const f = e.target.files?.[0]; 
+    if (!f) return; 
+    if (barcodeUploadedPreview) URL.revokeObjectURL(barcodeUploadedPreview); 
+    setBarcodeUploadedFile(f); 
+    setBarcodeUploadedPreview(URL.createObjectURL(f)); 
+    setBarcodePreview(null); 
+  };
+  
+  const handleSkuFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { 
+    const f = e.target.files?.[0]; 
+    if (!f) return; 
+    if (skuUploadedPreview) URL.revokeObjectURL(skuUploadedPreview); 
+    setSkuUploadedFile(f); 
+    setSkuUploadedPreview(URL.createObjectURL(f)); 
+    setSkuPreview(null); 
+  };
+  
+  const clearBarcodeUpload = () => { 
+    if (barcodeUploadedPreview) URL.revokeObjectURL(barcodeUploadedPreview); 
+    setBarcodeUploadedFile(null); 
+    setBarcodeUploadedPreview(null); 
+  };
+  
+  const clearSkuUpload = () => { 
+    if (skuUploadedPreview) URL.revokeObjectURL(skuUploadedPreview); 
+    setSkuUploadedFile(null); 
+    setSkuUploadedPreview(null); 
+  };
+  
+  const dataUrlToFile = (dataUrl: string, filename: string): File => { 
+    if (!dataUrl) return new File([], filename); 
+    const arr = dataUrl.split(','); 
+    const mime = arr[0].match(/:(.*?);/)![1]; 
+    const bstr = atob(arr[1]); 
+    let n = bstr.length; 
+    const u8arr = new Uint8Array(n); 
+    while (n--) u8arr[n] = bstr.charCodeAt(n); 
+    return new File([u8arr], filename, { type: mime }); 
+  };
+
+  const handleDeleteBarcode = () => {
+    setLocalBarcodes([]);
+    clearBarcodeUpload();
+    setBarcodeUploadContextMenu(null);
+  };
+
+  const handleDeleteSku = () => {
+    setLocalSkus([]);
+    clearSkuUpload();
+    setSkuUploadContextMenu(null);
+  };
 
   const handleBarcodeSave = () => {
     if (!barcodeValue.trim()) return;
@@ -128,12 +205,16 @@ const MainTab: React.FC<CommonProps> = (props) => {
         preview = barcodeUploadedPreview;
       }
     }
-    setLocalBarcodes([{ codeType: barcodeType, codeValue: barcodeValue, codeKind: 'BARCODE', file, preview }]);
+    const newCode: any = { 
+      codeType: barcodeType, 
+      codeValue: barcodeValue, 
+      codeKind: 'BARCODE', 
+      file, 
+      preview,
+      isGenerated: barcodeGenerationMode 
+    };
+    setLocalBarcodes([newCode]);
     setShowBarcodePopup(false);
-    setBarcodeValue('');
-    setBarcodePreview(null);
-    clearBarcodeUpload();
-    setBarcodeGenerationMode(false);
   };
 
   const handleSkuSave = () => {
@@ -151,27 +232,50 @@ const MainTab: React.FC<CommonProps> = (props) => {
         preview = skuUploadedPreview;
       }
     }
-    setLocalSkus([{ codeType: skuType, codeValue: skuValue, codeKind: 'SKU', file, preview }]);
+    const newCode: any = { 
+      codeType: 'QR_CODE', 
+      codeValue: skuValue, 
+      codeKind: 'SKU', 
+      file, 
+      preview,
+      isGenerated: skuGenerationMode 
+    };
+    setLocalSkus([newCode]);
     setShowSkuPopup(false);
-    setSkuValue('');
-    setSkuPreview(null);
-    clearSkuUpload();
-    setSkuGenerationMode(false);
   };
 
   const openBarcodePopup = () => { 
     if (currentBarcode) { 
       setBarcodeValue(currentBarcode.codeValue); 
       setBarcodeType(currentBarcode.codeType || 'code128');
-      setBarcodeGenerationMode(true);
+      const code = currentBarcode as any;
+      if (code.isGenerated === true) {
+        setBarcodeGenerationMode(true);
+        setBarcodeUploadedFile(null);
+        setBarcodeUploadedPreview(null);
+      } else if (code.file && code.isGenerated === false) {
+        setBarcodeGenerationMode(false);
+        setBarcodeUploadedFile(code.file);
+        setBarcodeUploadedPreview(code.preview || null);
+      } else {
+        const hasFile = !!code.file;
+        setBarcodeGenerationMode(!hasFile);
+        if (hasFile) {
+          setBarcodeUploadedFile(code.file);
+          setBarcodeUploadedPreview(code.preview || null);
+        } else {
+          setBarcodeUploadedFile(null);
+          setBarcodeUploadedPreview(null);
+        }
+      }
     } else { 
       setBarcodeValue(''); 
       setBarcodeType('code128');
-      setBarcodeGenerationMode(false);
+      setBarcodeGenerationMode(true);
+      setBarcodeUploadedFile(null);
+      setBarcodeUploadedPreview(null);
     } 
     setBarcodePreview(null); 
-    setBarcodeUploadedFile(null); 
-    setBarcodeUploadedPreview(null); 
     setBarcodeTypeOpen(false);
     setShowBarcodePopup(true); 
   };
@@ -179,16 +283,33 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const openSkuPopup = () => { 
     if (currentSku) { 
       setSkuValue(currentSku.codeValue); 
-      setSkuType(currentSku.codeType);
-      setSkuGenerationMode(true);
+      const code = currentSku as any;
+      if (code.isGenerated === true) {
+        setSkuGenerationMode(true);
+        setSkuUploadedFile(null);
+        setSkuUploadedPreview(null);
+      } else if (code.file && code.isGenerated === false) {
+        setSkuGenerationMode(false);
+        setSkuUploadedFile(code.file);
+        setSkuUploadedPreview(code.preview || null);
+      } else {
+        const hasFile = !!code.file;
+        setSkuGenerationMode(!hasFile);
+        if (hasFile) {
+          setSkuUploadedFile(code.file);
+          setSkuUploadedPreview(code.preview || null);
+        } else {
+          setSkuUploadedFile(null);
+          setSkuUploadedPreview(null);
+        }
+      }
     } else { 
       setSkuValue(''); 
-      setSkuType('QR_CODE');
-      setSkuGenerationMode(false);
+      setSkuGenerationMode(true);
+      setSkuUploadedFile(null);
+      setSkuUploadedPreview(null);
     } 
     setSkuPreview(null); 
-    setSkuUploadedFile(null); 
-    setSkuUploadedPreview(null); 
     setShowSkuPopup(true); 
   };
 
@@ -214,6 +335,12 @@ const MainTab: React.FC<CommonProps> = (props) => {
     e.stopPropagation();
     const url = getCurrentSkuUrl();
     if (url) setFullscreenCode(url);
+  };
+
+  const handleFullscreenCodeContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFullscreenCodeContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   const clearFieldError = (fieldKey: string) => { setValidationErrors(prev => { const next = new Set(prev); next.delete(fieldKey); return next; }); };
@@ -257,6 +384,15 @@ const MainTab: React.FC<CommonProps> = (props) => {
     boxSizing: 'border-box',
     backgroundColor: '#FFFFFF',
   });
+
+  const contextMenuButtonStyle: React.CSSProperties = {
+    width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', paddingLeft: 20,
+    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
+  };
+
+  const POPUP_WIDTH = 413;
+  const POPUP_HEIGHT = 580;
 
   return (
     <div style={{ ...cs, display: 'flex', gap: 30 }}>
@@ -363,149 +499,176 @@ const MainTab: React.FC<CommonProps> = (props) => {
 
       {/* Фулскрин для штрихкода и SKU */}
       {fullscreenCode && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setFullscreenCode(null)}>
+        <div 
+          style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} 
+          onContextMenu={handleFullscreenCodeContextMenu} 
+          onClick={() => { setFullscreenCode(null); setFullscreenCodeContextMenu(null); }}
+        >
           <img src={fullscreenCode} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', backgroundColor: '#FFFFFF', padding: 40, borderRadius: 16 }} />
+          {fullscreenCodeContextMenu && (
+            <div style={{ position: 'fixed', top: fullscreenCodeContextMenu.y, left: fullscreenCodeContextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10002, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => { handleDeleteBarcode(); handleDeleteSku(); setFullscreenCode(null); setFullscreenCodeContextMenu(null); }} style={contextMenuButtonStyle}>Удалить</button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Попап штрихкода */}
+      {/* Попап штрихкода — увеличенный */}
       {showBarcodePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setShowBarcodePopup(false); clearBarcodeUpload(); setBarcodeGenerationMode(false); }}>
-          <div style={{ width: 413, backgroundColor: '#FFFFFF', borderRadius: 20, padding: '30px 30px 30px 30px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', position: 'relative' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <img src={IconInfo} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', marginLeft: 9 }}>
-                {barcodeGenerationMode ? 'Создание штрихкода' : 'Прикрепление изображения штрихкода'}
-              </span>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBarcodePopup(false)}>
+          <div style={{ width: POPUP_WIDTH, height: POPUP_HEIGHT, backgroundColor: '#FFFFFF', borderRadius: 20, padding: '30px 30px 30px 30px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <img src={IconInfo} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', marginLeft: 9 }}>
+                  {barcodeGenerationMode ? 'Создание штрихкода' : 'Прикрепление изображения штрихкода'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 9, marginTop: 16 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Генерация кода</span>
+                <ToggleSwitch value={barcodeGenerationMode} onChange={() => setBarcodeGenerationMode(!barcodeGenerationMode)} />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 9, marginTop: 16 }}>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Генерация кода</span>
-              <ToggleSwitch value={barcodeGenerationMode} onChange={() => { setBarcodeGenerationMode(!barcodeGenerationMode); setBarcodeValue(''); setBarcodePreview(null); clearBarcodeUpload(); }} />
-            </div>
-            {!barcodeGenerationMode ? (
-              <>
-                <div style={{ marginTop: 35, width: 353, height: 249, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignSelf: 'center' }}>
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              {!barcodeGenerationMode ? (
+                <div 
+                  style={{ marginTop: 35, width: 353, height: 249, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignSelf: 'center', flexShrink: 0 }}
+                  onContextMenu={barcodeUploadedPreview ? (e) => { e.preventDefault(); e.stopPropagation(); setBarcodeUploadContextMenu({ x: e.clientX, y: e.clientY }); } : undefined}
+                >
                   <div style={{ width: 351, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => document.getElementById('barcode-file-input')?.click()}>
                     <img src={Icon10} alt="Добавить" style={{ width: 21, height: 21 }} />
                   </div>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFC', position: 'relative' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
                     {barcodeUploadedPreview ? (
-                      <>
-                        <img src={barcodeUploadedPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        <button onClick={clearBarcodeUpload} style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: '#FF3052', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                          <svg width="12" height="12" viewBox="0 0 10 10" fill="none"><line x1="2" y1="2" x2="8" y2="8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/><line x1="8" y1="2" x2="2" y2="8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                        </button>
-                      </>
+                      <img src={barcodeUploadedPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     ) : (
                       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9CA3AF' }}>Нет изображения</span>
                     )}
                   </div>
                 </div>
-                <input id="barcode-file-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBarcodeFileUpload} />
-              </>
-            ) : (
-              <div style={{ marginTop: 35 }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип кода</span>
-                <div style={{ position: 'relative' }}>
-                  <div onClick={() => setBarcodeTypeOpen(!barcodeTypeOpen)} style={{ width: 353, height: 44, borderRadius: 10, border: barcodeType ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', boxSizing: 'border-box' }}>
-                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE', flex: 1 }}>{BARCODE_TYPES.find(t => t.value === barcodeType)?.label || 'Выберите тип'}</span>
-                    <motion.img src={Icon9} alt="" style={{ width: 18, height: 18, flexShrink: 0, transition: 'transform 0.3s ease', transform: barcodeTypeOpen ? 'rotateX(180deg)' : 'rotateX(0deg)' }} />
+              ) : (
+                <div style={{ marginTop: 35, flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип кода</span>
+                  <div style={{ position: 'relative' }}>
+                    <div onClick={() => setBarcodeTypeOpen(!barcodeTypeOpen)} style={{ width: 353, height: 44, borderRadius: 10, border: barcodeType ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', boxSizing: 'border-box' }}>
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE', flex: 1 }}>{BARCODE_TYPES.find(t => t.value === barcodeType)?.label || 'Выберите тип'}</span>
+                      <motion.img src={Icon9} alt="" style={{ width: 18, height: 18, flexShrink: 0, transition: 'transform 0.3s ease', transform: barcodeTypeOpen ? 'rotateX(180deg)' : 'rotateX(0deg)' }} />
+                    </div>
+                    <AnimatePresence>
+                      {barcodeTypeOpen && (
+                        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: 48, left: 0, width: 353, backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden' }}>
+                          {BARCODE_TYPES.map(t => (
+                            <div key={t.value} onClick={() => { setBarcodeType(t.value); setBarcodeTypeOpen(false); }} style={{ height: 44, display: 'flex', alignItems: 'center', paddingLeft: 14, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', cursor: 'pointer', backgroundColor: barcodeType === t.value ? '#F0F1FF' : '#FFFFFF' }} onMouseEnter={(e) => { if (barcodeType !== t.value) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }} onMouseLeave={(e) => { if (barcodeType !== t.value) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>
+                              {t.label}
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <AnimatePresence>
-                    {barcodeTypeOpen && (
-                      <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: 48, left: 0, width: 353, backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden' }}>
-                        {BARCODE_TYPES.map(t => (
-                          <div key={t.value} onClick={() => { setBarcodeType(t.value); setBarcodeTypeOpen(false); }} style={{ height: 44, display: 'flex', alignItems: 'center', paddingLeft: 14, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', cursor: 'pointer', backgroundColor: barcodeType === t.value ? '#F0F1FF' : '#FFFFFF' }} onMouseEnter={(e) => { if (barcodeType !== t.value) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }} onMouseLeave={(e) => { if (barcodeType !== t.value) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>
-                            {t.label}
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
+              )}
+
+              <div style={{ marginTop: 20, flexShrink: 0 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Данные кода</span>
+                <input type="text" value={barcodeValue} onChange={e => setBarcodeValue(e.target.value)} placeholder={getBarcodeHint(barcodeType)} style={popupInputStyle(!!barcodeValue.trim())} />
               </div>
-            )}
-            <div style={{ marginTop: 20 }}>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Данные кода</span>
-              <input type="text" value={barcodeValue} onChange={e => setBarcodeValue(e.target.value)} placeholder={getBarcodeHint(barcodeType)} style={popupInputStyle(!!barcodeValue.trim())} />
+
+              {barcodeGenerationMode && (
+                <div style={{ marginTop: 20, width: 353, minHeight: 80, backgroundColor: '#F5F6FA', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, boxSizing: 'border-box', flexShrink: 0 }}>
+                  {barcodePreview ? (
+                    <img src={barcodePreview} alt="Штрихкод" style={{ maxWidth: '100%', maxHeight: 60, objectFit: 'contain' }} />
+                  ) : (
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Введите код для генерации</span>
+                  )}
+                </div>
+              )}
             </div>
-            {barcodeGenerationMode && (
-              <div style={{ marginTop: 20, width: 353, minHeight: 80, backgroundColor: '#F5F6FA', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, boxSizing: 'border-box' }}>
-                {barcodePreview ? (
-                  <img src={barcodePreview} alt="Штрихкод" style={{ maxWidth: '100%', maxHeight: 60 }} />
-                ) : (
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Введите код для генерации</span>
-                )}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
-              <button onClick={() => { setShowBarcodePopup(false); clearBarcodeUpload(); setBarcodeGenerationMode(false); }} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexShrink: 0 }}>
+              <button onClick={() => setShowBarcodePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
               <button onClick={handleBarcodeSave} disabled={!barcodeValue.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: barcodeValue.trim() ? '#666EFE' : '#BCC8FF', cursor: barcodeValue.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
             </div>
+
+            {barcodeUploadContextMenu && (
+              <div style={{ position: 'fixed', top: barcodeUploadContextMenu.y, left: barcodeUploadContextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10002, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+                <button onClick={() => { clearBarcodeUpload(); setBarcodeUploadContextMenu(null); }} style={contextMenuButtonStyle}>Удалить</button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Попап SKU */}
+      {/* Попап SKU — увеличенный */}
       {showSkuPopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setShowSkuPopup(false); clearSkuUpload(); setSkuGenerationMode(false); }}>
-          <div style={{ width: 413, backgroundColor: '#FFFFFF', borderRadius: 20, padding: '30px 30px 30px 30px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', position: 'relative' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <img src={IconInfo} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', marginLeft: 9 }}>
-                {skuGenerationMode ? 'Создание QR-кода' : 'Прикрепление изображения QR-кода'}
-              </span>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowSkuPopup(false)}>
+          <div style={{ width: POPUP_WIDTH, height: POPUP_HEIGHT, backgroundColor: '#FFFFFF', borderRadius: 20, padding: '30px 30px 30px 30px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <img src={IconInfo} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', marginLeft: 9 }}>
+                  {skuGenerationMode ? 'Создание QR-кода' : 'Прикрепление изображения QR-кода'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 9, marginTop: 16 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Генерация кода</span>
+                <ToggleSwitch value={skuGenerationMode} onChange={() => setSkuGenerationMode(!skuGenerationMode)} />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 9, marginTop: 16 }}>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Генерация кода</span>
-              <ToggleSwitch value={skuGenerationMode} onChange={() => { setSkuGenerationMode(!skuGenerationMode); setSkuValue(''); setSkuPreview(null); clearSkuUpload(); }} />
-            </div>
-            {!skuGenerationMode ? (
-              <>
-                <div style={{ marginTop: 35, width: 353, height: 249, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignSelf: 'center' }}>
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              {!skuGenerationMode ? (
+                <div 
+                  style={{ marginTop: 35, width: 353, height: 249, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignSelf: 'center', flexShrink: 0 }}
+                  onContextMenu={skuUploadedPreview ? (e) => { e.preventDefault(); e.stopPropagation(); setSkuUploadContextMenu({ x: e.clientX, y: e.clientY }); } : undefined}
+                >
                   <div style={{ width: 351, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => document.getElementById('sku-file-input')?.click()}>
                     <img src={Icon10} alt="Добавить" style={{ width: 21, height: 21 }} />
                   </div>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFC', position: 'relative' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
                     {skuUploadedPreview ? (
-                      <>
-                        <img src={skuUploadedPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        <button onClick={clearSkuUpload} style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: '#FF3052', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                          <svg width="12" height="12" viewBox="0 0 10 10" fill="none"><line x1="2" y1="2" x2="8" y2="8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/><line x1="8" y1="2" x2="2" y2="8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                        </button>
-                      </>
+                      <img src={skuUploadedPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     ) : (
                       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9CA3AF' }}>Нет изображения</span>
                     )}
                   </div>
                 </div>
-                <input id="sku-file-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleSkuFileUpload} />
-              </>
-            ) : (
-              <div style={{ marginTop: 35 }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип кода</span>
-                <div style={{ width: 353, height: 44, borderRadius: 10, border: '1px solid #666EFE', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, boxSizing: 'border-box' }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE' }}>QR_CODE</span>
+              ) : (
+                <div style={{ marginTop: 35, flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип кода</span>
+                  <div style={{ width: 353, height: 44, borderRadius: 10, border: '1px solid #666EFE', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, boxSizing: 'border-box' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE' }}>QR_CODE</span>
+                  </div>
                 </div>
+              )}
+
+              <div style={{ marginTop: 20, flexShrink: 0 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Данные кода</span>
+                <input type="text" value={skuValue} onChange={e => setSkuValue(e.target.value)} placeholder={getSkuHint()} style={popupInputStyle(!!skuValue.trim())} />
               </div>
-            )}
-            <div style={{ marginTop: 20 }}>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Данные кода</span>
-              <input type="text" value={skuValue} onChange={e => setSkuValue(e.target.value)} placeholder={getSkuHint()} style={popupInputStyle(!!skuValue.trim())} />
+
+              {skuGenerationMode && (
+                <div style={{ marginTop: 20, width: 353, minHeight: 120, backgroundColor: '#F5F6FA', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, boxSizing: 'border-box', flexShrink: 0 }}>
+                  {skuPreview ? (
+                    <img src={skuPreview} alt="QR-код" style={{ width: 100, height: 100, objectFit: 'contain' }} />
+                  ) : (
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Введите код для генерации</span>
+                  )}
+                </div>
+              )}
             </div>
-            {skuGenerationMode && (
-              <div style={{ marginTop: 20, width: 353, minHeight: 120, backgroundColor: '#F5F6FA', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, boxSizing: 'border-box' }}>
-                {skuPreview ? (
-                  <img src={skuPreview} alt="QR-код" style={{ width: 100, height: 100 }} />
-                ) : (
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Введите код для генерации</span>
-                )}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
-              <button onClick={() => { setShowSkuPopup(false); clearSkuUpload(); setSkuGenerationMode(false); }} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexShrink: 0 }}>
+              <button onClick={() => setShowSkuPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
               <button onClick={handleSkuSave} disabled={!skuValue.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: skuValue.trim() ? '#666EFE' : '#BCC8FF', cursor: skuValue.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
             </div>
+
+            {skuUploadContextMenu && (
+              <div style={{ position: 'fixed', top: skuUploadContextMenu.y, left: skuUploadContextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10002, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+                <button onClick={() => { clearSkuUpload(); setSkuUploadContextMenu(null); }} style={contextMenuButtonStyle}>Удалить</button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (сначала сервер, потом localStorage перезаписывает)
+// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (правые кнопки как в NomenclatureCreatePage)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -18,6 +18,9 @@ import SupplierEventLogTab from './SupplierEventLogTab';
 import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
+import IconOne from '../../../assets/References/NomenclatureCreatePage/IconOne.svg';
+import IconOne1 from '../../../assets/References/NomenclatureCreatePage/IconOne1.svg';
+import IconTwo from '../../../assets/References/NomenclatureCreatePage/IconTwo.svg';
 
 export interface ImageItem { uid: string; url: string; originalName: string; }
 export interface DocumentItem { uid: string; supplierUid: string; documentName: string; filePath: string; originalName: string; url: string; createdAt: string; }
@@ -94,11 +97,8 @@ interface DraftData {
 }
 
 const saveDraftToStorage = (uid: string, data: DraftData) => {
-  try {
-    localStorage.setItem(getDraftKey(uid), JSON.stringify(data));
-  } catch (e) {
-    console.error('Ошибка сохранения черновика поставщика:', e);
-  }
+  try { localStorage.setItem(getDraftKey(uid), JSON.stringify(data)); }
+  catch (e) { console.error('Ошибка сохранения черновика поставщика:', e); }
 };
 
 const loadDraftFromStorage = (uid: string): DraftData | null => {
@@ -106,51 +106,14 @@ const loadDraftFromStorage = (uid: string): DraftData | null => {
     const raw = localStorage.getItem(getDraftKey(uid));
     if (!raw) return null;
     const data = JSON.parse(raw) as DraftData;
-    if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(getDraftKey(uid));
-      return null;
-    }
+    if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) { localStorage.removeItem(getDraftKey(uid)); return null; }
     return data;
-  } catch (e) {
-    localStorage.removeItem(getDraftKey(uid));
-    return null;
-  }
+  } catch (e) { localStorage.removeItem(getDraftKey(uid)); return null; }
 };
 
-const clearDraftStorage = (uid: string) => {
-  localStorage.removeItem(getDraftKey(uid));
-};
+const clearDraftStorage = (uid: string) => { localStorage.removeItem(getDraftKey(uid)); };
 
-// Восстановление данных из черновика в стейт
-const applyDraftToState = (draft: DraftData, setters: {
-  setName: (v: string) => void;
-  setCode: (v: number | undefined) => void;
-  setSelectedCountry: (v: string) => void;
-  setSelectedCountryId: (v: string) => void;
-  setAddress: (v: string) => void;
-  setSelectedShortDescription: (v: string) => void;
-  setSelectedShortDescriptionId: (v: string) => void;
-  setDescription: (v: string) => void;
-  setEmail: (v: string) => void;
-  setWebsite: (v: string) => void;
-  setPhone: (v: string) => void;
-  setSelectedBrand: (v: string) => void;
-  setSelectedBrandId: (v: string) => void;
-  setInn: (v: string) => void;
-  setOgrn: (v: string) => void;
-  setKpp: (v: string) => void;
-  setContactPerson: (v: string) => void;
-  setContactPosition: (v: string) => void;
-  setContactPhone: (v: string) => void;
-  setDirector: (v: string) => void;
-  setDirectorPosition: (v: string) => void;
-  setBankName: (v: string) => void;
-  setBik: (v: string) => void;
-  setCorrespondentAccount: (v: string) => void;
-  setSettlementAccount: (v: string) => void;
-  setIsDataSaved: (v: boolean) => void;
-  setIsDataLoaded: (v: boolean) => void;
-}) => {
+const applyDraftToState = (draft: DraftData, setters: any) => {
   setters.setName(draft.name || '');
   setters.setCode(draft.code);
   setters.setSelectedCountry(draft.selectedCountry || '');
@@ -190,50 +153,35 @@ const SupplierCreatePage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
 
-  const [name, setName] = useState('');
-  const [code, setCode] = useState<number | undefined>(undefined);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [nameFocused, setNameFocused] = useState(false);
+  const [name, setName] = useState(''); const [code, setCode] = useState<number | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false); const [isLoading, setIsLoading] = useState(false);
+  const [isEdit, setIsEdit] = useState(false); const [nameFocused, setNameFocused] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  const [selectedCountry, setSelectedCountry] = useState('');
-  const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(''); const [selectedCountryId, setSelectedCountryId] = useState('');
   const [address, setAddress] = useState('');
-  const [selectedShortDescription, setSelectedShortDescription] = useState('');
-  const [selectedShortDescriptionId, setSelectedShortDescriptionId] = useState('');
-  const [description, setDescription] = useState('');
-  const [email, setEmail] = useState('');
-  const [website, setWebsite] = useState('');
-  const [phone, setPhone] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('');
-  const [selectedBrandId, setSelectedBrandId] = useState('');
+  const [selectedShortDescription, setSelectedShortDescription] = useState(''); const [selectedShortDescriptionId, setSelectedShortDescriptionId] = useState('');
+  const [description, setDescription] = useState(''); const [email, setEmail] = useState('');
+  const [website, setWebsite] = useState(''); const [phone, setPhone] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState(''); const [selectedBrandId, setSelectedBrandId] = useState('');
 
-  const [inn, setInn] = useState('');
-  const [ogrn, setOgrn] = useState('');
-  const [kpp, setKpp] = useState('');
-  const [contactPerson, setContactPerson] = useState('');
-  const [contactPosition, setContactPosition] = useState('');
+  const [inn, setInn] = useState(''); const [ogrn, setOgrn] = useState(''); const [kpp, setKpp] = useState('');
+  const [contactPerson, setContactPerson] = useState(''); const [contactPosition, setContactPosition] = useState('');
   const [contactPhone, setContactPhone] = useState('');
-  const [director, setDirector] = useState('');
-  const [directorPosition, setDirectorPosition] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [bik, setBik] = useState('');
-  const [correspondentAccount, setCorrespondentAccount] = useState('');
-  const [settlementAccount, setSettlementAccount] = useState('');
+  const [director, setDirector] = useState(''); const [directorPosition, setDirectorPosition] = useState('');
+  const [bankName, setBankName] = useState(''); const [bik, setBik] = useState('');
+  const [correspondentAccount, setCorrespondentAccount] = useState(''); const [settlementAccount, setSettlementAccount] = useState('');
 
   const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
   const [localImages, setLocalImages] = useState<LocalImageItem[]>([]);
 
-  const [popupOpen, setPopupOpen] = useState(false);
-  const [popupType, setPopupType] = useState<string>('country');
+  const [popupOpen, setPopupOpen] = useState(false); const [popupType, setPopupType] = useState<string>('country');
   const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
 
   const [showClosePopup, setShowClosePopup] = useState(false);
+  const [showDevPopup, setShowDevPopup] = useState(false);
   const [images, setImages] = useState<ImageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-
   const [averageRating, setAverageRating] = useState(0);
 
   const [isDataSaved, setIsDataSaved] = useState(false);
@@ -245,115 +193,31 @@ const SupplierCreatePage = () => {
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  const setters = {
-    setName, setCode,
-    setSelectedCountry, setSelectedCountryId,
-    setAddress,
-    setSelectedShortDescription, setSelectedShortDescriptionId,
-    setDescription, setEmail, setWebsite, setPhone,
-    setSelectedBrand, setSelectedBrandId,
-    setInn, setOgrn, setKpp,
-    setContactPerson, setContactPosition, setContactPhone,
-    setDirector, setDirectorPosition,
-    setBankName, setBik, setCorrespondentAccount, setSettlementAccount,
-    setIsDataSaved, setIsDataLoaded,
-  };
+  const setters = { setName, setCode, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setSelectedBrand, setSelectedBrandId, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setIsDataSaved, setIsDataLoaded };
 
-  // Сохранение черновика в localStorage при изменении данных
   const saveDraftToLocalStorage = useCallback(() => {
     if (!uid || !isDataLoaded) return;
-    const draft: DraftData = {
-      uid,
-      code,
-      name,
-      selectedCountry,
-      selectedCountryId,
-      address,
-      selectedShortDescription,
-      selectedShortDescriptionId,
-      description,
-      email,
-      website,
-      phone,
-      selectedBrand,
-      selectedBrandId,
-      inn,
-      ogrn,
-      kpp,
-      contactPerson,
-      contactPosition,
-      contactPhone,
-      director,
-      directorPosition,
-      bankName,
-      bik,
-      correspondentAccount,
-      settlementAccount,
-      isEdit,
-      timestamp: Date.now(),
-    };
+    const draft: DraftData = { uid, code, name, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, isEdit, timestamp: Date.now() };
     saveDraftToStorage(uid, draft);
-  }, [
-    uid, code, name, isEdit, isDataLoaded,
-    selectedCountry, selectedCountryId,
-    address,
-    selectedShortDescription, selectedShortDescriptionId,
-    description, email, website, phone,
-    selectedBrand, selectedBrandId,
-    inn, ogrn, kpp,
-    contactPerson, contactPosition, contactPhone,
-    director, directorPosition,
-    bankName, bik, correspondentAccount, settlementAccount,
-  ]);
+  }, [uid, code, name, isEdit, isDataLoaded, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount]);
 
-  // Автосохранение черновика при изменениях (дебаунс 500мс)
-  useEffect(() => {
-    if (!uid || !isDataLoaded) return;
-    const timer = setTimeout(() => {
-      saveDraftToLocalStorage();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [saveDraftToLocalStorage, uid, isDataLoaded]);
+  useEffect(() => { if (!uid || !isDataLoaded) return; const t = setTimeout(() => saveDraftToLocalStorage(), 500); return () => clearTimeout(t); }, [saveDraftToLocalStorage, uid, isDataLoaded]);
 
-  useEffect(() => { 
-    const handler = (e: Event) => { 
-      if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); 
-    }; 
-    window.addEventListener('navigateToTab', handler); 
-    return () => window.removeEventListener('navigateToTab', handler); 
-  }, []);
+  useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
 
   useEffect(() => {
     if (!uid) return;
     const cp = window.location.pathname;
     const isEditMode = cp.includes('/edit/');
     setIsEdit(isEditMode);
-    
     if (isEditMode) {
-      // Режим редактирования: сначала грузим с сервера, потом перезаписываем из черновика
       setIsDataSaved(true);
-      loadSupplierData(uid).then(() => {
-        // После загрузки с сервера — проверяем черновик и перезаписываем
-        const draft = loadDraftFromStorage(uid);
-        if (draft && draft.uid === uid) {
-          applyDraftToState(draft, setters);
-        } else {
-          setIsDataLoaded(true);
-        }
-      });
-      fetchImages();
-      fetchDocuments();
-      fetchAverageRating();
+      loadSupplierData(uid).then(() => { const draft = loadDraftFromStorage(uid); if (draft && draft.uid === uid) applyDraftToState(draft, setters); else setIsDataLoaded(true); });
+      fetchImages(); fetchDocuments(); fetchAverageRating();
     } else {
-      // Режим создания — пробуем загрузить черновик
       const draft = loadDraftFromStorage(uid);
-      if (draft && draft.uid === uid) {
-        applyDraftToState(draft, setters);
-      } else {
-        setIsDataSaved(false);
-        setIsDataLoaded(true);
-        if (codeParam) setCode(parseInt(codeParam));
-      }
+      if (draft && draft.uid === uid) applyDraftToState(draft, setters);
+      else { setIsDataSaved(false); setIsDataLoaded(true); if (codeParam) setCode(parseInt(codeParam)); }
     }
   }, [uid]);
 
@@ -369,132 +233,53 @@ const SupplierCreatePage = () => {
     setIsLoading(true); 
     try { 
       const d = (await AxiosService.get(ConstantInfo.restApiSupplierGet(suid))).data; 
-      setName(d.name || ''); 
-      setCode(d.code); 
+      setName(d.name || ''); setCode(d.code); 
       if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } else { setSelectedCountryId(''); setSelectedCountry(''); }
       setAddress(d.address || ''); 
       if (d.shortDescriptionUid) { setSelectedShortDescriptionId(d.shortDescriptionUid); setSelectedShortDescription(d.shortDescriptionName || ''); } else { setSelectedShortDescriptionId(''); setSelectedShortDescription(''); }
-      setDescription(d.description || ''); 
-      setEmail(d.email || ''); 
-      setWebsite(d.website || ''); 
-      setPhone(d.phone || ''); 
+      setDescription(d.description || ''); setEmail(d.email || ''); setWebsite(d.website || ''); setPhone(d.phone || ''); 
       if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); } else { setSelectedBrandId(''); setSelectedBrand(''); }
-      setInn(d.inn || ''); 
-      setOgrn(d.ogrn || ''); 
-      setKpp(d.kpp || ''); 
-      setContactPerson(d.contactPerson || ''); 
-      setContactPosition(d.contactPosition || ''); 
-      setContactPhone(d.contactPhone || ''); 
-      setDirector(d.director || ''); 
-      setDirectorPosition(d.directorPosition || ''); 
-      setBankName(d.bankName || ''); 
-      setBik(d.bik || ''); 
-      setCorrespondentAccount(d.correspondentAccount || ''); 
-      setSettlementAccount(d.settlementAccount || ''); 
+      setInn(d.inn || ''); setOgrn(d.ogrn || ''); setKpp(d.kpp || ''); 
+      setContactPerson(d.contactPerson || ''); setContactPosition(d.contactPosition || ''); setContactPhone(d.contactPhone || ''); 
+      setDirector(d.director || ''); setDirectorPosition(d.directorPosition || ''); 
+      setBankName(d.bankName || ''); setBik(d.bik || ''); setCorrespondentAccount(d.correspondentAccount || ''); setSettlementAccount(d.settlementAccount || ''); 
     } catch (e) { console.error(e); } finally { setIsLoading(false); } 
   };
 
   const getMissingFields = (): Set<string> => {
     const m = new Set<string>();
-    if (!name.trim()) m.add('name');
-    if (!selectedCountryId) m.add('country');
-    if (!address.trim()) m.add('address');
-    if (!selectedShortDescriptionId) m.add('shortDescription');
-    if (!email.trim()) m.add('email');
-    if (!website.trim()) m.add('website');
-    if (!phone.trim()) m.add('phone');
-    if (!selectedBrandId) m.add('brand');
-    if (!inn.trim()) m.add('inn');
-    if (!ogrn.trim()) m.add('ogrn');
-    if (!kpp.trim()) m.add('kpp');
-    if (!contactPerson.trim()) m.add('contactPerson');
-    if (!director.trim()) m.add('director');
-    if (!bankName.trim()) m.add('bankName');
-    if (!bik.trim()) m.add('bik');
-    if (!correspondentAccount.trim()) m.add('correspondentAccount');
-    if (!settlementAccount.trim()) m.add('settlementAccount');
+    if (!name.trim()) m.add('name'); if (!selectedCountryId) m.add('country'); if (!address.trim()) m.add('address');
+    if (!selectedShortDescriptionId) m.add('shortDescription'); if (!email.trim()) m.add('email'); if (!website.trim()) m.add('website');
+    if (!phone.trim()) m.add('phone'); if (!selectedBrandId) m.add('brand');
+    if (!inn.trim()) m.add('inn'); if (!ogrn.trim()) m.add('ogrn'); if (!kpp.trim()) m.add('kpp');
+    if (!contactPerson.trim()) m.add('contactPerson'); if (!director.trim()) m.add('director');
+    if (!bankName.trim()) m.add('bankName'); if (!bik.trim()) m.add('bik');
+    if (!correspondentAccount.trim()) m.add('correspondentAccount'); if (!settlementAccount.trim()) m.add('settlementAccount');
     return m;
   };
 
   const getMissingFieldLabels = (): string[] => {
     const l: string[] = [];
-    if (!name.trim()) l.push('Наименование');
-    if (!selectedCountryId) l.push('Страна');
-    if (!address.trim()) l.push('Адрес');
-    if (!selectedShortDescriptionId) l.push('Краткое описание');
-    if (!email.trim()) l.push('Email');
-    if (!website.trim()) l.push('Сайт');
-    if (!phone.trim()) l.push('Телефон');
-    if (!selectedBrandId) l.push('Бренд');
-    if (!inn.trim()) l.push('ИНН');
-    if (!ogrn.trim()) l.push('ОГРН');
-    if (!kpp.trim()) l.push('КПП');
-    if (!contactPerson.trim()) l.push('Контактное лицо');
-    if (!director.trim()) l.push('Руководитель');
-    if (!bankName.trim()) l.push('Банк');
-    if (!bik.trim()) l.push('БИК');
-    if (!correspondentAccount.trim()) l.push('Корр. счет');
-    if (!settlementAccount.trim()) l.push('Расч. счет');
+    if (!name.trim()) l.push('Наименование'); if (!selectedCountryId) l.push('Страна'); if (!address.trim()) l.push('Адрес');
+    if (!selectedShortDescriptionId) l.push('Краткое описание'); if (!email.trim()) l.push('Email'); if (!website.trim()) l.push('Сайт');
+    if (!phone.trim()) l.push('Телефон'); if (!selectedBrandId) l.push('Бренд');
+    if (!inn.trim()) l.push('ИНН'); if (!ogrn.trim()) l.push('ОГРН'); if (!kpp.trim()) l.push('КПП');
+    if (!contactPerson.trim()) l.push('Контактное лицо'); if (!director.trim()) l.push('Руководитель');
+    if (!bankName.trim()) l.push('Банк'); if (!bik.trim()) l.push('БИК');
+    if (!correspondentAccount.trim()) l.push('Корр. счет'); if (!settlementAccount.trim()) l.push('Расч. счет');
     return l;
   };
 
   const handleSave = async () => {
-    if (!uid) return;
-    setIsSaving(true);
+    if (!uid) return; setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiSupplierDraft, { 
-        uid, code, name, 
-        countryUid: selectedCountryId || null, 
-        address: address || null, 
-        shortDescriptionUid: selectedShortDescriptionId || null, 
-        description: description || null, 
-        email: email || null, 
-        website: website || null, 
-        phone: phone || null, 
-        brandUid: selectedBrandId || null, 
-        inn: inn || null, 
-        ogrn: ogrn || null, 
-        kpp: kpp || null, 
-        contactPerson: contactPerson || null, 
-        contactPosition: contactPosition || null, 
-        contactPhone: contactPhone || null, 
-        director: director || null, 
-        directorPosition: directorPosition || null, 
-        bankName: bankName || null, 
-        bik: bik || null, 
-        correspondentAccount: correspondentAccount || null, 
-        settlementAccount: settlementAccount || null, 
-        author: 'Оператор' 
-      });
-      for (const img of localImages) { 
-        const fd = new FormData(); 
-        fd.append('file', img.file); 
-        await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); 
-      }
-      for (const doc of localDocuments) { 
-        const fd = new FormData(); 
-        fd.append('file', doc.file); 
-        fd.append('documentName', doc.documentName); 
-        await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); 
-      }
-      setLocalImages([]); 
-      setLocalDocuments([]);
-      await fetchImages(); 
-      await fetchDocuments();
-      
-      // Чистим черновик
+      await AxiosService.post(ConstantInfo.restApiSupplierDraft, { uid, code, name, countryUid: selectedCountryId || null, address: address || null, shortDescriptionUid: selectedShortDescriptionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null, brandUid: selectedBrandId || null, inn: inn || null, ogrn: ogrn || null, kpp: kpp || null, contactPerson: contactPerson || null, contactPosition: contactPosition || null, contactPhone: contactPhone || null, director: director || null, directorPosition: directorPosition || null, bankName: bankName || null, bik: bik || null, correspondentAccount: correspondentAccount || null, settlementAccount: settlementAccount || null, author: 'Оператор' });
+      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); }
+      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); }
+      setLocalImages([]); setLocalDocuments([]); await fetchImages(); await fetchDocuments();
       clearDraftStorage(uid);
-      
-      setIsDataSaved(true); 
-      setValidationErrors(new Set());
-      window.dispatchEvent(new CustomEvent('refreshSupplierEvents'));
-      
-      // Переключаем в режим редактирования если были в создании
-      if (!isEdit) {
-        setIsEdit(true);
-        navigate(`/references/suppliers/edit/${uid}/${code}`, { replace: true });
-      }
-      
+      setIsDataSaved(true); setValidationErrors(new Set()); window.dispatchEvent(new CustomEvent('refreshSupplierEvents'));
+      if (!isEdit) { setIsEdit(true); navigate(`/references/suppliers/edit/${uid}/${code}`, { replace: true }); }
       return true;
     } catch (e) { console.error(e); return false; } finally { setIsSaving(false); }
   };
@@ -504,22 +289,12 @@ const SupplierCreatePage = () => {
   const handleCloseWithoutSaving = () => { if (uid) clearDraftStorage(uid); handleClose(); };
 
   const handleTabChange = (index: number) => {
-    if (!isDataSaved && index > 1) {
-      const m = getMissingFields();
-      setValidationErrors(m);
-      setShowBlockedTabWarning(true);
-      return;
-    }
+    if (!isDataSaved && index > 1) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; }
     setActiveTab(index);
   };
 
   const handleEventLogClick = () => {
-    if (!isDataSaved) {
-      const m = getMissingFields();
-      setValidationErrors(m);
-      setShowBlockedTabWarning(true);
-      return;
-    }
+    if (!isDataSaved) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; }
     setActiveTab(EVENT_LOG_TAB);
   };
 
@@ -542,7 +317,6 @@ const SupplierCreatePage = () => {
 
   const cef = ['inn', 'ogrn', 'kpp', 'contactPerson', 'director', 'bankName', 'bik', 'correspondentAccount', 'settlementAccount'];
   const hasRequisitesErrors = cef.some(f => validationErrors.has(f));
-
   const isEventLogActive = activeTab === EVENT_LOG_TAB;
 
   const commonProps: CommonSupplierProps = { uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setSelectedBrand, setSelectedBrandId, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setImages, setDocuments, handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors, fetchAverageRating, averageRating };
@@ -575,10 +349,12 @@ const SupplierCreatePage = () => {
           </AnimatePresence>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <button style={rightButtonStyle} onClick={handleEventLogClick}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="16" height="16" rx="3" stroke="#666EFE" strokeWidth="2"/><line x1="5" y1="5" x2="13" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="9" x2="13" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="13" x2="10" y2="13" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          <button onClick={handleEventLogClick} style={{ ...rightButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
+            <img src={isEventLogActive ? IconOne1 : IconOne} alt="" style={{ width: 20, height: 20 }} />
           </button>
-          <button style={rightButtonStyle} />
+          <button onClick={() => setShowDevPopup(true)} style={{ ...rightButtonStyle, backgroundColor: showDevPopup ? '#666EFE' : '#FFFFFF' }}>
+            <img src={IconTwo} alt="" style={{ width: 20, height: 20 }} />
+          </button>
         </div>
       </div>
 
@@ -612,6 +388,16 @@ const SupplierCreatePage = () => {
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
+          </div>
+        </div>
+      )}
+
+      {showDevPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDevPopup(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>В разработке</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Этот функционал находится в разработке</p>
+            <button onClick={() => setShowDevPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
           </div>
         </div>
       )}

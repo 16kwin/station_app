@@ -1,10 +1,13 @@
-// IntegrationTab.tsx — ПОЛНЫЙ ФАЙЛ (редизайн)
+// IntegrationTab.tsx — ПОЛНЫЙ ФАЙЛ (выделение строк, удаление выделенных, кнопки button1/button4/button5)
 import React, { useState, useRef, useEffect } from 'react';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import type { CommonProps } from './NomenclatureCreatePage';
 import InterIcon from '../../../assets/References/NomenclatureCreatePage/Inter.svg';
+import Button1 from '../../../assets/References/NomenclatureCreatePage/button1.svg';
+import Button4 from '../../../assets/References/NomenclatureCreatePage/button4.svg';
+import Button5 from '../../../assets/References/NomenclatureCreatePage/button5.svg';
 
 interface IntegrationItem {
   uid: string;
@@ -29,6 +32,8 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
   const [hasScroll, setHasScroll] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
 
   const [showAddPopup, setShowAddPopup] = useState(false);
   const [newExchangeType, setNewExchangeType] = useState(EXCHANGE_TYPES[0]);
@@ -46,6 +51,7 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
   const [isEditing, setIsEditing] = useState(false);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; integrationUid: string; exchangeType: string; direction: string; protocol: string; targetSystem: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
@@ -93,11 +99,7 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
     if (c) setHasScroll(c.scrollHeight > c.clientHeight);
   };
 
-  useEffect(() => {
-    const t = setTimeout(checkScroll, 100);
-    return () => clearTimeout(t);
-  }, [integrations]);
-
+  useEffect(() => { const t = setTimeout(checkScroll, 100); return () => clearTimeout(t); }, [integrations]);
   useEffect(() => {
     const c = scrollContainerRef.current;
     if (!c) return;
@@ -105,10 +107,7 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
     c.addEventListener('scroll', checkScroll);
     const ro = new ResizeObserver(checkScroll);
     ro.observe(c);
-    return () => {
-      c.removeEventListener('scroll', checkScroll);
-      ro.disconnect();
-    };
+    return () => { c.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, []);
 
   const formatDate = (dateStr: string) => {
@@ -117,6 +116,56 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
       const d = new Date(dateStr);
       return d.toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     } catch { return dateStr; }
+  };
+
+  const toggleSelect = (itemUid: string, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(itemUid)) next.delete(itemUid);
+        else next.add(itemUid);
+        return next;
+      });
+    } else if (e.shiftKey && lastSelectedId) {
+      const allIds = integrations.map(i => i.uid);
+      const lastIdx = allIds.indexOf(lastSelectedId);
+      const currentIdx = allIds.indexOf(itemUid);
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        const rangeIds = allIds.slice(start, end + 1);
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          rangeIds.forEach(id => next.add(id));
+          return next;
+        });
+      }
+    } else {
+      if (selectedIds.has(itemUid) && selectedIds.size === 1) {
+        setSelectedIds(new Set());
+      } else {
+        setSelectedIds(new Set([itemUid]));
+      }
+    }
+    setLastSelectedId(itemUid);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteSelected = async () => {
+    try {
+      for (const itemUid of selectedIds) {
+        await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteIntegration(itemUid));
+      }
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      await fetchIntegrations();
+    } catch (e) {
+      console.error('Ошибка удаления интеграций:', e);
+    }
   };
 
   const handleAddClick = () => {
@@ -149,6 +198,9 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
   const handleContextMenu = (e: React.MouseEvent, item: IntegrationItem) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!selectedIds.has(item.uid)) {
+      setSelectedIds(new Set([item.uid]));
+    }
     setContextMenu({ 
       x: e.clientX, y: e.clientY, 
       integrationUid: item.uid,
@@ -176,8 +228,14 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
       setContextMenu(null);
       return;
     }
-    AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteIntegration(contextMenu.integrationUid))
-      .then(() => fetchIntegrations())
+    const uidsToDelete = selectedIds.has(contextMenu.integrationUid) ? selectedIds : new Set([contextMenu.integrationUid]);
+    Promise.all(Array.from(uidsToDelete).map(uid => 
+      AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteIntegration(uid))
+    ))
+      .then(() => {
+        setSelectedIds(new Set());
+        fetchIntegrations();
+      })
       .catch(e => console.error('Ошибка удаления интеграции:', e));
     setContextMenu(null);
   };
@@ -214,10 +272,9 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
   const totalRows = Math.max(integrations.length, VISIBLE_ROWS);
 
   const getRowSeparator = (index: number, isRealData: boolean): React.CSSProperties => {
-    if (!isRealData) return { borderTop: 'none', borderBottom: 'none' };
+    if (!isRealData) return { borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' };
     const isFirst = index === 0;
     const isLast = index === integrations.length - 1;
-    
     return {
       borderTop: isFirst ? 'none' : '0.5px solid #E5ECF5',
       borderBottom: isLast ? 'none' : '0.5px solid #E5ECF5',
@@ -236,27 +293,18 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
         {/* Кнопки */}
         <div style={{ position: 'absolute', top: 14, left: 40, display: 'flex', gap: 15 }}>
           <button style={smallButtonStyle}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <line x1="1" y1="4" x2="17" y2="4" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="1" y1="9" x2="17" y2="9" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="1" y1="14" x2="12" y2="14" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <button style={smallButtonStyle}>
-            <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
-              <path d="M1 7H19M1 1H19M1 13H19" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            <img src={Button1} alt="" style={{ width: 18, height: 18 }} />
           </button>
           <button onClick={handleAddClick} style={smallButtonStyle}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            <img src={Button4} alt="" style={{ width: 14, height: 14 }} />
+          </button>
+          <button onClick={handleDeleteSelected} style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }}>
+            <img src={Button5} alt="" style={{ width: 18, height: 18 }} />
           </button>
         </div>
 
         {/* Таблица */}
-        <div style={{ position: 'absolute', top: 68, left: 40, display: 'flex', gap: 15 }}>
+        <div style={{ position: 'absolute', top: 68, left: 40, display: 'flex', gap: 10 }}>
           <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
             <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 0, paddingRight: 0, boxSizing: 'border-box' }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_DATE }}>ДАТА И ВРЕМЯ</span>
@@ -278,6 +326,7 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
                     {Array.from({ length: totalRows }).map((_, index) => {
                       const item = integrations[index];
                       const isRealData = !!item;
+                      const isSelected = item && selectedIds.has(item.uid);
 
                       if (!isRealData) {
                         return (
@@ -289,8 +338,8 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
                               boxSizing: 'border-box',
                               display: 'flex', 
                               alignItems: 'center',
-                              borderTop: 'none',
-                              borderBottom: 'none',
+                              borderTop: '0.5px solid #E5ECF5',
+                              borderBottom: '0.5px solid #E5ECF5',
                             }} 
                           />
                         );
@@ -299,15 +348,16 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
                       return (
                         <div 
                           key={item.uid} 
+                          onClick={(e) => toggleSelect(item.uid, e)}
                           onContextMenu={(e) => handleContextMenu(e, item)}
                           style={{ 
                             height: ROW_HEIGHT, 
                             display: 'flex', 
                             alignItems: 'center', 
-                            backgroundColor: '#FFFFFF', 
+                            backgroundColor: isSelected ? '#DEEEFF' : '#FFFFFF', 
                             position: 'relative', 
                             boxSizing: 'border-box',
-                            cursor: 'context-menu',
+                            cursor: 'pointer',
                             userSelect: 'none',
                             ...getRowSeparator(index, true),
                           }}
@@ -366,38 +416,11 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление интеграции</h3>
 
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип обмена</label>
-              <select value={newExchangeType} onChange={e => setNewExchangeType(e.target.value)} style={selectStyle}>
-                {EXCHANGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Направление</label>
-              <select value={newDirection} onChange={e => setNewDirection(e.target.value)} style={selectStyle}>
-                {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Протокол</label>
-              <select value={newProtocol} onChange={e => setNewProtocol(e.target.value)} style={selectStyle}>
-                {PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обмен с системой</label>
-              <select value={newTargetSystem} onChange={e => setNewTargetSystem(e.target.value)} style={selectStyle}>
-                {TARGET_SYSTEMS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleAddSubmit} disabled={isAdding} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: !isAdding ? '#666EFE' : '#BCC8FF', cursor: !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>
-            </div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип обмена</label><select value={newExchangeType} onChange={e => setNewExchangeType(e.target.value)} style={selectStyle}>{EXCHANGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Направление</label><select value={newDirection} onChange={e => setNewDirection(e.target.value)} style={selectStyle}>{DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Протокол</label><select value={newProtocol} onChange={e => setNewProtocol(e.target.value)} style={selectStyle}>{PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обмен с системой</label><select value={newTargetSystem} onChange={e => setNewTargetSystem(e.target.value)} style={selectStyle}>{TARGET_SYSTEMS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleAddSubmit} disabled={isAdding} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: !isAdding ? '#666EFE' : '#BCC8FF', cursor: !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button></div>
           </div>
         </div>
       )}
@@ -407,38 +430,24 @@ const IntegrationTab: React.FC<CommonProps> = (props) => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование интеграции</h3>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип обмена</label><select value={editExchangeType} onChange={e => setEditExchangeType(e.target.value)} style={selectStyle}>{EXCHANGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Направление</label><select value={editDirection} onChange={e => setEditDirection(e.target.value)} style={selectStyle}>{DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Протокол</label><select value={editProtocol} onChange={e => setEditProtocol(e.target.value)} style={selectStyle}>{PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обмен с системой</label><select value={editTargetSystem} onChange={e => setEditTargetSystem(e.target.value)} style={selectStyle}>{TARGET_SYSTEMS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleEditSubmit} disabled={isEditing} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: !isEditing ? '#666EFE' : '#BCC8FF', cursor: !isEditing ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isEditing ? 'Сохранение...' : 'Сохранить'}</button></div>
+          </div>
+        </div>
+      )}
 
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Тип обмена</label>
-              <select value={editExchangeType} onChange={e => setEditExchangeType(e.target.value)} style={selectStyle}>
-                {EXCHANGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Направление</label>
-              <select value={editDirection} onChange={e => setEditDirection(e.target.value)} style={selectStyle}>
-                {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Протокол</label>
-              <select value={editProtocol} onChange={e => setEditProtocol(e.target.value)} style={selectStyle}>
-                {PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обмен с системой</label>
-              <select value={editTargetSystem} onChange={e => setEditTargetSystem(e.target.value)} style={selectStyle}>
-                {TARGET_SYSTEMS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
+      {/* Попап подтверждения удаления */}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleEditSubmit} disabled={isEditing} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: !isEditing ? '#666EFE' : '#BCC8FF', cursor: !isEditing ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isEditing ? 'Сохранение...' : 'Сохранить'}</button>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDeleteSelected} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>
           </div>
         </div>

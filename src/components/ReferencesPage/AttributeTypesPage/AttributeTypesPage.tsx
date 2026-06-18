@@ -1,3 +1,4 @@
+// AttributeTypesPage.tsx — ПОЛНЫЙ ФАЙЛ (единый стиль)
 import React, { useRef, useState, useEffect } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -12,6 +13,7 @@ import Icon8 from '../../../assets/References/Icon8.svg';
 import Icon9 from '../../../assets/References/Icon9.svg';
 import Icon10 from '../../../assets/References/Icon10.svg';
 import Icon19 from '../../../assets/References/Icon19.svg';
+import Popup4 from '../../../assets/References/popup4.svg';
 
 interface AttributeTypeItem {
   uid: string;
@@ -38,8 +40,8 @@ const AttributeTypesPage = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
 
   const TABLE_WIDTH = 1720;
-  const ROW_HEIGHT = 54;
-  const HEADER_HEIGHT = 54;
+  const ROW_HEIGHT = 58;
+  const HEADER_HEIGHT = 58;
   const VISIBLE_ROWS = 10;
   const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
   const COL_DESIGNATION = 700;
@@ -200,17 +202,8 @@ const AttributeTypesPage = () => {
     cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0,
   };
 
-  const tableBorderStyle = '2px solid #666EFE';
-  const rowBoxShadow = 'inset 0px -0.7px 0px 0px #666EFE, inset 2px 0px 0px 0px #666EFE, inset -2px 0px 0px 0px #666EFE';
-
   const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
     <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
-    </div>
-  );
-
-  const HeaderEmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
-    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #FFFFFF', flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
     </div>
   );
@@ -240,11 +233,11 @@ const AttributeTypesPage = () => {
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
-      <div style={{ paddingTop: 35, paddingLeft: 60 }}>
-        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 30, fontWeight: 'bold', color: '#2D4059', margin: 0 }}>Справочник: Виды характеристик</h1>
+      <div style={{ position: 'absolute', top: 35, left: 60 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Виды характеристик</h1>
       </div>
 
-      <div style={{ position: 'absolute', top: 104, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
+      <div style={{ position: 'absolute', top: 99, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 15 }}>
           <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
           <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
@@ -264,28 +257,29 @@ const AttributeTypesPage = () => {
         </div>
       </div>
 
-      <div style={{ position: 'absolute', top: 159, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: tableBorderStyle }}>
+      <div style={{ position: 'absolute', top: 154, left: 40 }}>
+        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
-            <HeaderEmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_DESIGNATION }}>ОБОЗНАЧЕНИЕ</span>
+            <EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_DESIGNATION }}>ОБОЗНАЧЕНИЕ</span>
           </div>
           <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {data.map(item => {
               const isSelected = selectedIds.has(item.uid);
               return (
-                <div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', boxShadow: rowBoxShadow }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.name)}>
+                <div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.name)}>
                   <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
                     <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} />
                   </div>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 67, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DESIGNATION - 120 }}>{item.name}</span>
+                  <img src={Popup4} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} />
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DESIGNATION - 120 }}>{item.name}</span>
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_DESIGNATION, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: TABLE_WIDTH - COL_DESIGNATION - 60 }}>{item.designation || '—'}</span>
                 </div>
               );
             })}
             {Array.from({ length: emptyRows }).map((_, i) => (
-              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, boxShadow: rowBoxShadow }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
+              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
             ))}
           </div>
         </div>
