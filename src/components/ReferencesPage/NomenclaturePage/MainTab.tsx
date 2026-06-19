@@ -1,5 +1,5 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (увеличенный попап, поле Данные кода всегда видно)
-import React, { useState, useEffect, useRef } from 'react';
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (флаг isGenerated сохраняется в localStorage при сохранении в попапе)
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
 import bwipjs from 'bwip-js';
@@ -64,6 +64,26 @@ const BARCODE_TYPES = [
 const getBarcodeHint = (type: string): string => { switch (type) { case 'code128': return 'Пример: ABC123456'; case 'ean13': return 'Пример: 5901234123457'; case 'upca': return 'Пример: 042100005264'; default: return 'Введите код'; } };
 const getSkuHint = (): string => 'Пример: SKU-001-A';
 
+// Ключи для localStorage
+const getCodeFlagsKey = (materialUid: string) => `nomenclature_code_flags_${materialUid}`;
+
+interface CodeFlags {
+  [codeValue: string]: { isGenerated: boolean; codeKind: string };
+}
+
+const loadCodeFlags = (materialUid: string): CodeFlags => {
+  try {
+    const raw = localStorage.getItem(getCodeFlagsKey(materialUid));
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+};
+
+const saveCodeFlags = (materialUid: string, flags: CodeFlags) => {
+  try {
+    localStorage.setItem(getCodeFlagsKey(materialUid), JSON.stringify(flags));
+  } catch {}
+};
+
 const MainTab: React.FC<CommonProps> = (props) => {
   const { uid, code, name, article, description, isEdit, isUploading, images, selectedImageIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, fullscreenImage, typeMaterials, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, handleImageUpload, handleDeleteImage, openPopup, handleAccountingGroupSelect, localImages, setLocalImages, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, serverBarcodes, serverSkus, validationErrors, setValidationErrors, isFinishedProduct } = props;
 
@@ -74,8 +94,27 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [fullscreenCode, setFullscreenCode] = useState<string | null>(null);
   const [fullscreenCodeContextMenu, setFullscreenCodeContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const currentBarcode = (localBarcodes && localBarcodes[0]) || serverBarcodes[0] || null;
-  const currentSku = (localSkus && localSkus[0]) || serverSkus[0] || null;
+  // Применяем isGenerated из localStorage к серверным кодам (пересчитывается при каждом рендере)
+  const enrichedServerBarcodes: any[] = useMemo(() => {
+    if (!uid) return serverBarcodes;
+    const flags = loadCodeFlags(uid);
+    return serverBarcodes.map((bc: any) => ({
+      ...bc,
+      isGenerated: flags[bc.codeValue]?.isGenerated,
+    }));
+  }, [serverBarcodes, uid, localBarcodes]); // Добавил localBarcodes в зависимости для пересчёта
+
+  const enrichedServerSkus: any[] = useMemo(() => {
+    if (!uid) return serverSkus;
+    const flags = loadCodeFlags(uid);
+    return serverSkus.map((sku: any) => ({
+      ...sku,
+      isGenerated: flags[sku.codeValue]?.isGenerated,
+    }));
+  }, [serverSkus, uid, localSkus]);
+
+  const currentBarcode = (localBarcodes && localBarcodes[0]) || enrichedServerBarcodes[0] || null;
+  const currentSku = (localSkus && localSkus[0]) || enrichedServerSkus[0] || null;
 
   // Штрихкод
   const [showBarcodePopup, setShowBarcodePopup] = useState(false);
@@ -87,6 +126,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [barcodeUploadedPreview, setBarcodeUploadedPreview] = useState<string | null>(null);
   const [barcodeTypeOpen, setBarcodeTypeOpen] = useState(false);
   const [barcodeUploadContextMenu, setBarcodeUploadContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const barcodeFileInputRef = useRef<HTMLInputElement>(null);
 
   // SKU
   const [showSkuPopup, setShowSkuPopup] = useState(false);
@@ -96,6 +136,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [skuUploadedFile, setSkuUploadedFile] = useState<File | null>(null);
   const [skuUploadedPreview, setSkuUploadedPreview] = useState<string | null>(null);
   const [skuUploadContextMenu, setSkuUploadContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const skuFileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAverageRating = async () => { if (!uid || isFinishedProduct) return; try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureRatingsAverage(uid)); setAverageRating(Math.round((res.data || 0) * 10) / 10); } catch (e) { console.error(e); } };
 
@@ -110,7 +151,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const handleLocalDeleteImage = (index: number) => { setLocalImages((p: LocalImageItem[]) => { const n = [...p]; URL.revokeObjectURL(n[index].url); n.splice(index, 1); return n; }); if (localSelectedIndex >= (localImages || []).length - 1) setLocalSelectedIndex(Math.max(0, (localImages || []).length - 2)); };
   const handleImageContextMenu = (e: React.MouseEvent, index: number) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, index }); };
 
-  // Генерация штрихкода — только в режиме генерации и при открытом попапе
+  // Генерация штрихкода
   useEffect(() => { 
     if (!barcodeValue.trim() || !barcodeGenerationMode || !showBarcodePopup) { setBarcodePreview(null); return; } 
     const t = setTimeout(() => { 
@@ -124,7 +165,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
     return () => clearTimeout(t); 
   }, [barcodeValue, barcodeType, barcodeGenerationMode, showBarcodePopup]);
   
-  // Генерация QR — только в режиме генерации и при открытом попапе
+  // Генерация QR
   useEffect(() => { 
     if (!skuValue.trim() || !skuGenerationMode || !showSkuPopup) { setSkuPreview(null); return; } 
     const t = setTimeout(async () => { 
@@ -214,6 +255,14 @@ const MainTab: React.FC<CommonProps> = (props) => {
       isGenerated: barcodeGenerationMode 
     };
     setLocalBarcodes([newCode]);
+    
+    // Сохраняем флаг в localStorage
+    if (uid) {
+      const flags = loadCodeFlags(uid);
+      flags[barcodeValue] = { isGenerated: barcodeGenerationMode, codeKind: 'BARCODE' };
+      saveCodeFlags(uid, flags);
+    }
+    
     setShowBarcodePopup(false);
   };
 
@@ -241,6 +290,14 @@ const MainTab: React.FC<CommonProps> = (props) => {
       isGenerated: skuGenerationMode 
     };
     setLocalSkus([newCode]);
+    
+    // Сохраняем флаг в localStorage
+    if (uid) {
+      const flags = loadCodeFlags(uid);
+      flags[skuValue] = { isGenerated: skuGenerationMode, codeKind: 'SKU' };
+      saveCodeFlags(uid, flags);
+    }
+    
     setShowSkuPopup(false);
   };
 
@@ -249,20 +306,41 @@ const MainTab: React.FC<CommonProps> = (props) => {
       setBarcodeValue(currentBarcode.codeValue); 
       setBarcodeType(currentBarcode.codeType || 'code128');
       const code = currentBarcode as any;
+      // Определяем режим по isGenerated
       if (code.isGenerated === true) {
         setBarcodeGenerationMode(true);
         setBarcodeUploadedFile(null);
         setBarcodeUploadedPreview(null);
-      } else if (code.file && code.isGenerated === false) {
+      } else if (code.isGenerated === false) {
         setBarcodeGenerationMode(false);
-        setBarcodeUploadedFile(code.file);
-        setBarcodeUploadedPreview(code.preview || null);
+        setBarcodeUploadedFile(code.file || null);
+        setBarcodeUploadedPreview(code.preview || code.fileUrl || null);
       } else {
-        const hasFile = !!code.file;
+        // Если флага нет — проверяем localStorage
+        if (uid) {
+          const flags = loadCodeFlags(uid);
+          const flag = flags[code.codeValue];
+          if (flag) {
+            setBarcodeGenerationMode(flag.isGenerated);
+            if (!flag.isGenerated) {
+              setBarcodeUploadedFile(code.file || null);
+              setBarcodeUploadedPreview(code.preview || code.fileUrl || null);
+            } else {
+              setBarcodeUploadedFile(null);
+              setBarcodeUploadedPreview(null);
+            }
+            setBarcodePreview(null);
+            setBarcodeTypeOpen(false);
+            setShowBarcodePopup(true);
+            return;
+          }
+        }
+        // По умолчанию — если есть fileUrl, значит фото
+        const hasFile = !!code.fileUrl;
         setBarcodeGenerationMode(!hasFile);
         if (hasFile) {
-          setBarcodeUploadedFile(code.file);
-          setBarcodeUploadedPreview(code.preview || null);
+          setBarcodeUploadedFile(null);
+          setBarcodeUploadedPreview(code.fileUrl || null);
         } else {
           setBarcodeUploadedFile(null);
           setBarcodeUploadedPreview(null);
@@ -288,16 +366,33 @@ const MainTab: React.FC<CommonProps> = (props) => {
         setSkuGenerationMode(true);
         setSkuUploadedFile(null);
         setSkuUploadedPreview(null);
-      } else if (code.file && code.isGenerated === false) {
+      } else if (code.isGenerated === false) {
         setSkuGenerationMode(false);
-        setSkuUploadedFile(code.file);
-        setSkuUploadedPreview(code.preview || null);
+        setSkuUploadedFile(code.file || null);
+        setSkuUploadedPreview(code.preview || code.fileUrl || null);
       } else {
-        const hasFile = !!code.file;
+        if (uid) {
+          const flags = loadCodeFlags(uid);
+          const flag = flags[code.codeValue];
+          if (flag) {
+            setSkuGenerationMode(flag.isGenerated);
+            if (!flag.isGenerated) {
+              setSkuUploadedFile(code.file || null);
+              setSkuUploadedPreview(code.preview || code.fileUrl || null);
+            } else {
+              setSkuUploadedFile(null);
+              setSkuUploadedPreview(null);
+            }
+            setSkuPreview(null);
+            setShowSkuPopup(true);
+            return;
+          }
+        }
+        const hasFile = !!code.fileUrl;
         setSkuGenerationMode(!hasFile);
         if (hasFile) {
-          setSkuUploadedFile(code.file);
-          setSkuUploadedPreview(code.preview || null);
+          setSkuUploadedFile(null);
+          setSkuUploadedPreview(code.fileUrl || null);
         } else {
           setSkuUploadedFile(null);
           setSkuUploadedPreview(null);
@@ -492,6 +587,10 @@ const MainTab: React.FC<CommonProps> = (props) => {
         </div>
       </div>
 
+      {/* Скрытые input-ы для загрузки файлов */}
+      <input ref={barcodeFileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBarcodeFileUpload} />
+      <input ref={skuFileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleSkuFileUpload} />
+
       {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}><button onClick={() => { isLocal ? handleLocalDeleteImage(contextMenu.index) : handleDeleteImage(displayImages[contextMenu.index]?.uid); setContextMenu(null); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Удалить</button></div>)}
       
       {/* Фулскрин для фото */}
@@ -513,7 +612,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
         </div>
       )}
 
-      {/* Попап штрихкода — увеличенный */}
+      {/* Попап штрихкода */}
       {showBarcodePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBarcodePopup(false)}>
           <div style={{ width: POPUP_WIDTH, height: POPUP_HEIGHT, backgroundColor: '#FFFFFF', borderRadius: 20, padding: '30px 30px 30px 30px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', position: 'relative' }} onClick={e => e.stopPropagation()}>
@@ -536,7 +635,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
                   style={{ marginTop: 35, width: 353, height: 249, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignSelf: 'center', flexShrink: 0 }}
                   onContextMenu={barcodeUploadedPreview ? (e) => { e.preventDefault(); e.stopPropagation(); setBarcodeUploadContextMenu({ x: e.clientX, y: e.clientY }); } : undefined}
                 >
-                  <div style={{ width: 351, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => document.getElementById('barcode-file-input')?.click()}>
+                  <div style={{ width: 351, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => barcodeFileInputRef.current?.click()}>
                     <img src={Icon10} alt="Добавить" style={{ width: 21, height: 21 }} />
                   </div>
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
@@ -587,8 +686,8 @@ const MainTab: React.FC<CommonProps> = (props) => {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexShrink: 0 }}>
-              <button onClick={() => setShowBarcodePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
               <button onClick={handleBarcodeSave} disabled={!barcodeValue.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: barcodeValue.trim() ? '#666EFE' : '#BCC8FF', cursor: barcodeValue.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
+              <button onClick={() => setShowBarcodePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
             </div>
 
             {barcodeUploadContextMenu && (
@@ -600,7 +699,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
         </div>
       )}
 
-      {/* Попап SKU — увеличенный */}
+      {/* Попап SKU */}
       {showSkuPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowSkuPopup(false)}>
           <div style={{ width: POPUP_WIDTH, height: POPUP_HEIGHT, backgroundColor: '#FFFFFF', borderRadius: 20, padding: '30px 30px 30px 30px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', position: 'relative' }} onClick={e => e.stopPropagation()}>
@@ -623,7 +722,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
                   style={{ marginTop: 35, width: 353, height: 249, border: '1px solid rgba(230, 232, 248, 0.44)', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignSelf: 'center', flexShrink: 0 }}
                   onContextMenu={skuUploadedPreview ? (e) => { e.preventDefault(); e.stopPropagation(); setSkuUploadContextMenu({ x: e.clientX, y: e.clientY }); } : undefined}
                 >
-                  <div style={{ width: 351, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => document.getElementById('sku-file-input')?.click()}>
+                  <div style={{ width: 351, height: 47, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(230, 232, 248, 0.44)', cursor: 'pointer' }} onClick={() => skuFileInputRef.current?.click()}>
                     <img src={Icon10} alt="Добавить" style={{ width: 21, height: 21 }} />
                   </div>
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
@@ -660,8 +759,8 @@ const MainTab: React.FC<CommonProps> = (props) => {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexShrink: 0 }}>
-              <button onClick={() => setShowSkuPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
               <button onClick={handleSkuSave} disabled={!skuValue.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: skuValue.trim() ? '#666EFE' : '#BCC8FF', cursor: skuValue.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
+              <button onClick={() => setShowSkuPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
             </div>
 
             {skuUploadContextMenu && (

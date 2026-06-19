@@ -21,7 +21,7 @@ interface CreateGroupPopupProps {
   isLoading: boolean;
 }
 
-let globalZIndex = 10000;
+let globalZIndex = 10003;
 
 const getNextZIndex = () => {
   globalZIndex += 1;
@@ -33,7 +33,7 @@ const CreateGroupPopup: React.FC<CreateGroupPopupProps> = ({ isOpen, currentPare
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
   const [selectedParentName, setSelectedParentName] = useState<string>('');
   const [showCatalogSelect, setShowCatalogSelect] = useState(false);
-  const [zIndex, setZIndex] = useState(10001);
+  const [zIndex, setZIndex] = useState(10003);
 
   useEffect(() => {
     if (isOpen) {
@@ -151,17 +151,6 @@ const CreateGroupPopup: React.FC<CreateGroupPopupProps> = ({ isOpen, currentPare
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button
-              onClick={onClose}
-              style={{
-                height: '40px', paddingLeft: '24px', paddingRight: '24px', borderRadius: '10px',
-                border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
-                cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '15px',
-                fontWeight: 400, color: '#2D4059',
-              }}
-            >
-              Отмена
-            </button>
-            <button
               onClick={handleSubmit}
               disabled={isLoading || !name.trim()}
               style={{
@@ -172,6 +161,17 @@ const CreateGroupPopup: React.FC<CreateGroupPopupProps> = ({ isOpen, currentPare
               }}
             >
               {isLoading ? 'Создание...' : 'Создать'}
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                height: '40px', paddingLeft: '24px', paddingRight: '24px', borderRadius: '10px',
+                border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
+                cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '15px',
+                fontWeight: 400, color: '#2D4059',
+              }}
+            >
+              Отмена
             </button>
           </div>
         </div>

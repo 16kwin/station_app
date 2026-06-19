@@ -702,8 +702,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       </motion.div>
 
       {isCatalog && (
-        <CreateGroupPopup
-          isOpen={showCreateGroup}
+        <CreateGroupPopup          isOpen={showCreateGroup}
           currentParentName={null}
           currentParentUid={null}
           groups={flattenGroups(data)}
@@ -778,8 +777,8 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
             )}
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleCreateSubmit} disabled={isCreating || !createFormName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: createFormName.trim() && !isCreating ? '#666EFE' : '#BCC8FF', cursor: createFormName.trim() && !isCreating ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isCreating ? 'Сохранение...' : 'Создать'}</button>
+              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
             </div>
           </div>
         </div>
