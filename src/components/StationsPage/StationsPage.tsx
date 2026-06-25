@@ -1,4 +1,4 @@
-// pages/StationsPage.tsx
+// pages/StationsPage.tsx — с обновлением после назначения шаблона
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import StationCell from './StationCell';
@@ -318,6 +318,7 @@ const StationsPage = () => {
 
   const handleCloseSchablonPopup = () => {
     setSchablonPopupData({ isOpen: false });
+    fetchFilteredStations();
   };
 
   useEffect(() => {
@@ -1508,6 +1509,7 @@ const StationsPage = () => {
         workshop={schablonPopupData.workshop}
         section={schablonPopupData.section}
         status={schablonPopupData.status}
+        onTemplateAssigned={() => fetchFilteredStations()}
       />
 
       <AnimatePresence>

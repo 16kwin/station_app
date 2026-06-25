@@ -135,6 +135,11 @@ restApiSupplierEvents: (supplierUid: string) => `/api/suppliers/${supplierUid}/e
 restApiSupplierDeliveries: (supplierUid: string) => `/api/suppliers/${supplierUid}/deliveries`,
 restApiSupplierDeleteDelivery: (uid: string) => `/api/suppliers/deliveries/${uid}`,
 restApiSupplierAssortment: (supplierUid: string) => `/api/suppliers/${supplierUid}/assortment`,
+restApiTemplatesCategories: '/api/templates/categories',
+restApiTemplatesCategory: (id: number) => `/api/templates/categories/${id}`,
+restApiTemplates: '/api/templates',
+restApiTemplate: (uid: string) => `/api/templates/${uid}`,
+restApiTemplateCopy: '/api/templates/copy',
 
 };
 

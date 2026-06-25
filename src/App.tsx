@@ -21,6 +21,7 @@ import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPa
 import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/ManufacturersPage';
 import SuppliersPage from './components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from './components/ReferencesPage/SuppliersPage/SupplierCreatePage';
+import TemplatesPage from './components/ReferencesPage/TemplatesPage/TemplatesPage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -123,6 +124,7 @@ const AppContent = () => {
                 <Route path="references/suppliers" element={<SuppliersPage />} />
                 <Route path="references/suppliers/create/:uid/:code" element={<SupplierCreatePage />} />
                 <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />
+                <Route path="references/templates" element={<TemplatesPage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />

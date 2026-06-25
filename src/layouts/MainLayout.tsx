@@ -26,6 +26,7 @@ import CountriesPage from '../components/ReferencesPage/CountriesPage/CountriesP
 import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/ManufacturersPage';
 import SuppliersPage from '../components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from '../components/ReferencesPage/SuppliersPage/SupplierCreatePage';
+import TemplatesPage from '../components/ReferencesPage/TemplatesPage/TemplatesPage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
@@ -84,6 +85,7 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/settings': <SettingsPage />,
   '/account': <AccountPage />,
   '/references/nomenclature': <NomenclaturePage />,
+  '/references/templates': <TemplatesPage />,
   '/references/accounting-groups': <AccountingGroupsPage />,
   '/references/nomenclature-groups': <NomenclatureGroupsPage />,
   '/references/nomenclature-types': <NomenclatureTypesPage />,
@@ -111,7 +113,9 @@ const getLabelByPath = (path: string): string => {
   const staticLabels: Record<string, string> = {
     '/main': 'Главная', '/stations': 'Станции', '/references': 'Справочники', '/documents': 'Документы',
     '/reports': 'Отчеты', '/analytics': 'Аналитика', '/settings': 'Настройки', '/account': 'Аккаунт',
-    '/references/nomenclature': 'Справочник: Номенклатура', '/references/accounting-groups': 'Справочник: Группы учета',
+    '/references/nomenclature': 'Справочник: Номенклатура',
+    '/references/templates': 'Справочник: Шаблоны пополнения',
+    '/references/accounting-groups': 'Справочник: Группы учета',
     '/references/nomenclature-groups': 'Справочник: Группы номенклатуры', '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
     '/references/attribute-types': 'Справочник: Виды характеристик', '/references/units': 'Справочник: Единицы измерения',
     '/references/brands': 'Справочник: Бренды', '/references/models': 'Справочник: Модели',

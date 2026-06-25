@@ -1,17 +1,17 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (иконки 20x20 для плоских попапов)
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (исправлен templateCategory)
 import React, { useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import { useTabs } from '../../../context/TabContext';
 import CreateGroupPopup from './CreateGroupPopup';
+import TemplateCreateGroupPopup from '../TemplatesPage/TemplateCreateGroupPopup';
 import Icon1 from '../../../assets/References/Icon1.svg';
 import Icon4 from '../../../assets/References/Icon4.svg';
 import Icon11 from '../../../assets/References/Icon11.svg';
 import Icon12 from '../../../assets/References/Icon12.svg';
 import Icon13 from '../../../assets/References/Icon13.svg';
-// Иконки для плоских попапов
 import Popup2 from '../../../assets/References/popup2.svg';
 import Popup3 from '../../../assets/References/popup3.svg';
 import Popup4 from '../../../assets/References/popup4.svg';
@@ -51,7 +51,8 @@ export type PopupType =
   | 'country'
   | 'supplier'
   | 'analogSelect'
-  | 'shortDescription';
+  | 'shortDescription'
+  | 'templateCategory';
 
 interface PopupConfig {
   title: string;
@@ -87,12 +88,13 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
       return { title: 'Справочник: Поставщики (Выбор)', columns: [], createButtonLabel: 'Создать поставщика', isFlat: true, hasCreateButton: true };
     case 'shortDescription':
       return { title: 'Справочник: Типы описаний (Выбор)', columns: [], createButtonLabel: 'Создать тип описания', isFlat: true, hasCreateButton: true };
+    case 'templateCategory':
+      return { title: 'Справочник: Шаблоны (выбор каталога)', columns: [], createButtonLabel: 'Создать каталог', isFlat: true, hasCreateButton: true };
     default:
       return { title: '', columns: [], isFlat: true, hasCreateButton: false };
   }
 };
 
-// Получить иконку для плоского попапа
 const getFlatPopupIcon = (type: PopupType): string | null => {
   switch (type) {
     case 'nomenclatureGroup': return Popup2;
@@ -105,6 +107,7 @@ const getFlatPopupIcon = (type: PopupType): string | null => {
     case 'country': return Popup9;
     case 'supplier': return Popup10;
     case 'shortDescription': return Popup11;
+    case 'templateCategory': return Icon11;
     default: return null;
   }
 };
@@ -215,17 +218,14 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const [allBrands, setAllBrands] = useState<any[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<any[]>([]);
 
-  // ВНУТРЕННЕЕ СОСТОЯНИЕ — попап сам управляет своей видимостью
   const [internalOpen, setInternalOpen] = useState(false);
 
-  // Синхронизация с пропсом isOpen
   useEffect(() => {
     if (isOpen) {
       setInternalOpen(true);
     }
   }, [isOpen]);
 
-  // Закрытие
   const handleClose = () => {
     setInternalOpen(false);
     onClose();
@@ -234,6 +234,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const config = getPopupConfig(popupType);
   const isCatalog = popupType === 'catalog';
   const isAnalogSelect = popupType === 'analogSelect';
+  const isTemplateCategory = popupType === 'templateCategory';
   const flatIcon = getFlatPopupIcon(popupType);
 
   const loadReferenceData = async () => {
@@ -273,6 +274,13 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         const converted = convertBackendTreeWithMaterials(response.data, excludeUids);
         setData(converted);
         if (converted.length > 0) setOpenFolders(new Set([converted[0].id]));
+      } else if (isTemplateCategory) {
+        const response = await AxiosService.get(ConstantInfo.restApiTemplatesCategories);
+        const cats = response.data || [];
+        setData(cats.map((item: any) => ({
+          id: String(item.id),
+          name: item.name,
+        })));
       } else if (popupType === 'nomenclatureGroup' && filterParam) {
         const response = await AxiosService.get(`${ConstantInfo.restApiNomenclatureTypePurposes}?typeMaterialUid=${filterParam}`);
         setData(convertFlatReference(response.data));
@@ -320,20 +328,18 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     }
   };
 
-  // При открытии попапа
   useEffect(() => {
     if (internalOpen) {
       setOpenFolders(new Set());
       loadData();
-      if (config.hasCreateButton && !isCatalog) loadReferenceData();
+      if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData();
     }
   }, [internalOpen, popupType, filterParam, excludeUids.join(',')]);
 
-  // При возврате на эту же вкладку — обновляем данные
   useEffect(() => {
     if (internalOpen) {
       loadData();
-      if (config.hasCreateButton && !isCatalog) loadReferenceData();
+      if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData();
     }
   }, [activeTabId]);
 
@@ -381,13 +387,34 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     }
   };
 
+  const handleTemplateCreateGroup = async (groupName: string) => {
+    setIsCreatingGroup(true);
+    try {
+      await AxiosService.post(ConstantInfo.restApiTemplatesCategories, { name: groupName });
+      const response = await AxiosService.get(ConstantInfo.restApiTemplatesCategories);
+      const cats = response.data || [];
+      setData(cats.map((item: any) => ({
+        id: String(item.id),
+        name: item.name,
+      })));
+      setShowCreateGroup(false);
+    } catch (error) {
+      console.error('Ошибка создания категории шаблонов:', error);
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
   const handleCreateClick = () => {
     if (isCatalog) {
       setShowCreateGroup(true);
       return;
     }
+    if (isTemplateCategory) {
+      setShowCreateGroup(true);
+      return;
+    }
     if (popupType === 'supplier') {
-      // Открываем вкладку, попап НЕ закрываем
       AxiosService.get(ConstantInfo.restApiSupplierGenerate).then(res => {
         const { uid, code } = res.data;
         openTab(`/references/suppliers/create/${uid}/${code}`, 'Поставщик (новый)', null);
@@ -416,6 +443,9 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       let body: any = { name: createFormName.trim() };
 
       switch (popupType) {
+        case 'templateCategory':
+          url = ConstantInfo.restApiTemplatesCategories;
+          break;
         case 'nomenclatureGroup':
           url = ConstantInfo.restApiNomenclatureTypePurposes;
           body.typeMaterialUid = createFormTypeMaterialUid || null;
@@ -457,7 +487,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       if (url) {
         await AxiosService.post(url, body);
         await loadData();
-        if (config.hasCreateButton && !isCatalog) loadReferenceData();
+        if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData();
         setShowCreatePopup(false);
       }
     } catch (error) {
@@ -596,6 +626,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
 
   const getCreateTitle = (): string => {
     switch (popupType) {
+      case 'templateCategory': return 'Создание каталога шаблонов';
       case 'nomenclatureGroup': return 'Создание группы номенклатуры';
       case 'nomenclatureType': return 'Создание вида номенклатуры';
       case 'attributeType': return 'Создание вида характеристики';
@@ -609,7 +640,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     }
   };
 
-  // Используем internalOpen вместо isOpen
   if (!internalOpen) return null;
 
   return (
@@ -702,12 +732,22 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       </motion.div>
 
       {isCatalog && (
-        <CreateGroupPopup          isOpen={showCreateGroup}
+        <CreateGroupPopup
+          isOpen={showCreateGroup}
           currentParentName={null}
           currentParentUid={null}
           groups={flattenGroups(data)}
           onClose={() => setShowCreateGroup(false)}
           onSubmit={handleCreateGroup}
+          isLoading={isCreatingGroup}
+        />
+      )}
+
+      {isTemplateCategory && (
+        <TemplateCreateGroupPopup
+          isOpen={showCreateGroup}
+          onClose={() => setShowCreateGroup(false)}
+          onSubmit={handleTemplateCreateGroup}
           isLoading={isCreatingGroup}
         />
       )}

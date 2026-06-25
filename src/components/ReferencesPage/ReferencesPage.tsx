@@ -113,6 +113,14 @@ const ReferencesPage = () => {
         >
           <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Поставщики</span>
         </button>
+        <button
+          onClick={() => openTab('/references/templates', 'Справочник: Шаблоны пополнения', null)}
+          style={buttonStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5559E0'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}
+        >
+          <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Шаблоны пополнения</span>
+        </button>
       </div>
     </div>
   );
