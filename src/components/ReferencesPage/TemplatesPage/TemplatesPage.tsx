@@ -190,8 +190,20 @@ const TemplatesPage = () => {
     return () => document.removeEventListener('click', handleClick);
   }, [contextMenu]);
 
+  // Фильтрация категорий и шаблонов
+  const getFilteredCategories = (): CategoryItem[] => {
+    if (!showActiveOnly) return categories;
+    
+    return categories.map(cat => ({
+      ...cat,
+      templates: cat.templates.filter(t => t.active)
+    })).filter(cat => cat.templates.length > 0 || cat.id === 0); // "Без категории" показываем всегда если есть активные
+  };
+
+  const filteredCategories = getFilteredCategories();
+
   const currentCategory = currentCategoryId !== null
-    ? categories.find(c => c.id === currentCategoryId) || null
+    ? filteredCategories.find(c => c.id === currentCategoryId) || null
     : null;
 
   const enterCategory = (categoryId: number) => {
@@ -522,7 +534,7 @@ const TemplatesPage = () => {
     setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
   };
 
-  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [currentCategoryId, categories]);
+  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [currentCategoryId, filteredCategories]);
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -559,7 +571,7 @@ const TemplatesPage = () => {
   };
 
   const renderCategoryList = () => {
-    return categories.map(cat => (
+    return filteredCategories.map(cat => (
       <div key={cat.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 20, position: 'relative' }} onClick={() => enterCategory(cat.id)} onContextMenu={(e) => handleContextMenu(e, cat.uid, cat.name, 'category', cat.id)}>
         <EmptySquare isSelected={false} onClick={(e) => { e.stopPropagation(); }} />
         <div style={{ display: 'flex', alignItems: 'center', marginLeft: 19 }}>
@@ -618,7 +630,7 @@ const TemplatesPage = () => {
   };
 
   const isInCategory = currentCategoryId !== null;
-  const totalItems = isInCategory ? 1 + (currentCategory?.templates?.length || 0) : categories.length;
+  const totalItems = isInCategory ? 1 + (currentCategory?.templates?.length || 0) : filteredCategories.length;
   const emptyRows = Math.max(0, VISIBLE_ROWS - totalItems);
 
   if (isLoading) {
