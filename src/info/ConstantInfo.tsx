@@ -140,6 +140,29 @@ restApiTemplatesCategory: (id: number) => `/api/templates/categories/${id}`,
 restApiTemplates: '/api/templates',
 restApiTemplate: (uid: string) => `/api/templates/${uid}`,
 restApiTemplateCopy: '/api/templates/copy',
+restApiTemplateStations: (uid: string) => `/api/templates/${uid}/stations`,
+restApiEnterprises: '/api/enterprises',
+restApiEnterprise: (id: number) => `/api/enterprises/${id}`,
+// Workshops
+restApiWorkshops: '/api/workshops',
+restApiWorkshop: (id: number) => `/api/workshops/${id}`,
+// Sections
+restApiSections: '/api/sections',
+restApiSection: (id: number) => `/api/sections/${id}`,
+restApiStationTypes: '/api/station-types',
+restApiStationType: (uid: string) => `/api/station-types/${uid}`,
+// Station manufacturers
+restApiStationManufacturers: '/api/station-manufacturers',
+restApiStationManufacturer: (uid: string) => `/api/station-manufacturers/${uid}`,
+// Station models
+restApiStationModels: '/api/station-models',
+restApiStationModel: (uid: string) => `/api/station-models/${uid}`,
+restApiStationModelGenerateCode: '/api/station-models/generate-code',
+restApiStationModelImages: (modelUid: string) => `/api/station-models/${modelUid}/images`,
+restApiStationModelDeleteImage: (imageUid: string) => `/api/station-models/images/${imageUid}`,
+restApiStationConfigurations: '/api/station-configurations',
+restApiStationConfiguration: (uid: string) => `/api/station-configurations/${uid}`,
+restApiStationConfigurationsByModel: (modelId: string) => `/api/station-configurations?modelId=${modelId}`,
 
 };
 

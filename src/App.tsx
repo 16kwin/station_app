@@ -22,6 +22,15 @@ import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/Man
 import SuppliersPage from './components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from './components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import TemplatesPage from './components/ReferencesPage/TemplatesPage/TemplatesPage';
+import EnterprisesPage from './components/ReferencesPage/EnterprisesPage/EnterprisesPage';
+import WorkshopsPage from './components/ReferencesPage/WorkshopsPage/WorkshopsPage';
+import SectionsPage from './components/ReferencesPage/SectionsPage/SectionsPage';
+import StationTypesPage from './components/ReferencesPage/StationTypesPage/StationTypesPage';
+import StationManufacturersPage from './components/ReferencesPage/StationManufacturersPage/StationManufacturersPage';
+import StationModelsPage from './components/ReferencesPage/StationModelsPage/StationModelsPage';
+import StationModelCreatePage from './components/ReferencesPage/StationModelsPage/StationModelCreatePage';
+import StationConfigurationsPage from './components/ReferencesPage/StationConfigurationsPage/StationConfigurationsPage';
+import StationConfigurationCreatePage from './components/ReferencesPage/StationConfigurationsPage/StationConfigurationCreatePage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -44,67 +53,32 @@ const AppContent = () => {
   const { isAuth, isLoading, isLocked, setLocked } = useAuth();
   const { showWarning, setShowWarning } = useInactivityLock();
 
-  useEffect(() => {
-    setNavigator(navigate);
-  }, [navigate]);
+  useEffect(() => { setNavigator(navigate); }, [navigate]);
 
   useEffect(() => {
     AxiosService.get('/csrf')
-      .then((res) => {
-        const csrfToken = res.data.token;
-        AxiosService.defaults.headers['X-XSRF-TOKEN'] = csrfToken;
-        console.log('CSRF токен получен');
-      })
-      .catch((e) => {
-        console.error('Ошибка получения CSRF', e);
-      })
-      .finally(() => {
-        setNeedPreloader(false);
-      });
+      .then((res) => { const csrfToken = res.data.token; AxiosService.defaults.headers['X-XSRF-TOKEN'] = csrfToken; })
+      .catch((e) => { console.error('Ошибка получения CSRF', e); })
+      .finally(() => { setNeedPreloader(false); });
   }, []);
 
-  const handleUnlock = () => {
-    setLocked(false);
-  };
+  const handleUnlock = () => { setLocked(false); };
 
-  if (needPreloader || isLoading) {
-    return <FullScreenPreloader />;
-  }
+  if (needPreloader || isLoading) return <FullScreenPreloader />;
 
   return (
     <div className="relative min-h-screen">
       <AnimatedGradientBackground />
-      
       <AnimatePresence mode="wait">
         {isAuth && isLocked ? (
-          <motion.div
-            key="lock"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[100]"
-          >
+          <motion.div key="lock" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="fixed inset-0 z-[100]">
             <LockScreen onUnlock={handleUnlock} />
           </motion.div>
         ) : isAuth ? (
-          <motion.div
-            key="main"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+          <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <Routes>
               <Route path="/login" element={<Navigate to="/main" replace />} />
-              
-              <Route path="/" element={
-                <PrivateRoute>
-                  <TabProvider>
-                    <MainLayout />
-                  </TabProvider>
-                </PrivateRoute>
-              }>
+              <Route path="/" element={<PrivateRoute><TabProvider><MainLayout /></TabProvider></PrivateRoute>}>
                 <Route index element={<MainPage />} />
                 <Route path="main" element={<MainPage />} />
                 <Route path="stations" element={<StationsPage />} />
@@ -125,6 +99,17 @@ const AppContent = () => {
                 <Route path="references/suppliers/create/:uid/:code" element={<SupplierCreatePage />} />
                 <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />
                 <Route path="references/templates" element={<TemplatesPage />} />
+                <Route path="references/enterprises" element={<EnterprisesPage />} />
+                <Route path="references/workshops" element={<WorkshopsPage />} />
+                <Route path="references/sections" element={<SectionsPage />} />
+                <Route path="references/station-types" element={<StationTypesPage />} />
+                <Route path="references/station-manufacturers" element={<StationManufacturersPage />} />
+                <Route path="references/station-models" element={<StationModelsPage />} />
+                <Route path="references/station-models/create/:uid" element={<StationModelCreatePage />} />
+                <Route path="references/station-models/edit/:uid" element={<StationModelCreatePage />} />
+                <Route path="references/station-configurations" element={<StationConfigurationsPage />} />
+                <Route path="references/station-configurations/create/:uid" element={<StationConfigurationCreatePage />} />
+                <Route path="references/station-configurations/edit/:uid" element={<StationConfigurationCreatePage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />
@@ -132,20 +117,12 @@ const AppContent = () => {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="account" element={<AccountPage />} />
               </Route>
-              
               <Route path="*" element={<Navigate to="/main" replace />} />
             </Routes>
-            
             <InactivityWarning show={showWarning} onClose={() => setShowWarning(false)} />
           </motion.div>
         ) : (
-          <motion.div
-            key="login"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+          <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="*" element={<Navigate to="/login" replace />} />

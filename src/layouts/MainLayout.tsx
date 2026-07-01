@@ -27,52 +27,38 @@ import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/Ma
 import SuppliersPage from '../components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from '../components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import TemplatesPage from '../components/ReferencesPage/TemplatesPage/TemplatesPage';
+import EnterprisesPage from '../components/ReferencesPage/EnterprisesPage/EnterprisesPage';
+import WorkshopsPage from '../components/ReferencesPage/WorkshopsPage/WorkshopsPage';
+import SectionsPage from '../components/ReferencesPage/SectionsPage/SectionsPage';
+import StationTypesPage from '../components/ReferencesPage/StationTypesPage/StationTypesPage';
+import StationManufacturersPage from '../components/ReferencesPage/StationManufacturersPage/StationManufacturersPage';
+import StationModelsPage from '../components/ReferencesPage/StationModelsPage/StationModelsPage';
+import StationModelCreatePage from '../components/ReferencesPage/StationModelsPage/StationModelCreatePage';
+import StationConfigurationsPage from '../components/ReferencesPage/StationConfigurationsPage/StationConfigurationsPage';
+import StationConfigurationCreatePage from '../components/ReferencesPage/StationConfigurationsPage/StationConfigurationCreatePage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
-const stationInfoCache: Map<string, { name: string; workshop: string; section: string }> = new Map();
+const templateInfoCache: Map<string, string> = new Map();
 const nomenclatureInfoCache: Map<string, string> = new Map();
 const supplierInfoCache: Map<string, string> = new Map();
 
-const fetchStationInfo = async (uid: string): Promise<{ name: string; workshop: string; section: string }> => {
-  if (stationInfoCache.has(uid)) return stationInfoCache.get(uid)!;
-  try {
-    const response = await AxiosService.get(`${ConstantInfo.restApiStationsStatic}/${uid}`);
-    const data = response.data;
-    const info = { name: data?.name || uid, workshop: data?.workshop || '', section: data?.section || '' };
-    stationInfoCache.set(uid, info);
-    return info;
-  } catch {
-    const fallback = { name: uid, workshop: '', section: '' };
-    stationInfoCache.set(uid, fallback);
-    return fallback;
-  }
+const fetchTemplateName = async (uid: string): Promise<string> => {
+  if (templateInfoCache.has(uid)) return templateInfoCache.get(uid)!;
+  try { const response = await AxiosService.get(ConstantInfo.restApiTemplate(uid)); const name = response.data?.name || uid; templateInfoCache.set(uid, name); return name; }
+  catch { templateInfoCache.set(uid, uid); return uid; }
 };
 
 const fetchNomenclatureName = async (uid: string): Promise<string> => {
   if (nomenclatureInfoCache.has(uid)) return nomenclatureInfoCache.get(uid)!;
-  try {
-    const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(uid));
-    const name = response.data?.name || uid;
-    nomenclatureInfoCache.set(uid, name);
-    return name;
-  } catch {
-    nomenclatureInfoCache.set(uid, uid);
-    return uid;
-  }
+  try { const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(uid)); const name = response.data?.name || uid; nomenclatureInfoCache.set(uid, name); return name; }
+  catch { nomenclatureInfoCache.set(uid, uid); return uid; }
 };
 
 const fetchSupplierName = async (uid: string): Promise<string> => {
   if (supplierInfoCache.has(uid)) return supplierInfoCache.get(uid)!;
-  try {
-    const response = await AxiosService.get(ConstantInfo.restApiSupplierGet(uid));
-    const name = response.data?.name || uid;
-    supplierInfoCache.set(uid, name);
-    return name;
-  } catch {
-    supplierInfoCache.set(uid, uid);
-    return uid;
-  }
+  try { const response = await AxiosService.get(ConstantInfo.restApiSupplierGet(uid)); const name = response.data?.name || uid; supplierInfoCache.set(uid, name); return name; }
+  catch { supplierInfoCache.set(uid, uid); return uid; }
 };
 
 const staticComponents: Record<string, React.ReactNode> = {
@@ -96,6 +82,13 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/references/countries': <CountriesPage />,
   '/references/manufacturers': <ManufacturersPage />,
   '/references/suppliers': <SuppliersPage />,
+  '/references/enterprises': <EnterprisesPage />,
+  '/references/workshops': <WorkshopsPage />,
+  '/references/sections': <SectionsPage />,
+  '/references/station-types': <StationTypesPage />,
+  '/references/station-manufacturers': <StationManufacturersPage />,
+  '/references/station-models': <StationModelsPage />,
+  '/references/station-configurations': <StationConfigurationsPage />,
 };
 
 const getComponentByPath = (path: string): React.ReactNode => {
@@ -104,6 +97,10 @@ const getComponentByPath = (path: string): React.ReactNode => {
   if (path.startsWith('/references/nomenclature/edit/')) return <NomenclatureCreatePage />;
   if (path.startsWith('/references/suppliers/create/')) return <SupplierCreatePage />;
   if (path.startsWith('/references/suppliers/edit/')) return <SupplierCreatePage />;
+  if (path.startsWith('/references/station-models/create/')) return <StationModelCreatePage />;
+  if (path.startsWith('/references/station-models/edit/')) return <StationModelCreatePage />;
+  if (path.startsWith('/references/station-configurations/create/')) return <StationConfigurationCreatePage />;
+  if (path.startsWith('/references/station-configurations/edit/')) return <StationConfigurationCreatePage />;
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
   if (schablonMatch) return <SchablonPage />;
   return null;
@@ -116,18 +113,31 @@ const getLabelByPath = (path: string): string => {
     '/references/nomenclature': 'Справочник: Номенклатура',
     '/references/templates': 'Справочник: Шаблоны пополнения',
     '/references/accounting-groups': 'Справочник: Группы учета',
-    '/references/nomenclature-groups': 'Справочник: Группы номенклатуры', '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
-    '/references/attribute-types': 'Справочник: Виды характеристик', '/references/units': 'Справочник: Единицы измерения',
+    '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
+    '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
+    '/references/attribute-types': 'Справочник: Виды характеристик',
+    '/references/units': 'Справочник: Единицы измерения',
     '/references/brands': 'Справочник: Бренды', '/references/models': 'Справочник: Модели',
     '/references/countries': 'Справочник: Страны', '/references/manufacturers': 'Справочник: Производители',
     '/references/suppliers': 'Справочник: Поставщики',
+    '/references/enterprises': 'Справочник: Предприятия',
+    '/references/workshops': 'Справочник: Цеха',
+    '/references/sections': 'Справочник: Участки',
+    '/references/station-types': 'Справочник: Типы станций',
+    '/references/station-manufacturers': 'Справочник: Производители станций',
+    '/references/station-models': 'Справочник: Модели станций',
+    '/references/station-configurations': 'Справочник: Конфигурации станций',
   };
   if (staticLabels[path]) return staticLabels[path];
   if (path.startsWith('/references/nomenclature/create/')) { const code = path.split('/').pop(); return `Номенклатура: ${code}`; }
   if (path.startsWith('/references/nomenclature/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return nomenclatureInfoCache.get(uid) || 'Номенклатура'; }
   if (path.startsWith('/references/suppliers/create/')) { const code = path.split('/').pop(); return `Поставщик: ${code}`; }
   if (path.startsWith('/references/suppliers/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return supplierInfoCache.get(uid) || 'Поставщик'; }
-  if (path.startsWith('/documents/schablon/')) { const uid = path.replace('/documents/schablon/', ''); const cached = stationInfoCache.get(uid); return cached ? `Шаблон - ${cached.name}` : `Шаблон - ${uid}`; }
+  if (path.startsWith('/references/station-models/create/')) { const code = path.split('/').pop(); return `Модель станции: ${code}`; }
+  if (path.startsWith('/references/station-models/edit/')) { const uid = path.split('/').pop(); return 'Модель станции'; }
+  if (path.startsWith('/references/station-configurations/create/')) { const code = path.split('/').pop(); return `Конфигурация: ${code}`; }
+  if (path.startsWith('/references/station-configurations/edit/')) { const uid = path.split('/').pop(); return 'Конфигурация станции'; }
+  if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };
 
@@ -152,32 +162,27 @@ const MainLayout = () => {
 
   useEffect(() => {
     if (!isLoaded) return;
-    const path = location.pathname;
-    if (prevPathRef.current === path) return;
-    prevPathRef.current = path;
-    const existingTab = tabs.find(tab => tab.path === path);
+    const fullPath = location.pathname + location.search;
+    if (prevPathRef.current === fullPath) return;
+    prevPathRef.current = fullPath;
+    const existingTab = tabs.find(tab => tab.path === fullPath);
     if (existingTab) {
       if (activeTabId !== existingTab.id) switchTab(existingTab.id);
-      if (existingTab.component === null) { const component = getComponentByPath(path); if (component) updateTabComponent(existingTab.id, component); }
+      if (existingTab.component === null) { const component = getComponentByPath(location.pathname); if (component) updateTabComponent(existingTab.id, component); }
       return;
     }
-    const label = getLabelByPath(path);
-    const component = getComponentByPath(path);
-    const newTabId = openTab(path, label, component);
-    if (path.startsWith('/documents/schablon/')) { const uid = path.replace('/documents/schablon/', ''); fetchStationInfo(uid).then(info => updateTabLabel(newTabId, `Шаблон - ${info.name}`)); }
-    if (path.startsWith('/references/nomenclature/edit/')) { const segments = path.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
-    if (path.startsWith('/references/suppliers/edit/')) { const segments = path.split('/'); const uid = segments[segments.length - 1]; fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); }
-  }, [location.pathname, isLoaded]);
+    const label = getLabelByPath(fullPath);
+    const component = getComponentByPath(location.pathname);
+    const newTabId = openTab(fullPath, label, component);
+    if (location.pathname.startsWith('/documents/schablon/')) { const uid = location.pathname.replace('/documents/schablon/', ''); fetchTemplateName(uid).then(name => updateTabLabel(newTabId, `Шаблон - ${name}`)); }
+    if (location.pathname.startsWith('/references/nomenclature/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
+    if (location.pathname.startsWith('/references/suppliers/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 1]; fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); }
+  }, [location.pathname, location.search, isLoaded]);
 
-  useEffect(() => { const currentPathExists = tabs.some(tab => tab.path === location.pathname); if (!currentPathExists) prevPathRef.current = ''; }, [tabs, location.pathname]);
+  useEffect(() => { const fullPath = location.pathname + location.search; const currentPathExists = tabs.some(tab => tab.path === fullPath); if (!currentPathExists) prevPathRef.current = ''; }, [tabs, location.pathname, location.search]);
 
   useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth; const height = window.innerHeight;
-      const scaleX = width / windowSize.width; const scaleY = height / windowSize.height;
-      const scale = Math.min(scaleX, scaleY);
-      if (scale > 1) setPadding(60 * scale); else setPadding(60);
-    };
+    const handleResize = () => { const width = window.innerWidth; const height = window.innerHeight; const scaleX = width / windowSize.width; const scaleY = height / windowSize.height; const scale = Math.min(scaleX, scaleY); if (scale > 1) setPadding(60 * scale); else setPadding(60); };
     if (isLoaded) { handleResize(); window.addEventListener('resize', handleResize); }
     return () => window.removeEventListener('resize', handleResize);
   }, [windowSize, isLoaded]);

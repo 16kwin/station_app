@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (исправлен templateCategory)
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -52,7 +52,10 @@ export type PopupType =
   | 'supplier'
   | 'analogSelect'
   | 'shortDescription'
-  | 'templateCategory';
+  | 'templateCategory'
+  | 'stationType'
+  | 'stationManufacturer'
+  | 'stationModel';
 
 interface PopupConfig {
   title: string;
@@ -90,6 +93,12 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
       return { title: 'Справочник: Типы описаний (Выбор)', columns: [], createButtonLabel: 'Создать тип описания', isFlat: true, hasCreateButton: true };
     case 'templateCategory':
       return { title: 'Справочник: Шаблоны (выбор каталога)', columns: [], createButtonLabel: 'Создать каталог', isFlat: true, hasCreateButton: true };
+    case 'stationType':
+      return { title: 'Справочник: Типы станций (Выбор)', columns: [], createButtonLabel: 'Создать тип станции', isFlat: true, hasCreateButton: true };
+    case 'stationManufacturer':
+      return { title: 'Справочник: Производители станций (Выбор)', columns: [], createButtonLabel: 'Создать производителя', isFlat: true, hasCreateButton: true };
+    case 'stationModel':
+      return { title: 'Справочник: Модели станций (Выбор)', columns: [{ key: 'code', title: 'КОД', left: 400 }, { key: 'article', title: 'АРТИКУЛ', left: 600 }], isFlat: true, hasCreateButton: false };
     default:
       return { title: '', columns: [], isFlat: true, hasCreateButton: false };
   }
@@ -108,6 +117,9 @@ const getFlatPopupIcon = (type: PopupType): string | null => {
     case 'supplier': return Popup10;
     case 'shortDescription': return Popup11;
     case 'templateCategory': return Icon11;
+    case 'stationType': return Popup9;
+    case 'stationManufacturer': return Popup6;
+    case 'stationModel': return Popup9;
     default: return null;
   }
 };
@@ -319,6 +331,20 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'country') {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureCountries);
         setData(convertGenericFlat(response.data));
+      } else if (popupType === 'stationType') {
+        const response = await AxiosService.get(ConstantInfo.restApiStationTypes);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'stationManufacturer') {
+        const response = await AxiosService.get(ConstantInfo.restApiStationManufacturers);
+        setData(convertGenericFlat(response.data));
+      } else if (popupType === 'stationModel') {
+        const response = await AxiosService.get(ConstantInfo.restApiStationModels);
+        setData((response.data || []).map((item: any) => ({
+          id: item.uid,
+          name: item.name,
+          code: item.code ? String(item.code).padStart(4, '0') : '',
+          article: item.article || '',
+        })));
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
@@ -482,6 +508,14 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         case 'shortDescription':
           url = ConstantInfo.restApiSupplierDescriptionTypes;
           break;
+        case 'stationType':
+          url = ConstantInfo.restApiStationTypes;
+          body.description = createFormDescription.trim();
+          break;
+        case 'stationManufacturer':
+          url = ConstantInfo.restApiStationManufacturers;
+          body.description = createFormDescription.trim();
+          break;
       }
 
       if (url) {
@@ -636,6 +670,8 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       case 'model': return 'Создание модели';
       case 'country': return 'Создание страны';
       case 'shortDescription': return 'Создание типа описания';
+      case 'stationType': return 'Создание типа станции';
+      case 'stationManufacturer': return 'Создание производителя станций';
       default: return 'Создание';
     }
   };
@@ -789,7 +825,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
               </div>
             )}
 
-            {(popupType === 'unit' || popupType === 'manufacturer' || popupType === 'brand' || popupType === 'model') && (
+            {(popupType === 'unit' || popupType === 'manufacturer' || popupType === 'brand' || popupType === 'model' || popupType === 'stationType' || popupType === 'stationManufacturer') && (
               <div>
                 <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label>
                 <input type="text" value={createFormDescription} onChange={e => setCreateFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите описание" style={inputStyle} />

@@ -1,5 +1,6 @@
-// SchablonPopup.tsx — кнопки в создании шаблона поменяны местами
+// SchablonPopup.tsx — с логами
 import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../components/CustomScrollbar';
 import AxiosService from '../../services/AxiosService';
@@ -83,6 +84,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
   status,
   onTemplateAssigned,
 }) => {
+  const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -118,6 +120,8 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      console.log('=== SchablonPopup OPENED ===');
+      console.log('props - uid:', uid, 'name:', name);
       setInternalOpen(true);
       setNewlyCreatedUid('');
     }
@@ -345,6 +349,32 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     }
   };
 
+  const handleTemplateContextOpen = () => {
+    if (!templateContextMenu) return;
+    const { templateUid } = templateContextMenu;
+    console.log('=== POPUP CLICK OPEN ===');
+    console.log('templateUid:', templateUid);
+    console.log('prop uid:', uid);
+    console.log('prop name:', name);
+    
+    setTemplateContextMenu(null);
+    
+    const params = new URLSearchParams();
+    if (uid) {
+      params.set('stationUid', uid);
+      console.log('setting stationUid:', uid);
+    }
+    if (name) {
+      params.set('stationName', name);
+      console.log('setting stationName:', name);
+    }
+    const queryString = params.toString();
+    const url = `/documents/schablon/${templateUid}${queryString ? `?${queryString}` : ''}`;
+    console.log('navigating to:', url);
+    
+    navigate(url);
+  };
+
   const handleTemplateContextSetActive = () => {
     if (!templateContextMenu) return;
     const template = categories.flatMap(c => c.templates).find(t => t.uid === templateContextMenu.templateUid);
@@ -366,6 +396,17 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     setOperationTemplateUid(templateContextMenu.templateUid);
     setTemplateContextMenu(null);
     setShowMoveSelectPopup(true);
+  };
+
+  const handleTemplateContextDelete = async () => {
+    if (!templateContextMenu) return;
+    try {
+      await AxiosService.delete(ConstantInfo.restApiTemplate(templateContextMenu.templateUid));
+      setTemplateContextMenu(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Ошибка удаления шаблона:', error);
+    }
   };
 
   const handleCopyToCurrent = async () => {
@@ -761,7 +802,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
 
       {templateContextMenu && (
         <div data-context-menu style={{ position: 'fixed', top: templateContextMenu.y, left: templateContextMenu.x, width: 200, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => setTemplateContextMenu(null)} style={contextMenuButtonStyle}>
+          <button onClick={handleTemplateContextOpen} style={contextMenuButtonStyle}>
             <img src={IconOpen} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
             Открыть
           </button>
@@ -777,7 +818,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
             <img src={Icon24} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
             Скопировать
           </button>
-          <button onClick={() => setTemplateContextMenu(null)} style={contextMenuButtonStyle}>
+          <button onClick={handleTemplateContextDelete} style={contextMenuButtonStyle}>
             <img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
             Удалить
           </button>

@@ -23,10 +23,14 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationHighlight, setAnimationHighlight] = useState<number | null>(null);
   const [selectedCellIds, setSelectedCellIds] = useState<Set<number>>(new Set());
-  const [expandedCellId, setExpandedCellId] = useState<number | null>(null);
+  // const [expandedCellId, setExpandedCellId] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const cellRefsMap = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  const TABLE_HEIGHT = 560;
+  const HEADER_HEIGHT = 80;
+  const ROW_HEIGHT = 80;
 
   const rows: TableRow[] = Array.from({ length: 18 }, (_, i) => ({
     id: i + 1,
@@ -61,10 +65,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
   };
 
   const handleSelect = (id: number, ctrlKey: boolean) => {
-    if (expandedCellId === id && selectedCellIds.has(id)) {
-      return;
-    }
-
     if (isMultiSelect || ctrlKey) {
       if (ctrlKey && !isMultiSelect) {
         onEnableMultiSelect();
@@ -72,7 +72,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
       setSelectedCellIds(prev => {
         const next = new Set(prev);
         if (next.has(id)) {
-          if (expandedCellId === id) return prev;
           next.delete(id);
         } else {
           next.add(id);
@@ -82,44 +81,19 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
       return;
     }
 
-    if (expandedCellId !== null && expandedCellId !== id) {
-      setExpandedCellId(null);
-      setSelectedCellIds(new Set([id]));
-      return;
-    }
-
     setSelectedCellIds(prev => {
-      if (prev.has(id) && prev.size === 1 && expandedCellId !== id) {
+      if (prev.has(id) && prev.size === 1) {
         return new Set();
       }
       return new Set([id]);
     });
   };
 
-  const handleToggleExpand = (id: number) => {
-    setExpandedCellId(prev => {
-      const newExpandedId = prev === id ? null : id;
-      
-      if (newExpandedId !== null) {
-        setSelectedCellIds(prevSelected => {
-          if (isMultiSelect) {
-            const next = new Set(prevSelected);
-            next.add(newExpandedId);
-            return next;
-          }
-          return new Set([newExpandedId]);
-        });
-      }
-      
-      return newExpandedId;
-    });
+  const handleToggleExpand = (_id: number) => {
+    // Закомментировано
   };
 
   const handleDoubleClick = (id: number) => {
-    if (expandedCellId !== null && expandedCellId !== id) {
-      setExpandedCellId(null);
-    }
-
     setSelectedCellIds(prev => {
       const next = isMultiSelect ? new Set(prev) : new Set<number>();
       next.add(id);
@@ -203,7 +177,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
     };
   }, [isAnimating, selectedColumn]);
 
-  const trackHeight = 640 - 80;
+  const trackHeight = TABLE_HEIGHT - HEADER_HEIGHT;
   const columns = Array.from({ length: 14 }, (_, i) => i + 1);
 
   const DRUM_BUTTON_WIDTH = 144;
@@ -212,7 +186,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
   const TEXT_HEIGHT = 17;
   const TEXT_TO_LINE = 7;
   const LINE_THICKNESS = 3;
-  const HEADER_HEIGHT = 80;
   const TEXT_TOP = 30;
 
   const COLUMN_BLOCK_SIZE = 35;
@@ -240,15 +213,15 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
   const handleDrumClick = (drum: 'left' | 'right') => {
     onDrumChange(drum);
     setSelectedCellIds(new Set());
-    setExpandedCellId(null);
+    // setExpandedCellId(null);
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', height: '640px' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', height: `${TABLE_HEIGHT}px` }}>
       <div
         style={{
           width: '1183px',
-          height: '640px',
+          height: `${TABLE_HEIGHT}px`,
           backgroundColor: '#F3F4F6',
           borderRadius: '10px',
           overflow: 'hidden',
@@ -437,7 +410,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
               key={row.id}
               row={row}
               isSelected={selectedCellIds.has(row.id)}
-              isExpanded={expandedCellId === row.id}
+              isExpanded={false}
               isMultiSelect={isMultiSelect}
               selectedColumn={selectedColumn}
               onSelect={handleSelect}
@@ -449,7 +422,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({ isMultiSelect, onEnableMu
         </div>
       </div>
 
-      <div style={{ marginLeft: '15px', marginTop: '80px' }}>
+      <div style={{ marginLeft: '15px', marginTop: `${HEADER_HEIGHT}px` }}>
         <CustomScrollbar
           scrollContainerRef={scrollContainerRef}
           orientation="vertical"
