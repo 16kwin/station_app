@@ -27,6 +27,7 @@ import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/Ma
 import SuppliersPage from '../components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from '../components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import TemplatesPage from '../components/ReferencesPage/TemplatesPage/TemplatesPage';
+import HoldingsPage from '../components/ReferencesPage/HoldingsPage/HoldingsPage';
 import EnterprisesPage from '../components/ReferencesPage/EnterprisesPage/EnterprisesPage';
 import WorkshopsPage from '../components/ReferencesPage/WorkshopsPage/WorkshopsPage';
 import SectionsPage from '../components/ReferencesPage/SectionsPage/SectionsPage';
@@ -36,6 +37,8 @@ import StationModelsPage from '../components/ReferencesPage/StationModelsPage/St
 import StationModelCreatePage from '../components/ReferencesPage/StationModelsPage/StationModelCreatePage';
 import StationConfigurationsPage from '../components/ReferencesPage/StationConfigurationsPage/StationConfigurationsPage';
 import StationConfigurationCreatePage from '../components/ReferencesPage/StationConfigurationsPage/StationConfigurationCreatePage';
+import StationsCrudPage from '../components/ReferencesPage/StationsCrudPage/StationsCrudPage';
+import StationCreatePage from '../components/ReferencesPage/StationsCrudPage/StationCreatePage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
@@ -62,33 +65,19 @@ const fetchSupplierName = async (uid: string): Promise<string> => {
 };
 
 const staticComponents: Record<string, React.ReactNode> = {
-  '/main': <MainPage />,
-  '/stations': <StationsPage />,
-  '/references': <ReferencesPage />,
-  '/documents': <DocumentsPage />,
-  '/reports': <ReportsPage />,
-  '/analytics': <AnalyticsPage />,
-  '/settings': <SettingsPage />,
-  '/account': <AccountPage />,
-  '/references/nomenclature': <NomenclaturePage />,
-  '/references/templates': <TemplatesPage />,
-  '/references/accounting-groups': <AccountingGroupsPage />,
-  '/references/nomenclature-groups': <NomenclatureGroupsPage />,
-  '/references/nomenclature-types': <NomenclatureTypesPage />,
-  '/references/attribute-types': <AttributeTypesPage />,
-  '/references/units': <UnitsPage />,
-  '/references/brands': <BrandsPage />,
-  '/references/models': <ModelsPage />,
-  '/references/countries': <CountriesPage />,
-  '/references/manufacturers': <ManufacturersPage />,
-  '/references/suppliers': <SuppliersPage />,
-  '/references/enterprises': <EnterprisesPage />,
-  '/references/workshops': <WorkshopsPage />,
-  '/references/sections': <SectionsPage />,
-  '/references/station-types': <StationTypesPage />,
-  '/references/station-manufacturers': <StationManufacturersPage />,
-  '/references/station-models': <StationModelsPage />,
-  '/references/station-configurations': <StationConfigurationsPage />,
+  '/main': <MainPage />, '/stations': <StationsPage />, '/references': <ReferencesPage />,
+  '/documents': <DocumentsPage />, '/reports': <ReportsPage />, '/analytics': <AnalyticsPage />,
+  '/settings': <SettingsPage />, '/account': <AccountPage />,
+  '/references/nomenclature': <NomenclaturePage />, '/references/templates': <TemplatesPage />,
+  '/references/accounting-groups': <AccountingGroupsPage />, '/references/nomenclature-groups': <NomenclatureGroupsPage />,
+  '/references/nomenclature-types': <NomenclatureTypesPage />, '/references/attribute-types': <AttributeTypesPage />,
+  '/references/units': <UnitsPage />, '/references/brands': <BrandsPage />, '/references/models': <ModelsPage />,
+  '/references/countries': <CountriesPage />, '/references/manufacturers': <ManufacturersPage />,
+  '/references/suppliers': <SuppliersPage />, '/references/holdings': <HoldingsPage />,
+  '/references/enterprises': <EnterprisesPage />, '/references/workshops': <WorkshopsPage />,
+  '/references/sections': <SectionsPage />, '/references/station-types': <StationTypesPage />,
+  '/references/station-manufacturers': <StationManufacturersPage />, '/references/station-models': <StationModelsPage />,
+  '/references/station-configurations': <StationConfigurationsPage />, '/references/stations': <StationsCrudPage />,
 };
 
 const getComponentByPath = (path: string): React.ReactNode => {
@@ -101,6 +90,8 @@ const getComponentByPath = (path: string): React.ReactNode => {
   if (path.startsWith('/references/station-models/edit/')) return <StationModelCreatePage />;
   if (path.startsWith('/references/station-configurations/create/')) return <StationConfigurationCreatePage />;
   if (path.startsWith('/references/station-configurations/edit/')) return <StationConfigurationCreatePage />;
+  if (path.startsWith('/references/stations/create/')) return <StationCreatePage />;
+  if (path.startsWith('/references/stations/edit/')) return <StationCreatePage />;
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
   if (schablonMatch) return <SchablonPage />;
   return null;
@@ -110,23 +101,17 @@ const getLabelByPath = (path: string): string => {
   const staticLabels: Record<string, string> = {
     '/main': 'Главная', '/stations': 'Станции', '/references': 'Справочники', '/documents': 'Документы',
     '/reports': 'Отчеты', '/analytics': 'Аналитика', '/settings': 'Настройки', '/account': 'Аккаунт',
-    '/references/nomenclature': 'Справочник: Номенклатура',
-    '/references/templates': 'Справочник: Шаблоны пополнения',
-    '/references/accounting-groups': 'Справочник: Группы учета',
-    '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
-    '/references/nomenclature-types': 'Справочник: Виды номенклатуры',
-    '/references/attribute-types': 'Справочник: Виды характеристик',
-    '/references/units': 'Справочник: Единицы измерения',
-    '/references/brands': 'Справочник: Бренды', '/references/models': 'Справочник: Модели',
-    '/references/countries': 'Справочник: Страны', '/references/manufacturers': 'Справочник: Производители',
-    '/references/suppliers': 'Справочник: Поставщики',
-    '/references/enterprises': 'Справочник: Предприятия',
-    '/references/workshops': 'Справочник: Цеха',
-    '/references/sections': 'Справочник: Участки',
-    '/references/station-types': 'Справочник: Типы станций',
-    '/references/station-manufacturers': 'Справочник: Производители станций',
-    '/references/station-models': 'Справочник: Модели станций',
-    '/references/station-configurations': 'Справочник: Конфигурации станций',
+    '/references/nomenclature': 'Справочник: Номенклатура', '/references/templates': 'Справочник: Шаблоны пополнения',
+    '/references/accounting-groups': 'Справочник: Группы учета', '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
+    '/references/nomenclature-types': 'Справочник: Виды номенклатуры', '/references/attribute-types': 'Справочник: Виды характеристик',
+    '/references/units': 'Справочник: Единицы измерения', '/references/brands': 'Справочник: Бренды',
+    '/references/models': 'Справочник: Модели', '/references/countries': 'Справочник: Страны',
+    '/references/manufacturers': 'Справочник: Производители', '/references/suppliers': 'Справочник: Поставщики',
+    '/references/holdings': 'Справочник: Холдинги', '/references/enterprises': 'Справочник: Предприятия',
+    '/references/workshops': 'Справочник: Цеха', '/references/sections': 'Справочник: Участки',
+    '/references/station-types': 'Справочник: Типы станций', '/references/station-manufacturers': 'Справочник: Производители станций',
+    '/references/station-models': 'Справочник: Модели станций', '/references/station-configurations': 'Справочник: Конфигурации станций',
+    '/references/stations': 'Справочник: Станции',
   };
   if (staticLabels[path]) return staticLabels[path];
   if (path.startsWith('/references/nomenclature/create/')) { const code = path.split('/').pop(); return `Номенклатура: ${code}`; }
@@ -137,6 +122,8 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/references/station-models/edit/')) { const uid = path.split('/').pop(); return 'Модель станции'; }
   if (path.startsWith('/references/station-configurations/create/')) { const code = path.split('/').pop(); return `Конфигурация: ${code}`; }
   if (path.startsWith('/references/station-configurations/edit/')) { const uid = path.split('/').pop(); return 'Конфигурация станции'; }
+  if (path.startsWith('/references/stations/create/')) { const code = path.split('/').pop(); return `Станция: ${code}`; }
+  if (path.startsWith('/references/stations/edit/')) { const uid = path.split('/').pop(); return 'Станция'; }
   if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };

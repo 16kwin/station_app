@@ -1,4 +1,6 @@
+// StationCell.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Импорт фонов
 import SectionCard1 from '../../assets/Station/StationCard1.svg';
@@ -120,6 +122,7 @@ const StationCell: React.FC<StationCellProps> = ({
   readyPartsCount = 0,
   onOpenSchablonPopup,
 }) => {
+  const navigate = useNavigate();
   const [side, setSide] = useState<CardSide>('front');
   const [displaySide, setDisplaySide] = useState<CardSide>('front');
   const [isAnimating, setIsAnimating] = useState(false);
@@ -338,6 +341,13 @@ const StationCell: React.FC<StationCellProps> = ({
         section: section || '',
         status: status || '',
       });
+    }
+  };
+
+  const handleSettingsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (uid) {
+      navigate(`/references/stations/edit/${uid}`);
     }
   };
 
@@ -1192,10 +1202,12 @@ const StationCell: React.FC<StationCellProps> = ({
         </div>
         
         <div
+          onClick={handleSettingsClick}
           style={{
             display: 'flex',
             alignItems: 'center',
             position: 'relative',
+            cursor: 'pointer',
           }}
         >
           <img

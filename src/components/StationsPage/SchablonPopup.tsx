@@ -1,4 +1,4 @@
-// SchablonPopup.tsx — с логами
+// SchablonPopup.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,8 @@ import Icon22 from '../../assets/References/Icon22.svg';
 import Icon23 from '../../assets/References/Icon23.svg';
 import Icon24 from '../../assets/References/Icon24.svg';
 import Icon25 from '../../assets/References/Icon25.svg';
+import Icon31 from '../../assets/References/NomenclatureCreatePage/Icon31.svg';
+import Icon32 from '../../assets/References/NomenclatureCreatePage/Icon32.svg';
 
 interface TemplateItem {
   uid: string;
@@ -29,6 +31,8 @@ interface TemplateItem {
   categoryId: number | null;
   categoryName: string | null;
   configuration: string | null;
+  configurationUid: string | null;
+  configurationName: string | null;
   totalCells: number;
   filledCells: number;
   freeCells: number;
@@ -65,6 +69,7 @@ interface SchablonPopupProps {
   workshop?: string;
   section?: string;
   status?: string;
+  configurationUid?: string;
   onTemplateAssigned?: (templateUid: string) => void;
 }
 
@@ -82,6 +87,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
   workshop,
   section,
   status,
+  configurationUid,
   onTemplateAssigned,
 }) => {
   const navigate = useNavigate();
@@ -95,7 +101,10 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
   const [createTemplateName, setCreateTemplateName] = useState('');
   const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState<number | null>(null);
   const [createTemplateCategoryName, setCreateTemplateCategoryName] = useState('');
+  const [createTemplateConfigUid, setCreateTemplateConfigUid] = useState('');
+  const [createTemplateConfigName, setCreateTemplateConfigName] = useState('');
   const [showCreateCategorySelect, setShowCreateCategorySelect] = useState(false);
+  const [showCreateConfigSelect, setShowCreateConfigSelect] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
   const [categoryContextMenu, setCategoryContextMenu] = useState<CategoryContextMenu | null>(null);
   const [templateContextMenu, setTemplateContextMenu] = useState<TemplateContextMenu | null>(null);
@@ -106,6 +115,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
   const [activeTemplateUid, setActiveTemplateUid] = useState<string>('');
   const [activeTemplateName, setActiveTemplateName] = useState<string>('');
   const [newlyCreatedUid, setNewlyCreatedUid] = useState<string>('');
+  const [stationConfUid, setStationConfUid] = useState<string>('');
 
   const [showCopyPopup, setShowCopyPopup] = useState(false);
   const [showCopySelectPopup, setShowCopySelectPopup] = useState(false);
@@ -120,8 +130,6 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      console.log('=== SchablonPopup OPENED ===');
-      console.log('props - uid:', uid, 'name:', name);
       setInternalOpen(true);
       setNewlyCreatedUid('');
     }
@@ -144,16 +152,31 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
       ]);
 
       const cats: any[] = catsRes.data;
-      const temps: TemplateItem[] = tempsRes.data;
+      const allTemps: TemplateItem[] = tempsRes.data;
 
       const stationData = stationRes?.data;
+      let confUid = configurationUid || '';
       if (stationData?.activeTemplateUid) {
         setActiveTemplateUid(stationData.activeTemplateUid);
-        const found = temps.find((t: TemplateItem) => t.uid === stationData.activeTemplateUid);
+        const found = allTemps.find((t: TemplateItem) => t.uid === stationData.activeTemplateUid);
         setActiveTemplateName(found?.name || '');
       } else {
         setActiveTemplateUid('');
         setActiveTemplateName('');
+      }
+
+      if (!confUid && stationData?.configurationUid) {
+        confUid = stationData.configurationUid;
+      }
+      setStationConfUid(confUid);
+
+      let temps: TemplateItem[];
+      if (confUid) {
+        temps = allTemps.filter((t: TemplateItem) => 
+          t.configurationUid === confUid
+        );
+      } else {
+        temps = [];
       }
 
       const catMap = new Map<number, TemplateItem[]>();
@@ -168,13 +191,15 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
         }
       });
 
-      const result: CategoryItem[] = cats.map((c: any) => ({
-        id: c.id,
-        uid: c.uid,
-        name: c.name,
-        templates: catMap.get(c.id) || [],
-        isOpen: openCategoriesRef.current.has(c.id),
-      }));
+      const result: CategoryItem[] = cats
+        .filter((c: any) => (catMap.get(c.id) || []).length > 0)
+        .map((c: any) => ({
+          id: c.id,
+          uid: c.uid,
+          name: c.name,
+          templates: catMap.get(c.id) || [],
+          isOpen: openCategoriesRef.current.has(c.id),
+        }));
 
       if (uncategorized.length > 0) {
         result.push({
@@ -270,6 +295,11 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
       if (createTemplateCategoryId && createTemplateCategoryId !== 0) {
         body.categoryId = createTemplateCategoryId;
       }
+      if (createTemplateConfigUid) {
+        body.configurationUid = createTemplateConfigUid;
+      } else if (configurationUid) {
+        body.configurationUid = configurationUid;
+      }
       const response = await AxiosService.post(ConstantInfo.restApiTemplates, body);
       setNewlyCreatedUid(response.data.uid);
       if (createTemplateCategoryId) {
@@ -282,6 +312,8 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
       setCreateTemplateName('');
       setCreateTemplateCategoryId(null);
       setCreateTemplateCategoryName('');
+      setCreateTemplateConfigUid('');
+      setCreateTemplateConfigName('');
     } catch (error) {
       console.error('Ошибка создания шаблона:', error);
     } finally {
@@ -294,6 +326,12 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     setCreateTemplateCategoryId(isNaN(numId) || numId === 0 ? null : numId);
     setCreateTemplateCategoryName(name);
     setShowCreateCategorySelect(false);
+  };
+
+  const handleCreateConfigSelect = (id: string, name: string) => {
+    setCreateTemplateConfigUid(id);
+    setCreateTemplateConfigName(name);
+    setShowCreateConfigSelect(false);
   };
 
   const handleCreateGroup = async (groupName: string) => {
@@ -326,6 +364,8 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     setCreateTemplateName('');
     setCreateTemplateCategoryId(categoryContextMenu.categoryId);
     setCreateTemplateCategoryName(categoryContextMenu.categoryName);
+    setCreateTemplateConfigUid('');
+    setCreateTemplateConfigName('');
     setCategoryContextMenu(null);
     setShowCreateTemplatePopup(true);
   };
@@ -352,26 +392,12 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
   const handleTemplateContextOpen = () => {
     if (!templateContextMenu) return;
     const { templateUid } = templateContextMenu;
-    console.log('=== POPUP CLICK OPEN ===');
-    console.log('templateUid:', templateUid);
-    console.log('prop uid:', uid);
-    console.log('prop name:', name);
-    
     setTemplateContextMenu(null);
-    
     const params = new URLSearchParams();
-    if (uid) {
-      params.set('stationUid', uid);
-      console.log('setting stationUid:', uid);
-    }
-    if (name) {
-      params.set('stationName', name);
-      console.log('setting stationName:', name);
-    }
+    if (uid) params.set('stationUid', uid);
+    if (name) params.set('stationName', name);
     const queryString = params.toString();
     const url = `/documents/schablon/${templateUid}${queryString ? `?${queryString}` : ''}`;
-    console.log('navigating to:', url);
-    
     navigate(url);
   };
 
@@ -524,11 +550,27 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     backgroundColor: '#FFFFFF',
   };
 
+  const selectFieldStyle: React.CSSProperties = {
+    width: '100%', height: 44, borderRadius: 10,
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center',
+    paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box',
+  };
+
   const contextMenuButtonStyle: React.CSSProperties = {
     height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
     display: 'flex', alignItems: 'center', paddingLeft: 20,
     fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
     width: '100%',
+  };
+
+  const handleToolbarCreate = () => {
+    setCreateTemplateName('');
+    setCreateTemplateCategoryId(null);
+    setCreateTemplateCategoryName('');
+    setCreateTemplateConfigUid('');
+    setCreateTemplateConfigName('');
+    setShowCreateTemplatePopup(true);
   };
 
   if (!internalOpen) return null;
@@ -594,36 +636,24 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
             </button>
 
             <div style={{ display: 'flex', gap: '15px' }}>
-              <button
-                onClick={() => { setCreateTemplateName(''); setCreateTemplateCategoryId(null); setCreateTemplateCategoryName(''); setShowCreateTemplatePopup(true); }}
-                style={{
-                  width: '122px', height: '40px',
-                  backgroundColor: '#FFFFFF', border: 'none', borderRadius: '10px',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  padding: 0, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-                }}
-              >
+              <button onClick={handleToolbarCreate} style={{
+                width: '122px', height: '40px',
+                backgroundColor: '#FFFFFF', border: 'none', borderRadius: '10px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                padding: 0, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+              }}>
                 <img src={PopupIcon2} alt="" style={{ width: '14px', height: '14px', marginLeft: '15px' }} />
-                <span style={{
-                  fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 500,
-                  color: '#2D4059', marginLeft: '15px',
-                }}>Создать</span>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 500, color: '#2D4059', marginLeft: '15px' }}>Создать</span>
               </button>
 
-              <button
-                onClick={() => setShowCreateGroup(true)}
-                style={{
-                  width: '185px', height: '40px',
-                  backgroundColor: '#FFFFFF', border: 'none', borderRadius: '10px',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  padding: 0, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-                }}
-              >
+              <button onClick={() => setShowCreateGroup(true)} style={{
+                width: '185px', height: '40px',
+                backgroundColor: '#FFFFFF', border: 'none', borderRadius: '10px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                padding: 0, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+              }}>
                 <img src={Iconn} alt="" style={{ width: '22px', height: '20px', marginLeft: '13px' }} />
-                <span style={{
-                  fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 500,
-                  color: '#2D4059', marginLeft: '15px',
-                }}>Создать группу</span>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 500, color: '#2D4059', marginLeft: '15px' }}>Создать группу</span>
               </button>
             </div>
           </div>
@@ -643,6 +673,12 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
                     {isLoading ? (
                       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#9CA3AF' }}>Загрузка...</span>
+                      </div>
+                    ) : categories.length === 0 ? (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#9CA3AF' }}>
+                          {stationConfUid ? 'Нет шаблонов для данной конфигурации' : 'Конфигурация станции не задана'}
+                        </span>
                       </div>
                     ) : (
                       <>
@@ -748,8 +784,15 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
               <input type="text" value={createTemplateName} onChange={e => setCreateTemplateName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplateSubmit(); else if (e.key === 'Escape') setShowCreateTemplatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
             </div>
             <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Конфигурация</label>
+              <div onClick={() => setShowCreateConfigSelect(true)} style={{ ...selectFieldStyle, border: createTemplateConfigUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
+                <img src={createTemplateConfigUid ? Icon32 : Icon31} alt="" style={{ width: '14.5px', height: '18px', flexShrink: 0 }} />
+                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateConfigUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateConfigName || 'Выберите конфигурацию'}</span>
+              </div>
+            </div>
+            <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Группа</label>
-              <div onClick={() => setShowCreateCategorySelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateCategoryId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
+              <div onClick={() => setShowCreateCategorySelect(true)} style={{ ...selectFieldStyle, border: createTemplateCategoryId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
                 <img src={PopupIcon4} alt="" style={{ width: '14.5px', height: '18px', flexShrink: 0 }} />
                 <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryId ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Выберите группу'}</span>
               </div>
@@ -763,6 +806,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
       )}
 
       <CatalogSelectPopup isOpen={showCreateCategorySelect} onClose={() => setShowCreateCategorySelect(false)} onSelect={handleCreateCategorySelect} popupType="templateCategory" />
+      <CatalogSelectPopup isOpen={showCreateConfigSelect} onClose={() => setShowCreateConfigSelect(false)} onSelect={handleCreateConfigSelect} popupType="stationConfiguration" />
 
       <TemplateCreateGroupPopup isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} onSubmit={handleCreateGroup} isLoading={isCreatingGroup} />
 

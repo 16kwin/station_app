@@ -1,4 +1,4 @@
-// TemplatesPage.tsx — исправлен цвет текста станций и иконка активного
+// TemplatesPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -27,6 +27,8 @@ import Icon25 from '../../../assets/References/Icon25.svg';
 import IconOpen from '../../../assets/References/IconOpen.svg';
 import Iconn2 from '../../../assets/Station/Iconn2.svg';
 import Iconn3 from '../../../assets/Station/Iconn3.svg';
+import Icon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
+import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
 import PopupIcon2 from '../../../assets/Station/PopupIcon2.svg';
 import PopupIcon4 from '../../../assets/Station/PopupIcon4.svg';
 import PopupIcon7 from '../../../assets/Station/PopupIcon7.svg';
@@ -38,6 +40,8 @@ interface TemplateItem {
   categoryId: number | null;
   categoryName: string | null;
   configuration: string | null;
+  configurationName: string | null;
+  modelName: string | null;
   totalCells: number;
   filledCells: number;
   freeCells: number;
@@ -104,7 +108,13 @@ const TemplatesPage = () => {
   const [createTemplateName, setCreateTemplateName] = useState('');
   const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState<number | null>(null);
   const [createTemplateCategoryName, setCreateTemplateCategoryName] = useState('');
+  const [createTemplateModelUid, setCreateTemplateModelUid] = useState('');
+  const [createTemplateModelName, setCreateTemplateModelName] = useState('');
+  const [createTemplateConfigUid, setCreateTemplateConfigUid] = useState('');
+  const [createTemplateConfigName, setCreateTemplateConfigName] = useState('');
   const [showCreateCategorySelect, setShowCreateCategorySelect] = useState(false);
+  const [showCreateModelSelect, setShowCreateModelSelect] = useState(false);
+  const [showCreateConfigSelect, setShowCreateConfigSelect] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
   const [showActiveOnly, setShowActiveOnly] = useState(false);
@@ -117,11 +127,14 @@ const TemplatesPage = () => {
   const HEADER_HEIGHT = 58;
   const VISIBLE_ROWS = 10;
 
+  // Колонки: НАИМЕНОВАНИЕ | КОД | КОНФИГУРАЦИЯ | МОДЕЛЬ | СТАНЦИЯ | СТАТУС | ДАТА
   const COL_NAME = 85;
-  const COL_CODE = 640;
-  const COL_STATION = 824;
-  const COL_STATUS = 1250;
-  const COL_DATE = 1451;
+  const COL_CODE = 380;
+  const COL_CONFIG = 580;
+  const COL_MODEL = 800;
+  const COL_STATION = 1020;
+  const COL_STATUS = 1370;
+  const COL_DATE = 1511;
 
   useEffect(() => {
     tabIdRef.current = activeTabId;
@@ -190,14 +203,13 @@ const TemplatesPage = () => {
     return () => document.removeEventListener('click', handleClick);
   }, [contextMenu]);
 
-  // Фильтрация категорий и шаблонов
   const getFilteredCategories = (): CategoryItem[] => {
     if (!showActiveOnly) return categories;
     
     return categories.map(cat => ({
       ...cat,
       templates: cat.templates.filter(t => t.active)
-    })).filter(cat => cat.templates.length > 0 || cat.id === 0); // "Без категории" показываем всегда если есть активные
+    })).filter(cat => cat.templates.length > 0 || cat.id === 0);
   };
 
   const filteredCategories = getFilteredCategories();
@@ -339,6 +351,10 @@ const TemplatesPage = () => {
     setCreateTemplateName('');
     setCreateTemplateCategoryId(categoryId || null);
     setCreateTemplateCategoryName(categoryId ? categoryName : '');
+    setCreateTemplateModelUid('');
+    setCreateTemplateModelName('');
+    setCreateTemplateConfigUid('');
+    setCreateTemplateConfigName('');
     setShowCreateTemplatePopup(true);
   };
 
@@ -346,6 +362,10 @@ const TemplatesPage = () => {
     setCreateTemplateName('');
     setCreateTemplateCategoryId(currentCategoryId);
     setCreateTemplateCategoryName(currentCategory?.name || '');
+    setCreateTemplateModelUid('');
+    setCreateTemplateModelName('');
+    setCreateTemplateConfigUid('');
+    setCreateTemplateConfigName('');
     setShowCreateTemplatePopup(true);
   };
 
@@ -357,12 +377,19 @@ const TemplatesPage = () => {
       if (createTemplateCategoryId && createTemplateCategoryId !== 0) {
         body.categoryId = createTemplateCategoryId;
       }
+      if (createTemplateConfigUid) {
+        body.configurationUid = createTemplateConfigUid;
+      }
       await AxiosService.post(ConstantInfo.restApiTemplates, body);
       await fetchData();
       setShowCreateTemplatePopup(false);
       setCreateTemplateName('');
       setCreateTemplateCategoryId(null);
       setCreateTemplateCategoryName('');
+      setCreateTemplateModelUid('');
+      setCreateTemplateModelName('');
+      setCreateTemplateConfigUid('');
+      setCreateTemplateConfigName('');
     } catch (error) {
       console.error('Ошибка создания шаблона:', error);
     } finally {
@@ -375,6 +402,20 @@ const TemplatesPage = () => {
     setCreateTemplateCategoryId(isNaN(numId) || numId === 0 ? null : numId);
     setCreateTemplateCategoryName(name);
     setShowCreateCategorySelect(false);
+  };
+
+  const handleCreateModelSelect = (id: string, name: string) => {
+    setCreateTemplateModelUid(id);
+    setCreateTemplateModelName(name);
+    setCreateTemplateConfigUid('');
+    setCreateTemplateConfigName('');
+    setShowCreateModelSelect(false);
+  };
+
+  const handleCreateConfigSelect = (id: string, name: string) => {
+    setCreateTemplateConfigUid(id);
+    setCreateTemplateConfigName(name);
+    setShowCreateConfigSelect(false);
   };
 
   const handleRenameSubmit = async () => {
@@ -570,6 +611,13 @@ const TemplatesPage = () => {
     backgroundColor: '#FFFFFF',
   };
 
+  const selectFieldStyle: React.CSSProperties = {
+    width: '100%', height: 44, borderRadius: 10,
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center',
+    paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box',
+  };
+
   const renderCategoryList = () => {
     return filteredCategories.map(cat => (
       <div key={cat.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 20, position: 'relative' }} onClick={() => enterCategory(cat.id)} onContextMenu={(e) => handleContextMenu(e, cat.uid, cat.name, 'category', cat.id)}>
@@ -593,7 +641,7 @@ const TemplatesPage = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', marginLeft: 19 }}>
           <img src={PopupIcon4} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 10, maxWidth: 310, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentCategory.name}</span>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 10, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentCategory.name}</span>
           <button onClick={(e) => { e.stopPropagation(); goBack(); }} style={{ marginLeft: 18, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0 }}><img src={Icon17} alt="Назад" style={{ width: 18, height: 18 }} /></button>
         </div>
       </div>
@@ -608,7 +656,9 @@ const TemplatesPage = () => {
             <img src={PopupIcon7} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, maxWidth: COL_CODE - 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{template.name}</span>
           </div>
-          <span style={{ ...cellTextStyle, left: COL_CODE, maxWidth: COL_STATION - COL_CODE - 20 }}>{template.number || '—'}</span>
+          <span style={{ ...cellTextStyle, left: COL_CODE, maxWidth: COL_CONFIG - COL_CODE - 20 }}>{template.number || '—'}</span>
+          <span style={{ ...cellTextStyle, left: COL_CONFIG, maxWidth: COL_MODEL - COL_CONFIG - 20 }}>{template.configurationName || '—'}</span>
+          <span style={{ ...cellTextStyle, left: COL_MODEL, maxWidth: COL_STATION - COL_MODEL - 20 }}>{template.modelName || '—'}</span>
           <span style={{ ...cellTextStyle, left: COL_STATION, maxWidth: COL_STATUS - COL_STATION - 20, cursor: template.stationNames?.length > 0 ? 'pointer' : 'default', color: '#2D4059' }}
             onClick={(e) => {
               e.stopPropagation();
@@ -679,6 +729,8 @@ const TemplatesPage = () => {
             <EmptySquare isSelected={isInCategory && isHeaderSelected()} onClick={toggleSelectAll} isHeader />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_NAME }}>НАИМЕНОВАНИЕ</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_CODE }}>КОД</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_CONFIG }}>КОНФИГУРАЦИЯ</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_MODEL }}>МОДЕЛЬ</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_STATION }}>СТАНЦИЯ</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_STATUS }}>СТАТУС</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_DATE }}>ДАТА</span>
@@ -705,8 +757,22 @@ const TemplatesPage = () => {
               <input type="text" value={createTemplateName} onChange={e => setCreateTemplateName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplateSubmit(); else if (e.key === 'Escape') setShowCreateTemplatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
             </div>
             <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Модель</label>
+              <div onClick={() => setShowCreateModelSelect(true)} style={{ ...selectFieldStyle, border: createTemplateModelUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
+                <img src={createTemplateModelUid ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
+                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateModelUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateModelName || 'Выберите модель'}</span>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Конфигурация</label>
+              <div onClick={() => setShowCreateConfigSelect(true)} style={{ ...selectFieldStyle, border: createTemplateConfigUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
+                <img src={createTemplateConfigUid ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
+                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateConfigUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateConfigName || 'Выберите конфигурацию'}</span>
+              </div>
+            </div>
+            <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Каталог</label>
-              <div onClick={() => setShowCreateCategorySelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateCategoryId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
+              <div onClick={() => setShowCreateCategorySelect(true)} style={{ ...selectFieldStyle, border: createTemplateCategoryId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
                 <img src={PopupIcon4} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
                 <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryId ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Выберите каталог'}</span>
               </div>
@@ -720,6 +786,8 @@ const TemplatesPage = () => {
       )}
 
       <CatalogSelectPopup isOpen={showCreateCategorySelect} onClose={() => setShowCreateCategorySelect(false)} onSelect={handleCreateCategorySelect} popupType="templateCategory" />
+      <CatalogSelectPopup isOpen={showCreateModelSelect} onClose={() => setShowCreateModelSelect(false)} onSelect={handleCreateModelSelect} popupType="stationModel" />
+      <CatalogSelectPopup isOpen={showCreateConfigSelect} onClose={() => setShowCreateConfigSelect(false)} onSelect={handleCreateConfigSelect} popupType="stationConfiguration" filterParam={createTemplateModelUid || undefined} />
 
       <TemplateCreateGroupPopup isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} onSubmit={handleCreateGroup} isLoading={isCreatingGroup} />
 

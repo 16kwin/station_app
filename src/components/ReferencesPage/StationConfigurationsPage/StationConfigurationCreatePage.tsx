@@ -139,27 +139,30 @@ const StationConfigurationCreatePage = () => {
       const selectedSet = new Set(allPhysicalIds);
       const selectedRows = new Set(rows);
 
-      // Множество затрагиваемых колонок
       const affectedColSet = new Set<number>();
       for (let col = minCol; col <= maxCol; col++) affectedColSet.add(col);
 
       setConfigCells(prev => {
-        // Удаляем ВСЕ ConfigCell которые затрагивают эти колонки
+        // Удаляем ConfigCell которые затрагивают эти колонки ТОЛЬКО в текущем барабане
         let updated: ConfigCell[] = prev.filter(c => {
-          const ccCols = new Set(c.modelCellIds.map(mid => modelCells.cells.find(mc => mc.id === mid)?.column).filter((col): col is number => col !== undefined));
+          const ccCols = new Set(c.modelCellIds.map(mid => {
+            const mc = modelCells.cells.find(mcell => mcell.id === mid);
+            if (mc?.drum !== selectedDrum) return undefined;
+            return mc?.column;
+          }).filter((col): col is number => col !== undefined));
           return ![...ccCols].some(col => affectedColSet.has(col));
         });
 
         // Одна большая ячейка для выделенного
         updated.push({ id: mergedId, modelCellIds: allPhysicalIds, deleted: false });
 
-        // Перестраиваем все строки для этих колонок
+        // Перестраиваем все строки для этих колонок в текущем барабане
         for (let row = 1; row <= modelRows; row++) {
           if (selectedRows.has(row)) continue;
 
           const cellsInRow: string[] = [];
           for (let col = minCol; col <= maxCol; col++) {
-            const mc = modelCells.cells.find(c => c.column === col && c.row === row);
+            const mc = modelCells.cells.find(c => c.column === col && c.row === row && c.drum === selectedDrum);
             if (mc && !selectedSet.has(mc.id)) {
               cellsInRow.push(mc.id);
             }
@@ -192,7 +195,11 @@ const StationConfigurationCreatePage = () => {
         const toRemove = new Set<string>();
         prev.forEach(cc => {
           if (cc.modelCellIds.length > 1) {
-            const ccCols = new Set(cc.modelCellIds.map(mid => modelCells.cells.find(c => c.id === mid)?.column).filter(c => c !== undefined));
+            const ccCols = new Set(cc.modelCellIds.map(mid => {
+              const mc = modelCells.cells.find(mcell => mcell.id === mid);
+              if (mc?.drum !== selectedDrum) return undefined;
+              return mc?.column;
+            }).filter(c => c !== undefined));
             if ([...ccCols].some(c => affectedCols.has(c!))) toRemove.add(cc.id);
           }
         });
@@ -201,7 +208,7 @@ const StationConfigurationCreatePage = () => {
         const modelRows = modelCells.type === 'postamat' ? modelCells.cellsPerColumn || 0 : modelCells.rowsPerColumn || 0;
         cols.forEach(col => {
           for (let row = 1; row <= modelRows; row++) {
-            const mc = modelCells.cells.find(c => c.column === col && c.row === row);
+            const mc = modelCells.cells.find(c => c.column === col && c.row === row && c.drum === selectedDrum);
             if (mc) restored.push({ id: mc.id, modelCellIds: [mc.id], deleted: false });
           }
         });
@@ -260,6 +267,17 @@ const StationConfigurationCreatePage = () => {
     return null;
   };
 
+  const totalActiveCells = configCells.filter(c => !c.deleted).length;
+  const getDrumCellCount = (drum: number): number => {
+    return configCells.filter(c => {
+      if (c.deleted) return false;
+      return c.modelCellIds.some(mid => {
+        const mc = modelCells?.cells.find(cell => cell.id === mid);
+        return mc?.drum === drum;
+      });
+    }).length;
+  };
+
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   return (
@@ -285,7 +303,27 @@ const StationConfigurationCreatePage = () => {
           {modelCells && (
             <div style={{ marginTop: 25 }}>
               <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>Тип: <strong>{modelCells.type === 'postamat' ? 'Постамат' : 'Барабанный'}</strong></span>
-              <div style={{ marginTop: 8 }}><span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>Всего: <strong>{configCells.filter(c => !c.deleted).length}</strong></span></div>
+              <div style={{ marginTop: 8 }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>Колонок: <strong>{columnsCount}</strong></span>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>Строк: <strong>{rowsCount}</strong></span>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>Всего ячеек: <strong>{totalActiveCells}</strong></span>
+              </div>
+              {modelCells.type === 'drum' && modelCells.drums && modelCells.drums > 1 && (
+                <div style={{ marginTop: 8 }}>
+                  <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>По барабанам:</span>
+                  {Array.from({ length: modelCells.drums }, (_, i) => i + 1).map(drum => (
+                    <div key={drum} style={{ marginTop: 4, marginLeft: 12 }}>
+                      <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#6B7280' }}>
+                        Барабан {drum}: <strong>{getDrumCellCount(drum)}</strong>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {selectedConfigCells.size > 0 && (

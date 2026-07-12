@@ -22,6 +22,7 @@ import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/Man
 import SuppliersPage from './components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from './components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import TemplatesPage from './components/ReferencesPage/TemplatesPage/TemplatesPage';
+import HoldingsPage from './components/ReferencesPage/HoldingsPage/HoldingsPage';
 import EnterprisesPage from './components/ReferencesPage/EnterprisesPage/EnterprisesPage';
 import WorkshopsPage from './components/ReferencesPage/WorkshopsPage/WorkshopsPage';
 import SectionsPage from './components/ReferencesPage/SectionsPage/SectionsPage';
@@ -31,6 +32,8 @@ import StationModelsPage from './components/ReferencesPage/StationModelsPage/Sta
 import StationModelCreatePage from './components/ReferencesPage/StationModelsPage/StationModelCreatePage';
 import StationConfigurationsPage from './components/ReferencesPage/StationConfigurationsPage/StationConfigurationsPage';
 import StationConfigurationCreatePage from './components/ReferencesPage/StationConfigurationsPage/StationConfigurationCreatePage';
+import StationsCrudPage from './components/ReferencesPage/StationsCrudPage/StationsCrudPage';
+import StationCreatePage from './components/ReferencesPage/StationsCrudPage/StationCreatePage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -83,6 +86,7 @@ const AppContent = () => {
                 <Route path="main" element={<MainPage />} />
                 <Route path="stations" element={<StationsPage />} />
                 <Route path="references" element={<ReferencesPage />} />
+                <Route path="references/holdings" element={<HoldingsPage />} />
                 <Route path="references/nomenclature" element={<NomenclaturePage />} />
                 <Route path="references/nomenclature/create/:uid/:code" element={<NomenclatureCreatePage />} />
                 <Route path="references/nomenclature/edit/:uid/:code" element={<NomenclatureCreatePage />} />
@@ -110,6 +114,9 @@ const AppContent = () => {
                 <Route path="references/station-configurations" element={<StationConfigurationsPage />} />
                 <Route path="references/station-configurations/create/:uid" element={<StationConfigurationCreatePage />} />
                 <Route path="references/station-configurations/edit/:uid" element={<StationConfigurationCreatePage />} />
+                <Route path="references/stations" element={<StationsCrudPage />} />
+                <Route path="references/stations/create/:uid" element={<StationCreatePage />} />
+                <Route path="references/stations/edit/:uid" element={<StationCreatePage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />

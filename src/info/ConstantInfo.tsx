@@ -163,7 +163,12 @@ restApiStationModelDeleteImage: (imageUid: string) => `/api/station-models/image
 restApiStationConfigurations: '/api/station-configurations',
 restApiStationConfiguration: (uid: string) => `/api/station-configurations/${uid}`,
 restApiStationConfigurationsByModel: (modelId: string) => `/api/station-configurations?modelId=${modelId}`,
-
+restApiStationsCrud: '/api/stations/crud',
+restApiStationsCrudGenerateCode: '/api/stations/crud/generate-code',
+restApiStationCrud: (uid: string) => `/api/stations/crud/${uid}`,
+restApiStationDocuments: (stationUid: string) => `/api/stations/${stationUid}/documents`,
+restApiStationDeleteDocument: (stationUid: string, documentUid: string) => `/api/stations/${stationUid}/documents/${documentUid}`,
+restApiHoldings: '/api/holdings',
 };
 
 export default ConstantInfo;

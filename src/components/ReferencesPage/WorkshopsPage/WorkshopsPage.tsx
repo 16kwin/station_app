@@ -1,4 +1,4 @@
-// WorkshopsPage.tsx
+// WorkshopsPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -18,6 +18,8 @@ import Popup9 from '../../../assets/References/popup9.svg';
 interface WorkshopItem {
   id: number;
   name: string;
+  holdingId: number | null;
+  holdingName: string | null;
   enterpriseId: number;
   enterpriseName: string;
 }
@@ -199,8 +201,10 @@ const WorkshopsPage = () => {
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
   const selectStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', cursor: 'pointer', appearance: 'none' };
 
+  // Колонки: НАИМЕНОВАНИЕ | ПРЕДПРИЯТИЕ | ХОЛДИНГ
   const COL_NAME = 85;
-  const COL_ENTERPRISE = 550;
+  const COL_ENTERPRISE = 400;
+  const COL_HOLDING = 750;
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
@@ -236,6 +240,7 @@ const WorkshopsPage = () => {
             <EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
             <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
             <span style={{ position: 'absolute', left: COL_ENTERPRISE, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ПРЕДПРИЯТИЕ</span>
+            <span style={{ position: 'absolute', left: COL_HOLDING, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ХОЛДИНГ</span>
           </div>
           <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {data.map(item => {
@@ -247,7 +252,8 @@ const WorkshopsPage = () => {
                   </div>
                   <img src={Popup9} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} />
                   <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_ENTERPRISE - COL_NAME - 30 }}>{item.name}</span>
-                  <span style={{ position: 'absolute', left: COL_ENTERPRISE, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 500 }}>{item.enterpriseName}</span>
+                  <span style={{ position: 'absolute', left: COL_ENTERPRISE, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_HOLDING - COL_ENTERPRISE - 30 }}>{item.enterpriseName}</span>
+                  <span style={{ position: 'absolute', left: COL_HOLDING, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 500 }}>{item.holdingName || ''}</span>
                 </div>
               );
             })}

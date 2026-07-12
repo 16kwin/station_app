@@ -1,5 +1,7 @@
+// StationRow.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 // Импорт фонов для ряда
 import Line1 from '../../assets/Station/Line1.svg';
@@ -112,6 +114,7 @@ const StationRow: React.FC<StationRowProps> = ({
   readyPartsCount = 0,
   onOpenSchablonPopup,
 }) => {
+  const navigate = useNavigate();
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
   const [isConfigMode, setIsConfigMode] = useState(false);
@@ -430,6 +433,13 @@ const StationRow: React.FC<StationRowProps> = ({
         section: section || '',
         status: status || '',
       });
+    }
+  };
+
+  const handleSettingsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (uid) {
+      navigate(`/references/stations/edit/${uid}`);
     }
   };
 
@@ -1206,10 +1216,7 @@ const StationRow: React.FC<StationRowProps> = ({
                 paddingLeft: '12px',
                 gap: '8px',
               }}
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log('Настройки станций', uid);
-              }}
+              onClick={handleSettingsClick}
             >
               <img src={getConfig4Icon()} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />
               <span style={{ fontSize: '14px', fontWeight: 500, color: '#2D4059' }}>

@@ -1,4 +1,4 @@
-// EnterprisesPage.tsx — ПОЛНЫЙ ФАЙЛ
+// HoldingsPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -15,29 +15,27 @@ import Icon10 from '../../../assets/References/Icon10.svg';
 import Icon19 from '../../../assets/References/Icon19.svg';
 import Popup9 from '../../../assets/References/popup9.svg';
 
-interface EnterpriseItem {
+interface HoldingItem {
   id: number;
   name: string;
-  holdingId: number | null;
-  holdingName: string | null;
+  description: string;
 }
 
-const EnterprisesPage = () => {
+const HoldingsPage = () => {
   const { activeTabId } = useTabs();
   const tabIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<EnterpriseItem[]>([]);
+  const [data, setData] = useState<HoldingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
-  const [editItem, setEditItem] = useState<EnterpriseItem | null>(null);
+  const [editItem, setEditItem] = useState<HoldingItem | null>(null);
   const [formName, setFormName] = useState('');
-  const [formHoldingId, setFormHoldingId] = useState<number | ''>('');
-  const [holdings, setHoldings] = useState<{ id: number; name: string }[]>([]);
+  const [formDescription, setFormDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: number; name: string } | null>(null);
 
@@ -51,7 +49,7 @@ const EnterprisesPage = () => {
 
   const fetchData = async () => {
     try {
-      const response = await AxiosService.get(ConstantInfo.restApiEnterprises);
+      const response = await AxiosService.get(ConstantInfo.restApiHoldings);
       setData(response.data || []);
     } catch (error) {
       console.error('Ошибка загрузки:', error);
@@ -60,16 +58,7 @@ const EnterprisesPage = () => {
     }
   };
 
-  const fetchHoldings = async () => {
-    try {
-      const response = await AxiosService.get(ConstantInfo.restApiHoldings);
-      setHoldings(response.data || []);
-    } catch (error) {
-      console.error('Ошибка загрузки холдингов:', error);
-    }
-  };
-
-  useEffect(() => { fetchData(); fetchHoldings(); }, []);
+  useEffect(() => { fetchData(); }, []);
   useEffect(() => {
     if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) fetchData();
   }, [activeTabId]);
@@ -120,7 +109,7 @@ const EnterprisesPage = () => {
 
   const handleCreateClick = () => {
     setFormName('');
-    setFormHoldingId('');
+    setFormDescription('');
     setEditItem(null);
     setShowCreatePopup(true);
   };
@@ -129,7 +118,7 @@ const EnterprisesPage = () => {
     if (!formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiEnterprises, { name: formName.trim(), holdingId: formHoldingId === '' ? null : formHoldingId });
+      await AxiosService.post(ConstantInfo.restApiHoldings, { name: formName.trim(), description: formDescription.trim() });
       await fetchData();
       setShowCreatePopup(false);
     } catch (error) {
@@ -142,7 +131,7 @@ const EnterprisesPage = () => {
   const handleEditClick = () => {
     if (!contextMenu) return;
     const item = data.find(d => d.id === contextMenu.id);
-    if (item) { setEditItem(item); setFormName(item.name); setFormHoldingId(item.holdingId ?? ''); setShowEditPopup(true); }
+    if (item) { setEditItem(item); setFormName(item.name); setFormDescription(item.description || ''); setShowEditPopup(true); }
     setContextMenu(null);
   };
 
@@ -150,7 +139,7 @@ const EnterprisesPage = () => {
     if (!editItem || !formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.patch(`${ConstantInfo.restApiEnterprises}/${editItem.id}`, { name: formName.trim(), holdingId: formHoldingId === '' ? null : formHoldingId });
+      await AxiosService.patch(`${ConstantInfo.restApiHoldings}/${editItem.id}`, { name: formName.trim(), description: formDescription.trim() });
       await fetchData();
       setShowEditPopup(false);
       setEditItem(null);
@@ -169,7 +158,7 @@ const EnterprisesPage = () => {
   const confirmDelete = async () => {
     try {
       for (const id of selectedIds) {
-        await AxiosService.delete(`${ConstantInfo.restApiEnterprises}/${id}`);
+        await AxiosService.delete(`${ConstantInfo.restApiHoldings}/${id}`);
       }
       await fetchData();
       setSelectedIds(new Set());
@@ -197,17 +186,14 @@ const EnterprisesPage = () => {
 
   const contextMenuButtonStyle: React.CSSProperties = { width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
-  const selectStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', cursor: 'pointer', appearance: 'none' };
-
-  const COL_NAME = 85;
-  const COL_HOLDING = 550;
+  const textareaStyle: React.CSSProperties = { ...inputStyle, height: 80, resize: 'vertical', paddingTop: 10 };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Предприятия</h1>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Холдинги</h1>
       </div>
 
       <div style={{ position: 'absolute', top: 99, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
@@ -234,8 +220,8 @@ const EnterprisesPage = () => {
         <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
             <EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
-            <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ position: 'absolute', left: COL_HOLDING, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ХОЛДИНГ</span>
+            <span style={{ position: 'absolute', left: 85, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
+            <span style={{ position: 'absolute', left: 550, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ОПИСАНИЕ</span>
           </div>
           <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {data.map(item => {
@@ -246,8 +232,8 @@ const EnterprisesPage = () => {
                     <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.id)} />
                   </div>
                   <img src={Popup9} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} />
-                  <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_HOLDING - COL_NAME - 30 }}>{item.name}</span>
-                  <span style={{ position: 'absolute', left: COL_HOLDING, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 500 }}>{item.holdingName || ''}</span>
+                  <span style={{ position: 'absolute', left: 85, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 430 }}>{item.name}</span>
+                  <span style={{ position: 'absolute', left: 550, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 600 }}>{item.description || ''}</span>
                 </div>
               );
             })}
@@ -262,13 +248,13 @@ const EnterprisesPage = () => {
 
       {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}><button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button><button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button></div>)}
 
-      {showCreatePopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание предприятия</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Холдинг</label><select value={formHoldingId} onChange={e => setFormHoldingId(e.target.value ? Number(e.target.value) : '')} style={selectStyle}><option value="">Без холдинга</option>{holdings.map(h => (<option key={h.id} value={h.id}>{h.name}</option>))}</select></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button></div></div></div>)}
+      {showCreatePopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание холдинга</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label><textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} placeholder="Введите описание" style={textareaStyle} /></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button></div></div></div>)}
 
-      {showEditPopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование предприятия</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Холдинг</label><select value={formHoldingId} onChange={e => setFormHoldingId(e.target.value ? Number(e.target.value) : '')} style={selectStyle}><option value="">Без холдинга</option>{holdings.map(h => (<option key={h.id} value={h.id}>{h.name}</option>))}</select></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleEditSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button></div></div></div>)}
+      {showEditPopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование холдинга</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label><textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} placeholder="Введите описание" style={textareaStyle} /></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleEditSubmit} disabled={isSaving || !formName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button></div></div></div>)}
 
       {showDeleteConfirm && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}><div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3><p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button></div></div></div>)}
     </div>
   );
 };
 
-export default EnterprisesPage;
+export default HoldingsPage;
