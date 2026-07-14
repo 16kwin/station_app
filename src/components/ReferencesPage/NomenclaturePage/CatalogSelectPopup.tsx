@@ -103,9 +103,9 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
     case 'stationManufacturer':
       return { title: 'Справочник: Производители станций (Выбор)', columns: [], createButtonLabel: 'Создать производителя', isFlat: true, hasCreateButton: true };
     case 'stationModel':
-      return { title: 'Справочник: Модели станций (Выбор)', columns: [{ key: 'code', title: 'КОД', left: 400 }, { key: 'article', title: 'АРТИКУЛ', left: 600 }], isFlat: true, hasCreateButton: false };
+      return { title: 'Справочник: Модели станций (Выбор)', columns: [{ key: 'code', title: 'КОД', left: 400 }, { key: 'article', title: 'АРТИКУЛ', left: 600 }], createButtonLabel: 'Создать модель', isFlat: true, hasCreateButton: true };
     case 'stationConfiguration':
-      return { title: 'Справочник: Конфигурации станций (Выбор)', columns: [{ key: 'modelName', title: 'МОДЕЛЬ', left: 500 }], isFlat: true, hasCreateButton: false };
+      return { title: 'Справочник: Конфигурации станций (Выбор)', columns: [{ key: 'modelName', title: 'МОДЕЛЬ', left: 500 }], createButtonLabel: 'Создать конфигурацию', isFlat: true, hasCreateButton: true };
     case 'holding':
       return { title: 'Справочник: Холдинги (Выбор)', columns: [], isFlat: true, hasCreateButton: false };
     case 'enterprise':
@@ -418,6 +418,16 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       }).catch(() => {
         openTab(`/references/suppliers/create/${crypto.randomUUID()}/0`, 'Поставщик (новый)', null);
       });
+      return;
+    }
+    if (popupType === 'stationModel') {
+      const newUid = crypto.randomUUID();
+      openTab(`/references/station-models/create/${newUid}`, 'Модель станции (новая)', null);
+      return;
+    }
+    if (popupType === 'stationConfiguration') {
+      const newUid = crypto.randomUUID();
+      openTab(`/references/station-configurations/create/${newUid}`, 'Конфигурация станции (новая)', null);
       return;
     }
     setCreateFormName(''); setCreateFormDescription(''); setCreateFormDesignation('');

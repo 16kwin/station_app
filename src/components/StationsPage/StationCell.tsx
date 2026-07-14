@@ -2,37 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Импорт фонов
-import SectionCard1 from '../../assets/Station/StationCard1.svg';
-import SectionCard2 from '../../assets/Station/StationCard2.svg';
-import SectionCard3 from '../../assets/Station/StationCard3.svg';
-import SectionCard4 from '../../assets/Station/StationCard4.svg';
-
-// Импорт стрелок для WORKING
-import ArrowLeft1 from '../../assets/Station/arrow-left1.svg';
-import ArrowRight1 from '../../assets/Station/arrow-right1.svg';
-import ArrowBack1 from '../../assets/Station/arrow-back1.svg';
-
-// Импорт стрелок для OFFLINE
-import ArrowLeft2 from '../../assets/Station/arrow-left2.svg';
-import ArrowRight2 from '../../assets/Station/arrow-right2.svg';
-import ArrowBack2 from '../../assets/Station/arrow-back2.svg';
-
-// Импорт стрелок для MINIMAL_STOCK
-import ArrowLeft3 from '../../assets/Station/arrow-left3.svg';
-import ArrowRight3 from '../../assets/Station/arrow-right3.svg';
-import ArrowBack3 from '../../assets/Station/arrow-back3.svg';
-
-// Импорт стрелок для CRITICAL_STOCK
-import ArrowLeft4 from '../../assets/Station/arrow-left4.svg';
-import ArrowRight4 from '../../assets/Station/arrow-right4.svg';
-import ArrowBack4 from '../../assets/Station/arrow-back4.svg';
-
-// Импорт фонов для блока станции
-import FonStation1 from '../../assets/Station/FonStation1.svg';
-import FonStation2 from '../../assets/Station/FonStation2.svg';
-import FonStation3 from '../../assets/Station/FonStation3.svg';
-import FonStation4 from '../../assets/Station/FonStation4.svg';
+// Импорт стрелок (единые для всех статусов)
+import ArrowLeft from '../../assets/Station/arrow-left1.svg';
+import ArrowRight from '../../assets/Station/arrow-right1.svg';
+import ArrowBack from '../../assets/Station/arrow-back1.svg';
 
 // Импорт картинки станции
 import Station from '../../assets/Station/Station.svg';
@@ -45,33 +18,42 @@ import Icon3 from '../../assets/Station/Icon3.svg';
 // Импорт иконки ошибки
 import ERR from '../../assets/Station/ERR.svg';
 
-// Импорт иконок для информации
-import TMC from '../../assets/Station/TMC.svg';
-import SGD from '../../assets/Station/SGD.svg';
-import OK from '../../assets/Station/OK.svg';
-import CHAIN from '../../assets/Station/CHAIN.svg';
+// Импорт иконок для информации (новые)
+import TMC2 from '../../assets/Station/TMC2.svg';
+import SGD2 from '../../assets/Station/SGD2.svg';
+import OK2 from '../../assets/Station/OK2.svg';
+import CHAIN2 from '../../assets/Station/CHAIN2.svg';
 
-// Импорт иконок для конфигурации по статусам
-import Config1_1 from '../../assets/Station/Config11.svg';
-import Config1_2 from '../../assets/Station/Config12.svg';
-import Config1_3 from '../../assets/Station/Config13.svg';
-import Config1_4 from '../../assets/Station/Config14.svg';
-import Config2_1 from '../../assets/Station/Config21.svg';
-import Config2_2 from '../../assets/Station/Config22.svg';
-import Config2_3 from '../../assets/Station/Config23.svg';
-import Config2_4 from '../../assets/Station/Config24.svg';
-import Config3_1 from '../../assets/Station/Config31.svg';
-import Config3_2 from '../../assets/Station/Config32.svg';
-import Config3_3 from '../../assets/Station/Config33.svg';
-import Config3_4 from '../../assets/Station/Config34.svg';
-import Config4_1 from '../../assets/Station/Config41.svg';
-import Config4_2 from '../../assets/Station/Config42.svg';
-import Config4_3 from '../../assets/Station/Config43.svg';
-import Config4_4 from '../../assets/Station/Config44.svg';
+// Импорт иконок для управления (единые)
+import Config1 from '../../assets/Station/Config1.svg';
+import Config2 from '../../assets/Station/Config2.svg';
+import Config3 from '../../assets/Station/Config3.svg';
+import Config4 from '../../assets/Station/Config4.svg';
+import Config5 from '../../assets/Station/Config5.svg';
 
-// Импорт иконок для статусов
-import KRIT from '../../assets/Station/KRIT.svg';
-import KRIT2 from '../../assets/Station/KRIT2.svg';
+// Импорт иконок закладки
+import Zaklad1 from '../../assets/Station/Zaklad1.svg';
+import Zaklad2 from '../../assets/Station/Zaklad2.svg';
+
+// Импорт иконки графика
+import IconGraf from '../../assets/Station/IconGraf.svg';
+
+// Единая иконка остатка для всех статусов
+import OstatokIcon from '../../assets/Station/KRIT.svg';
+
+const glassPulseTop = `
+@keyframes glassPulseTop {
+  0%, 100% { opacity: 0.67; transform: translate(0, 0); }
+  50% { opacity: 1; transform: translate(-3px, 3px); }
+}
+`;
+
+const glassPulseBottom = `
+@keyframes glassPulseBottom {
+  0%, 100% { opacity: 1; transform: translate(3px, -3px); }
+  50% { opacity: 0.67; transform: translate(0, 0); }
+}
+`;
 
 interface StationCellProps {
   uid?: string;
@@ -135,6 +117,33 @@ const StationCell: React.FC<StationCellProps> = ({
   
   const [startAnimation, setStartAnimation] = useState(false);
 
+  // Состояние закладки
+  const [isZakladActive, setIsZakladActive] = useState(false);
+
+  // Состояния для hover/press эффектов кнопок
+  const [leftBtnHovered, setLeftBtnHovered] = useState(false);
+  const [leftBtnPressed, setLeftBtnPressed] = useState(false);
+  const [rightBtnHovered, setRightBtnHovered] = useState(false);
+  const [rightBtnPressed, setRightBtnPressed] = useState(false);
+  const [refillBtnHovered, setRefillBtnHovered] = useState(false);
+  const [refillBtnPressed, setRefillBtnPressed] = useState(false);
+  const [zakladBtnHovered, setZakladBtnHovered] = useState(false);
+  const [zakladBtnPressed, setZakladBtnPressed] = useState(false);
+
+  // Hover/press для кнопок на Back1
+  const [back1BtnHovered, setBack1BtnHovered] = useState(false);
+  const [back1BtnPressed, setBack1BtnPressed] = useState(false);
+  const [analyticsBtnHovered, setAnalyticsBtnHovered] = useState(false);
+  const [analyticsBtnPressed, setAnalyticsBtnPressed] = useState(false);
+  const [analyticsIconBtnHovered, setAnalyticsIconBtnHovered] = useState(false);
+  const [analyticsIconBtnPressed, setAnalyticsIconBtnPressed] = useState(false);
+
+  // Hover/press для кнопок на Back2 (Управление)
+  const [back2BtnHovered, setBack2BtnHovered] = useState(false);
+  const [back2BtnPressed, setBack2BtnPressed] = useState(false);
+  const [menuHovered, setMenuHovered] = useState<number | null>(null);
+  const [menuPressed, setMenuPressed] = useState<number | null>(null);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setStartAnimation(true);
@@ -171,48 +180,18 @@ const StationCell: React.FC<StationCellProps> = ({
     return () => clearInterval(timer);
   }, [startAnimation, filledCellsPercent, remainingNomenclaturePercent, readyPartsPercent]);
 
-  const getBackgroundImage = () => {
+  const getBackgroundStyle = (): React.CSSProperties => {
     switch (status) {
-      case 'WORKING': return SectionCard1;
-      case 'OFFLINE': return SectionCard2;
-      case 'MINIMAL_STOCK': return SectionCard3;
-      case 'CRITICAL_STOCK': return SectionCard4;
-      default: return SectionCard2;
-    }
-  };
-
-  const getArrows = () => {
-    switch (status) {
-      case 'WORKING': 
-        return { left: ArrowLeft1, right: ArrowRight1, back: ArrowBack1 };
-      case 'OFFLINE': 
-        return { left: ArrowLeft2, right: ArrowRight2, back: ArrowBack2 };
-      case 'MINIMAL_STOCK': 
-        return { left: ArrowLeft3, right: ArrowRight3, back: ArrowBack3 };
-      case 'CRITICAL_STOCK': 
-        return { left: ArrowLeft4, right: ArrowRight4, back: ArrowBack4 };
-      default: 
-        return { left: ArrowLeft2, right: ArrowRight2, back: ArrowBack2 };
-    }
-  };
-
-  const getFonStation = () => {
-    switch (status) {
-      case 'WORKING': return FonStation1;
-      case 'OFFLINE': return FonStation2;
-      case 'MINIMAL_STOCK': return FonStation3;
-      case 'CRITICAL_STOCK': return FonStation4;
-      default: return FonStation2;
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (status) {
-      case 'WORKING': return '#666EFE';
-      case 'OFFLINE': return '#777777';
-      case 'MINIMAL_STOCK': return '#FDA373';
-      case 'CRITICAL_STOCK': return '#FF3052';
-      default: return '#777777';
+      case 'WORKING':
+        return { background: 'linear-gradient(180deg, #5FB0E2 0%, #5D5FEF 100%)' };
+      case 'OFFLINE':
+        return { background: 'linear-gradient(180deg, #B5B5B5 0%, #777777 77%)' };
+      case 'MINIMAL_STOCK':
+        return { background: 'linear-gradient(180deg, #F9B38E 0%, #FFAF81 100%)' };
+      case 'CRITICAL_STOCK':
+        return { background: 'linear-gradient(180deg, #FF6C84 0%, #FF3052 80%)' };
+      default:
+        return { background: 'linear-gradient(180deg, #B5B5B5 0%, #777777 77%)' };
     }
   };
 
@@ -223,60 +202,6 @@ const StationCell: React.FC<StationCellProps> = ({
       case 'MINIMAL_STOCK': return 'Минимальный остаток';
       case 'CRITICAL_STOCK': return 'Критический остаток';
       default: return status || '—';
-    }
-  };
-
-  const getProgressBarColor = () => {
-    return status === 'OFFLINE' ? '#777777' : '#666EFE';
-  };
-
-  const getButtonColor = () => {
-    switch (status) {
-      case 'WORKING': return '#E8E9FF';
-      case 'OFFLINE': return '#E2E2E2';
-      case 'MINIMAL_STOCK': return '#FEE8DC';
-      case 'CRITICAL_STOCK': return '#FFDAE0';
-      default: return '#E2E2E2';
-    }
-  };
-
-  const getConfig1Icon = () => {
-    switch (status) {
-      case 'WORKING': return Config1_1;
-      case 'OFFLINE': return Config1_2;
-      case 'MINIMAL_STOCK': return Config1_3;
-      case 'CRITICAL_STOCK': return Config1_4;
-      default: return Config1_2;
-    }
-  };
-
-  const getConfig2Icon = () => {
-    switch (status) {
-      case 'WORKING': return Config2_1;
-      case 'OFFLINE': return Config2_2;
-      case 'MINIMAL_STOCK': return Config2_3;
-      case 'CRITICAL_STOCK': return Config2_4;
-      default: return Config2_2;
-    }
-  };
-
-  const getConfig3Icon = () => {
-    switch (status) {
-      case 'WORKING': return Config3_1;
-      case 'OFFLINE': return Config3_2;
-      case 'MINIMAL_STOCK': return Config3_3;
-      case 'CRITICAL_STOCK': return Config3_4;
-      default: return Config3_2;
-    }
-  };
-
-  const getConfig4Icon = () => {
-    switch (status) {
-      case 'WORKING': return Config4_1;
-      case 'OFFLINE': return Config4_2;
-      case 'MINIMAL_STOCK': return Config4_3;
-      case 'CRITICAL_STOCK': return Config4_4;
-      default: return Config4_2;
     }
   };
 
@@ -360,1138 +285,1211 @@ const StationCell: React.FC<StationCellProps> = ({
     }
   };
 
-  const arrows = getArrows();
   const displayName = name || uid || '—';
   const workshopSectionText = `${workshop || '—'} ${section || '—'}`;
 
   const overNorm = templateNomenclatureCount > 0 ? Math.max(0, templateNomenclatureCount - remainingNomenclatureCount) : 0;
 
+  const isOstatok = status === 'MINIMAL_STOCK' || status === 'CRITICAL_STOCK';
+
+  // Базовый стиль для текста (антиалиасинг)
+  const textSmoothing: React.CSSProperties = {
+    WebkitFontSmoothing: 'antialiased',
+    MozOsxFontSmoothing: 'grayscale',
+    textRendering: 'optimizeLegibility',
+  };
+
+  // Функция для получения стиля стеклянной кнопки с учётом hover/press
+  const getGlassButtonStyle = (hovered: boolean, pressed: boolean): React.CSSProperties => ({
+    width: '34px',
+    height: '34px',
+    borderRadius: '50%',
+    background: hovered ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.15)',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    padding: 0,
+    position: 'absolute',
+    backdropFilter: 'blur(25px)',
+    WebkitBackdropFilter: 'blur(25px)',
+    boxShadow: `
+      inset -1px -1px 1px rgba(255, 255, 255, 0.5),
+      inset 1px 1px 1px rgba(255, 255, 255, 0.5)
+    `,
+    transform: pressed ? 'scale(0.95)' : 'scale(1)',
+    transition: 'background 0.3s ease, transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+  });
+
+  // Функция для получения стиля нижней стеклянной кнопки
+  const getGlassBottomBtnStyle = (hovered: boolean, pressed: boolean, width: number, height: number, borderRadius: string): React.CSSProperties => ({
+    background: hovered ? 'rgba(255, 255, 255, 0.30)' : 'rgba(255, 255, 255, 0.17)',
+    backdropFilter: 'blur(25px)',
+    WebkitBackdropFilter: 'blur(25px)',
+    boxShadow: `
+      inset -1px -1px 1px rgba(255, 255, 255, 0.5),
+      inset 1px 1px 1px rgba(255, 255, 255, 0.5)
+    `,
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    padding: 0,
+    position: 'absolute',
+    width: `${width}px`,
+    height: `${height}px`,
+    borderRadius,
+    transform: pressed ? 'scale(0.95)' : 'scale(1)',
+    transition: 'background 0.3s ease, transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+  });
+
+  // Стиль для стеклянного прогресс-бара (пустая часть)
+  const glassProgressBgStyle: React.CSSProperties = {
+    background: 'rgba(255, 255, 255, 0.30)',
+    backdropFilter: 'blur(25px)',
+    WebkitBackdropFilter: 'blur(25px)',
+    boxShadow: `
+      inset -1px -1px 1px rgba(255, 255, 255, 0.5),
+      inset 1px 1px 1px rgba(255, 255, 255, 0.5)
+    `,
+  };
+
+  // Позиция левой кнопки: top: 9px, left: 9px
+  const leftBtnTop = 9;
+
+  // Остаток: на 13px ниже левой кнопки
+  const ostatokTop = leftBtnTop + 34 + 13;
+  const ostatokLeft = 16;
+
+  // Ошибка: если есть остаток — на 13px ниже остатка, иначе на 13px ниже левой кнопки
+  const errorTop = isOstatok ? ostatokTop + 19 + 13 : ostatokTop;
+  const errorLeft = 15;
+
+  // Стеклянный блок иконки: top 30px, высота 70px
+  const iconBlockTop = 30;
+  const iconBlockHeight = 70;
+
+  // Название станции: на 10px ниже стеклянного блока
+  const nameTop = iconBlockTop + iconBlockHeight + 10;
+  // Цех/участок: на 1px ниже названия
+  const workshopTop = nameTop + 18 + 1;
+  // Статус: на 8px ниже цеха
+  const statusTop = workshopTop + 16 + 8;
+
+  // Прогресс-бары
+  const barsLeft = 45;
+  const bar1Top = statusTop + 16 + 7;
+  const barWidth = 110;
+  const barHeight = 5;
+  const barGap = 15;
+  const bar2Top = bar1Top + barHeight + barGap;
+  const bar3Top = bar2Top + barHeight + barGap;
+  const percentLeft = barsLeft + barWidth + 5;
+
+  // Нижние кнопки
+  const iconsBlockBottom = statusTop + 16 + 5 + 53;
+  const bottomBtnsTop = iconsBlockBottom + 14;
+  const refillBtnLeft = 20;
+  const refillBtnWidth = 126;
+  const refillBtnHeight = 34;
+  const zakladBtnLeft = refillBtnLeft + refillBtnWidth + 20;
+
   const renderFront = () => (
     <>
+      {/* Стеклянный блик-круг — правый верхний */}
       <div
         style={{
           position: 'absolute',
-          top: '15px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '84px',
-          height: '92px',
+          width: '242px',
+          height: '242px',
+          borderRadius: '50%',
+          top: '-132px',
+          left: '110px',
+          background: 'radial-gradient(circle, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.3) 100%)',
+          pointerEvents: 'none',
+          zIndex: 0,
+          animation: 'glassPulseTop 10s ease-in-out infinite',
         }}
-      >
-        <img
-          src={getFonStation()}
-          alt=""
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-          }}
-        />
-        
-        <img
-          src={Station}
-          alt="Station"
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '68px',
-            height: '76px',
-            objectFit: 'contain',
-            zIndex: 1,
-          }}
-        />
-      </div>
+      />
 
+      {/* Стеклянный блик-круг — левый нижний */}
       <div
         style={{
           position: 'absolute',
-          top: '111px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          width: '184px',
+          width: '306px',
+          height: '306px',
+          borderRadius: '50%',
+          top: '185px',
+          left: '-176px',
+          background: 'radial-gradient(circle, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.3) 100%)',
+          pointerEvents: 'none',
+          zIndex: 0,
+          animation: 'glassPulseBottom 10s ease-in-out infinite',
         }}
-      >
-        <div
-          style={{
-            position: 'relative',
-            maxWidth: '150px',
-            marginBottom: '1px',
-          }}
-          onMouseEnter={() => setShowNameTooltip(true)}
-          onMouseLeave={() => setShowNameTooltip(false)}
-        >
-          <div
-            style={{
-              fontWeight: 500,
-              fontSize: '17px',
-              lineHeight: '20px',
-              color: '#2D4059',
-              letterSpacing: '0px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              textAlign: 'center',
-            }}
-          >
-            {displayName}
-          </div>
-          {showNameTooltip && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '100%',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                marginBottom: '4px',
-                padding: '4px 8px',
-                backgroundColor: 'rgba(45, 64, 89, 0.9)',
-                color: '#FFFFFF',
-                fontSize: '12px',
-                borderRadius: '4px',
-                whiteSpace: 'nowrap',
-                zIndex: 1000,
-                pointerEvents: 'none',
-              }}
-            >
-              {displayName}
-            </div>
-          )}
-        </div>
-        
-        <div
-          style={{
-            position: 'relative',
-            maxWidth: '150px',
-            marginBottom: '8px',
-          }}
-          onMouseEnter={() => setShowWorkshopTooltip(true)}
-          onMouseLeave={() => setShowWorkshopTooltip(false)}
-        >
-          <div
-            style={{
-              fontWeight: 500,
-              fontSize: '14px',
-              lineHeight: '16px',
-              color: '#2D4059',
-              opacity: 0.5,
-              letterSpacing: '0px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              textAlign: 'center',
-            }}
-          >
-            {workshopSectionText}
-          </div>
-          {showWorkshopTooltip && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '100%',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                marginBottom: '4px',
-                padding: '4px 8px',
-                backgroundColor: 'rgba(45, 64, 89, 0.9)',
-                color: '#FFFFFF',
-                fontSize: '12px',
-                borderRadius: '4px',
-                whiteSpace: 'nowrap',
-                zIndex: 1000,
-                pointerEvents: 'none',
-              }}
-            >
-              {workshopSectionText}
-            </div>
-          )}
-        </div>
+      />
 
-        <div
-          style={{
-            fontWeight: 500,
-            fontSize: '14px',
-            lineHeight: '16px',
-            color: getStatusColor(),
-            letterSpacing: '0px',
-            textAlign: 'center',
-            whiteSpace: 'nowrap',
-            marginBottom: '4px',
-          }}
-        >
-          {getStatusText()}
-        </div>
-
-        <div
-          style={{
-            width: '184px',
-            height: '15px',
-            position: 'relative',
-            marginBottom: '6px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <img
-            src={Icon1}
-            alt=""
-            style={{
-              width: '17px',
-              height: '8px',
-              flexShrink: 0,
-            }}
-          />
-          <div
-            style={{
-              width: '130px',
-              height: '8px',
-              backgroundColor: 'rgba(45, 64, 89, 0.08)',
-              borderRadius: '4px',
-              marginLeft: '3px',
-              position: 'relative',
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.min(animatedFilled, 100)}%`,
-                height: '8px',
-                backgroundColor: getProgressBarColor(),
-                borderRadius: '4px',
-                transition: 'width 0.05s linear',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              marginLeft: '6px',
-              fontSize: '12px',
-              fontWeight: 500,
-              color: '#6C7A8B',
-              letterSpacing: '0.1em',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {Math.round(animatedFilled)}%
-          </div>
-        </div>
-
-        <div
-          style={{
-            width: '184px',
-            height: '15px',
-            position: 'relative',
-            marginBottom: '6px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <img
-            src={Icon2}
-            alt=""
-            style={{
-              width: '15px',
-              height: '14px',
-              flexShrink: 0,
-            }}
-          />
-          <div
-            style={{
-              width: '130px',
-              height: '8px',
-              backgroundColor: 'rgba(45, 64, 89, 0.08)',
-              borderRadius: '4px',
-              marginLeft: '5px',
-              position: 'relative',
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.min(animatedRemaining, 100)}%`,
-                height: '8px',
-                backgroundColor: getProgressBarColor(),
-                borderRadius: '4px',
-                transition: 'width 0.05s linear',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              marginLeft: '6px',
-              fontSize: '12px',
-              fontWeight: 500,
-              color: '#6C7A8B',
-              letterSpacing: '0.1em',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {Math.round(animatedRemaining)}%
-          </div>
-        </div>
-
-        <div
-          style={{
-            width: '184px',
-            height: '15px',
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <img
-            src={Icon3}
-            alt=""
-            style={{
-              width: '9px',
-              height: '15px',
-              marginLeft: '3px',
-              flexShrink: 0,
-            }}
-          />
-          <div
-            style={{
-              width: '130px',
-              height: '8px',
-              backgroundColor: 'rgba(45, 64, 89, 0.08)',
-              borderRadius: '4px',
-              marginLeft: '8px',
-              position: 'relative',
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.min(animatedReady, 100)}%`,
-                height: '8px',
-                backgroundColor: getProgressBarColor(),
-                borderRadius: '4px',
-                transition: 'width 0.05s linear',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              marginLeft: '6px',
-              fontSize: '12px',
-              fontWeight: 500,
-              color: '#6C7A8B',
-              letterSpacing: '0.1em',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {Math.round(animatedReady)}%
-          </div>
-        </div>
-      </div>
-
+      {/* Левая кнопка */}
       <button
+        onClick={handleFlipLeft}
+        onMouseEnter={() => setLeftBtnHovered(true)}
+        onMouseLeave={() => { setLeftBtnHovered(false); setLeftBtnPressed(false); }}
+        onMouseDown={() => setLeftBtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setLeftBtnPressed(false), 100)}
         style={{
-          position: 'absolute',
-          bottom: '18px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '164px',
-          height: '30px',
-          backgroundColor: getButtonColor(),
-          border: 'none',
-          borderRadius: '20px',
-          cursor: 'pointer',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: '#2D4059',
-          letterSpacing: '0px',
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          console.log('Пополнить');
+          ...getGlassButtonStyle(leftBtnHovered, leftBtnPressed),
+          left: '9px',
+          top: `${leftBtnTop}px`,
         }}
       >
-        Пополнить
+        <img 
+          src={ArrowLeft} 
+          alt="left" 
+          style={{ 
+            width: '18px', 
+            height: '18px',
+            position: 'relative',
+            zIndex: 3,
+          }} 
+        />
       </button>
 
-      {status === 'MINIMAL_STOCK' && (
+      {/* Правая кнопка */}
+      <button
+        onClick={handleFlipRight}
+        onMouseEnter={() => setRightBtnHovered(true)}
+        onMouseLeave={() => { setRightBtnHovered(false); setRightBtnPressed(false); }}
+        onMouseDown={() => setRightBtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setRightBtnPressed(false), 100)}
+        style={{
+          ...getGlassButtonStyle(rightBtnHovered, rightBtnPressed),
+          right: '9px',
+          top: '9px',
+        }}
+      >
+        <img 
+          src={ArrowRight} 
+          alt="right" 
+          style={{ 
+            width: '16px', 
+            height: '14px',
+            position: 'relative',
+            zIndex: 3,
+          }} 
+        />
+      </button>
+
+      {/* Иконка остатка */}
+      {isOstatok && (
         <img
-          src={KRIT}
-          alt="krit"
+          src={OstatokIcon}
+          alt="ostatok"
           style={{
             position: 'absolute',
-            left: '10px',
-            top: '41px',
-            width: '21px',
+            left: `${ostatokLeft}px`,
+            top: `${ostatokTop}px`,
+            width: '20px',
             height: '19px',
             zIndex: 2,
           }}
         />
       )}
-      
-      {status === 'CRITICAL_STOCK' && (
-        <img
-          src={KRIT2}
-          alt="krit2"
-          style={{
-            position: 'absolute',
-            left: '10px',
-            top: '41px',
-            width: '21px',
-            height: '19px',
-            zIndex: 2,
-          }}
-        />
-      )}
-      
+
+      {/* Иконка ошибки */}
       {hasError && (
         <img
           src={ERR}
           alt="error"
           style={{
             position: 'absolute',
-            left: '10px',
-            top: (status === 'MINIMAL_STOCK' || status === 'CRITICAL_STOCK') ? '70px' : '41px',
+            left: `${errorLeft}px`,
+            top: `${errorTop}px`,
             width: '21px',
-            height: '19px',
+            height: '12px',
             zIndex: 2,
           }}
         />
       )}
-    </>
-  );
 
-  const renderBack1 = () => (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        position: 'relative',
-        paddingTop: '9px',
-      }}
-    >
+      {/* Стеклянный контейнер с иконкой станции */}
       <div
         style={{
-          color: getStatusColor(),
-          fontSize: '15px',
-          fontWeight: 500,
-          letterSpacing: '0px',
-          textAlign: 'center',
-          marginBottom: '8px',
-        }}
-      >
-        Информация
-      </div>
-      
-      <div
-        style={{
-          maxWidth: '184px',
-          marginLeft: 'auto',
-          marginRight: 'auto',
-          marginBottom: '10px',
-        }}
-      >
-        <div
-          style={{
-            fontWeight: 500,
-            fontSize: '17px',
-            lineHeight: '20px',
-            color: '#2D4059',
-            letterSpacing: '0px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            textAlign: 'center',
-          }}
-        >
-          {displayName}
-        </div>
-      </div>
-      
-      <div
-        style={{
+          position: 'absolute',
+          top: '30px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '70px',
+          height: '70px',
+          borderRadius: '15px',
+          background: 'rgba(255, 255, 255, 0.30)',
+          backdropFilter: 'blur(25px)',
+          WebkitBackdropFilter: 'blur(25px)',
+          boxShadow: `
+            inset -1px -1px 1px rgba(255, 255, 255, 0.5),
+            inset 1px 1px 1px rgba(255, 255, 255, 0.5),
+            0 0 15px rgba(255, 255, 255, 0.3)
+          `,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '8px',
-          marginBottom: '15px',
+          zIndex: 1,
         }}
       >
-        {isTmc && <img src={TMC} alt="TMC" style={{ width: '30px', height: '17px' }} />}
-        {isSgd && <img src={SGD} alt="SGD" style={{ width: '30px', height: '17px' }} />}
-        {isOk && <img src={OK} alt="OK" style={{ width: '30px', height: '17px' }} />}
-        {parentUid && <img src={CHAIN} alt="CHAIN" style={{ width: '30px', height: '17px' }} />}
-      </div>
-      
-      <div
-        style={{
-          width: '100%',
-          paddingLeft: '15px',
-          paddingRight: '27px',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div
+        <img
+          src={Station}
+          alt="Station"
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            height: '17px',
-            marginBottom: '20px',
+            width: '48px',
+            height: '54px',
+            objectFit: 'contain',
+            position: 'relative',
+            zIndex: 2,
           }}
-        >
-          <span
-            style={{
-              fontSize: '14px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-              lineHeight: '17px',
-            }}
-          >
-            ТМЦ в станции
-          </span>
-          <div
-            style={{
-              width: '40px',
-              textAlign: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                letterSpacing: '0px',
-                color: '#2D4059',
-                lineHeight: '17px',
-              }}
-            >
-              {totalCells}
-            </span>
-          </div>
-        </div>
-        
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            height: '17px',
-            marginBottom: '20px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '14px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-              lineHeight: '17px',
-            }}
-          >
-            Выдано ТМЦ
-          </span>
-          <div
-            style={{
-              width: '40px',
-              textAlign: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                letterSpacing: '0px',
-                color: '#2D4059',
-                lineHeight: '17px',
-              }}
-            >
-              {filledCells}
-            </span>
-          </div>
-        </div>
-        
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            height: '17px',
-            marginBottom: '20px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '14px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-              whiteSpace: 'nowrap',
-              lineHeight: '17px',
-            }}
-          >
-            Выдано сверхнормы
-          </span>
-          <div
-            style={{
-              width: '40px',
-              textAlign: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                letterSpacing: '0px',
-                color: '#2D4059',
-                lineHeight: '17px',
-              }}
-            >
-              {overNorm}
-            </span>
-          </div>
-        </div>
-        
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            height: '17px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '14px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-              lineHeight: '17px',
-            }}
-          >
-            Готовые детали
-          </span>
-          <div
-            style={{
-              width: '40px',
-              textAlign: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                letterSpacing: '0px',
-                color: '#2D4059',
-                lineHeight: '17px',
-              }}
-            >
-              {readyPartsCount}
-            </span>
-          </div>
-        </div>
+        />
       </div>
 
-      <button
+      {/* Название станции */}
+      <div
         style={{
           position: 'absolute',
-          bottom: '18px',
+          top: `${nameTop}px`,
           left: '50%',
           transform: 'translateX(-50%)',
-          width: '164px',
-          height: '30px',
-          backgroundColor: getButtonColor(),
-          border: 'none',
-          borderRadius: '20px',
-          cursor: 'pointer',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: '#2D4059',
-          letterSpacing: '0px',
+          width: '150px',
+          height: '18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1,
         }}
-        onClick={(e) => {
-          e.stopPropagation();
-          console.log('Аналитика');
-        }}
-      >
-        Аналитика
-      </button>
-    </div>
-  );
-
-  const renderBack2 = () => (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        position: 'relative',
-        paddingTop: '9px',
-      }}
-    >
-      <div
-        style={{
-          color: getStatusColor(),
-          fontSize: '15px',
-          fontWeight: 500,
-          letterSpacing: '0px',
-          textAlign: 'center',
-          marginBottom: '8px',
-        }}
-      >
-        Конфигурация
-      </div>
-      
-      <div
-        style={{
-          maxWidth: '184px',
-          marginLeft: 'auto',
-          marginRight: 'auto',
-          marginBottom: '1px',
-        }}
+        onMouseEnter={() => setShowNameTooltip(true)}
+        onMouseLeave={() => setShowNameTooltip(false)}
       >
         <div
           style={{
-            fontWeight: 500,
-            fontSize: '17px',
-            lineHeight: '20px',
-            color: '#2D4059',
-            letterSpacing: '0px',
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '15px',
+            lineHeight: '18px',
+            color: '#FFFFFF',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             textAlign: 'center',
+            maxWidth: '150px',
+            ...textSmoothing,
           }}
         >
           {displayName}
         </div>
+        {showNameTooltip && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              marginBottom: '4px',
+              padding: '4px 8px',
+              backgroundColor: 'rgba(45, 64, 89, 0.9)',
+              color: '#FFFFFF',
+              fontSize: '12px',
+              borderRadius: '4px',
+              whiteSpace: 'nowrap',
+              zIndex: 1000,
+              pointerEvents: 'none',
+            }}
+          >
+            {displayName}
+          </div>
+        )}
       </div>
-      
+
+      {/* Цех/участок */}
       <div
         style={{
-          maxWidth: '184px',
-          marginLeft: 'auto',
-          marginRight: 'auto',
+          position: 'absolute',
+          top: `${workshopTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '150px',
+          height: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1,
         }}
+        onMouseEnter={() => setShowWorkshopTooltip(true)}
+        onMouseLeave={() => setShowWorkshopTooltip(false)}
       >
         <div
           style={{
-            fontWeight: 500,
-            fontSize: '14px',
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '13px',
             lineHeight: '16px',
-            color: '#2D4059',
-            opacity: 0.5,
-            letterSpacing: '0px',
+            color: 'rgba(255, 255, 255, 0.8)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             textAlign: 'center',
+            maxWidth: '150px',
+            ...textSmoothing,
           }}
         >
           {workshopSectionText}
         </div>
-      </div>
-      
-      <div
-        style={{
-          width: '100%',
-          paddingLeft: '60px',
-          paddingRight: '10px',
-          boxSizing: 'border-box',
-          marginTop: '23px',
-        }}
-      >
-        <div
-          onClick={handleSchablonClick}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '28px',
-            position: 'relative',
-            cursor: 'pointer',
-          }}
-        >
-          <img
-            src={getConfig1Icon()}
-            alt=""
+        {showWorkshopTooltip && (
+          <div
             style={{
               position: 'absolute',
-              left: '-33px',
-              width: '21px',
-              height: '21px',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-            }}
-          >
-            Шаблоны загрузки
-          </span>
-        </div>
-        
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '28px',
-            position: 'relative',
-          }}
-        >
-          <img
-            src={getConfig2Icon()}
-            alt=""
-            style={{
-              position: 'absolute',
-              left: '-33px',
-              width: '22px',
-              height: '17px',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
+              bottom: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              marginBottom: '4px',
+              padding: '4px 8px',
+              backgroundColor: 'rgba(45, 64, 89, 0.9)',
+              color: '#FFFFFF',
+              fontSize: '12px',
+              borderRadius: '4px',
+              whiteSpace: 'nowrap',
+              zIndex: 1000,
+              pointerEvents: 'none',
             }}
           >
-            Карта загрузки
-          </span>
-        </div>
-        
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            marginBottom: '28px',
-            position: 'relative',
-          }}
-        >
-          <img
-            src={getConfig3Icon()}
-            alt=""
-            style={{
-              position: 'absolute',
-              left: '-33px',
-              width: '22px',
-              height: '22px',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-              lineHeight: '16px',
-            }}
-          >
-            Отчет движения<br />ТМЦ/деталей
-          </span>
-        </div>
-        
-        <div
-          onClick={handleSettingsClick}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            position: 'relative',
-            cursor: 'pointer',
-          }}
-        >
-          <img
-            src={getConfig4Icon()}
-            alt=""
-            style={{
-              position: 'absolute',
-              left: '-33px',
-              width: '21px',
-              height: '21px',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 500,
-              letterSpacing: '0px',
-              color: '#2D4059',
-            }}
-          >
-            Настройки станций
-          </span>
-        </div>
+            {workshopSectionText}
+          </div>
+        )}
       </div>
 
-      <button
-        onClick={handleBack}
+      {/* Статус */}
+      <div
         style={{
           position: 'absolute',
-          right: '10px',
-          top: '10px',
-          width: '21px',
-          height: '21px',
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
+          top: `${statusTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '150px',
+          height: '16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 2,
-          padding: 0,
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '13px',
+            lineHeight: '16px',
+            color: '#FFFFFF',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textAlign: 'center',
+            ...textSmoothing,
+          }}
+        >
+          {getStatusText()}
+        </div>
+      </div>
+
+      {/* Блок иконок прогресс-баров */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '21px',
+          top: `${statusTop + 16 + 5}px`,
+          width: '17px',
+          height: '53px',
+          zIndex: 1,
+        }}
+      >
+        <img
+          src={Icon1}
+          alt=""
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '17px',
+            height: '9px',
+          }}
+        />
+        <img
+          src={Icon2}
+          alt=""
+          style={{
+            position: 'absolute',
+            top: '17.5px',
+            left: '2px',
+            width: '13px',
+            height: '14px',
+          }}
+        />
+        <img
+          src={Icon3}
+          alt=""
+          style={{
+            position: 'absolute',
+            top: '39px',
+            left: '4px',
+            width: '9px',
+            height: '14px',
+          }}
+        />
+      </div>
+
+      {/* Прогресс-бар 1 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${barsLeft}px`,
+          top: `${bar1Top}px`,
+          width: `${barWidth}px`,
+          height: `${barHeight}px`,
+          borderRadius: '2.5px',
+          overflow: 'hidden',
+          ...glassProgressBgStyle,
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.min(animatedFilled, 100)}%`,
+            height: '100%',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '2.5px',
+            transition: 'width 0.05s linear',
+          }}
+        />
+      </div>
+
+      {/* Процент 1 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${percentLeft}px`,
+          top: `${bar1Top}px`,
+          height: `${barHeight}px`,
+          display: 'flex',
+          alignItems: 'center',
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 500,
+          fontSize: '12px',
+          letterSpacing: '2%',
+          color: '#FFFFFF',
+          whiteSpace: 'nowrap',
+          ...textSmoothing,
+        }}
+      >
+        {Math.round(animatedFilled)}%
+      </div>
+
+      {/* Прогресс-бар 2 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${barsLeft}px`,
+          top: `${bar2Top}px`,
+          width: `${barWidth}px`,
+          height: `${barHeight}px`,
+          borderRadius: '2.5px',
+          overflow: 'hidden',
+          ...glassProgressBgStyle,
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.min(animatedRemaining, 100)}%`,
+            height: '100%',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '2.5px',
+            transition: 'width 0.05s linear',
+          }}
+        />
+      </div>
+
+      {/* Процент 2 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${percentLeft}px`,
+          top: `${bar2Top}px`,
+          height: `${barHeight}px`,
+          display: 'flex',
+          alignItems: 'center',
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 500,
+          fontSize: '12px',
+          letterSpacing: '2%',
+          color: '#FFFFFF',
+          whiteSpace: 'nowrap',
+          ...textSmoothing,
+        }}
+      >
+        {Math.round(animatedRemaining)}%
+      </div>
+
+      {/* Прогресс-бар 3 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${barsLeft}px`,
+          top: `${bar3Top}px`,
+          width: `${barWidth}px`,
+          height: `${barHeight}px`,
+          borderRadius: '2.5px',
+          overflow: 'hidden',
+          ...glassProgressBgStyle,
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.min(animatedReady, 100)}%`,
+            height: '100%',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '2.5px',
+            transition: 'width 0.05s linear',
+          }}
+        />
+      </div>
+
+      {/* Процент 3 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${percentLeft}px`,
+          top: `${bar3Top}px`,
+          height: `${barHeight}px`,
+          display: 'flex',
+          alignItems: 'center',
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 500,
+          fontSize: '12px',
+          letterSpacing: '2%',
+          color: '#FFFFFF',
+          whiteSpace: 'nowrap',
+          ...textSmoothing,
+        }}
+      >
+        {Math.round(animatedReady)}%
+      </div>
+
+      {/* Кнопка "Пополнить" */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          console.log('Пополнить');
+        }}
+        onMouseEnter={() => setRefillBtnHovered(true)}
+        onMouseLeave={() => { setRefillBtnHovered(false); setRefillBtnPressed(false); }}
+        onMouseDown={() => setRefillBtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setRefillBtnPressed(false), 100)}
+        style={{
+          ...getGlassBottomBtnStyle(refillBtnHovered, refillBtnPressed, refillBtnWidth, refillBtnHeight, `${refillBtnHeight}px`),
+          left: `${refillBtnLeft}px`,
+          top: `${bottomBtnsTop}px`,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '13px',
+            letterSpacing: '1%',
+            color: '#FFFFFF',
+            whiteSpace: 'nowrap',
+            ...textSmoothing,
+          }}
+        >
+          Пополнить
+        </span>
+      </button>
+
+      {/* Круглая кнопка закладки */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsZakladActive(!isZakladActive);
+        }}
+        onMouseEnter={() => setZakladBtnHovered(true)}
+        onMouseLeave={() => { setZakladBtnHovered(false); setZakladBtnPressed(false); }}
+        onMouseDown={() => setZakladBtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setZakladBtnPressed(false), 100)}
+        style={{
+          ...getGlassBottomBtnStyle(zakladBtnHovered, zakladBtnPressed, 34, 34, '50%'),
+          left: `${zakladBtnLeft}px`,
+          top: `${bottomBtnsTop}px`,
         }}
       >
         <img 
-          src={arrows.back} 
-          alt="back" 
+          src={isZakladActive ? Zaklad2 : Zaklad1} 
+          alt="zaklad" 
           style={{ 
-            width: '21px', 
-            height: '21px',
-            transform: 'rotate(180deg)',
+            width: '10px', 
+            height: '14px',
+            position: 'relative',
+            zIndex: 3,
           }} 
         />
       </button>
-    </div>
+    </>
+  );
+
+  // Позиции для Back1
+  const back1BtnLeft = 9;
+  const back1BtnTop = 9;
+  const back1TitleTop = 16;
+  const back1TitleLeft = back1BtnLeft + 34 + 21;
+  const back1NameTop = back1TitleTop + 20 + 15;
+  const back1IconsTop = back1NameTop + 18 + 9;
+  const back1RowsTop = back1IconsTop + 17 + 15;
+  const back1RowHeight = 17;
+  const back1RowGap = 15;
+  const back1AnalyticsTop = back1RowsTop + 4 * back1RowHeight + 3 * back1RowGap + 18;
+
+  const renderBack1 = () => (
+    <>
+      {/* Кнопка Back */}
+      <button
+        onClick={handleBack}
+        onMouseEnter={() => setBack1BtnHovered(true)}
+        onMouseLeave={() => { setBack1BtnHovered(false); setBack1BtnPressed(false); }}
+        onMouseDown={() => setBack1BtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setBack1BtnPressed(false), 100)}
+        style={{
+          ...getGlassButtonStyle(back1BtnHovered, back1BtnPressed),
+          left: `${back1BtnLeft}px`,
+          top: `${back1BtnTop}px`,
+        }}
+      >
+        <img 
+          src={ArrowBack} 
+          alt="back" 
+          style={{ 
+            width: '18px', 
+            height: '18px',
+            position: 'relative',
+            zIndex: 3,
+          }} 
+        />
+      </button>
+
+      {/* Заголовок "Информация" */}
+      <div
+        style={{
+          position: 'absolute',
+          top: `${back1TitleTop}px`,
+          left: `${back1TitleLeft}px`,
+          height: '20px',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '14px',
+            lineHeight: '20px',
+            color: '#FFFFFF',
+            ...textSmoothing,
+          }}
+        >
+          Информация
+        </span>
+      </div>
+
+      {/* Название станции */}
+      <div
+        style={{
+          position: 'absolute',
+          top: `${back1NameTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '150px',
+          height: '18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '15px',
+            lineHeight: '18px',
+            color: '#FFFFFF',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '150px',
+            ...textSmoothing,
+          }}
+        >
+          {displayName}
+        </span>
+      </div>
+
+      {/* Иконки TMC2, SGD2, OK2, CHAIN2 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: `${back1IconsTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '7px',
+        }}
+      >
+        {isTmc && <img src={TMC2} alt="TMC" style={{ width: '30px', height: '17px' }} />}
+        {isSgd && <img src={SGD2} alt="SGD" style={{ width: '30px', height: '17px' }} />}
+        {isOk && <img src={OK2} alt="OK" style={{ width: '30px', height: '17px' }} />}
+        {parentUid && <img src={CHAIN2} alt="CHAIN" style={{ width: '30px', height: '17px' }} />}
+      </div>
+
+      {/* 4 строки данных */}
+      {[
+        { label: 'ТМЦ в станции', value: totalCells },
+        { label: 'Выдано ТМЦ', value: filledCells },
+        { label: 'Выдано сверхнормы', value: overNorm },
+        { label: 'Готовые детали', value: readyPartsCount },
+      ].map((row, index) => (
+        <div
+          key={row.label}
+          style={{
+            position: 'absolute',
+            top: `${back1RowsTop + index * (back1RowHeight + back1RowGap)}px`,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '193px',
+            height: '17px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 500,
+              fontSize: '14px',
+              lineHeight: '17px',
+              color: '#FFFFFF',
+              ...textSmoothing,
+            }}
+          >
+            {row.label}
+          </span>
+          <div
+            style={{
+              width: '40px',
+              height: '17px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 600,
+                fontSize: '13px',
+                lineHeight: '17px',
+                color: '#FFFFFF',
+                ...textSmoothing,
+              }}
+            >
+              {row.value}
+            </span>
+          </div>
+        </div>
+      ))}
+
+      {/* Кнопка "Аналитика" */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          console.log('Аналитика');
+        }}
+        onMouseEnter={() => setAnalyticsBtnHovered(true)}
+        onMouseLeave={() => { setAnalyticsBtnHovered(false); setAnalyticsBtnPressed(false); }}
+        onMouseDown={() => setAnalyticsBtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setAnalyticsBtnPressed(false), 100)}
+        style={{
+          ...getGlassBottomBtnStyle(analyticsBtnHovered, analyticsBtnPressed, 126, 34, '34px'),
+          left: '20px',
+          top: `${back1AnalyticsTop}px`,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '13px',
+            letterSpacing: '1%',
+            color: '#FFFFFF',
+            whiteSpace: 'nowrap',
+            ...textSmoothing,
+          }}
+        >
+          Аналитика
+        </span>
+      </button>
+
+      {/* Круглая кнопка с иконкой графика */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          console.log('График');
+        }}
+        onMouseEnter={() => setAnalyticsIconBtnHovered(true)}
+        onMouseLeave={() => { setAnalyticsIconBtnHovered(false); setAnalyticsIconBtnPressed(false); }}
+        onMouseDown={() => setAnalyticsIconBtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setAnalyticsIconBtnPressed(false), 100)}
+        style={{
+          ...getGlassBottomBtnStyle(analyticsIconBtnHovered, analyticsIconBtnPressed, 34, 34, '50%'),
+          left: '166px',
+          top: `${back1AnalyticsTop}px`,
+        }}
+      >
+        <img 
+          src={IconGraf} 
+          alt="graf" 
+          style={{ 
+            width: '16px', 
+            height: '18px',
+            position: 'relative',
+            zIndex: 3,
+          }} 
+        />
+      </button>
+    </>
+  );
+
+  // Позиции для Back2 (Управление)
+  const back2BtnRight = 9;
+  const back2BtnTop = 9;
+  const back2TitleTop = 16;
+  const back2NameTop = back2TitleTop + 20 + 15;
+  const back2WorkshopTop = back2NameTop + 18 + 2;
+  const back2MenuFirstTop = back2WorkshopTop + 16 + 19;
+  const back2MenuLeft = 25;
+  const back2MenuGap = 21;
+  const back2MenuHeight = 18;
+
+  const menuItems = [
+    { label: 'Шаблоны загрузки', icon: Config1, action: 'schablon' },
+    { label: 'Карта загрузки', icon: Config2, action: 'map' },
+    { label: 'Списание', icon: Config3, action: 'writeoff' },
+    { label: 'Видео', icon: Config4, action: 'video' },
+    { label: 'Настройки станции', icon: Config5, action: 'settings' },
+  ];
+
+  const renderBack2 = () => (
+    <>
+      {/* Кнопка Back справа */}
+      <button
+        onClick={handleBack}
+        onMouseEnter={() => setBack2BtnHovered(true)}
+        onMouseLeave={() => { setBack2BtnHovered(false); setBack2BtnPressed(false); }}
+        onMouseDown={() => setBack2BtnPressed(true)}
+        onMouseUp={() => setTimeout(() => setBack2BtnPressed(false), 100)}
+        style={{
+          ...getGlassButtonStyle(back2BtnHovered, back2BtnPressed),
+          right: `${back2BtnRight}px`,
+          top: `${back2BtnTop}px`,
+        }}
+      >
+        <img 
+          src={ArrowBack} 
+          alt="back" 
+          style={{ 
+            width: '18px', 
+            height: '18px',
+            transform: 'rotate(180deg)',
+            position: 'relative',
+            zIndex: 3,
+          }} 
+        />
+      </button>
+
+      {/* Заголовок "Управление" */}
+      <div
+        style={{
+          position: 'absolute',
+          top: `${back2TitleTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          height: '20px',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '14px',
+            lineHeight: '20px',
+            color: '#FFFFFF',
+            ...textSmoothing,
+          }}
+        >
+          Управление
+        </span>
+      </div>
+
+      {/* Название станции */}
+      <div
+        style={{
+          position: 'absolute',
+          top: `${back2NameTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '150px',
+          height: '18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '15px',
+            lineHeight: '18px',
+            color: '#FFFFFF',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '150px',
+            ...textSmoothing,
+          }}
+        >
+          {displayName}
+        </span>
+      </div>
+
+      {/* Цех/участок */}
+      <div
+        style={{
+          position: 'absolute',
+          top: `${back2WorkshopTop}px`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '150px',
+          height: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            fontSize: '13px',
+            lineHeight: '16px',
+            color: 'rgba(255, 255, 255, 0.7)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '150px',
+            ...textSmoothing,
+          }}
+        >
+          {workshopSectionText}
+        </span>
+      </div>
+
+      {/* 5 строк меню */}
+      {menuItems.map((item, index) => {
+        const isHovered = menuHovered === index;
+        const isPressed = menuPressed === index;
+        const scale = isPressed ? 0.95 : isHovered ? 1.05 : 1;
+
+        return (
+          <div
+            key={item.label}
+            style={{
+              position: 'absolute',
+              top: `${back2MenuFirstTop + index * (back2MenuHeight + back2MenuGap)}px`,
+              left: `${back2MenuLeft}px`,
+              height: `${back2MenuHeight}px`,
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              transform: `scale(${scale})`,
+              transformOrigin: 'left center',
+              transition: 'transform 0.12s ease',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.action === 'schablon') handleSchablonClick(e);
+              else if (item.action === 'settings') handleSettingsClick(e);
+              else console.log(item.action);
+            }}
+            onMouseEnter={() => setMenuHovered(index)}
+            onMouseLeave={() => { setMenuHovered(null); setMenuPressed(null); }}
+            onMouseDown={() => setMenuPressed(index)}
+            onMouseUp={() => setTimeout(() => setMenuPressed(null), 100)}
+          >
+            <img 
+              src={item.icon} 
+              alt="" 
+              style={{ 
+                width: '18px', 
+                height: '18px',
+              }} 
+            />
+            <span
+              style={{
+                marginLeft: '12px',
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 500,
+                fontSize: '14px',
+                lineHeight: '18px',
+                color: '#FFFFFF',
+                whiteSpace: 'nowrap',
+                ...textSmoothing,
+              }}
+            >
+              {item.label}
+            </span>
+          </div>
+        );
+      })}
+    </>
   );
 
   return (
-    <div
-      style={{
-        width: '220px',
-        height: '295px',
-        borderRadius: '20px',
-        position: 'relative',
-        overflow: 'visible',
-        perspective: '1000px',
-        backgroundColor: 'transparent',
-      }}
-    >
+    <>
+      <style>{glassPulseTop}</style>
+      <style>{glassPulseBottom}</style>
       <div
         style={{
+          width: '220px',
+          height: '295px',
+          borderRadius: '20px',
           position: 'relative',
-          width: '100%',
-          height: '100%',
-          transition: 'transform 0.6s',
-          transformStyle: 'preserve-3d',
-          transform: getContainerTransform(),
+          overflow: 'visible',
+          perspective: '1000px',
           backgroundColor: 'transparent',
         }}
       >
-        {/* Front */}
         <div
           style={{
-            position: 'absolute',
+            position: 'relative',
             width: '100%',
             height: '100%',
-            backfaceVisibility: 'hidden',
-            borderRadius: '20px',
-            overflow: 'hidden',
+            transition: 'transform 0.6s',
+            transformStyle: 'preserve-3d',
+            transform: getContainerTransform(),
             backgroundColor: 'transparent',
-            zIndex: displaySide === 'front' ? 2 : 1,
           }}
         >
-          <img
-            src={getBackgroundImage()}
-            alt=""
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
+          {/* Front */}
           <div
             style={{
-              position: 'relative',
-              zIndex: 1,
-              padding: '12px',
+              position: 'absolute',
+              width: '100%',
               height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
+              backfaceVisibility: 'hidden',
+              borderRadius: '20px',
+              overflow: 'hidden',
               backgroundColor: 'transparent',
+              zIndex: displaySide === 'front' ? 2 : 1,
+              willChange: 'transform',
+              ...getBackgroundStyle(),
             }}
           >
-            <button
-              onClick={handleFlipLeft}
+            <div
               style={{
-                position: 'absolute',
-                left: '10px',
-                top: '10px',
-                width: '21px',
-                height: '21px',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
+                position: 'relative',
+                zIndex: 1,
+                padding: '12px',
+                height: '100%',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-                padding: 0,
+                flexDirection: 'column',
+                backgroundColor: 'transparent',
               }}
             >
-              <img 
-                src={arrows.left} 
-                alt="left" 
-                style={{ 
-                  width: '21px', 
-                  height: '21px',
-                }} 
-              />
-            </button>
-
-            <button
-              onClick={handleFlipRight}
-              style={{
-                position: 'absolute',
-                right: '10px',
-                top: '10px',
-                width: '22px',
-                height: '17px',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-                padding: 0,
-              }}
-            >
-              <img 
-                src={arrows.right} 
-                alt="right" 
-                style={{ 
-                  width: '22px', 
-                  height: '17px',
-                }} 
-              />
-            </button>
-            
-            {renderFront()}
+              {renderFront()}
+            </div>
           </div>
-        </div>
 
-        {/* Back1 */}
-        <div
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            backfaceVisibility: 'hidden',
-            borderRadius: '20px',
-            overflow: 'hidden',
-            transform: 'rotateY(180deg)',
-            backgroundColor: 'transparent',
-            zIndex: displaySide === 'back1' ? 2 : 1,
-          }}
-        >
-          <img
-            src={getBackgroundImage()}
-            alt=""
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
+          {/* Back1 */}
           <div
             style={{
-              position: 'relative',
-              zIndex: 1,
+              position: 'absolute',
+              width: '100%',
               height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
+              backfaceVisibility: 'hidden',
+              borderRadius: '20px',
+              overflow: 'hidden',
+              transform: 'rotateY(180deg)',
               backgroundColor: 'transparent',
+              zIndex: displaySide === 'back1' ? 2 : 1,
+              willChange: 'transform',
+              ...getBackgroundStyle(),
             }}
           >
-            <button
-              onClick={handleBack}
+            <div
               style={{
-                position: 'absolute',
-                left: '10px',
-                top: '10px',
-                width: '21px',
-                height: '21px',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
+                position: 'relative',
+                zIndex: 1,
+                padding: '12px',
+                height: '100%',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-                padding: 0,
+                flexDirection: 'column',
+                backgroundColor: 'transparent',
               }}
             >
-              <img 
-                src={arrows.back} 
-                alt="back" 
-                style={{ 
-                  width: '21px', 
-                  height: '21px',
-                }} 
-              />
-            </button>
-            
-            {renderBack1()}
+              {renderBack1()}
+            </div>
           </div>
-        </div>
 
-        {/* Back2 */}
-        <div
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            backfaceVisibility: 'hidden',
-            borderRadius: '20px',
-            overflow: 'hidden',
-            transform: 'rotateY(-180deg)',
-            backgroundColor: 'transparent',
-            zIndex: displaySide === 'back2' ? 2 : 1,
-          }}
-        >
-          <img
-            src={getBackgroundImage()}
-            alt=""
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
+          {/* Back2 */}
           <div
             style={{
-              position: 'relative',
-              zIndex: 1,
+              position: 'absolute',
+              width: '100%',
               height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
+              backfaceVisibility: 'hidden',
+              borderRadius: '20px',
+              overflow: 'hidden',
+              transform: 'rotateY(-180deg)',
               backgroundColor: 'transparent',
+              zIndex: displaySide === 'back2' ? 2 : 1,
+              willChange: 'transform',
+              ...getBackgroundStyle(),
             }}
           >
-            {renderBack2()}
+            <div
+              style={{
+                position: 'relative',
+                zIndex: 1,
+                padding: '12px',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: 'transparent',
+              }}
+            >
+              {renderBack2()}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
