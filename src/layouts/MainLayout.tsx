@@ -10,6 +10,10 @@ import ReferencesPage from '../components/ReferencesPage/ReferencesPage';
 import DocumentsPage from '../components/DocumentsPage/DocumentsPage';
 import ReportsPage from '../components/ReportsPage/ReportsPage';
 import AnalyticsPage from '../components/AnalyticsPage/AnalyticsPage';
+import OrdersPage from '../components/AnalyticsPage/OrdersPage';
+import OrderCreatePage from '../components/AnalyticsPage/OrderCreatePage';
+import TkpPage from '../components/AnalyticsPage/TkpPage';
+import TkpViewPage from '../components/AnalyticsPage/TkpViewPage';
 import SettingsPage from '../components/SettingsPage/SettingsPage';
 import AccountPage from '../components/AccountPage/AccountPage';
 import SchablonPage from '../components/DocumentsPage/Schablon/SchablonPage';
@@ -67,6 +71,7 @@ const fetchSupplierName = async (uid: string): Promise<string> => {
 const staticComponents: Record<string, React.ReactNode> = {
   '/main': <MainPage />, '/stations': <StationsPage />, '/references': <ReferencesPage />,
   '/documents': <DocumentsPage />, '/reports': <ReportsPage />, '/analytics': <AnalyticsPage />,
+  '/orders': <OrdersPage />, '/tkp': <TkpPage />,
   '/settings': <SettingsPage />, '/account': <AccountPage />,
   '/references/nomenclature': <NomenclaturePage />, '/references/templates': <TemplatesPage />,
   '/references/accounting-groups': <AccountingGroupsPage />, '/references/nomenclature-groups': <NomenclatureGroupsPage />,
@@ -92,6 +97,9 @@ const getComponentByPath = (path: string): React.ReactNode => {
   if (path.startsWith('/references/station-configurations/edit/')) return <StationConfigurationCreatePage />;
   if (path.startsWith('/references/stations/create/')) return <StationCreatePage />;
   if (path.startsWith('/references/stations/edit/')) return <StationCreatePage />;
+  if (path.startsWith('/orders/create/')) return <OrderCreatePage />;
+  if (path.match(/^\/orders\/[^/]+$/)) return <OrderCreatePage />;
+  if (path.match(/^\/tkp\/[^/]+$/)) return <TkpViewPage />;
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
   if (schablonMatch) return <SchablonPage />;
   return null;
@@ -100,7 +108,8 @@ const getComponentByPath = (path: string): React.ReactNode => {
 const getLabelByPath = (path: string): string => {
   const staticLabels: Record<string, string> = {
     '/main': 'Главная', '/stations': 'Станции', '/references': 'Справочники', '/documents': 'Документы',
-    '/reports': 'Отчеты', '/analytics': 'Аналитика', '/settings': 'Настройки', '/account': 'Аккаунт',
+    '/reports': 'Отчеты', '/analytics': 'Аналитика', '/orders': 'Заказы', '/tkp': 'ТКП',
+    '/settings': 'Настройки', '/account': 'Аккаунт',
     '/references/nomenclature': 'Справочник: Номенклатура', '/references/templates': 'Справочник: Шаблоны пополнения',
     '/references/accounting-groups': 'Справочник: Группы учета', '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
     '/references/nomenclature-types': 'Справочник: Виды номенклатуры', '/references/attribute-types': 'Справочник: Виды характеристик',
@@ -124,6 +133,9 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/references/station-configurations/edit/')) { const uid = path.split('/').pop(); return 'Конфигурация станции'; }
   if (path.startsWith('/references/stations/create/')) { const code = path.split('/').pop(); return `Станция: ${code}`; }
   if (path.startsWith('/references/stations/edit/')) { const uid = path.split('/').pop(); return 'Станция'; }
+  if (path.startsWith('/orders/create/')) { return 'Заказ (новый)'; }
+  if (path.match(/^\/orders\/[^/]+$/)) { const uid = path.split('/').pop(); return `Заказ ${uid?.slice(0, 8)}`; }
+  if (path.match(/^\/tkp\/[^/]+$/)) { const uid = path.split('/').pop(); return `ТКП ${uid?.slice(0, 8)}`; }
   if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };

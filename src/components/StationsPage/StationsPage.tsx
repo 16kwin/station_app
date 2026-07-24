@@ -19,7 +19,7 @@ import Icon8 from '../../assets/Station/8.svg';
 import Icon9 from '../../assets/Station/9.svg';
 import Icon10 from '../../assets/Station/10.svg';
 import Icon11 from '../../assets/Station/11.svg';
-import Icon12 from '../../assets/Station/11.svg';
+import Icon12 from '../../assets/Station/12.svg';
 import type { JSX } from 'react/jsx-runtime';
 
 interface Holding {

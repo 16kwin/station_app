@@ -1,10 +1,9 @@
-// StationMainTab.tsx — ПОЛНЫЙ ФАЙЛ (3 блока: Предприятие → Цех → Участок, холдинг автоматом)
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+// StationMainTab.tsx — ПОЛНЫЙ ФАЙЛ (с использованием FormField)
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
-import Icon6 from '../../../assets/References/NomenclatureCreatePage/Icon6.svg';
+import FormField from '../../elements/FormField';
 import Icon8 from '../../../assets/References/NomenclatureCreatePage/Icon8.svg';
-import Icon9 from '../../../assets/References/NomenclatureCreatePage/Icon9.svg';
 import Icon21 from '../../../assets/References/NomenclatureCreatePage/Icon21.svg';
 import Icon22 from '../../../assets/References/NomenclatureCreatePage/Icon22.svg';
 import Icon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
@@ -55,18 +54,6 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const START_LEFT = 40;
   const START_TOP = 30;
 
-  const fieldBaseStyle = (locked?: boolean): React.CSSProperties => ({
-    width: FIELD_WIDTH, height: FIELD_HEIGHT, borderRadius: 10, marginTop: 11,
-    display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    outline: 'none', backgroundColor: locked ? '#F5F6FA' : '#FFFFFF',
-    position: 'relative', boxSizing: 'border-box',
-    border: locked ? '1px solid rgba(102, 110, 254, 0.5)' : '1px solid rgba(102, 110, 254, 0.15)',
-    cursor: locked ? 'not-allowed' : 'default',
-  });
-
-  const inputStyle: React.CSSProperties = { width: 'calc(100% - 50px)', height: '100%', border: 'none', outline: 'none', marginLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE', backgroundColor: 'transparent' };
-
   const getColLeft = (col: number) => START_LEFT + col * (FIELD_WIDTH + COL_GAP);
   const getRowTop = (row: number) => START_TOP + row * (FIELD_HEIGHT + 11 + ROW_GAP + 14);
 
@@ -76,31 +63,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const BOTTOM_BLOCK_TOP = TOP_BLOCK_TOP + TOP_BLOCK_HEIGHT + 30;
   const BOTTOM_BLOCK_HEIGHT = 300;
 
-  const [centerMode, setCenterMode] = useState<'main' | 'placement'>('main');
-  const [showAccountingChecklist, setShowAccountingChecklist] = useState(false);
-  const checklistRef = useRef<HTMLDivElement>(null);
-  const checklistContainerRef = useRef<HTMLDivElement>(null);
-  const [checklistStyle, setChecklistStyle] = useState<React.CSSProperties>({});
-
-  useEffect(() => {
-    if (!showAccountingChecklist) return;
-    const h = (e: MouseEvent) => {
-      if (checklistRef.current && !checklistRef.current.contains(e.target as Node)) {
-        setShowAccountingChecklist(false);
-      }
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [showAccountingChecklist]);
-
-  const updateChecklistPosition = () => {
-    if (checklistContainerRef.current) {
-      const rect = checklistContainerRef.current.getBoundingClientRect();
-      setChecklistStyle({ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 10001 });
-    }
-  };
-
-  useEffect(() => { if (showAccountingChecklist) updateChecklistPosition(); }, [showAccountingChecklist]);
+  const [centerMode, setCenterMode] = useState<'main' | 'placement' | 'accounting'>('main');
 
   const placementText = [props.holdingName, props.enterpriseName, props.workshopName, props.sectionName].filter(Boolean).join('; ') || 'Выберите размещение';
 
@@ -116,122 +79,89 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const accountingLabels = accountingItems.filter(item => item.value).map(item => item.label);
   const accountingText = accountingLabels.length > 0 ? accountingLabels.join(', ') : 'Выберите вид учёта';
 
-  const renderCenterContent = () => {
-    return (
-      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-        <motion.div key="main" initial={false} animate={{ x: centerMode === 'main' ? 0 : -536 }} transition={{ type: 'tween', duration: 0.3 }}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', padding: '25px 30px 0', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-            <span style={{ ...labelStyle, marginLeft: 9 }}>Размещение:</span>
-          </div>
-          <div onClick={() => setCenterMode('placement')} style={{ width: '100%', height: 44, borderRadius: 10, marginTop: 11, border: props.enterpriseId ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: props.enterpriseId ? '#666EFE' : '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
-            {placementText}
-          </div>
-          <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 20, borderRadius: 10, backgroundColor: 'rgba(45, 64, 89, 0.3)', cursor: 'pointer', position: 'relative', flexShrink: 0 }}>
-              <div style={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: '#FFFFFF', position: 'absolute', top: 2, left: 2 }} />
-            </div>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Выдача по операционной карте</span>
-          </div>
-          <div style={{ marginTop: 25 }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-              <span style={{ ...labelStyle, marginLeft: 9 }}>Вид учёта станции:</span>
-            </div>
-            <div ref={checklistContainerRef} style={{ position: 'relative' }}>
-              <div onClick={() => { updateChecklistPosition(); setShowAccountingChecklist(!showAccountingChecklist); }}
-                style={{ width: '100%', height: 44, borderRadius: 10, marginTop: 11, border: accountingLabels.length > 0 ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: accountingLabels.length > 0 ? '#666EFE' : '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
-                {accountingText}
-                <motion.img src={Icon9} alt="" style={{ width: 18, height: 18, flexShrink: 0, marginLeft: 'auto', transition: 'transform 0.3s ease', transform: showAccountingChecklist ? 'rotateX(180deg)' : 'rotateX(0deg)' }} />
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div key="placement" initial={false} animate={{ x: centerMode === 'placement' ? 0 : 536 }} transition={{ type: 'tween', duration: 0.3 }}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', padding: '25px 30px 0', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-            <button onClick={() => setCenterMode('main')} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
-              <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#2D4059" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-            <span style={{ ...labelStyle }}>Размещение станции</span>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6B7280', display: 'block', marginBottom: 4 }}>Предприятие</span>
-            <div onClick={() => {
-              props.openPopup('enterprise');
-            }} style={{ width: '100%', height: 44, borderRadius: 10, border: props.enterpriseId ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 15, paddingRight: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: props.enterpriseId ? '#666EFE' : '#9CA3AF', boxSizing: 'border-box' }}>
-              <img src={props.enterpriseId ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
-              <span style={{ marginLeft: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{props.enterpriseName || 'Выберите предприятие'}</span>
-            </div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6B7280', display: 'block', marginBottom: 4 }}>Цех</span>
-            <div onClick={() => props.enterpriseId && props.openPopup('workshop', String(props.enterpriseId))} style={{ width: '100%', height: 44, borderRadius: 10, border: props.workshopId ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 15, paddingRight: 13, cursor: props.enterpriseId ? 'pointer' : 'not-allowed', opacity: props.enterpriseId ? 1 : 0.5, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: props.workshopId ? '#666EFE' : '#9CA3AF', boxSizing: 'border-box' }}>
-              <img src={props.workshopId ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
-              <span style={{ marginLeft: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{props.enterpriseId ? (props.workshopName || 'Выберите цех') : 'Сначала выберите предприятие'}</span>
-            </div>
-          </div>
-          <div>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6B7280', display: 'block', marginBottom: 4 }}>Участок</span>
-            <div onClick={() => props.workshopId && props.openPopup('section', String(props.workshopId))} style={{ width: '100%', height: 44, borderRadius: 10, border: props.sectionId ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 15, paddingRight: 13, cursor: props.workshopId ? 'pointer' : 'not-allowed', opacity: props.workshopId ? 1 : 0.5, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: props.sectionId ? '#666EFE' : '#9CA3AF', boxSizing: 'border-box' }}>
-              <img src={props.sectionId ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
-              <span style={{ marginLeft: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{props.workshopId ? (props.sectionName || 'Выберите участок') : 'Сначала выберите цех'}</span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    );
-  };
-
   return (
     <>
       {/* ВЕРХНИЙ БЛОК */}
       <div style={{ position: 'absolute', top: TOP_BLOCK_TOP, left: 30, width: TOP_BLOCK_WIDTH, height: TOP_BLOCK_HEIGHT, ...blockStyle }}>
         <div style={{ position: 'absolute', top: getRowTop(0), left: getColLeft(0) }}>
-          <span style={labelStyle}>Код:</span>
-          <div style={fieldBaseStyle(true)}><span style={{ marginLeft: 0, color: '#666EFE', opacity: 0.5 }}>{String(props.code).padStart(4, '0')}</span></div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Код:"
+            value={String(props.code).padStart(4, '0')}
+            type="display"
+            locked
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(0), left: getColLeft(1) }}>
-          <span style={labelStyle}>Модель:</span>
-          <div onClick={() => props.openPopup('stationModel')} style={{ ...fieldBaseStyle(), cursor: 'pointer', border: props.modelId ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)' }}>
-            <img src={props.modelId ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, position: 'absolute', left: 15 }} />
-            <span style={{ marginLeft: 44, color: props.modelId ? '#666EFE' : '#A0A3BD' }}>{props.modelName || 'Выберите модель'}</span>
-          </div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Модель:"
+            icon={Icon31} iconActive={Icon32}
+            value={props.modelName}
+            placeholder="Выберите модель"
+            type="select"
+            onClick={() => props.openPopup('stationModel')}
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(0), left: getColLeft(2) }}>
-          <span style={labelStyle}>Артикул:</span>
-          <div style={fieldBaseStyle(true)}><span style={{ marginLeft: 0, color: '#666EFE', opacity: props.article ? 1 : 0.5 }}>{props.article || '—'}</span></div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Артикул:"
+            value={props.article || '—'}
+            type="display"
+            locked
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(0), left: getColLeft(3) }}>
-          <span style={labelStyle}>Дата производства:</span>
-          <div style={{ ...fieldBaseStyle(), border: props.productionDate ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)' }}>
-            <input type="date" style={{ ...inputStyle, color: props.productionDate ? '#666EFE' : '#A0A3BD', marginLeft: 0 }} value={props.productionDate} onChange={e => props.setProductionDate(e.target.value)} />
-          </div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Дата производства:"
+            value={props.productionDate}
+            type="input"
+            inputType="date"
+            onChange={e => props.setProductionDate(e.target.value)}
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(0) }}>
-          <span style={labelStyle}>Наименование:</span>
-          <div style={{ ...fieldBaseStyle(), border: props.name ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)' }}>
-            <img src={props.name ? Icon22 : Icon21} alt="" style={{ width: 16, height: 16, position: 'absolute', left: 14 }} />
-            <input style={inputStyle} value={props.name} onChange={e => props.setName(e.target.value)} placeholder="Введите название" />
-            {props.name && <button onClick={() => props.setName('')} style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} /></button>}
-          </div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Наименование:"
+            icon={Icon21} iconActive={Icon22}
+            value={props.name}
+            placeholder="Введите название"
+            type="input"
+            onChange={e => props.setName(e.target.value)}
+            onClear={() => props.setName('')}
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(1) }}>
-          <span style={labelStyle}>Тип:</span>
-          <div style={fieldBaseStyle(true)}><span style={{ marginLeft: 0, color: '#666EFE', opacity: props.typeName ? 1 : 0.5 }}>{props.typeName || '—'}</span></div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Тип:"
+            value={props.typeName || '—'}
+            type="display"
+            locked
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(2) }}>
-          <span style={labelStyle}>Ревизия:</span>
-          <div style={fieldBaseStyle(true)}><span style={{ marginLeft: 0, color: '#666EFE', opacity: props.revision ? 1 : 0.5 }}>{props.revision || '—'}</span></div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Ревизия:"
+            value={props.revision || '—'}
+            type="display"
+            locked
+          />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(3) }}>
-          <span style={labelStyle}>Серийный номер:</span>
-          <div style={{ ...fieldBaseStyle(), border: props.serialNumber ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)' }}>
-            <input style={inputStyle} value={props.serialNumber} onChange={e => props.setSerialNumber(e.target.value)} placeholder="Введите серийный номер" />
-            {props.serialNumber && <button onClick={() => props.setSerialNumber('')} style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} /></button>}
-          </div>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Серийный номер:"
+            value={props.serialNumber}
+            placeholder="Введите серийный номер"
+            type="input"
+            onChange={e => props.setSerialNumber(e.target.value)}
+            onClear={() => props.setSerialNumber('')}
+          />
         </div>
       </div>
 
@@ -246,8 +176,104 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
         </div>
 
         {/* ЦЕНТРАЛЬНЫЙ — Размещение и вид учёта */}
-        <div style={{ width: 536, height: BOTTOM_BLOCK_HEIGHT, ...blockStyle, overflow: 'hidden' }}>
-          {renderCenterContent()}
+        <div style={{ width: 536, height: BOTTOM_BLOCK_HEIGHT, ...blockStyle, overflow: 'hidden', position: 'relative' }}>
+          {/* Главный экран */}
+          <motion.div
+            animate={{ x: centerMode === 'main' ? 0 : -536 }}
+            transition={{ type: 'tween', duration: 0.3 }}
+            style={{ position: 'absolute', top: 0, left: 0, width: 536, height: '100%', padding: '25px 30px 0', boxSizing: 'border-box' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <span style={{ ...labelStyle, marginLeft: 9 }}>Размещение:</span>
+            </div>
+            <div onClick={() => setCenterMode('placement')} style={{ width: '100%', height: 44, borderRadius: 10, marginTop: 11, border: props.enterpriseId ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: props.enterpriseId ? '#666EFE' : '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
+              {placementText}
+            </div>
+            <div style={{ marginTop: 25 }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                <span style={{ ...labelStyle, marginLeft: 9 }}>Вид учёта станции:</span>
+              </div>
+              <div onClick={() => setCenterMode('accounting')} style={{ width: '100%', height: 44, borderRadius: 10, marginTop: 11, border: accountingLabels.length > 0 ? '1px solid #666EFE' : '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: accountingLabels.length > 0 ? '#666EFE' : '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
+                {accountingText}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Второй экран — меняет содержимое в зависимости от centerMode */}
+          <motion.div
+            animate={{ x: centerMode !== 'main' ? 0 : 536 }}
+            transition={{ type: 'tween', duration: 0.3 }}
+            style={{ position: 'absolute', top: 0, left: 0, width: 536, height: '100%', padding: '25px 30px 0', boxSizing: 'border-box' }}
+          >
+            {centerMode === 'placement' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+                  <button onClick={() => setCenterMode('main')} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
+                    <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#2D4059" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  <span style={{ ...labelStyle }}>Размещение станции</span>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <FormField
+                    width={476} height={44}
+                    label="Предприятие"
+                    icon={Icon31} iconActive={Icon32}
+                    value={props.enterpriseName}
+                    placeholder="Выберите предприятие"
+                    type="select"
+                    onClick={() => props.openPopup('enterprise')}
+                  />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <FormField
+                    width={476} height={44}
+                    label="Цех"
+                    icon={Icon31} iconActive={Icon32}
+                    value={props.workshopName}
+                    placeholder={props.enterpriseId ? 'Выберите цех' : 'Сначала выберите предприятие'}
+                    type="select"
+                    locked={!props.enterpriseId}
+                    onClick={() => props.enterpriseId && props.openPopup('workshop', String(props.enterpriseId))}
+                  />
+                </div>
+                <div>
+                  <FormField
+                    width={476} height={44}
+                    label="Участок"
+                    icon={Icon31} iconActive={Icon32}
+                    value={props.sectionName}
+                    placeholder={props.workshopId ? 'Выберите участок' : 'Сначала выберите цех'}
+                    type="select"
+                    locked={!props.workshopId}
+                    onClick={() => props.workshopId && props.openPopup('section', String(props.workshopId))}
+                  />
+                </div>
+              </>
+            )}
+            {centerMode === 'accounting' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+                  <button onClick={() => setCenterMode('main')} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
+                    <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#2D4059" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  <span style={{ ...labelStyle }}>Вид учёта станции</span>
+                </div>
+                <div style={{ border: '1px solid rgba(102, 110, 254, 0.15)', borderRadius: 10, overflow: 'hidden' }}>
+                  {accountingItems.map(item => (
+                    <div key={item.label} onClick={item.setter}
+                      style={{ height: 44, display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 14, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', backgroundColor: item.value ? '#F0F1FF' : '#FFFFFF', borderBottom: '1px solid rgba(102, 110, 254, 0.08)' }}>
+                      <div style={{ width: 18, height: 18, borderRadius: 4, border: item.value ? 'none' : '2px solid rgba(45,64,89,0.3)', backgroundColor: item.value ? '#666EFE' : 'transparent', marginRight: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {item.value && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </div>
+                      {item.label}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </motion.div>
         </div>
 
         {/* ПРАВЫЙ — Описание */}
@@ -279,33 +305,15 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
                 onClick={() => props.setDescription('')}
                 style={{ position: 'absolute', top: 15, right: 10, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
               >
-                <img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} />
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="8" fill="#666EFE" fillOpacity="0.15" />
+                  <path d="M6 6L12 12M12 6L6 12" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
               </button>
             )}
           </div>
         </div>
       </div>
-
-      {/* Чеклист (портал) */}
-      <AnimatePresence>
-        {showAccountingChecklist && (
-          <motion.div ref={checklistRef} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}
-            style={{ ...checklistStyle, backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', overflow: 'hidden', padding: '4px 0', position: 'fixed' }}
-            onClick={e => e.stopPropagation()}>
-            {accountingItems.map(item => (
-              <div key={item.label} onClick={(e) => { e.stopPropagation(); item.setter(); }}
-                style={{ height: 40, display: 'flex', alignItems: 'center', paddingLeft: 14, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', backgroundColor: item.value ? '#F0F1FF' : '#FFFFFF' }}
-                onMouseEnter={(e) => { if (!item.value) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }}
-                onMouseLeave={(e) => { if (!item.value) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>
-                <div style={{ width: 18, height: 18, borderRadius: 4, border: item.value ? 'none' : '2px solid rgba(45,64,89,0.3)', backgroundColor: item.value ? '#666EFE' : 'transparent', marginRight: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {item.value && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                </div>
-                {item.label}
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   );
 };

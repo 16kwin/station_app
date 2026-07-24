@@ -169,6 +169,13 @@ restApiStationCrud: (uid: string) => `/api/stations/crud/${uid}`,
 restApiStationDocuments: (stationUid: string) => `/api/stations/${stationUid}/documents`,
 restApiStationDeleteDocument: (stationUid: string, documentUid: string) => `/api/stations/${stationUid}/documents/${documentUid}`,
 restApiHoldings: '/api/holdings',
+  restApiOrdersActive: '/api/orders/active',
+  restApiOrdersClosed: '/api/orders/closed',
+  restApiOrderCreate: (orderUid: string) => `/api/orders/${orderUid}`,
+  restApiOrderGet: (orderUid: string) => `/api/orders/${orderUid}`,
+  restApiTkpActive: '/api/tkp/active',
+restApiTkpClosed: '/api/tkp/closed',
+restApiTkpGet: (tkpUid: string) => `/api/tkp/${tkpUid}`,
 };
 
 export default ConstantInfo;

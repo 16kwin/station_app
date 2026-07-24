@@ -1,3 +1,4 @@
+// services/AuthContext.tsx
 import React, { useContext, useEffect, useState, type ReactNode } from 'react';
 import ConstantInfo from '../info/ConstantInfo';
 import AxiosService from './AxiosService';
@@ -34,12 +35,24 @@ interface ValueType {
 const AuthContext = React.createContext<ValueType | null>(null);
 
 const LOCKED_STORAGE_KEY = 'app_locked_state';
+const LOGOUT_EVENT_KEY = 'app_logout_event';
+const LOGIN_EVENT_KEY = 'app_login_event';
+
+const emptyUserInfo: UserInfo = {
+  id: '',
+  name: '',
+  role: '',
+  roleDescription: '',
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  imgAvatar: undefined,
+};
 
 export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLocked, setIsLockedState] = useState(() => {
-    // Загружаем состояние блокировки из localStorage при инициализации
     try {
       const saved = localStorage.getItem(LOCKED_STORAGE_KEY);
       return saved ? JSON.parse(saved) : false;
@@ -47,26 +60,29 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
       return false;
     }
   });
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    id: '',
-    name: '',
-    role: '',
-    roleDescription: '',
-    firstName: '',
-    middleName: '',
-    lastName: '',
-    imgAvatar: undefined,
-  });
+  const [userInfo, setUserInfo] = useState<UserInfo>(emptyUserInfo);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
 
-  // Обёртка для setLocked, которая сохраняет состояние в localStorage
   const setLocked = (locked: boolean) => {
     setIsLockedState(locked);
     try {
       localStorage.setItem(LOCKED_STORAGE_KEY, JSON.stringify(locked));
     } catch (e) {
       console.error('Failed to save locked state:', e);
+    }
+  };
+
+  const resetAuthState = () => {
+    setIsAuth(false);
+    setIsAdmin(false);
+    setIsOperator(false);
+    setUserInfo(emptyUserInfo);
+    setIsLockedState(false);
+    try {
+      localStorage.removeItem(LOCKED_STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed to clear auth state:', e);
     }
   };
 
@@ -88,19 +104,7 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
       setIsOperator(response.data.role === 'ROLE_OPERATOR');
       return true;
     } catch {
-      setIsAuth(false);
-      setIsAdmin(false);
-      setIsOperator(false);
-      setUserInfo({
-        id: '',
-        name: '',
-        role: '',
-        roleDescription: '',
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        imgAvatar: undefined,
-      });
+      resetAuthState();
       return false;
     } finally {
       setIsLoading(false);
@@ -118,23 +122,14 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      setIsAuth(false);
-      setIsAdmin(false);
-      setIsOperator(false);
-      setLocked(false); // Используем обёртку, которая сохраняет в localStorage
-      setUserInfo({
-        id: '',
-        name: '',
-        role: '',
-        roleDescription: '',
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        imgAvatar: undefined,
-      });
+      resetAuthState();
       
-      localStorage.removeItem('tabs_state');
-      localStorage.removeItem('drafts_state');
+      // Отправляем сигнал другим вкладкам
+      try {
+        localStorage.setItem(LOGOUT_EVENT_KEY, Date.now().toString());
+        localStorage.removeItem('tabs_state');
+        localStorage.removeItem('drafts_state');
+      } catch (e) {}
     }
   };
 
@@ -147,9 +142,39 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
     }
   };
 
+  // Слушаем изменения в localStorage из других вкладок
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Синхронизация блокировки
+      if (e.key === LOCKED_STORAGE_KEY) {
+        try {
+          const newValue = e.newValue ? JSON.parse(e.newValue) : false;
+          setIsLockedState(newValue);
+        } catch {}
+      }
+      
+      // Синхронизация логаута
+      if (e.key === LOGOUT_EVENT_KEY && e.newValue) {
+        // Принудительно переходим на страницу логина
+        window.location.href = '/login';
+      }
+      
+      // Синхронизация входа
+      if (e.key === LOGIN_EVENT_KEY && e.newValue) {
+        // Вызываем refreshAuth для проверки новых кук
+        refreshAuth();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Проверка авторизации при загрузке
   useEffect(() => {
     checkAuth();
 
+    // Периодическая проверка (каждые 3 часа)
     const interval = setInterval(() => {
       refreshAuth();
     }, 180 * 60 * 1000);

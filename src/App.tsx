@@ -37,6 +37,10 @@ import StationCreatePage from './components/ReferencesPage/StationsCrudPage/Stat
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
+import OrdersPage from './components/AnalyticsPage/OrdersPage';
+import OrderCreatePage from './components/AnalyticsPage/OrderCreatePage';
+import TkpPage from './components/AnalyticsPage/TkpPage';
+import TkpViewPage from './components/AnalyticsPage/TkpViewPage';
 import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
 import SchablonPage from './components/DocumentsPage/Schablon/SchablonPage';
@@ -121,6 +125,11 @@ const AppContent = () => {
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
+                <Route path="orders" element={<OrdersPage />} />
+                <Route path="orders/create/:uid" element={<OrderCreatePage />} />
+                <Route path="orders/:uid" element={<OrderCreatePage />} />
+                <Route path="tkp" element={<TkpPage />} />
+                <Route path="tkp/:uid" element={<TkpViewPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="account" element={<AccountPage />} />
               </Route>

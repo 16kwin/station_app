@@ -1,8 +1,9 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (флаг isGenerated сохраняется в localStorage при сохранении в попапе)
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (с использованием FormField)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
 import bwipjs from 'bwip-js';
+import FormField from '../../elements/FormField';
 import Icon8 from '../../../assets/References/NomenclatureCreatePage/Icon8.svg';
 import Icon9 from '../../../assets/References/NomenclatureCreatePage/Icon9.svg';
 import Icon10 from '../../../assets/References/NomenclatureCreatePage/Icon10.svg';
@@ -21,7 +22,6 @@ import Icon61 from '../../../assets/References/NomenclatureCreatePage/Icon61.svg
 import Icon62 from '../../../assets/References/NomenclatureCreatePage/Icon62.svg';
 import Icon71 from '../../../assets/References/NomenclatureCreatePage/Icon71.svg';
 import Icon72 from '../../../assets/References/NomenclatureCreatePage/Icon72.svg';
-import Icon6 from '../../../assets/References/NomenclatureCreatePage/Icon6.svg';
 import IconArt1 from '../../../assets/References/NomenclatureCreatePage/IconArt1.svg';
 import IconArt2 from '../../../assets/References/NomenclatureCreatePage/IconArt2.svg';
 import IconRating from '../../../assets/References/NomenclatureCreatePage/IconRating.svg';
@@ -64,7 +64,6 @@ const BARCODE_TYPES = [
 const getBarcodeHint = (type: string): string => { switch (type) { case 'code128': return 'Пример: ABC123456'; case 'ean13': return 'Пример: 5901234123457'; case 'upca': return 'Пример: 042100005264'; default: return 'Введите код'; } };
 const getSkuHint = (): string => 'Пример: SKU-001-A';
 
-// Ключи для localStorage
 const getCodeFlagsKey = (materialUid: string) => `nomenclature_code_flags_${materialUid}`;
 
 interface CodeFlags {
@@ -94,7 +93,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [fullscreenCode, setFullscreenCode] = useState<string | null>(null);
   const [fullscreenCodeContextMenu, setFullscreenCodeContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // Применяем isGenerated из localStorage к серверным кодам (пересчитывается при каждом рендере)
   const enrichedServerBarcodes: any[] = useMemo(() => {
     if (!uid) return serverBarcodes;
     const flags = loadCodeFlags(uid);
@@ -102,7 +100,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
       ...bc,
       isGenerated: flags[bc.codeValue]?.isGenerated,
     }));
-  }, [serverBarcodes, uid, localBarcodes]); // Добавил localBarcodes в зависимости для пересчёта
+  }, [serverBarcodes, uid, localBarcodes]);
 
   const enrichedServerSkus: any[] = useMemo(() => {
     if (!uid) return serverSkus;
@@ -116,7 +114,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const currentBarcode = (localBarcodes && localBarcodes[0]) || enrichedServerBarcodes[0] || null;
   const currentSku = (localSkus && localSkus[0]) || enrichedServerSkus[0] || null;
 
-  // Штрихкод
   const [showBarcodePopup, setShowBarcodePopup] = useState(false);
   const [barcodeGenerationMode, setBarcodeGenerationMode] = useState(true);
   const [barcodeValue, setBarcodeValue] = useState(''); 
@@ -128,7 +125,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [barcodeUploadContextMenu, setBarcodeUploadContextMenu] = useState<{ x: number; y: number } | null>(null);
   const barcodeFileInputRef = useRef<HTMLInputElement>(null);
 
-  // SKU
   const [showSkuPopup, setShowSkuPopup] = useState(false);
   const [skuGenerationMode, setSkuGenerationMode] = useState(true);
   const [skuValue, setSkuValue] = useState(''); 
@@ -151,7 +147,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const handleLocalDeleteImage = (index: number) => { setLocalImages((p: LocalImageItem[]) => { const n = [...p]; URL.revokeObjectURL(n[index].url); n.splice(index, 1); return n; }); if (localSelectedIndex >= (localImages || []).length - 1) setLocalSelectedIndex(Math.max(0, (localImages || []).length - 2)); };
   const handleImageContextMenu = (e: React.MouseEvent, index: number) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, index }); };
 
-  // Генерация штрихкода
   useEffect(() => { 
     if (!barcodeValue.trim() || !barcodeGenerationMode || !showBarcodePopup) { setBarcodePreview(null); return; } 
     const t = setTimeout(() => { 
@@ -165,7 +160,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
     return () => clearTimeout(t); 
   }, [barcodeValue, barcodeType, barcodeGenerationMode, showBarcodePopup]);
   
-  // Генерация QR
   useEffect(() => { 
     if (!skuValue.trim() || !skuGenerationMode || !showSkuPopup) { setSkuPreview(null); return; } 
     const t = setTimeout(async () => { 
@@ -256,7 +250,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
     };
     setLocalBarcodes([newCode]);
     
-    // Сохраняем флаг в localStorage
     if (uid) {
       const flags = loadCodeFlags(uid);
       flags[barcodeValue] = { isGenerated: barcodeGenerationMode, codeKind: 'BARCODE' };
@@ -291,7 +284,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
     };
     setLocalSkus([newCode]);
     
-    // Сохраняем флаг в localStorage
     if (uid) {
       const flags = loadCodeFlags(uid);
       flags[skuValue] = { isGenerated: skuGenerationMode, codeKind: 'SKU' };
@@ -306,7 +298,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
       setBarcodeValue(currentBarcode.codeValue); 
       setBarcodeType(currentBarcode.codeType || 'code128');
       const code = currentBarcode as any;
-      // Определяем режим по isGenerated
       if (code.isGenerated === true) {
         setBarcodeGenerationMode(true);
         setBarcodeUploadedFile(null);
@@ -316,7 +307,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
         setBarcodeUploadedFile(code.file || null);
         setBarcodeUploadedPreview(code.preview || code.fileUrl || null);
       } else {
-        // Если флага нет — проверяем localStorage
         if (uid) {
           const flags = loadCodeFlags(uid);
           const flag = flags[code.codeValue];
@@ -335,7 +325,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
             return;
           }
         }
-        // По умолчанию — если есть fileUrl, значит фото
         const hasFile = !!code.fileUrl;
         setBarcodeGenerationMode(!hasFile);
         if (hasFile) {
@@ -442,10 +431,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
 
   const labelStyle: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' };
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
-  const getFieldBorderStyle = (fieldKey: string, isFilled: boolean, isFocused: boolean): string => { if (validationErrors.has(fieldKey) && !isFocused) return '2px solid #FF3052'; if (isFilled || isFocused) return '1px solid #666EFE'; return '1px solid rgba(102, 110, 254, 0.15)'; };
-  const getSelectBorderStyle = (fieldKey: string, isFilled: boolean): string => { if (validationErrors.has(fieldKey)) return '2px solid #FF3052'; if (isFilled) return '1px solid #666EFE'; return '1px solid rgba(102, 110, 254, 0.15)'; };
-  const fieldBaseStyle: React.CSSProperties = { width: 340, height: 44, borderRadius: 10, marginTop: 11, display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, outline: 'none', backgroundColor: '#FFFFFF', position: 'relative', boxSizing: 'border-box' };
-  const getSelectStyle = (hv: boolean, fieldKey: string): React.CSSProperties => ({ width: 388, height: 44, borderRadius: 10, border: getSelectBorderStyle(fieldKey, hv), backgroundColor: '#FFFFFF', marginTop: 11, display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: hv ? '#666EFE' : '#9CA3AF', cursor: 'pointer', position: 'relative' as const, boxSizing: 'border-box' });
   const arrowIconStyle: React.CSSProperties = { width: 18, height: 18, flexShrink: 0, transition: 'transform 0.3s ease' };
 
   const displayImages = (localImages && localImages.length > 0) ? localImages.map(img => ({ uid: img.url, url: img.url, originalName: img.file.name })) : images;
@@ -489,24 +474,134 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const POPUP_WIDTH = 413;
   const POPUP_HEIGHT = 580;
 
+  const FIELD_WIDTH = 340;
+  const FIELD_HEIGHT = 44;
+  const SELECT_WIDTH = 388;
+
   return (
     <div style={{ ...cs, display: 'flex', gap: 30 }}>
       {/* ЛЕВЫЙ БЛОК */}
       <div style={{ ...blockStyle, width: 792, height: 565, flexShrink: 0, position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 40, left: 30 }}><span style={labelStyle}>Код:</span><div style={{ ...fieldBaseStyle, backgroundColor: '#F5F6FA', border: '1px solid rgba(102, 110, 254, 0.5)', cursor: 'not-allowed' }}><img src={code ? Icon12 : Icon11} alt="" style={{ width: 20, height: 40, position: 'absolute', left: 12 }} /><span style={{ marginLeft: 44, color: '#666EFE', opacity: 0.5 }}>{code || 'Код'}</span></div>
-          <div style={{ marginTop: 25 }}><span style={labelStyle}>Артикул:</span><div style={{ ...fieldBaseStyle, border: getFieldBorderStyle('article', !!article.trim(), articleFocused) }}><img src={article ? IconArt2 : IconArt1} alt="" style={{ width: 20, height: 20, position: 'absolute', left: 13 }} /><input style={{ width: 'calc(100% - 50px)', height: '100%', border: 'none', outline: 'none', marginLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: article ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent' }} value={article} onChange={e => { setArticle(e.target.value); clearFieldError('article'); }} onFocus={() => { setArticleFocused(true); clearFieldError('article'); }} onBlur={() => setArticleFocused(false)} placeholder="Артикул" />{article && <button onClick={() => setArticle('')} style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} /></button>}</div></div>
+        <div style={{ position: 'absolute', top: 40, left: 30 }}>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Код:"
+            icon={Icon11} iconActive={Icon12}
+            value={code ? String(code) : ''}
+            type="display"
+            locked
+            selectIconWidth={20}
+            selectIconHeight={40}
+          />
+          <div style={{ marginTop: 25 }}>
+            <FormField
+              width={FIELD_WIDTH} height={FIELD_HEIGHT}
+              label="Артикул:"
+              icon={IconArt1} iconActive={IconArt2}
+              value={article}
+              placeholder="Артикул"
+              type="input"
+              onChange={e => { setArticle(e.target.value); clearFieldError('article'); }}
+              onClear={() => setArticle('')}
+            />
+          </div>
         </div>
-        <div style={{ position: 'absolute', top: 40, right: 52 }}><span style={labelStyle}>Наименование:</span><div style={{ ...fieldBaseStyle, border: getFieldBorderStyle('name', !!name.trim(), nameFocused) }}><img src={name ? Icon22 : Icon21} alt="" style={{ width: 16, height: 16, position: 'absolute', left: 14 }} /><input style={{ width: 'calc(100% - 50px)', height: '100%', border: 'none', outline: 'none', marginLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: name ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent' }} value={name} onChange={e => { setName(e.target.value); clearFieldError('name'); }} onFocus={() => { setNameFocused(true); clearFieldError('name'); }} onBlur={() => setNameFocused(false)} placeholder="Введите название" />{name && <button onClick={() => setName('')} style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} /></button>}</div>
-          <div style={{ marginTop: 25 }}><span style={labelStyle}>Каталог:</span><div style={{ ...fieldBaseStyle, cursor: 'pointer', border: getSelectBorderStyle('catalog', !!selectedCatalogId) }} onClick={() => { clearFieldError('catalog'); openPopup('catalog'); }}><img src={selectedCatalog ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, position: 'absolute', left: 15 }} /><span style={{ marginLeft: 44, color: selectedCatalog ? '#666EFE' : '#A0A3BD' }}>{selectedCatalog || 'Выберите группу'}</span><button onClick={(e) => { e.stopPropagation(); clearFieldError('catalog'); openPopup('catalog'); }} style={{ position: 'absolute', right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={selectedCatalog ? Icon42 : Icon41} alt="Открыть" style={{ width: 18, height: 18 }} /></button></div></div>
+        <div style={{ position: 'absolute', top: 40, right: 52 }}>
+          <FormField
+            width={FIELD_WIDTH} height={FIELD_HEIGHT}
+            label="Наименование:"
+            icon={Icon21} iconActive={Icon22}
+            value={name}
+            placeholder="Введите название"
+            type="input"
+            onChange={e => { setName(e.target.value); clearFieldError('name'); }}
+            onClear={() => setName('')}
+          />
+          <div style={{ marginTop: 25 }}>
+            <FormField
+              width={FIELD_WIDTH} height={FIELD_HEIGHT}
+              label="Каталог:"
+              icon={Icon31} iconActive={Icon32}
+              value={selectedCatalog}
+              placeholder="Выберите группу"
+              type="select"
+              rightIcon={Icon41} rightIconActive={Icon42}
+              onRightIconClick={(e) => { e.stopPropagation(); clearFieldError('catalog'); openPopup('catalog'); }}
+              onClick={() => { clearFieldError('catalog'); openPopup('catalog'); }}
+            />
+          </div>
         </div>
-        <div style={{ position: 'absolute', top: 238, left: 30, right: 30 }}><span style={labelStyle}>Описание:</span><div style={{ width: 732, height: 263, borderRadius: 10, border: (description || descriptionFocused) ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', marginTop: 11, position: 'relative' }}><img src={description ? Icon52 : Icon51} alt="" style={{ width: 16, height: 16, position: 'absolute', top: 15, left: 15 }} /><textarea style={{ width: '100%', height: '100%', border: 'none', outline: 'none', paddingTop: 15, paddingLeft: 44, paddingRight: 40, paddingBottom: 15, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: description ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent', resize: 'none', borderRadius: 10, boxSizing: 'border-box' }} value={description} onChange={e => setDescription(e.target.value)} onFocus={() => setDescriptionFocused(true)} onBlur={() => setDescriptionFocused(false)} placeholder="Введите описание" />{description && <button onClick={() => setDescription('')} style={{ position: 'absolute', top: 15, right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon6} alt="Очистить" style={{ width: 18, height: 18 }} /></button>}</div></div>
+        <div style={{ position: 'absolute', top: 238, left: 30, right: 30 }}>
+          <span style={labelStyle}>Описание:</span>
+          <div style={{ width: 732, height: 263, borderRadius: 10, border: (description || descriptionFocused) ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', marginTop: 11, position: 'relative' }}>
+            <img src={description ? Icon52 : Icon51} alt="" style={{ width: 16, height: 16, position: 'absolute', top: 15, left: 15 }} />
+            <textarea style={{ width: '100%', height: '100%', border: 'none', outline: 'none', paddingTop: 15, paddingLeft: 44, paddingRight: 40, paddingBottom: 15, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: description ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent', resize: 'none', borderRadius: 10, boxSizing: 'border-box' }} value={description} onChange={e => setDescription(e.target.value)} onFocus={() => setDescriptionFocused(true)} onBlur={() => setDescriptionFocused(false)} placeholder="Введите описание" />
+            {description && (
+              <button onClick={() => setDescription('')} style={{ position: 'absolute', top: 15, right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="8" fill="#666EFE" fillOpacity="0.15" />
+                  <path d="M6 6L12 12M12 6L6 12" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* СРЕДНИЙ БЛОК */}
       <div style={{ ...blockStyle, width: 475, height: 565, flexShrink: 0, position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 40, left: 30, right: 30 }}><div style={{ display: 'flex', alignItems: 'center' }}><img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} /><span style={{ ...labelStyle, marginLeft: 9 }}>Группа учета:</span></div><div className="accounting-group-dropdown" style={{ position: 'relative' }}><div onClick={() => { clearFieldError('accountingGroup'); setAccountingGroupOpen(!accountingGroupOpen); }} style={getSelectStyle(!!selectedAccountingGroup, 'accountingGroup')}><img src={selectedAccountingGroup ? Icon62 : Icon61} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} /><span style={{ marginLeft: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedAccountingGroup ? '#666EFE' : '#9CA3AF' }}>{selectedAccountingGroup || 'Выбрать группу учета'}</span><motion.img src={Icon9} alt="" style={{ ...arrowIconStyle, transform: accountingGroupOpen ? 'rotateX(180deg)' : 'rotateX(0deg)' }} /></div><AnimatePresence>{accountingGroupOpen && (<motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: 48, left: 0, width: 388, backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden' }}>{typeMaterials.map(o => (<div key={o.uid} onClick={() => handleAccountingGroupSelect(o)} style={{ height: 44, display: 'flex', alignItems: 'center', paddingLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', cursor: 'pointer', backgroundColor: selectedAccountingGroupId === o.uid ? '#F0F1FF' : '#FFFFFF' }} onMouseEnter={(e) => { if (selectedAccountingGroupId !== o.uid) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }} onMouseLeave={(e) => { if (selectedAccountingGroupId !== o.uid) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>{o.typeName}</div>))}</motion.div>)}</AnimatePresence></div></div>
-        <div style={{ position: 'absolute', top: 145, left: 30, right: 30 }}><div style={{ display: 'flex', alignItems: 'center' }}><img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} /><span style={{ ...labelStyle, marginLeft: 9 }}>Группа номенклатуры:</span></div><div onClick={() => { clearFieldError('nomenclatureGroup'); openPopup('nomenclatureGroup'); }} style={{ ...getSelectStyle(!!selectedNomenclatureGroup, 'nomenclatureGroup'), opacity: selectedAccountingGroupId ? 1 : 0.5, cursor: selectedAccountingGroupId ? 'pointer' : 'not-allowed' }}><img src={selectedNomenclatureGroup ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} /><span style={{ marginLeft: 15.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedNomenclatureGroup ? '#666EFE' : '#9CA3AF' }}>{selectedNomenclatureGroup || (selectedAccountingGroupId ? 'Выбрать группу' : 'Сначала выберите группу учета')}</span><img src={selectedNomenclatureGroup ? Icon42 : Icon41} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} /></div></div>
-        <div style={{ position: 'absolute', top: 250, left: 30, right: 30 }}><div style={{ display: 'flex', alignItems: 'center' }}><img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} /><span style={{ ...labelStyle, marginLeft: 9 }}>Вид номенклатуры:</span></div><div onClick={() => { clearFieldError('nomenclatureType'); openPopup('nomenclatureType'); }} style={{ ...getSelectStyle(!!selectedNomenclatureType, 'nomenclatureType'), opacity: selectedNomenclatureGroupId ? 1 : 0.5, cursor: selectedNomenclatureGroupId ? 'pointer' : 'not-allowed' }}><img src={selectedNomenclatureType ? Icon72 : Icon71} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} /><span style={{ marginLeft: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedNomenclatureType ? '#666EFE' : '#9CA3AF' }}>{selectedNomenclatureType || (selectedNomenclatureGroupId ? 'Выбрать вид' : 'Сначала выберите группу номенклатуры')}</span><img src={selectedNomenclatureType ? Icon42 : Icon41} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} /></div></div>
+        <div style={{ position: 'absolute', top: 40, left: 30, right: 30 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+            <span style={{ ...labelStyle, marginLeft: 9 }}>Группа учета:</span>
+          </div>
+          <div className="accounting-group-dropdown" style={{ position: 'relative' }}>
+            <div onClick={() => { clearFieldError('accountingGroup'); setAccountingGroupOpen(!accountingGroupOpen); }} style={{ width: 388, height: 44, borderRadius: 10, border: selectedAccountingGroupId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', marginTop: 11, display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedAccountingGroup ? '#666EFE' : '#9CA3AF', cursor: 'pointer', position: 'relative', boxSizing: 'border-box' }}>
+              <img src={selectedAccountingGroup ? Icon62 : Icon61} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <span style={{ marginLeft: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedAccountingGroup ? '#666EFE' : '#9CA3AF' }}>{selectedAccountingGroup || 'Выбрать группу учета'}</span>
+              <motion.img src={Icon9} alt="" style={{ ...arrowIconStyle, transform: accountingGroupOpen ? 'rotateX(180deg)' : 'rotateX(0deg)' }} />
+            </div>
+            <AnimatePresence>
+              {accountingGroupOpen && (
+                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: 48, left: 0, width: 388, backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden' }}>
+                  {typeMaterials.map(o => (
+                    <div key={o.uid} onClick={() => handleAccountingGroupSelect(o)} style={{ height: 44, display: 'flex', alignItems: 'center', paddingLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', cursor: 'pointer', backgroundColor: selectedAccountingGroupId === o.uid ? '#F0F1FF' : '#FFFFFF' }} onMouseEnter={(e) => { if (selectedAccountingGroupId !== o.uid) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }} onMouseLeave={(e) => { if (selectedAccountingGroupId !== o.uid) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>
+                      {o.typeName}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+        <div style={{ position: 'absolute', top: 145, left: 30, right: 30 }}>
+          <FormField
+            width={SELECT_WIDTH} height={FIELD_HEIGHT}
+            label="Группа номенклатуры:"
+            icon={Icon31} iconActive={Icon32}
+            value={selectedNomenclatureGroup}
+            placeholder={selectedAccountingGroupId ? 'Выбрать группу' : 'Сначала выберите группу учета'}
+            type="select"
+            locked={!selectedAccountingGroupId}
+            rightIcon={Icon41} rightIconActive={Icon42}
+            onRightIconClick={(e) => { e.stopPropagation(); clearFieldError('nomenclatureGroup'); openPopup('nomenclatureGroup'); }}
+            onClick={() => { clearFieldError('nomenclatureGroup'); openPopup('nomenclatureGroup'); }}
+          />
+        </div>
+        <div style={{ position: 'absolute', top: 250, left: 30, right: 30 }}>
+          <FormField
+            width={SELECT_WIDTH} height={FIELD_HEIGHT}
+            label="Вид номенклатуры:"
+            icon={Icon71} iconActive={Icon72}
+            value={selectedNomenclatureType}
+            placeholder={selectedNomenclatureGroupId ? 'Выбрать вид' : 'Сначала выберите группу номенклатуры'}
+            type="select"
+            locked={!selectedNomenclatureGroupId}
+            rightIcon={Icon41} rightIconActive={Icon42}
+            onRightIconClick={(e) => { e.stopPropagation(); clearFieldError('nomenclatureType'); openPopup('nomenclatureType'); }}
+            onClick={() => { clearFieldError('nomenclatureType'); openPopup('nomenclatureType'); }}
+          />
+        </div>
         
         {!isFinishedProduct && (
           <div style={{ position: 'absolute', top: 345, left: 70, right: 70, height: 85, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -587,16 +682,13 @@ const MainTab: React.FC<CommonProps> = (props) => {
         </div>
       </div>
 
-      {/* Скрытые input-ы для загрузки файлов */}
       <input ref={barcodeFileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBarcodeFileUpload} />
       <input ref={skuFileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleSkuFileUpload} />
 
       {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}><button onClick={() => { isLocal ? handleLocalDeleteImage(contextMenu.index) : handleDeleteImage(displayImages[contextMenu.index]?.uid); setContextMenu(null); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Удалить</button></div>)}
       
-      {/* Фулскрин для фото */}
       {fullscreenImage && displayImages[localSelectedIndex] && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onContextMenu={(e) => { e.preventDefault(); handleImageContextMenu(e, localSelectedIndex); }} onClick={() => setFullscreenImage(false)}><img src={displayImages[localSelectedIndex].url} alt="" style={{ maxWidth: '95vw', maxHeight: '95vh', objectFit: 'contain' }} /></div>)}
 
-      {/* Фулскрин для штрихкода и SKU */}
       {fullscreenCode && (
         <div 
           style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} 
