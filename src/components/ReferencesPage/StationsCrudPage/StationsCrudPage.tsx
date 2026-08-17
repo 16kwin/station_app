@@ -1,274 +1,1021 @@
-// StationsCrudPage.tsx
-import React, { useRef, useState, useEffect } from 'react';
+// StationsCrudPage.tsx — ПОЛНЫЙ ФАЙЛ (исправлены fetchModels и fetchConfigurations)
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import Icon1 from '../../../assets/References/Icon1.svg';
-import Icon2 from '../../../assets/References/Icon2.svg';
-import Icon3 from '../../../assets/References/Icon3.svg';
-import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon7 from '../../../assets/References/Icon7.svg';
-import Icon8 from '../../../assets/References/Icon8.svg';
-import Icon9 from '../../../assets/References/Icon9.svg';
-import Icon10 from '../../../assets/References/Icon10.svg';
-import Icon19 from '../../../assets/References/Icon19.svg';
-import Popup9 from '../../../assets/References/popup9.svg';
+import ConfigurationPopup from '../../elements/ConfigurationPopup';
+import HistoryTable from '../../elements/HistoryTable';
+import DataTable from '../../elements/DataTable';
+import TableToolbar from '../../elements/TableToolbar';
+import type { ContextMenuItem } from '../../elements/ContextMenu';
+import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
+import ContextMenuCopyIcon16 from '../../../assets/Icons/CopyIcons/CopyIcon16Black.svg';
+import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
+import StationIcon16Black from '../../../assets/Icons/StationIcons/StationIcon16Black.svg';
 
-interface StationItem {
-  uid: string;
-  code: number;
-  name: string;
-  description: string;
-  stationType: string;
-  modelName: string;
-  enterpriseName: string;
-  workshopName: string;
-  sectionName: string;
-  status: string;
-  serialNumber: string;
+interface StationRowData { [key: string]: any; }
+interface StationListResponse { 
+  columns: string[]; 
+  data: StationRowData[]; 
+  columnWidths?: Record<string, number>;
+  requiredColumns?: string[];
 }
+interface ColumnItem { key: string; label: string; }
+
+const REQUIRED_COLUMNS = new Set([
+  'name', 'code', 'hasError', 'status', 'enterpriseName', 'workshopName', 'sectionName', 'modelName', 'stationType'
+]);
+
+const ALL_COLUMNS: ColumnItem[] = [
+  { key: 'name', label: 'Наименование' },
+  { key: 'code', label: 'Код' },
+  { key: 'hasError', label: 'Ошибка' },
+  { key: 'status', label: 'Статус' },
+  { key: 'enterpriseName', label: 'Предприятие' },
+  { key: 'workshopName', label: 'Цех' },
+  { key: 'sectionName', label: 'Участок' },
+  { key: 'modelName', label: 'Модель' },
+  { key: 'stationType', label: 'Тип' },
+  { key: 'isTmc', label: 'ТМЦ' },
+  { key: 'isSgd', label: 'СГД' },
+  { key: 'isOk', label: 'ОК' },
+  { key: 'holdingName', label: 'Холдинг' },
+  { key: 'description', label: 'Описание' },
+  { key: 'configurationName', label: 'Конфигурация' },
+  { key: 'hasAdditionalModule', label: 'Имеет доп. модуль' },
+  { key: 'activeTemplateName', label: 'Шаблон' },
+  { key: 'article', label: 'Артикул' },
+  { key: 'productionDate', label: 'Дата производства' },
+  { key: 'serialNumber', label: 'Серийный номер' },
+  { key: 'revision', label: 'Ревизия' },
+  { key: 'ipAddress', label: 'IP-адрес' },
+  { key: 'networkPort', label: 'Порт' },
+  { key: 'uid', label: 'UID' },
+];
+
+interface SortField { key: string; label: string; iconType?: '19' | '20' | null; isAccounting?: boolean; }
+const SORT_FIELDS: SortField[] = [
+  { key: 'code', label: 'Код', iconType: '19' }, { key: 'name', label: 'Наименование', iconType: '20' },
+  { key: 'hasError', label: 'Ошибка' }, { key: 'status', label: 'Статус' },
+  { key: 'sectionName', label: 'Размещение' }, { key: 'modelName', label: 'Модель станции' },
+  { key: 'stationType', label: 'Тип станции' }, { key: 'isTmc', label: 'Вид учета', isAccounting: true },
+  { key: 'configurationName', label: 'Конфигурация' }, { key: 'hasAdditionalModule', label: 'Имеет доп модуль' },
+  { key: 'article', label: 'Артикул' }, { key: 'productionDate', label: 'Дата производства', iconType: '19' },
+  { key: 'ipAddress', label: 'IP-адрес' },
+];
+
+const FILTER_FIELDS = [
+  { key: 'status', label: 'Статус', options: [
+    { uid: 'WORKING', name: 'В работе' },
+    { uid: 'OFFLINE', name: 'Не в сети' },
+    { uid: 'MINIMAL_STOCK', name: 'Минимальный остаток' },
+    { uid: 'CRITICAL_STOCK', name: 'Критический остаток' },
+  ]},
+  { key: 'sectionName', label: 'Размещение' },
+  { key: 'modelName', label: 'Модель станции' },
+  { key: 'stationType', label: 'Тип станции', options: [
+    { uid: 'DRUM_TYPE', name: 'Барабанного типа' },
+    { uid: 'POSTAMAT_TYPE', name: 'Постамат' },
+    { uid: 'ADDITIONAL_MODULE', name: 'Дополнительный модуль' },
+  ]},
+  { key: 'isTmc', label: 'Вид учета', options: [
+    { uid: 'isTmc', name: 'ТМЦ' },
+    { uid: 'isSgd', name: 'СГД' },
+    { uid: 'isOk', name: 'ОК' },
+  ]},
+  { key: 'hasError', label: 'Ошибка', options: [
+    { uid: 'true', name: 'Ошибка на станции' },
+  ]},
+  { key: 'configurationName', label: 'Конфигурация' },
+  { key: 'hasAdditionalModule', label: 'Имеет доп. модуль', options: [
+    { uid: 'true', name: 'Станция имеет доп. модуль' },
+  ]},
+  { key: 'article', label: 'Артикул' },
+];
+
+const PLACEMENT_LEVELS = [
+  { key: 'holdingName', label: 'Холдинг', emptyText: 'Нет холдингов' },
+  { key: 'enterpriseName', label: 'Предприятие', emptyText: 'Нет предприятий' },
+  { key: 'workshopName', label: 'Цех', emptyText: 'Нет цехов' },
+  { key: 'sectionName', label: 'Участок', emptyText: 'Нет участков' },
+];
+
+interface HierarchyDTO { holdings: HoldingDTO[] }
+interface HoldingDTO { id: number; name: string; enterprises: EnterpriseDTO[] }
+interface EnterpriseDTO { id: number; name: string; holdingId: number; workshops: WorkshopDTO[] }
+interface WorkshopDTO { id: number; name: string; enterpriseId: number; holdingId: number; sections: SectionDTO[] }
+interface SectionDTO { id: number; name: string; workshopId: number; enterpriseId: number; holdingId: number }
+
+type PlacementKey = typeof PLACEMENT_LEVELS[number]['key'];
+type PlacementSelections = Record<PlacementKey, Set<string>>;
+
+const ACCOUNTING_TYPES = ['ТМЦ', 'СГД', 'ОК'] as const;
+const ACCOUNTING_COLUMN_KEYS = ['isTmc', 'isSgd', 'isOk'] as const;
+const USER_ID = 1;
+
+const EMPTY_PLACEMENT: PlacementSelections = { holdingName: new Set(), enterpriseName: new Set(), workshopName: new Set(), sectionName: new Set() };
+
+const STATION_TYPE_ORDER: Record<string, number> = {
+  'DRUM_TYPE': 0,
+  'POSTAMAT_TYPE': 1,
+  'ADDITIONAL_MODULE': 2,
+};
+
+const STATUS_ORDER: Record<string, number> = {
+  'WORKING': 0,
+  'OFFLINE': 1,
+  'MINIMAL_STOCK': 2,
+  'CRITICAL_STOCK': 3,
+};
+
+type ExpandedType = 'search' | 'sort' | 'filter' | null;
 
 const StationsCrudPage = () => {
-  const { activeTabId, openTab } = useTabs();
-  const tabIdRef = useRef<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
-  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<StationItem[]>([]);
+  const { openTab } = useTabs();
+  const [responseData, setResponseData] = useState<StationListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
+  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expanded, setExpanded] = useState<ExpandedType>(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [accountingIndex, setAccountingIndex] = useState(-1);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
+  const [placementSelections, setPlacementSelections] = useState<PlacementSelections>(EMPTY_PLACEMENT);
+  const [hierarchy, setHierarchy] = useState<HierarchyDTO | null>(null);
+  const [modelList, setModelList] = useState<{ uid: string; name: string; article: string }[]>([]);
+  const [configList, setConfigList] = useState<string[]>([]);
 
-  const TABLE_WIDTH = 1720;
-  const ROW_HEIGHT = 58;
-  const HEADER_HEIGHT = 58;
-  const VISIBLE_ROWS = 10;
-  const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
+  const filterOptions = useMemo(() => ({
+    status: FILTER_FIELDS.find(f => f.key === 'status')?.options || [],
+    stationType: FILTER_FIELDS.find(f => f.key === 'stationType')?.options || [],
+    isTmc: FILTER_FIELDS.find(f => f.key === 'isTmc')?.options || [],
+    hasError: FILTER_FIELDS.find(f => f.key === 'hasError')?.options || [],
+    hasAdditionalModule: FILTER_FIELDS.find(f => f.key === 'hasAdditionalModule')?.options || [],
+    modelName: modelList.map(m => ({ uid: m.uid, name: m.name })),
+    configurationName: configList.map(c => ({ uid: c, name: c })),
+    article: modelList.filter(m => m.article).map(m => ({ uid: m.article, name: m.article })),
+  }), [modelList, configList]);
 
-  const COL_CODE = 85;
-  const COL_NAME = 170;
-  const COL_TYPE = 470;
-  const COL_MODEL = 640;
-  const COL_ENTERPRISE = 840;
-  const COL_WORKSHOP = 1020;
-  const COL_SECTION = 1200;
-  const COL_STATUS = 1380;
+  const fetchData = async () => { 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiStationsCrud(USER_ID)); 
+      const response = r.data as StationListResponse;
+      setResponseData(response); 
+      setVisibleColumns(new Set(response.columns));
+      if (response.columnWidths) {
+        setColumnWidths(response.columnWidths);
+      }
+      if (response.requiredColumns && response.requiredColumns.length > 0) {
+        setRequiredColumns(new Set(response.requiredColumns));
+      }
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setIsLoading(false); 
+    } 
+  };
 
-  useEffect(() => { tabIdRef.current = activeTabId; }, []);
+  const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
+    setColumnWidths(widths);
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: visibleColumns.has(col.key),
+        width: widths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiStationColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
+  }, [visibleColumns, requiredColumns]);
 
-  const fetchData = async () => {
-    try {
-      const response = await AxiosService.get(ConstantInfo.restApiStationsCrud);
-      setData(response.data || []);
-    } catch (error) {
-      console.error('Ошибка загрузки:', error);
-    } finally {
-      setIsLoading(false);
+  const handleResetToBase = useCallback(() => {
+    const baseCols = new Set(requiredColumns);
+    setVisibleColumns(baseCols);
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+  }, [requiredColumns]);
+
+  const fetchSettings = async () => { 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiStationAllSettings(USER_ID)); 
+      const settings = r.data as { filtersJson: string; sortJson: string };
+      
+      if (settings.filtersJson && settings.filtersJson !== '{}') {
+        const filters = JSON.parse(settings.filtersJson) as Record<string, any>;
+        const newFilterValues: Record<string, Set<string>> = {};
+        const newActiveFilters = new Set<string>();
+        
+        Object.entries(filters).forEach(([key, values]) => {
+          if (key === 'placementSelections') return;
+          if (Array.isArray(values) && values.length > 0) {
+            newFilterValues[key] = new Set(values as string[]);
+            newActiveFilters.add(key);
+          }
+        });
+        
+        setFilterValues(newFilterValues);
+        setActiveFilters(newActiveFilters);
+        
+        const placementData = filters.placementSelections as any;
+        if (placementData && typeof placementData === 'object') {
+          setPlacementSelections({
+            holdingName: Array.isArray(placementData.holdingName) ? new Set<string>(placementData.holdingName) : new Set<string>(),
+            enterpriseName: Array.isArray(placementData.enterpriseName) ? new Set<string>(placementData.enterpriseName) : new Set<string>(),
+            workshopName: Array.isArray(placementData.workshopName) ? new Set<string>(placementData.workshopName) : new Set<string>(),
+            sectionName: Array.isArray(placementData.sectionName) ? new Set<string>(placementData.sectionName) : new Set<string>(),
+          });
+        }
+      }
+      
+      if (settings.sortJson && settings.sortJson !== '{}') {
+        const sort = JSON.parse(settings.sortJson) as { column?: string; direction?: 'asc' | 'desc'; accountingIndex?: number };
+        if (sort.column) {
+          setSortColumn(sort.column);
+          setSortDirection(sort.direction || 'asc');
+          setAccountingIndex(sort.accountingIndex !== undefined ? sort.accountingIndex : -1);
+        }
+      }
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+  
+  const saveFilters = useCallback((filters: Record<string, Set<string>>, placement: PlacementSelections) => {
+    const filtersJsonObj: Record<string, any> = {};
+    
+    Object.entries(filters).forEach(([key, values]) => {
+      if (values.size > 0) {
+        filtersJsonObj[key] = Array.from(values);
+      }
+    });
+    
+    const placementObj: Record<string, string[]> = {};
+    (Object.keys(placement) as PlacementKey[]).forEach(key => {
+      if (placement[key].size > 0) {
+        placementObj[key] = Array.from(placement[key]);
+      }
+    });
+    
+    if (Object.keys(placementObj).length > 0) {
+      filtersJsonObj.placementSelections = placementObj;
+    }
+    
+    const filtersJson = JSON.stringify(filtersJsonObj);
+    AxiosService.patch(ConstantInfo.restApiStationFiltersSettingsSave(USER_ID), { filtersJson }).catch(e => console.error(e));
+  }, []);
+  
+  const saveSort = useCallback((column: string | null, direction: 'asc' | 'desc', accountingIdx: number) => {
+    let sortJson = '{}';
+    
+    if (column) {
+      const sortObj: Record<string, any> = { column, direction };
+      if (column === 'isTmc' && accountingIdx >= 0) {
+        sortObj.accountingIndex = accountingIdx;
+      }
+      sortJson = JSON.stringify(sortObj);
+    }
+    
+    AxiosService.patch(ConstantInfo.restApiStationSortSettingsSave(USER_ID), { sortJson }).catch(e => console.error(e));
+  }, []);
+  
+  const fetchHistory = async () => { 
+    setHistoryLoading(true); 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiStationEvents); 
+      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription }))); 
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setHistoryLoading(false); 
+    } 
+  };
+  
+  const fetchHierarchy = async () => { 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiLocationHierarchy); 
+      setHierarchy(r.data); 
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+  
+  const fetchModels = async () => { 
+    try { 
+      const r = await AxiosService.get(`${ConstantInfo.restApiStationModels}?userId=${USER_ID}`); 
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setModelList(items.map((m: any) => ({ uid: m.uid, name: m.name, article: m.article || '' }))); 
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+  
+  const fetchConfigurations = async () => { 
+    try { 
+      const r = await AxiosService.get(`${ConstantInfo.restApiStationConfigurations}?userId=${USER_ID}`); 
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setConfigList(items.map((c: any) => c.name)); 
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+
+  useEffect(() => { fetchData(); fetchHierarchy(); fetchSettings(); }, []);
+
+  const hasPlacementSelections = useMemo(() => (Object.values(placementSelections) as Set<string>[]).some(s => s.size > 0), [placementSelections]);
+  
+  useEffect(() => { 
+    setActiveFilters(prev => { 
+      const next = new Set(prev); 
+      if (hasPlacementSelections) next.add('sectionName'); 
+      else next.delete('sectionName'); 
+      return next; 
+    }); 
+  }, [hasPlacementSelections]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveFilters(filterValues, placementSelections);
+    }
+  }, [filterValues, placementSelections, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveSort(sortColumn, sortDirection, accountingIndex);
+    }
+  }, [sortColumn, sortDirection, accountingIndex, isLoading]);
+
+  const ensureColumnVisible = useCallback((key: string) => {
+    setVisibleColumns(prev => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      setResponseData(prevData => {
+        if (prevData.columns.includes(key)) return prevData;
+        return { ...prevData, columns: [...prevData.columns, key] };
+      });
+      return next;
+    });
+  }, []);
+
+  const ensurePlacementColumnsVisible = useCallback(() => {
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      PLACEMENT_LEVELS.forEach(level => {
+        if (!next.has(level.key)) {
+          next.add(level.key);
+          changed = true;
+        }
+      });
+      if (changed) {
+        setResponseData(prevData => {
+          const newColumns = [...prevData.columns];
+          PLACEMENT_LEVELS.forEach(level => {
+            if (!newColumns.includes(level.key)) {
+              newColumns.push(level.key);
+            }
+          });
+          return { ...prevData, columns: newColumns };
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const ensureAccountingColumnsVisible = useCallback(() => {
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      ACCOUNTING_COLUMN_KEYS.forEach(key => {
+        if (!next.has(key)) {
+          next.add(key);
+          changed = true;
+        }
+      });
+      if (changed) {
+        setResponseData(prevData => {
+          const newColumns = [...prevData.columns];
+          ACCOUNTING_COLUMN_KEYS.forEach(key => {
+            if (!newColumns.includes(key)) {
+              newColumns.push(key);
+            }
+          });
+          return { ...prevData, columns: newColumns };
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSortSelect = (col: string) => {
+    if (col === 'sectionName') {
+      ensurePlacementColumnsVisible();
+    } else {
+      ensureColumnVisible(col);
+    }
+    if (col !== 'isTmc') setAccountingIndex(-1);
+    
+    const reversibleFields = ['code', 'name', 'productionDate'];
+    
+    if (sortColumn === col) {
+      if (reversibleFields.includes(col)) {
+        setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      }
+    } else {
+      setSortColumn(col);
+      setSortDirection('asc');
+    }
+  };
+  
+  const handleAccountingClick = () => {
+    const newIndex = accountingIndex === -1 ? 0 : accountingIndex === 2 ? 0 : accountingIndex + 1;
+    ensureAccountingColumnsVisible();
+    setAccountingIndex(newIndex);
+    setSortColumn('isTmc');
+    setSortDirection('asc');
+  };
+  
+  const handleClearSort = () => { 
+    setSortColumn(null); 
+    setAccountingIndex(-1);
+  };
+
+  const handleFilterToggle = (key: string) => {
+    if (key === 'sectionName') {
+      ensurePlacementColumnsVisible();
+      fetchHierarchy();
+    }
+    if (key === 'modelName') {
+      fetchModels();
+    }
+    if (key === 'configurationName') {
+      fetchConfigurations();
+    }
+    if (key === 'article') {
+      fetchModels();
+    }
+    if (key === 'isTmc') {
+      ensureAccountingColumnsVisible();
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-  useEffect(() => {
-    if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) fetchData();
-  }, [activeTabId]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [contextMenu]);
-
-  const checkScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    setHasVerticalScroll(container.scrollHeight > container.clientHeight);
-    setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
+  const handleCheckFilterOption = (filterKey: string, optionUid: string) => {
+    if (filterKey === 'isTmc') {
+      ensureAccountingColumnsVisible();
+    } else if (filterKey === 'hasError') {
+      ensureColumnVisible('hasError');
+    } else if (filterKey === 'sectionName') {
+      ensurePlacementColumnsVisible();
+    } else {
+      ensureColumnVisible(filterKey);
+    }
+    
+    setActiveFilters(prev => { 
+      const next = new Set(prev); 
+      next.add(filterKey); 
+      return next; 
+    });
+    
+    setFilterValues(prev => {
+      const current = new Set(prev[filterKey] || []);
+      if (current.has(optionUid)) current.delete(optionUid); 
+      else current.add(optionUid);
+      if (current.size === 0) {
+        const { [filterKey]: _, ...rest } = prev;
+        setActiveFilters(prev2 => { 
+          const n = new Set(prev2); 
+          n.delete(filterKey); 
+          return n; 
+        });
+        return rest;
+      }
+      return { ...prev, [filterKey]: current };
+    });
   };
 
-  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [data]);
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    checkScroll();
-    container.addEventListener('scroll', checkScroll);
-    const ro = new ResizeObserver(checkScroll);
-    ro.observe(container);
-    return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
-  }, []);
-
-  const toggleSelectItem = (uid: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(uid)) next.delete(uid); else next.add(uid);
+  const findParentValues = (level: PlacementKey, value: string): Partial<Record<PlacementKey, string>> => { 
+    if (!hierarchy) return {}; 
+    const result: Partial<Record<PlacementKey, string>> = {}; 
+    if (level === 'sectionName') { 
+      for (const h of hierarchy.holdings) 
+        for (const e of h.enterprises) 
+          for (const w of e.workshops) { 
+            const s = w.sections.find(s => String(s.id) === value); 
+            if (s) { 
+              result.holdingName = String(h.id); 
+              result.enterpriseName = String(e.id); 
+              result.workshopName = String(w.id); 
+              return result; 
+            } 
+          } 
+    } 
+    if (level === 'workshopName') { 
+      for (const h of hierarchy.holdings) 
+        for (const e of h.enterprises) { 
+          const w = e.workshops.find(w => String(w.id) === value); 
+          if (w) { 
+            result.holdingName = String(h.id); 
+            result.enterpriseName = String(e.id); 
+            return result; 
+          } 
+        } 
+    } 
+    if (level === 'enterpriseName') { 
+      for (const h of hierarchy.holdings) { 
+        const e = h.enterprises.find(e => String(e.id) === value); 
+        if (e) { 
+          result.holdingName = String(h.id); 
+          return result; 
+        } 
+      } 
+    } 
+    return result; 
+  };
+  
+  const handlePlacementCheck = (level: PlacementKey, value: string) => { 
+    ensurePlacementColumnsVisible();
+    setPlacementSelections(prev => { 
+      const current = new Set(prev[level] || []); 
+      if (current.has(value)) { 
+        current.delete(value); 
+        const next = { ...prev, [level]: current }; 
+        const idx = PLACEMENT_LEVELS.findIndex(l => l.key === level); 
+        for (let i = idx + 1; i < PLACEMENT_LEVELS.length; i++) 
+          next[PLACEMENT_LEVELS[i].key] = new Set(); 
+        if (current.size === 0) next[level] = new Set(); 
+        return next; 
+      } else { 
+        current.add(value); 
+        const next = { ...prev, [level]: current }; 
+        const parents = findParentValues(level, value); 
+        (Object.keys(parents) as PlacementKey[]).forEach((key) => { 
+          if (parents[key] && !next[key]?.has(parents[key]!)) 
+            next[key] = new Set([...(next[key] || []), parents[key]!]); 
+        }); 
+        return next; 
+      } 
+    }); 
+  };
+  
+  const handleClearFilters = () => { 
+    setActiveFilters(new Set()); 
+    setFilterValues({}); 
+    setPlacementSelections(EMPTY_PLACEMENT); 
+  };
+  
+  const handleDoubleClick = (uid: string, name: string) => 
+    openTab(`/references/stations/edit/${uid}`, `Станция: ${name}`, null);
+  
+  const handleSaveColumns = (cols: Set<string>) => { 
+    const finalCols = new Set(cols);
+    requiredColumns.forEach(key => finalCols.add(key));
+    
+    setVisibleColumns(finalCols); 
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+  };
+  
+  const handleHistoryClick = () => { 
+    setShowHistory(prev => {
+      const next = !prev;
+      if (next) fetchHistory();
       return next;
     });
   };
 
-  const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.uid));
-  const toggleSelectAll = () => {
-    if (isAllSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(data.map(item => item.uid)));
-  };
+  const rowContextMenuItems = useCallback((uid: string, name: string): ContextMenuItem[] => {
+    return [
+      { id: 'open', label: 'Открыть', icon: ContextMenuOpenIcon16, onClick: () => { 
+        const item = responseData.data.find(d => d.uid === uid); 
+        if (item) { 
+          openTab(`/references/stations/edit/${item.uid}`, `Станция: ${item.name}`, null); 
+        } 
+      } },
+      { id: 'copy', label: 'Копировать', icon: ContextMenuCopyIcon16, onClick: () => { 
+        navigator.clipboard.writeText(uid).catch(() => {}); 
+      } },
+      { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => { 
+        setDeleteTargetUid(uid); 
+        setTimeout(() => setShowDeleteConfirm(true), 50); 
+      } },
+    ];
+  }, [responseData.data, openTab]);
 
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, uid, name });
-  };
-
-  const handleCreateClick = async () => {
-    try {
-      const response = await AxiosService.get(ConstantInfo.restApiStationsCrudGenerateCode);
-      const code = response.data;
-      const newUid = crypto.randomUUID();
-      openTab(`/references/stations/create/${newUid}`, `Станция: ${String(code).padStart(4, '0')}`, null);
-    } catch (error) {
-      console.error('Ошибка генерации кода:', error);
-      const newUid = crypto.randomUUID();
-      openTab(`/references/stations/create/${newUid}`, 'Станция (новая)', null);
-    }
-  };
-
-  const handleEditClick = () => {
-    if (!contextMenu) return;
-    const item = data.find(d => d.uid === contextMenu.uid);
-    if (item) {
-      setContextMenu(null);
-      openTab(`/references/stations/edit/${item.uid}`, `Станция: ${item.name}`, null);
-    }
-  };
-
-  const handleDeleteClick = () => {
-    if (selectedIds.size === 0) return;
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      for (const uid of selectedIds) {
-        await AxiosService.delete(`${ConstantInfo.restApiStationsCrud}/${uid}`);
+  const formatCode = (code: number) => String(code).padStart(4, '0'); 
+  const formatBool = (val: boolean) => val ? 'Да' : 'Нет';
+  
+  const renderCell = (key: string, item: StationRowData): string => { 
+    const val = item[key]; 
+    if (val === null || val === undefined) return '-'; 
+    switch (key) { 
+      case 'code': return formatCode(Number(val)); 
+      case 'hasError': 
+      case 'isTmc': 
+      case 'isSgd': 
+      case 'isOk': 
+      case 'hasAdditionalModule': return formatBool(Boolean(val)); 
+      case 'networkPort': return val ? String(val) : '-'; 
+      case 'status': {
+        const statusMap: Record<string, string> = {
+          'WORKING': 'В работе',
+          'OFFLINE': 'Не в сети',
+          'MINIMAL_STOCK': 'Минимальный остаток',
+          'CRITICAL_STOCK': 'Критический остаток',
+        };
+        return statusMap[val] || val;
       }
-      await fetchData();
-      setSelectedIds(new Set());
-      setShowDeleteConfirm(false);
-    } catch (error) { console.error('Ошибка удаления:', error); }
+      case 'stationType': {
+        const typeMap: Record<string, string> = {
+          'DRUM_TYPE': 'Барабанного типа',
+          'POSTAMAT_TYPE': 'Постамат',
+          'ADDITIONAL_MODULE': 'Дополнительный модуль',
+        };
+        return typeMap[val] || val;
+      }
+      default: return String(val); 
+    } 
+  };
+  
+  const isGrayColumn = (key: string): boolean => 
+    !['code', 'name', 'status', 'hasError', 'isTmc', 'isSgd', 'isOk', 'hasAdditionalModule'].includes(key);
+  
+  const confirmDelete = async () => { 
+    try { 
+      if (deleteTargetUid) await AxiosService.delete(ConstantInfo.restApiStationCrud(deleteTargetUid) + '?author=admin'); 
+      else for (const uid of selectedIds) await AxiosService.delete(ConstantInfo.restApiStationCrud(uid) + '?author=admin'); 
+      await fetchData(); 
+      setSelectedIds(new Set()); 
+      setDeleteTargetUid(null); 
+      setShowDeleteConfirm(false); 
+    } catch (e) { 
+      console.error(e); 
+    } 
   };
 
-  const handleContextDelete = () => {
-    if (!contextMenu) return;
-    setSelectedIds(new Set([contextMenu.uid]));
-    setContextMenu(null);
-    setTimeout(() => setShowDeleteConfirm(true), 50);
+  const getSortValue = (row: StationRowData, sortKey: string): any => {
+    const code = String(row['code'] || '').padStart(4, '0');
+    
+    switch (sortKey) {
+      case 'sectionName': {
+        const holding = row['holdingName'] || '';
+        const enterprise = row['enterpriseName'] || '';
+        const workshop = row['workshopName'] || '';
+        const section = row['sectionName'] || '';
+        
+        if (!holding) return `999|${code}`;
+        if (!enterprise) return `998|${holding}|${code}`;
+        if (!workshop) return `997|${holding}|${enterprise}|${code}`;
+        if (!section) return `996|${holding}|${enterprise}|${workshop}|${code}`;
+        
+        return `0|${holding}|${enterprise}|${workshop}|${section}|${code}`;
+      }
+      case 'stationType': {
+        const t = row['stationType'] || '';
+        const order = STATION_TYPE_ORDER[t] ?? 99;
+        return `${order}|${code}`;
+      }
+      case 'status': {
+        const s = row['status'] || '';
+        const order = STATUS_ORDER[s] ?? 99;
+        return `${order}|${code}`;
+      }
+      case 'isTmc': {
+        const tmc = row['isTmc'] === true;
+        const ok = row['isOk'] === true;
+        const sgd = row['isSgd'] === true;
+        
+        if (accountingIndex === 0) {
+          if (tmc && !ok && !sgd) return `0|${code}`;
+          if (tmc && ok && !sgd) return `1|${code}`;
+          if (tmc && ok && sgd) return `2|${code}`;
+          if (tmc && !ok && sgd) return `3|${code}`;
+          if (sgd && !tmc && !ok) return `4|${code}`;
+          return `5|${code}`;
+        } else if (accountingIndex === 1) {
+          if (sgd && !tmc && !ok) return `0|${code}`;
+          if (sgd && tmc && !ok) return `1|${code}`;
+          if (sgd && tmc && ok) return `2|${code}`;
+          if (!sgd && tmc && ok) return `3|${code}`;
+          if (!sgd && tmc && !ok) return `4|${code}`;
+          return `5|${code}`;
+        } else {
+          if (ok && !tmc && !sgd) return `0|${code}`;
+          if (ok && tmc && !sgd) return `1|${code}`;
+          if (ok && tmc && sgd) return `2|${code}`;
+          if (!ok && tmc && sgd) return `3|${code}`;
+          if (!ok && tmc && !sgd) return `4|${code}`;
+          if (!ok && !tmc && sgd) return `5|${code}`;
+          return `6|${code}`;
+        }
+      }
+      case 'hasError':
+      case 'hasAdditionalModule': {
+        const val = row[sortKey];
+        if (val === null || val === undefined || val === '') return `999|${code}`;
+        return `${val ? '1' : '0'}|${code}`;
+      }
+      case 'modelName':
+      case 'configurationName':
+      case 'ipAddress':
+      case 'article': {
+        const val = row[sortKey];
+        if (!val || val === '-') return `999|${code}`;
+        return `0|${val}|${code}`;
+      }
+      case 'productionDate': {
+        const val = row['productionDate'];
+        if (!val) return '999';
+        return val;
+      }
+      case 'name': {
+        const val = row['name'];
+        if (!val || val === '-') return `999|${code}`;
+        return `0|${val}|${code}`;
+      }
+      case 'code':
+        return Number(row['code'] || 0);
+      default: {
+        const val = row[sortKey];
+        if (!val || val === '-') return `999|${code}`;
+        return `0|${val}|${code}`;
+      }
+    }
   };
 
-  const formatCode = (code: number) => String(code).padStart(4, '0');
+  const filteredData = useMemo(() => {
+    let result = [...responseData.data];
+    
+    if (searchValue.trim()) { 
+      const q = searchValue.toLowerCase(); 
+      result = result.filter(row => 
+        responseData.columns.some(col => { 
+          const v = row[col]; 
+          return v !== null && v !== undefined && String(v).toLowerCase().includes(q); 
+        })
+      ); 
+    }
+    
+    if (filterValues['status'] && filterValues['status'].size > 0) 
+      result = result.filter(row => filterValues['status'].has(String(row['status'])));
+    
+    if (filterValues['stationType'] && filterValues['stationType'].size > 0) 
+      result = result.filter(row => filterValues['stationType'].has(String(row['stationType'])));
+    
+    if (filterValues['isTmc'] && filterValues['isTmc'].size > 0) {
+      result = result.filter(row => {
+        return Array.from(filterValues['isTmc']).every(uid => {
+          return row[uid] === true;
+        });
+      });
+    }
+    
+    if (filterValues['hasError'] && filterValues['hasError'].size > 0) 
+      result = result.filter(row => row['hasError'] === true);
+    
+    if (filterValues['hasAdditionalModule'] && filterValues['hasAdditionalModule'].size > 0) 
+      result = result.filter(row => row['hasAdditionalModule'] === true);
+    
+    if (filterValues['configurationName'] && filterValues['configurationName'].size > 0) 
+      result = result.filter(row => filterValues['configurationName'].has(String(row['configurationName'])));
+    
+    if (filterValues['modelName'] && filterValues['modelName'].size > 0) 
+      result = result.filter(row => filterValues['modelName'].has(String(row['modelId'])));
+    
+    if (filterValues['article'] && filterValues['article'].size > 0) 
+      result = result.filter(row => filterValues['article'].has(String(row['article'])));
+    
+    if (placementSelections['holdingName'] && placementSelections['holdingName'].size > 0) 
+      result = result.filter(row => placementSelections['holdingName'].has(String(row['holdingId'])));
+    if (placementSelections['enterpriseName'] && placementSelections['enterpriseName'].size > 0) 
+      result = result.filter(row => placementSelections['enterpriseName'].has(String(row['enterpriseId'])));
+    if (placementSelections['workshopName'] && placementSelections['workshopName'].size > 0) 
+      result = result.filter(row => placementSelections['workshopName'].has(String(row['workshopId'])));
+    if (placementSelections['sectionName'] && placementSelections['sectionName'].size > 0) 
+      result = result.filter(row => placementSelections['sectionName'].has(String(row['sectionId'])));
+    
+    if (sortColumn) {
+      result.sort((a, b) => {
+        const aVal = getSortValue(a, sortColumn);
+        const bVal = getSortValue(b, sortColumn);
+        
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        
+        const aStr = String(aVal);
+        const bStr = String(bVal);
+        
+        if (['status', 'stationType', 'sectionName', 'isTmc'].includes(sortColumn)) {
+          return aStr.localeCompare(bStr);
+        }
+        
+        if (['hasError', 'hasAdditionalModule'].includes(sortColumn)) {
+          return bStr.localeCompare(aStr);
+        }
+        
+        if (['code', 'name', 'productionDate'].includes(sortColumn)) {
+          return sortDirection === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+        }
+        
+        return aStr.localeCompare(bStr);
+      });
+    }
+    
+    return result;
+  }, [responseData.data, responseData.columns, searchValue, filterValues, placementSelections, sortColumn, sortDirection, accountingIndex]);
 
-  const emptyRows = Math.max(0, VISIBLE_ROWS - data.length);
+  if (isLoading) 
+    return (
+      <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span>
+      </div>
+    );
 
-  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const mediumButtonStyle: React.CSSProperties = { height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
-
-  const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
-    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
-    </div>
-  );
-
-  const contextMenuButtonStyle: React.CSSProperties = { width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
-
-  const headerStyle: React.CSSProperties = { position: 'absolute' as const, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' };
-  const cellStyle = (left: number, maxWidth: number, gray?: boolean): React.CSSProperties => ({
-    position: 'absolute', left, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400,
-    color: gray ? '#6B7280' : '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth
-  });
-
-  if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
+  const toggleSelectItem = (uid: string) => 
+    setSelectedIds(prev => { 
+      const n = new Set(prev); 
+      n.has(uid) ? n.delete(uid) : n.add(uid); 
+      return n; 
+    });
+  
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => { 
+    e.stopPropagation(); 
+    toggleSelectItem(uid); 
+  };
+  
+  const handleRowClick = (uid: string, e: React.MouseEvent) => { 
+    e.stopPropagation(); 
+    toggleSelectItem(uid); 
+  };
+  
+  const handleSelectAll = (e: React.MouseEvent) => { 
+    e.stopPropagation(); 
+    const all = filteredData.length > 0 && filteredData.every(d => selectedIds.has(d.uid)); 
+    all ? setSelectedIds(new Set()) : setSelectedIds(new Set(filteredData.map(d => d.uid))); 
+  };
 
   return (
-    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
+    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Станции</h1>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {showHistory ? 'Справочник: Станции (История изменений)' : 'Справочник: Станции'}
+        </h1>
       </div>
-
-      <div style={{ position: 'absolute', top: 99, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateClick}>
-            <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
-          </button>
-          <button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
-        </div>
+      
+      <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
+        <TableToolbar 
+          sortFields={SORT_FIELDS}
+          filterFields={FILTER_FIELDS}
+          placementLevels={PLACEMENT_LEVELS}
+          accountingTypes={ACCOUNTING_TYPES}
+          accountingColumnKeys={ACCOUNTING_COLUMN_KEYS}
+          filterOptions={filterOptions}
+          
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
+          
+          sortColumn={sortColumn}
+          sortDirection={sortDirection}
+          accountingIndex={accountingIndex}
+          onSortSelect={handleSortSelect}
+          onAccountingClick={handleAccountingClick}
+          onClearSort={handleClearSort}
+          
+          activeFilters={activeFilters}
+          filterValues={filterValues}
+          placementSelections={placementSelections}
+          hasPlacementSelections={hasPlacementSelections}
+          onFilterToggle={handleFilterToggle}
+          onCheckFilterOption={handleCheckFilterOption}
+          onPlacementLevelClick={() => {}}
+          onPlacementCheck={handlePlacementCheck}
+          onClearFilters={handleClearFilters}
+          
+          hierarchy={hierarchy}
+          modelList={modelList}
+          configList={configList}
+          onFetchHierarchy={fetchHierarchy}
+          onFetchModels={fetchModels}
+          onFetchConfigurations={fetchConfigurations}
+          
+          selectedCount={selectedIds.size}
+          onCreate={async () => { 
+            try { 
+              const r = await AxiosService.get(ConstantInfo.restApiStationsCrudGenerateCode); 
+              openTab(`/references/stations/create/${crypto.randomUUID()}`, `Станция: ${String(r.data).padStart(4, '0')}`, null); 
+            } catch { 
+              openTab(`/references/stations/create/${crypto.randomUUID()}`, 'Станция (новая)', null); 
+            } 
+          }}
+          onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
+          onPrint={() => {}}
+          onPrintPdf={() => {}}
+          showHistory={showHistory}
+          onHistory={handleHistoryClick}
+          onConfiguration={() => setShowConfigurationPopup(true)}
+          
+          expanded={expanded}
+          setExpanded={setExpanded}
+        />
       </div>
-
-      <div style={{ position: 'absolute', top: 154, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
-            <EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
-            <span style={{ ...headerStyle, left: COL_CODE }}>КОД</span>
-            <span style={{ ...headerStyle, left: COL_NAME }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ ...headerStyle, left: COL_TYPE }}>ТИП</span>
-            <span style={{ ...headerStyle, left: COL_MODEL }}>МОДЕЛЬ</span>
-            <span style={{ ...headerStyle, left: COL_ENTERPRISE }}>ПРЕДПРИЯТИЕ</span>
-            <span style={{ ...headerStyle, left: COL_WORKSHOP }}>ЦЕХ</span>
-            <span style={{ ...headerStyle, left: COL_SECTION }}>УЧАСТОК</span>
-            <span style={{ ...headerStyle, left: COL_STATUS }}>СТАТУС</span>
-          </div>
-          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {data.map(item => {
-              const isSelected = selectedIds.has(item.uid);
-              return (
-                <div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.name)} onDoubleClick={() => openTab(`/references/stations/edit/${item.uid}`, `Станция: ${item.name}`, null)}>
-                  <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
-                    <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} />
-                  </div>
-                  <img src={Popup9} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} />
-                  <span style={cellStyle(COL_CODE, 60)}>{formatCode(item.code)}</span>
-                  <span style={cellStyle(COL_NAME, COL_TYPE - COL_NAME - 20)}>{item.name}</span>
-                  <span style={cellStyle(COL_TYPE, COL_MODEL - COL_TYPE - 20, true)}>{item.stationType || '-'}</span>
-                  <span style={cellStyle(COL_MODEL, COL_ENTERPRISE - COL_MODEL - 20, true)}>{item.modelName || '-'}</span>
-                  <span style={cellStyle(COL_ENTERPRISE, COL_WORKSHOP - COL_ENTERPRISE - 20, true)}>{item.enterpriseName || '-'}</span>
-                  <span style={cellStyle(COL_WORKSHOP, COL_SECTION - COL_WORKSHOP - 20, true)}>{item.workshopName || '-'}</span>
-                  <span style={cellStyle(COL_SECTION, COL_STATUS - COL_SECTION - 20, true)}>{item.sectionName || '-'}</span>
-                  <span style={cellStyle(COL_STATUS, 300)}>{item.status || '-'}</span>
-                </div>
-              );
-            })}
-            {Array.from({ length: emptyRows }).map((_, i) => (
-              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
-            ))}
-          </div>
-        </div>
-        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
-        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
+      
+      <div style={{ position: 'absolute', top: 162, left: 40, right: 15, bottom: 0, overflow: 'hidden' }}>
+        <AnimatePresence initial={false}>
+          {showHistory ? (
+            <motion.div 
+              key="history"
+              initial={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+            >
+              <HistoryTable events={historyEvents} isLoading={historyLoading} />
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="data"
+              initial={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+            >
+              <DataTable 
+                columns={ALL_COLUMNS} 
+                visibleKeys={responseData.columns} 
+                data={filteredData} 
+                selectedIds={selectedIds} 
+                onCheckboxClick={handleCheckboxClick} 
+                onSelectAll={handleSelectAll} 
+                onRowClick={handleRowClick} 
+                onDoubleClick={handleDoubleClick} 
+                renderCell={renderCell} 
+                isGrayColumn={isGrayColumn} 
+                highlightText={searchValue.trim() || undefined}
+                initialWidths={columnWidths}
+                onWidthsChange={handleColumnWidthsChange}
+                rowContextMenuItems={rowContextMenuItems}
+                requiredColumns={requiredColumns}
+                onResetToBase={handleResetToBase}
+                rowIcon={StationIcon16Black}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
-        <button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button>
-        <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
-      </div>)}
-
-      {showDeleteConfirm && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
-        <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-          <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-            <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
+      
+      <ConfigurationPopup 
+        isOpen={showConfigurationPopup} 
+        onClose={() => setShowConfigurationPopup(false)} 
+        title="Справочник: Станции (Настройки списка)" 
+        columns={ALL_COLUMNS} 
+        visibleColumns={visibleColumns} 
+        requiredColumns={requiredColumns}
+        onSave={handleSaveColumns} 
+      />
+      
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+          onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} 
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>
+              Подтверждение удаления
+            </h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>
+              Вы уверены, что хотите удалить выбранные элементы?
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} 
+                style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+                Отмена
+              </button>
+              <button onClick={confirmDelete} 
+                style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>
+                Удалить
+              </button>
+            </div>
           </div>
         </div>
-      </div>)}
+      )}
     </div>
   );
 };

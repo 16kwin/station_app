@@ -1,5 +1,12 @@
-// src/components/elements/FormField.tsx
+// FormField.tsx — ПОЛНЫЙ ФАЙЛ (исправлены пути импортов)
 import React from 'react';
+import CloseIcon18Blue from '../../assets/Icons/CloseIcons/CloseIcon18Blue.svg';
+import PopupIcon16Blue from '../../assets/Icons/PopupIcons/PopupIcon16Blue.svg';
+import PopupIcon16Gray from '../../assets/Icons/PopupIcons/PopupIcon16Gray.svg';
+import CalendarIcon16Blue from '../../assets/Icons/CalendarIcons/CalendarIcon16Blue.svg';
+import CalendarIcon16Gray from '../../assets/Icons/CalendarIcons/CalendarIcon16Gray.svg';
+import CalendarIcon14Blue from '../../assets/Icons/CalendarIcons/CalendarIcon14Blue.svg';
+import CalendarIcon14Gray from '../../assets/Icons/CalendarIcons/CalendarIcon14Gray.svg';
 
 export interface FormFieldProps {
   width: number;
@@ -11,16 +18,16 @@ export interface FormFieldProps {
   placeholder?: string;
   active?: boolean;
   locked?: boolean;
-  type: 'input' | 'select' | 'display';
+  type: 'input' | 'select' | 'display' | 'calendar';
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClear?: () => void;
   onClick?: () => void;
+  onCalendarClick?: () => void;
   inputType?: string;
-  rightIcon?: string;
-  rightIconActive?: string;
-  onRightIconClick?: (e: React.MouseEvent) => void;
   selectIconWidth?: number;
   selectIconHeight?: number;
+  iconWidth?: number;
+  iconHeight?: number;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -46,15 +53,15 @@ const FormField: React.FC<FormFieldProps> = ({
   onChange,
   onClear,
   onClick,
+  onCalendarClick,
   inputType = 'text',
-  rightIcon,
-  rightIconActive,
-  onRightIconClick,
   selectIconWidth = 14.5,
   selectIconHeight = 18,
+  iconWidth = 20,
+  iconHeight = 20,
 }) => {
   const isActive = active ?? (value.length > 0);
-  const rightIconSrc = isActive && rightIconActive ? rightIconActive : rightIcon;
+  const iconSrc = isActive && iconActive ? iconActive : icon;
 
   const fieldStyle: React.CSSProperties = {
     width,
@@ -62,32 +69,34 @@ const FormField: React.FC<FormFieldProps> = ({
     borderRadius: 10,
     display: 'flex',
     alignItems: 'center',
-    paddingLeft: 12,
-    paddingRight: 12,
+    paddingLeft: 13,
+    paddingRight: 14,
     fontFamily: 'Inter, sans-serif',
     fontSize: 14,
     fontWeight: 500,
     outline: 'none',
-    backgroundColor: locked ? '#F5F6FA' : '#FFFFFF',
+    backgroundColor: '#FFFFFF',
     position: 'relative',
     boxSizing: 'border-box',
     border: locked
-      ? '1px solid rgba(102, 110, 254, 0.5)'
+      ? '1px solid rgba(102, 110, 254, 0.6)'
       : isActive
       ? '1px solid #666EFE'
-      : '1px solid rgba(102, 110, 254, 0.15)',
-    cursor: locked ? 'not-allowed' : type === 'select' ? 'pointer' : 'default',
-    opacity: locked ? 1 : undefined,
+      : '1px solid #A0A3BD',
+    cursor: locked ? 'not-allowed' : type === 'select' || type === 'calendar' ? 'pointer' : 'default',
   };
 
-  const iconSrc = isActive && iconActive ? iconActive : icon;
-  const textColor = locked ? '#666EFE' : isActive ? '#666EFE' : '#A0A3BD';
+  const textColor = locked
+    ? 'rgba(102, 110, 254, 0.6)'
+    : isActive
+    ? '#666EFE'
+    : '#A0A3BD';
 
   const renderContent = () => {
     switch (type) {
       case 'display':
         return (
-          <span style={{ marginLeft: iconSrc ? 44 : 0, color: textColor, opacity: value ? 1 : 0.5 }}>
+          <span style={{ color: textColor, opacity: value ? 1 : 0.5 }}>
             {value || '—'}
           </span>
         );
@@ -95,22 +104,27 @@ const FormField: React.FC<FormFieldProps> = ({
       case 'input':
         return (
           <>
-            {iconSrc && (
-              <img src={iconSrc} alt="" style={{ width: 16, height: 16, position: 'absolute', left: 14 }} />
-            )}
+            <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
+              {iconSrc ? (
+                <img src={iconSrc} alt="" style={{ width: iconWidth, height: iconHeight, opacity: locked ? 0.6 : 1 }} />
+              ) : (
+                <div style={{ width: iconWidth, height: iconHeight, backgroundColor: 'red', borderRadius: 2, opacity: locked ? 0.6 : 1 }} />
+              )}
+            </div>
             <input
               type={inputType}
               style={{
-                width: '100%',
+                flex: 1,
                 height: '100%',
                 border: 'none',
                 outline: 'none',
-                marginLeft: iconSrc ? 30 : 0,
                 fontFamily: 'Inter, sans-serif',
                 fontSize: 14,
                 fontWeight: 500,
                 color: textColor,
                 backgroundColor: 'transparent',
+                minWidth: 0,
+                cursor: locked ? 'not-allowed' : 'default',
               }}
               value={value}
               onChange={onChange}
@@ -118,76 +132,86 @@ const FormField: React.FC<FormFieldProps> = ({
               disabled={locked}
             />
             {isActive && onClear && !locked && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClear();
-                }}
-                style={{
-                  position: 'absolute',
-                  right: 13,
-                  width: 18,
-                  height: 18,
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
+              <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8, cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); onClear(); }}
               >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <circle cx="9" cy="9" r="8" fill="#666EFE" fillOpacity="0.15" />
-                  <path d="M6 6L12 12M12 6L6 12" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
+                <img src={CloseIcon18Blue} alt="Очистить" style={{ width: 18, height: 18 }} />
+              </div>
             )}
+          </>
+        );
+
+      case 'calendar':
+        return (
+          <>
+            <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
+              {iconSrc ? (
+                <img src={iconSrc} alt="" style={{ width: 16, height: 18, opacity: locked ? 0.6 : 1 }} />
+              ) : (
+                <div style={{ width: 16, height: 18, backgroundColor: 'red', borderRadius: 2, opacity: locked ? 0.6 : 1 }} />
+              )}
+            </div>
+            <span
+              style={{
+                color: textColor,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              {value || placeholder || 'Выберите дату'}
+            </span>
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                marginLeft: 8,
+                cursor: locked ? 'not-allowed' : 'pointer',
+                opacity: locked ? 0.6 : 1,
+              }}
+              onClick={(e) => {
+                if (!locked) {
+                  e.stopPropagation();
+                  onCalendarClick?.();
+                }
+              }}
+            >
+              <img src={isActive ? CalendarIcon14Blue : CalendarIcon14Gray} alt="" style={{ width: 14, height: 16 }} />
+            </div>
           </>
         );
 
       case 'select':
         return (
           <>
-            {iconSrc && (
-              <img src={iconSrc} alt="" style={{ width: selectIconWidth, height: selectIconHeight, position: 'absolute', left: 15 }} />
-            )}
+            <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
+              {iconSrc ? (
+                <img src={iconSrc} alt="" style={{ width: selectIconWidth, height: selectIconHeight, opacity: locked ? 0.6 : 1 }} />
+              ) : (
+                <div style={{ width: selectIconWidth, height: selectIconHeight, backgroundColor: 'red', borderRadius: 2, opacity: locked ? 0.6 : 1 }} />
+              )}
+            </div>
             <span
               style={{
-                marginLeft: iconSrc ? 30 : 0,
                 color: textColor,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 flex: 1,
+                minWidth: 0,
               }}
             >
               {value || placeholder || 'Выберите'}
             </span>
-            {rightIconSrc ? (
-              <img
-                src={rightIconSrc}
-                alt=""
-                style={{ width: 18, height: 18, flexShrink: 0, cursor: 'pointer' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRightIconClick?.(e);
-                }}
-              />
-            ) : (
-              <svg
-                width="12"
-                height="8"
-                viewBox="0 0 12 8"
-                fill="none"
-                style={{ flexShrink: 0, marginLeft: 8 }}
-              >
-                <path
-                  d="M1 1.5L6 6.5L11 1.5"
-                  stroke={isActive ? '#666EFE' : '#A0A3BD'}
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
+            <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
+              <img src={isActive ? PopupIcon16Blue : PopupIcon16Gray} alt="" style={{ width: 16, height: 4, opacity: locked ? 0.6 : 1 }} />
+            </div>
           </>
         );
     }
@@ -196,10 +220,7 @@ const FormField: React.FC<FormFieldProps> = ({
   return (
     <div>
       {label && <span style={labelStyle}>{label}</span>}
-      <div
-        style={fieldStyle}
-        onClick={type === 'select' && !locked ? onClick : undefined}
-      >
+      <div style={fieldStyle} onClick={type === 'select' && !locked ? onClick : type === 'calendar' && !locked ? onCalendarClick : undefined}>
         {renderContent()}
       </div>
     </div>

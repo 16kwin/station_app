@@ -1,283 +1,632 @@
-// SectionsPage.tsx — ПОЛНЫЙ ФАЙЛ
-import React, { useRef, useState, useEffect } from 'react';
+// SectionsPage.tsx — ПОЛНЫЙ ФАЙЛ (фильтрация по id, findParentValues по id)
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import Icon1 from '../../../assets/References/Icon1.svg';
-import Icon2 from '../../../assets/References/Icon2.svg';
-import Icon3 from '../../../assets/References/Icon3.svg';
-import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon7 from '../../../assets/References/Icon7.svg';
-import Icon8 from '../../../assets/References/Icon8.svg';
-import Icon9 from '../../../assets/References/Icon9.svg';
-import Icon10 from '../../../assets/References/Icon10.svg';
-import Icon19 from '../../../assets/References/Icon19.svg';
-import Popup9 from '../../../assets/References/popup9.svg';
+import ConfigurationPopup from '../../elements/ConfigurationPopup';
+import HistoryTable from '../../elements/HistoryTable';
+import DataTable from '../../elements/DataTable';
+import TableToolbar from '../../elements/TableToolbar';
+import ContextMenu from '../../elements/ContextMenu';
+import type { ContextMenuItem } from '../../elements/ContextMenu';
+import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
+import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 
-interface SectionItem {
-  id: number;
-  name: string;
-  holdingId: number | null;
-  holdingName: string | null;
-  enterpriseId: number;
-  enterpriseName: string;
-  workshopId: number;
-  workshopName: string;
+interface SectionRowData { [key: string]: any; }
+interface SectionListResponse { 
+  columns: string[]; 
+  data: SectionRowData[]; 
+  columnWidths?: Record<string, number>;
+  requiredColumns?: string[];
 }
+interface ColumnItem { key: string; label: string; }
+
+const ALL_COLUMNS: ColumnItem[] = [
+  { key: 'name', label: 'Наименование' },
+  { key: 'workshopName', label: 'Цех' },
+  { key: 'enterpriseName', label: 'Предприятие' },
+  { key: 'holdingName', label: 'Холдинг' },
+];
+
+const REQUIRED_COLUMNS = new Set(['name']);
+
+const SORT_FIELDS = [
+  { key: 'name', label: 'Наименование', iconType: '19' as const },
+  { key: 'locationName', label: 'Размещение' },
+];
+
+const FILTER_FIELDS = [
+  { key: 'sectionName', label: 'Размещение' },
+];
+
+const PLACEMENT_LEVELS = [
+  { key: 'holdingName', label: 'Холдинг', emptyText: 'Нет холдингов' },
+  { key: 'enterpriseName', label: 'Предприятие', emptyText: 'Нет предприятий' },
+  { key: 'workshopName', label: 'Цех', emptyText: 'Нет цехов' },
+];
+
+const USER_ID = 1;
+
+interface HierarchyDTO { holdings: HoldingDTO[] }
+interface HoldingDTO { id: number; name: string; enterprises: EnterpriseDTO[] }
+interface EnterpriseDTO { id: number; name: string; holdingId: number; workshops: WorkshopDTO[] }
+interface WorkshopDTO { id: number; name: string; enterpriseId: number; holdingId: number; sections: SectionDTO[] }
+interface SectionDTO { id: number; name: string; workshopId: number; enterpriseId: number; holdingId: number }
+
+type PlacementKey = typeof PLACEMENT_LEVELS[number]['key'];
+type PlacementSelections = Record<PlacementKey, Set<string>>;
+
+const EMPTY_PLACEMENT: PlacementSelections = { holdingName: new Set(), enterpriseName: new Set(), workshopName: new Set() };
 
 const SectionsPage = () => {
   const { activeTabId } = useTabs();
-  const tabIdRef = useRef<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
-  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<SectionItem[]>([]);
+  const [responseData, setResponseData] = useState<SectionListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | null>(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [accountingIndex, setAccountingIndex] = useState(-1);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
+  const [placementSelections, setPlacementSelections] = useState<PlacementSelections>(EMPTY_PLACEMENT);
+  const [hierarchy, setHierarchy] = useState<HierarchyDTO | null>(null);
+  const [workshopList, setWorkshopList] = useState<{ id: string; name: string }[]>([]);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
+
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
-  const [editItem, setEditItem] = useState<SectionItem | null>(null);
+  const [editItem, setEditItem] = useState<SectionRowData | null>(null);
   const [formName, setFormName] = useState('');
-  const [formWorkshopId, setFormWorkshopId] = useState<number | ''>('');
-  const [workshops, setWorkshops] = useState<{ id: number; name: string; enterpriseName: string }[]>([]);
+  const [formWorkshopId, setFormWorkshopId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: number; name: string } | null>(null);
 
-  const TABLE_WIDTH = 1720;
-  const ROW_HEIGHT = 58;
-  const HEADER_HEIGHT = 58;
-  const VISIBLE_ROWS = 10;
-  const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
-
-  useEffect(() => { tabIdRef.current = activeTabId; }, []);
-
-  const fetchData = async () => {
-    try {
-      const response = await AxiosService.get(ConstantInfo.restApiSections);
-      setData(response.data || []);
-    } catch (error) {
-      console.error('Ошибка загрузки:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const fetchData = async () => { 
+    try { 
+      const r = await AxiosService.get(`${ConstantInfo.restApiSections}?userId=${USER_ID}`); 
+      const response = r.data as SectionListResponse;
+      const mappedData = response.data.map(item => ({
+        ...item,
+        uid: String(item.id),
+      }));
+      setResponseData({ ...response, data: mappedData });
+      setVisibleColumns(new Set(response.columns));
+      if (response.columnWidths) {
+        setColumnWidths(response.columnWidths);
+      }
+      if (response.requiredColumns && response.requiredColumns.length > 0) {
+        setRequiredColumns(new Set(response.requiredColumns));
+      }
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setIsLoading(false); 
+    } 
   };
 
-  const fetchWorkshops = async () => {
-    try {
-      const response = await AxiosService.get(ConstantInfo.restApiWorkshops);
-      setWorkshops(response.data || []);
-    } catch (error) {
-      console.error('Ошибка загрузки цехов:', error);
+  const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
+    setColumnWidths(widths);
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: visibleColumns.has(col.key),
+        width: widths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiSectionColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
+  }, [visibleColumns, requiredColumns]);
+
+  const handleResetToBase = useCallback(() => {
+    const baseCols = new Set(requiredColumns);
+    setVisibleColumns(baseCols);
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+  }, [requiredColumns]);
+
+  const fetchSettings = async () => { 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiSectionAllSettings(USER_ID)); 
+      const settings = r.data as { filtersJson: string; sortJson: string };
+      
+      if (settings.filtersJson && settings.filtersJson !== '{}') {
+        const filters = JSON.parse(settings.filtersJson) as Record<string, any>;
+        const newFilterValues: Record<string, Set<string>> = {};
+        const newActiveFilters = new Set<string>();
+        
+        Object.entries(filters).forEach(([key, values]) => {
+          if (key === 'placementSelections') return;
+          if (Array.isArray(values) && values.length > 0) {
+            newFilterValues[key] = new Set(values as string[]);
+            newActiveFilters.add(key);
+          }
+        });
+        
+        setFilterValues(newFilterValues);
+        setActiveFilters(newActiveFilters);
+        
+        const placementData = filters.placementSelections as any;
+        if (placementData && typeof placementData === 'object') {
+          setPlacementSelections({
+            holdingName: Array.isArray(placementData.holdingName) ? new Set<string>(placementData.holdingName) : new Set<string>(),
+            enterpriseName: Array.isArray(placementData.enterpriseName) ? new Set<string>(placementData.enterpriseName) : new Set<string>(),
+            workshopName: Array.isArray(placementData.workshopName) ? new Set<string>(placementData.workshopName) : new Set<string>(),
+          });
+        }
+      }
+      
+      if (settings.sortJson && settings.sortJson !== '{}') {
+        const sort = JSON.parse(settings.sortJson) as { column?: string; direction?: 'asc' | 'desc' };
+        if (sort.column) {
+          setSortColumn(sort.column);
+          setSortDirection(sort.direction || 'asc');
+        }
+      }
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+  
+  const saveFilters = useCallback((filters: Record<string, Set<string>>, placement: PlacementSelections) => {
+    const filtersJsonObj: Record<string, any> = {};
+    
+    Object.entries(filters).forEach(([key, values]) => {
+      if (values.size > 0) {
+        filtersJsonObj[key] = Array.from(values);
+      }
+    });
+    
+    const placementObj: Record<string, string[]> = {};
+    (Object.keys(placement) as PlacementKey[]).forEach(key => {
+      if (placement[key].size > 0) {
+        placementObj[key] = Array.from(placement[key]);
+      }
+    });
+    
+    if (Object.keys(placementObj).length > 0) {
+      filtersJsonObj.placementSelections = placementObj;
     }
+    
+    const filtersJson = JSON.stringify(filtersJsonObj);
+    AxiosService.patch(ConstantInfo.restApiSectionFiltersSettingsSave(USER_ID), { filtersJson }).catch(e => console.error(e));
+  }, []);
+  
+  const saveSort = useCallback((column: string | null, direction: 'asc' | 'desc') => {
+    const sortJson = column ? JSON.stringify({ column, direction }) : '{}';
+    AxiosService.patch(ConstantInfo.restApiSectionSortSettingsSave(USER_ID), { sortJson }).catch(e => console.error(e));
+  }, []);
+  
+  const fetchHistory = async () => { 
+    setHistoryLoading(true); 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiSectionEvents); 
+      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription }))); 
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setHistoryLoading(false); 
+    } 
+  };
+  
+  const fetchHierarchy = async () => { 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiLocationHierarchy); 
+      setHierarchy(r.data); 
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+  
+  const fetchWorkshops = async () => { 
+    try { 
+      const r = await AxiosService.get(`${ConstantInfo.restApiWorkshops}?userId=${USER_ID}`); 
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setWorkshopList(items.map((item: any) => ({ id: String(item.id), name: item.name }))); 
+    } catch (e) { 
+      console.error(e); 
+    } 
   };
 
-  useEffect(() => { fetchData(); fetchWorkshops(); }, []);
+  useEffect(() => { fetchData(); fetchHierarchy(); fetchWorkshops(); fetchSettings(); }, []);
+
+  const hasPlacementSelections = useMemo(() => (Object.values(placementSelections) as Set<string>[]).some(s => s.size > 0), [placementSelections]);
+  
+  useEffect(() => { 
+    setActiveFilters(prev => { 
+      const next = new Set(prev); 
+      if (hasPlacementSelections) next.add('sectionName'); 
+      else next.delete('sectionName'); 
+      return next; 
+    }); 
+  }, [hasPlacementSelections]);
+
   useEffect(() => {
-    if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) fetchData();
-  }, [activeTabId]);
+    if (!isLoading) {
+      saveFilters(filterValues, placementSelections);
+    }
+  }, [filterValues, placementSelections, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveSort(sortColumn, sortDirection);
+    }
+  }, [sortColumn, sortDirection, isLoading, saveSort]);
 
   useEffect(() => {
     if (!contextMenu) return;
     const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
   }, [contextMenu]);
 
-  const checkScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    setHasVerticalScroll(container.scrollHeight > container.clientHeight);
-    setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
+  const toggleSelectItem = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   };
 
-  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [data]);
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    checkScroll();
-    container.addEventListener('scroll', checkScroll);
-    const ro = new ResizeObserver(checkScroll);
-    ro.observe(container);
-    return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
-  }, []);
-
-  const toggleSelectItem = (id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+  const handleCheckboxClick = (id: string, e: React.MouseEvent) => { e.stopPropagation(); toggleSelectItem(id); };
+  const handleRowClick = (id: string, e: React.MouseEvent) => { e.stopPropagation(); toggleSelectItem(id); };
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const isAllSelected = responseData.data.length > 0 && responseData.data.every(item => selectedIds.has(item.uid));
+    if (isAllSelected) setSelectedIds(new Set()); else setSelectedIds(new Set(responseData.data.map(item => item.uid)));
+  };
+  const handleContextMenu = (e: React.MouseEvent, id: string, name: string) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, id, name }); };
+  const handleDoubleClick = (id: string, name: string) => {};
+  
+  const handleSaveColumns = (cols: Set<string>) => { 
+    const finalCols = new Set(cols);
+    requiredColumns.forEach(key => finalCols.add(key));
+    setVisibleColumns(finalCols); 
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+  };
+  
+  const handleHistoryClick = () => { 
+    setShowHistory(prev => {
+      const next = !prev;
+      if (next) fetchHistory();
       return next;
     });
   };
 
-  const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.id));
-  const toggleSelectAll = () => {
-    if (isAllSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(data.map(item => item.id)));
-  };
-
-  const handleContextMenu = (e: React.MouseEvent, id: number, name: string) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, id, name });
-  };
-
-  const handleCreateClick = () => {
-    setFormName('');
-    setFormWorkshopId('');
-    setEditItem(null);
-    setShowCreatePopup(true);
-  };
-
+  const handleCreateClick = () => { setFormName(''); setFormWorkshopId(''); setEditItem(null); setShowCreatePopup(true); };
   const handleCreateSubmit = async () => {
-    if (!formName.trim() || formWorkshopId === '') return;
+    if (!formName.trim() || !formWorkshopId) return;
     setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiSections, { name: formName.trim(), workshopId: formWorkshopId });
+      await AxiosService.post(ConstantInfo.restApiSections, { 
+        name: formName.trim(), 
+        workshopId: Number(formWorkshopId),
+      });
       await fetchData();
       setShowCreatePopup(false);
-    } catch (error) {
-      console.error('Ошибка создания:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (error) { console.error('Ошибка создания:', error); } finally { setIsSaving(false); }
   };
 
   const handleEditClick = () => {
     if (!contextMenu) return;
-    const item = data.find(d => d.id === contextMenu.id);
-    if (item) { setEditItem(item); setFormName(item.name); setFormWorkshopId(item.workshopId); setShowEditPopup(true); }
+    const item = responseData.data.find(d => d.uid === contextMenu.id);
+    if (item) { 
+      setEditItem(item); 
+      setFormName(item.name); 
+      setFormWorkshopId(item.workshopId ? String(item.workshopId) : ''); 
+      setShowEditPopup(true); 
+    }
     setContextMenu(null);
   };
 
   const handleEditSubmit = async () => {
-    if (!editItem || !formName.trim() || formWorkshopId === '') return;
+    if (!editItem || !formName.trim() || !formWorkshopId) return;
     setIsSaving(true);
     try {
-      await AxiosService.patch(`${ConstantInfo.restApiSections}/${editItem.id}`, { name: formName.trim(), workshopId: formWorkshopId });
+      await AxiosService.patch(`${ConstantInfo.restApiSections}/${editItem.id}`, { 
+        name: formName.trim(), 
+        workshopId: Number(formWorkshopId),
+      });
       await fetchData();
-      setShowEditPopup(false);
-      setEditItem(null);
-    } catch (error) {
-      console.error('Ошибка редактирования:', error);
-    } finally {
-      setIsSaving(false);
-    }
+      setShowEditPopup(false); setEditItem(null);
+    } catch (error) { console.error('Ошибка редактирования:', error); } finally { setIsSaving(false); }
   };
 
-  const handleDeleteClick = () => {
-    if (selectedIds.size === 0) return;
-    setShowDeleteConfirm(true);
+  const contextMenuItems: ContextMenuItem[] = [
+    { id: 'edit', label: 'Редактировать', icon: ContextMenuOpenIcon16, onClick: handleEditClick },
+    { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => { if (!contextMenu) return; setDeleteTargetUid(contextMenu.id); setContextMenu(null); setTimeout(() => setShowDeleteConfirm(true), 50); } },
+  ];
+
+  const renderCell = (key: string, item: SectionRowData): string => {
+    const val = item[key];
+    if (val === null || val === undefined) return '-';
+    return String(val);
   };
 
   const confirmDelete = async () => {
     try {
-      for (const id of selectedIds) {
-        await AxiosService.delete(`${ConstantInfo.restApiSections}/${id}`);
+      if (deleteTargetUid) {
+        const item = responseData.data.find(d => d.uid === deleteTargetUid);
+        await AxiosService.delete(`${ConstantInfo.restApiSections}/${item?.id}`);
+      } else {
+        for (const uid of selectedIds) {
+          const item = responseData.data.find(d => d.uid === uid);
+          await AxiosService.delete(`${ConstantInfo.restApiSections}/${item?.id}`);
+        }
       }
-      await fetchData();
-      setSelectedIds(new Set());
-      setShowDeleteConfirm(false);
+      await fetchData(); setSelectedIds(new Set()); setDeleteTargetUid(null); setShowDeleteConfirm(false);
     } catch (error) { console.error('Ошибка удаления:', error); }
   };
 
-  const handleContextDelete = () => {
-    if (!contextMenu) return;
-    setSelectedIds(new Set([contextMenu.id]));
-    setContextMenu(null);
-    setTimeout(() => setShowDeleteConfirm(true), 50);
+  const getSortValue = (row: SectionRowData, sortKey: string): string => {
+    const code = String(row['name'] || '');
+    
+    switch (sortKey) {
+      case 'locationName': {
+        const holding = row['holdingName'] || '';
+        const enterprise = row['enterpriseName'] || '';
+        const workshop = row['workshopName'] || '';
+        const section = row['name'] || '';
+        
+        if (!holding) return `999|${code}`;
+        if (!enterprise) return `998|${holding}|${code}`;
+        if (!workshop) return `997|${holding}|${enterprise}|${code}`;
+        if (!section) return `996|${holding}|${enterprise}|${workshop}|${code}`;
+        
+        return `0|${holding}|${enterprise}|${workshop}|${section}|${code}`;
+      }
+      default: {
+        const val = row[sortKey];
+        if (!val || val === '-') return `999|${code}`;
+        return `0|${val}|${code}`;
+      }
+    }
   };
 
-  const emptyRows = Math.max(0, VISIBLE_ROWS - data.length);
+  const findParentValues = (level: PlacementKey, value: string): Partial<Record<PlacementKey, string>> => { 
+    if (!hierarchy) return {}; 
+    const result: Partial<Record<PlacementKey, string>> = {}; 
+    if (level === 'workshopName') { 
+      for (const h of hierarchy.holdings) 
+        for (const e of h.enterprises) { 
+          const w = e.workshops.find(w => String(w.id) === value); 
+          if (w) { 
+            result.holdingName = String(h.id); 
+            result.enterpriseName = String(e.id); 
+            return result; 
+          } 
+        } 
+    } 
+    if (level === 'enterpriseName') { 
+      for (const h of hierarchy.holdings) { 
+        const e = h.enterprises.find(e => String(e.id) === value); 
+        if (e) { 
+          result.holdingName = String(h.id); 
+          return result; 
+        } 
+      } 
+    } 
+    return result; 
+  };
 
-  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const mediumButtonStyle: React.CSSProperties = { height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
+  const handlePlacementCheck = (level: PlacementKey, value: string) => { 
+    setPlacementSelections(prev => { 
+      const current = new Set(prev[level] || []); 
+      if (current.has(value)) { 
+        current.delete(value); 
+        const next = { ...prev, [level]: current }; 
+        const idx = PLACEMENT_LEVELS.findIndex(l => l.key === level); 
+        for (let i = idx + 1; i < PLACEMENT_LEVELS.length; i++) 
+          next[PLACEMENT_LEVELS[i].key] = new Set(); 
+        if (current.size === 0) next[level] = new Set(); 
+        return next; 
+      } else { 
+        current.add(value); 
+        const next = { ...prev, [level]: current }; 
+        const parents = findParentValues(level, value); 
+        (Object.keys(parents) as PlacementKey[]).forEach((key) => { 
+          if (parents[key] && !next[key]?.has(parents[key]!)) 
+            next[key] = new Set([...(next[key] || []), parents[key]!]); 
+        }); 
+        return next; 
+      } 
+    }); 
+  };
 
-  const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
-    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
-    </div>
-  );
+  const filteredData = useMemo(() => {
+    let result = [...responseData.data];
+    if (searchValue.trim()) {
+      const q = searchValue.toLowerCase();
+      result = result.filter(row => {
+        return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
+      });
+    }
+    
+    if (placementSelections['holdingName'] && placementSelections['holdingName'].size > 0) 
+      result = result.filter(row => placementSelections['holdingName'].has(String(row['holdingId'])));
+    if (placementSelections['enterpriseName'] && placementSelections['enterpriseName'].size > 0) 
+      result = result.filter(row => placementSelections['enterpriseName'].has(String(row['enterpriseId'])));
+    if (placementSelections['workshopName'] && placementSelections['workshopName'].size > 0) 
+      result = result.filter(row => placementSelections['workshopName'].has(String(row['workshopId'])));
+    
+    if (sortColumn) {
+      result.sort((a, b) => {
+        const aVal = getSortValue(a, sortColumn);
+        const bVal = getSortValue(b, sortColumn);
+        if (sortColumn === 'locationName') {
+          return aVal.localeCompare(bVal);
+        }
+        if (sortColumn === 'name') {
+          return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        return aVal.localeCompare(bVal);
+      });
+    }
+    return result;
+  }, [responseData.data, searchValue, placementSelections, sortColumn, sortDirection]);
 
-  const contextMenuButtonStyle: React.CSSProperties = { width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
+  if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
+
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
   const selectStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', cursor: 'pointer', appearance: 'none' };
 
-  // Колонки: НАИМЕНОВАНИЕ | ЦЕХ | ПРЕДПРИЯТИЕ | ХОЛДИНГ
-  const COL_NAME = 85;
-  const COL_WORKSHOP = 400;
-  const COL_ENTERPRISE = 750;
-  const COL_HOLDING = 1100;
-
-  if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
-
   return (
-    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
+    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Участки</h1>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {showHistory ? 'Справочник: Участки (История изменений)' : 'Справочник: Участки'}
+        </h1>
       </div>
 
-      <div style={{ position: 'absolute', top: 99, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateClick}>
-            <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
-          </button>
-          <button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
-        </div>
+      <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
+        <TableToolbar 
+          sortFields={SORT_FIELDS}
+          filterFields={FILTER_FIELDS}
+          placementLevels={PLACEMENT_LEVELS}
+          accountingTypes={[]}
+          accountingColumnKeys={[]}
+          filterOptions={{}}
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
+          sortColumn={sortColumn}
+          sortDirection={sortDirection}
+          accountingIndex={accountingIndex}
+          onSortSelect={(col) => {
+            if (col === 'name') {
+              if (sortColumn === col) {
+                setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+              } else {
+                setSortColumn(col);
+                setSortDirection('asc');
+              }
+            } else {
+              setSortColumn(col);
+              setSortDirection('asc');
+            }
+          }}
+          onAccountingClick={() => {}}
+          onClearSort={() => { setSortColumn(null); setAccountingIndex(-1); }}
+          activeFilters={activeFilters}
+          filterValues={filterValues}
+          placementSelections={placementSelections}
+          hasPlacementSelections={hasPlacementSelections}
+          onFilterToggle={(key) => { if (key === 'sectionName') fetchHierarchy(); }}
+          onCheckFilterOption={() => {}}
+          onPlacementLevelClick={() => {}}
+          onPlacementCheck={handlePlacementCheck}
+          onClearFilters={() => { setActiveFilters(new Set()); setFilterValues({}); setPlacementSelections(EMPTY_PLACEMENT); }}
+          hierarchy={hierarchy}
+          modelList={[]}
+          configList={[]}
+          onFetchHierarchy={fetchHierarchy}
+          onFetchModels={() => {}}
+          onFetchConfigurations={() => {}}
+          selectedCount={selectedIds.size}
+          onCreate={handleCreateClick}
+          onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
+          onPrint={() => {}}
+          onPrintPdf={() => {}}
+          showHistory={showHistory}
+          onHistory={handleHistoryClick}
+          onConfiguration={() => setShowConfigurationPopup(true)}
+          expanded={expanded}
+          setExpanded={setExpanded}
+        />
       </div>
 
-      <div style={{ position: 'absolute', top: 154, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
-            <EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
-            <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ position: 'absolute', left: COL_WORKSHOP, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ЦЕХ</span>
-            <span style={{ position: 'absolute', left: COL_ENTERPRISE, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ПРЕДПРИЯТИЕ</span>
-            <span style={{ position: 'absolute', left: COL_HOLDING, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>ХОЛДИНГ</span>
+      <div style={{ position: 'absolute', top: 162, left: 40, right: 15, bottom: 0, overflow: 'hidden' }}>
+        <AnimatePresence initial={false}>
+          {showHistory ? (
+            <motion.div key="history" initial={{ x: 'calc(100% + 40px)' }} animate={{ x: 0 }} exit={{ x: 'calc(100% + 40px)' }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+              <HistoryTable events={historyEvents} isLoading={historyLoading} />
+            </motion.div>
+          ) : (
+            <motion.div key="data" initial={{ x: 'calc(-100% - 40px)' }} animate={{ x: 0 }} exit={{ x: 'calc(-100% - 40px)' }} transition={{ duration: 0.3, ease: 'easeInOut' }} style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+              <DataTable
+                columns={ALL_COLUMNS}
+                visibleKeys={responseData.columns}
+                data={filteredData}
+                selectedIds={selectedIds}
+                onCheckboxClick={handleCheckboxClick}
+                onSelectAll={handleSelectAll}
+                onRowClick={handleRowClick}
+                onContextMenu={handleContextMenu}
+                onDoubleClick={handleDoubleClick}
+                renderCell={renderCell}
+                highlightText={searchValue.trim() || undefined}
+                initialWidths={columnWidths}
+                onWidthsChange={handleColumnWidthsChange}
+                requiredColumns={requiredColumns}
+                onResetToBase={handleResetToBase}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} />}
+
+      <ConfigurationPopup 
+        isOpen={showConfigurationPopup} 
+        onClose={() => setShowConfigurationPopup(false)} 
+        title="Справочник: Участки (Настройки списка)" 
+        columns={ALL_COLUMNS} 
+        visibleColumns={visibleColumns} 
+        requiredColumns={requiredColumns}
+        onSave={handleSaveColumns} 
+      />
+
+      {showCreatePopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание участка</h3>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Введите название" autoFocus style={inputStyle} /></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value)} style={selectStyle}><option value="">Выберите цех</option>{workshopList.map(w => (<option key={w.id} value={w.id}>{w.name}</option>))}</select></div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim() || !formWorkshopId} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && formWorkshopId && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && formWorkshopId && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button>
+            </div>
           </div>
-          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {data.map(item => {
-              const isSelected = selectedIds.has(item.id);
-              return (
-                <div key={item.id} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, item.id, item.name)}>
-                  <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
-                    <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.id)} />
-                  </div>
-                  <img src={Popup9} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} />
-                  <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_WORKSHOP - COL_NAME - 30 }}>{item.name}</span>
-                  <span style={{ position: 'absolute', left: COL_WORKSHOP, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_ENTERPRISE - COL_WORKSHOP - 30 }}>{item.workshopName}</span>
-                  <span style={{ position: 'absolute', left: COL_ENTERPRISE, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_HOLDING - COL_ENTERPRISE - 30 }}>{item.enterpriseName}</span>
-                  <span style={{ position: 'absolute', left: COL_HOLDING, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 500 }}>{item.holdingName || ''}</span>
-                </div>
-              );
-            })}
-            {Array.from({ length: emptyRows }).map((_, i) => (
-              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
-            ))}
+        </div>
+      )}
+
+      {showEditPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование участка</h3>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} autoFocus style={inputStyle} /></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value)} style={selectStyle}><option value="">Выберите цех</option>{workshopList.map(w => (<option key={w.id} value={w.id}>{w.name}</option>))}</select></div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleEditSubmit} disabled={isSaving || !formName.trim() || !formWorkshopId} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && formWorkshopId && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && formWorkshopId && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button>
+            </div>
           </div>
         </div>
-        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
-        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
-      </div>
+      )}
 
-      {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}><button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button><button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button></div>)}
-
-      {showCreatePopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание участка</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Введите название" autoFocus style={inputStyle} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value ? Number(e.target.value) : '')} style={selectStyle}><option value="">Выберите цех</option>{workshops.map(w => (<option key={w.id} value={w.id}>{w.name} ({w.enterpriseName})</option>))}</select></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim() || formWorkshopId === ''} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && formWorkshopId !== '' && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && formWorkshopId !== '' && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button></div></div></div>)}
-
-      {showEditPopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование участка</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Введите название" autoFocus style={inputStyle} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value ? Number(e.target.value) : '')} style={selectStyle}><option value="">Выберите цех</option>{workshops.map(w => (<option key={w.id} value={w.id}>{w.name} ({w.enterpriseName})</option>))}</select></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={handleEditSubmit} disabled={isSaving || !formName.trim() || formWorkshopId === ''} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && formWorkshopId !== '' && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && formWorkshopId !== '' && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button></div></div></div>)}
-
-      {showDeleteConfirm && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}><div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3><p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button></div></div></div>)}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

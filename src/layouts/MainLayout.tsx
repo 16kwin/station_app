@@ -1,4 +1,4 @@
-// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ
+// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлен LocationsPage)
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -43,6 +43,7 @@ import StationConfigurationsPage from '../components/ReferencesPage/StationConfi
 import StationConfigurationCreatePage from '../components/ReferencesPage/StationConfigurationsPage/StationConfigurationCreatePage';
 import StationsCrudPage from '../components/ReferencesPage/StationsCrudPage/StationsCrudPage';
 import StationCreatePage from '../components/ReferencesPage/StationsCrudPage/StationCreatePage';
+import LocationsPage from '../components/ReferencesPage/LocationsPage/LocationsPage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
@@ -83,6 +84,24 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/references/sections': <SectionsPage />, '/references/station-types': <StationTypesPage />,
   '/references/station-manufacturers': <StationManufacturersPage />, '/references/station-models': <StationModelsPage />,
   '/references/station-configurations': <StationConfigurationsPage />, '/references/stations': <StationsCrudPage />,
+  '/references/locations': <LocationsPage />,
+};
+
+const isChildPath = (path: string): boolean => {
+  return path.startsWith('/references/nomenclature/create/') ||
+    path.startsWith('/references/nomenclature/edit/') ||
+    path.startsWith('/references/suppliers/create/') ||
+    path.startsWith('/references/suppliers/edit/') ||
+    path.startsWith('/references/station-models/create/') ||
+    path.startsWith('/references/station-models/edit/') ||
+    path.startsWith('/references/station-configurations/create/') ||
+    path.startsWith('/references/station-configurations/edit/') ||
+    path.startsWith('/references/stations/create/') ||
+    path.startsWith('/references/stations/edit/') ||
+    path.startsWith('/orders/create/') ||
+    path.match(/^\/orders\/[^/]+$/) !== null ||
+    path.match(/^\/tkp\/[^/]+$/) !== null ||
+    path.startsWith('/documents/schablon/');
 };
 
 const getComponentByPath = (path: string): React.ReactNode => {
@@ -120,13 +139,13 @@ const getLabelByPath = (path: string): string => {
     '/references/workshops': 'Справочник: Цеха', '/references/sections': 'Справочник: Участки',
     '/references/station-types': 'Справочник: Типы станций', '/references/station-manufacturers': 'Справочник: Производители станций',
     '/references/station-models': 'Справочник: Модели станций', '/references/station-configurations': 'Справочник: Конфигурации станций',
-    '/references/stations': 'Справочник: Станции',
+    '/references/stations': 'Справочник: Станции', '/references/locations': 'Справочник: Расположения',
   };
   if (staticLabels[path]) return staticLabels[path];
   if (path.startsWith('/references/nomenclature/create/')) { const code = path.split('/').pop(); return `Номенклатура: ${code}`; }
   if (path.startsWith('/references/nomenclature/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return nomenclatureInfoCache.get(uid) || 'Номенклатура'; }
   if (path.startsWith('/references/suppliers/create/')) { const code = path.split('/').pop(); return `Поставщик: ${code}`; }
-  if (path.startsWith('/references/suppliers/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return supplierInfoCache.get(uid) || 'Поставщик'; }
+  if (path.startsWith('/references/suppliers/edit/')) { const uid = path.split('/').pop() || ''; return supplierInfoCache.get(uid) || 'Поставщик'; }
   if (path.startsWith('/references/station-models/create/')) { const code = path.split('/').pop(); return `Модель станции: ${code}`; }
   if (path.startsWith('/references/station-models/edit/')) { const uid = path.split('/').pop(); return 'Модель станции'; }
   if (path.startsWith('/references/station-configurations/create/')) { const code = path.split('/').pop(); return `Конфигурация: ${code}`; }
@@ -161,21 +180,35 @@ const MainLayout = () => {
 
   useEffect(() => {
     if (!isLoaded) return;
+    tabs.forEach(tab => {
+      if (tab.component === null) {
+        const component = getComponentByPath(tab.path);
+        if (component) updateTabComponent(tab.id, component);
+      }
+    });
+  }, [tabs, isLoaded, updateTabComponent]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
     const fullPath = location.pathname + location.search;
     if (prevPathRef.current === fullPath) return;
     prevPathRef.current = fullPath;
     const existingTab = tabs.find(tab => tab.path === fullPath);
     if (existingTab) {
       if (activeTabId !== existingTab.id) switchTab(existingTab.id);
-      if (existingTab.component === null) { const component = getComponentByPath(location.pathname); if (component) updateTabComponent(existingTab.id, component); }
+      if (existingTab.component === null) {
+        const component = getComponentByPath(location.pathname);
+        if (component) updateTabComponent(existingTab.id, component);
+      }
       return;
     }
     const label = getLabelByPath(fullPath);
     const component = getComponentByPath(location.pathname);
-    const newTabId = openTab(fullPath, label, component);
+    const parentTabId = isChildPath(location.pathname) ? (activeTabId ?? undefined) : undefined;
+    const newTabId = openTab(fullPath, label, component, parentTabId);
     if (location.pathname.startsWith('/documents/schablon/')) { const uid = location.pathname.replace('/documents/schablon/', ''); fetchTemplateName(uid).then(name => updateTabLabel(newTabId, `Шаблон - ${name}`)); }
     if (location.pathname.startsWith('/references/nomenclature/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
-    if (location.pathname.startsWith('/references/suppliers/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 1]; fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); }
+    if (location.pathname.startsWith('/references/suppliers/edit/')) { const uid = location.pathname.split('/').pop() || ''; if (uid) { fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); } }
   }, [location.pathname, location.search, isLoaded]);
 
   useEffect(() => { const fullPath = location.pathname + location.search; const currentPathExists = tabs.some(tab => tab.path === fullPath); if (!currentPathExists) prevPathRef.current = ''; }, [tabs, location.pathname, location.search]);

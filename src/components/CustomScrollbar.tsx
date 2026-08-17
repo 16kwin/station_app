@@ -1,25 +1,16 @@
-// components/CustomScrollbar.tsx
+// CustomScrollbar.tsx — ПОЛНЫЙ ФАЙЛ (исправлено обновление)
 import React, { useState, useCallback, useEffect } from 'react';
 
 interface CustomScrollbarProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   orientation: 'vertical' | 'horizontal';
   trackSize: number;
-  thumbColor?: string;
-  trackColor?: string;
-  triangleColor?: string;
 }
-
-const TRIANGLE_SIZE = 6;
-const TRIANGLE_MARGIN = 4;
 
 const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
   scrollContainerRef,
   orientation,
   trackSize,
-  thumbColor = '#2D4059',
-  trackColor = 'rgba(45, 64, 89, 0.04)',
-  triangleColor = '#2D4059',
 }) => {
   const [thumbSize, setThumbSize] = useState(0);
   const [thumbOffset, setThumbOffset] = useState(0);
@@ -41,7 +32,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
 
     setHasScroll(true);
 
-    const trackInnerSize = trackSize - (TRIANGLE_SIZE + TRIANGLE_MARGIN) * 2;
+    const trackInnerSize = trackSize;
     const thumb = (clientSize / scrollSize) * trackInnerSize;
     const scrollPos = isVertical ? container.scrollTop : container.scrollLeft;
     const maxScroll = scrollSize - clientSize;
@@ -71,19 +62,27 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
     mutationObserver.observe(container, {
       childList: true,
       subtree: true,
-      attributes: false,
-      characterData: false,
+      attributes: true,
+      characterData: true,
     });
+
+    // Периодическое обновление для гарантии
+    const interval = setInterval(() => {
+      updateScrollbar();
+    }, 100);
 
     return () => {
       container.removeEventListener('scroll', updateScrollbar);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
+      clearInterval(interval);
     };
   }, [updateScrollbar]);
 
   const handleThumbMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+
     const container = scrollContainerRef.current;
     if (!container) return;
 
@@ -91,12 +90,16 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
     const scrollSize = isVertical ? container.scrollHeight : container.scrollWidth;
     const clientSize = isVertical ? container.clientHeight : container.clientWidth;
     const maxScroll = scrollSize - clientSize;
-    const trackInnerSize = trackSize - (TRIANGLE_SIZE + TRIANGLE_MARGIN) * 2;
+    const trackInnerSize = trackSize;
 
     const startCoord = isVertical ? e.clientY : e.clientX;
     const startScrollPos = isVertical ? container.scrollTop : container.scrollLeft;
 
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      moveEvent.preventDefault();
       const currentCoord = isVertical ? moveEvent.clientY : moveEvent.clientX;
       const delta = currentCoord - startCoord;
       const trackAvailable = trackInnerSize - thumbSize;
@@ -111,6 +114,7 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
     };
 
     const handleMouseUp = () => {
+      document.body.style.userSelect = prevUserSelect;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -120,123 +124,46 @@ const CustomScrollbar: React.FC<CustomScrollbarProps> = ({
   };
 
   const isVertical = orientation === 'vertical';
-  
+
+  const trackStyle: React.CSSProperties = {
+    width: isVertical ? '10px' : `${trackSize}px`,
+    height: isVertical ? `${trackSize}px` : '10px',
+    backgroundColor: '#F2F4F9',
+    borderRadius: '5px',
+    position: 'relative',
+    flexShrink: 0,
+    userSelect: 'none',
+  };
+
   const thumbStyle: React.CSSProperties = isVertical
     ? {
         position: 'absolute',
         top: `${thumbOffset}px`,
+        left: '1px',
         width: '8px',
         height: `${thumbSize}px`,
-        backgroundColor: thumbColor,
+        backgroundColor: '#2D4059',
         borderRadius: '4px',
         cursor: 'pointer',
+        userSelect: 'none',
       }
     : {
         position: 'absolute',
         left: `${thumbOffset}px`,
+        top: '1px',
         height: '8px',
         width: `${thumbSize}px`,
-        backgroundColor: thumbColor,
+        backgroundColor: '#2D4059',
         borderRadius: '4px',
         cursor: 'pointer',
-      };
-
-  const trackStyle: React.CSSProperties = isVertical
-    ? {
-        width: '8px',
-        height: `${trackSize - (TRIANGLE_SIZE + TRIANGLE_MARGIN) * 2}px`,
-        backgroundColor: trackColor,
-        borderRadius: '4px',
-        position: 'relative',
-        marginTop: `${TRIANGLE_MARGIN}px`,
-        marginBottom: `${TRIANGLE_MARGIN}px`,
-        flexShrink: 0,
-      }
-    : {
-        height: '8px',
-        width: `${trackSize - (TRIANGLE_SIZE + TRIANGLE_MARGIN) * 2}px`,
-        backgroundColor: trackColor,
-        borderRadius: '4px',
-        position: 'relative',
-        marginLeft: `${TRIANGLE_MARGIN}px`,
-        marginRight: `${TRIANGLE_MARGIN}px`,
-        flexShrink: 0,
-      };
-
-  const wrapperStyle: React.CSSProperties = isVertical
-    ? {
-        width: '10px',
-        height: `${trackSize}px`,
-        position: 'relative',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }
-    : {
-        height: '10px',
-        width: `${trackSize}px`,
-        position: 'relative',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
+        userSelect: 'none',
       };
 
   return (
-    <div style={wrapperStyle}>
-      <div
-        style={
-          isVertical
-            ? {
-                width: 0,
-                height: 0,
-                borderLeft: '4px solid transparent',
-                borderRight: '4px solid transparent',
-                borderBottom: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
-                flexShrink: 0,
-                opacity: hasScroll ? 1 : 0.3,
-              }
-            : {
-                width: 0,
-                height: 0,
-                borderTop: '4px solid transparent',
-                borderBottom: '4px solid transparent',
-                borderRight: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
-                flexShrink: 0,
-                opacity: hasScroll ? 1 : 0.3,
-              }
-        }
-      />
-
-      <div style={trackStyle}>
-        {hasScroll && (
-          <div onMouseDown={handleThumbMouseDown} style={thumbStyle} />
-        )}
-      </div>
-
-      <div
-        style={
-          isVertical
-            ? {
-                width: 0,
-                height: 0,
-                borderLeft: '4px solid transparent',
-                borderRight: '4px solid transparent',
-                borderTop: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
-                flexShrink: 0,
-                opacity: hasScroll ? 1 : 0.3,
-              }
-            : {
-                width: 0,
-                height: 0,
-                borderTop: '4px solid transparent',
-                borderBottom: '4px solid transparent',
-                borderLeft: `${TRIANGLE_SIZE}px solid ${triangleColor}`,
-                flexShrink: 0,
-                opacity: hasScroll ? 1 : 0.3,
-              }
-        }
-      />
+    <div style={trackStyle}>
+      {hasScroll && (
+        <div onMouseDown={handleThumbMouseDown} style={thumbStyle} />
+      )}
     </div>
   );
 };

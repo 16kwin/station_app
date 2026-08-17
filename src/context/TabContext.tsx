@@ -8,12 +8,13 @@ export interface Tab {
   path: string;
   label: string;
   component: ReactNode;
+  parentTabId?: string;
 }
 
 interface TabContextType {
   tabs: Tab[];
   activeTabId: string | null;
-  openTab: (path: string, label: string, component: ReactNode) => string;
+  openTab: (path: string, label: string, component: ReactNode, parentTabId?: string) => string;
   closeTab: (id: string) => void;
   switchTab: (id: string) => void;
   openNewTab: () => void;
@@ -40,6 +41,7 @@ const saveTabsToStorage = (tabs: Tab[], activeId: string | null) => {
       id: tab.id,
       path: tab.path,
       label: tab.label,
+      parentTabId: tab.parentTabId,
     })),
     activeTabId: activeId,
   };
@@ -100,7 +102,16 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [tabs, activeTabId, isRestored]);
 
-  const openTab = useCallback((path: string, baseLabel: string, component: ReactNode): string => {
+  const openTab = useCallback((path: string, baseLabel: string, component: ReactNode, parentTabId?: string): string => {
+    const existingTab = tabs.find(tab => tab.path === path);
+    if (existingTab) {
+      if (activeTabId !== existingTab.id) {
+        setActiveTabId(existingTab.id);
+      }
+      navigate(path);
+      return existingTab.id;
+    }
+    
     const label = getLabelWithNumber(path, baseLabel, tabs);
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const newTab: Tab = {
@@ -108,13 +119,14 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       path,
       label,
       component,
+      parentTabId,
     };
     
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newId);
     navigate(path);
     return newId;
-  }, [tabs, navigate]);
+  }, [tabs, activeTabId, navigate]);
 
   const closeTab = useCallback((id: string) => {
     const tabToClose = tabs.find(tab => tab.id === id);
@@ -123,7 +135,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    const tabIndex = tabs.findIndex(tab => tab.id === id);
     const newTabs = tabs.filter(tab => tab.id !== id);
     
     if (newTabs.length === 0) {
@@ -142,6 +153,18 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     setTabs(newTabs);
     
     if (activeTabId === id) {
+      // Если у закрываемой вкладки есть родитель — пробуем перейти на него
+      if (tabToClose?.parentTabId) {
+        const parentTab = newTabs.find(t => t.id === tabToClose.parentTabId);
+        if (parentTab) {
+          setActiveTabId(parentTab.id);
+          navigate(parentTab.path);
+          return;
+        }
+      }
+      
+      // Иначе переключаемся на ближайшую сверху
+      const tabIndex = tabs.findIndex(tab => tab.id === id);
       const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
       const newActiveTab = newTabs[newActiveIndex];
       setActiveTabId(newActiveTab.id);

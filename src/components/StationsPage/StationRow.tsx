@@ -3,33 +3,20 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
-// Импорт картинки станции
 import Station from '../../assets/Station/Station.svg';
-
-// Импорт иконок для прогресс-баров
 import Icon1 from '../../assets/Station/Icon1.svg';
 import Icon2 from '../../assets/Station/Icon2.svg';
 import Icon3 from '../../assets/Station/Icon3.svg';
-
-// Импорт иконки ошибки
 import ERR3 from '../../assets/Station/ERR3.svg';
-
-// Импорт иконок для информации
 import TMC2 from '../../assets/Station/TMC2.svg';
 import SGD2 from '../../assets/Station/SGD2.svg';
 import OK2 from '../../assets/Station/OK2.svg';
 import CHAIN2 from '../../assets/Station/CHAIN2.svg';
-
-// Единая иконка остатка
 import OstatokIcon from '../../assets/Station/KRIT.svg';
-
-// Импорт иконок для кнопок справа (единые)
 import IconDash from '../../assets/Station/IconDash.svg';
 import IconGraf from '../../assets/Station/IconGraf.svg';
 import ArrowRight from '../../assets/Station/arrow-right1.svg';
 import ArrowBack from '../../assets/Station/arrow-back1.svg';
-
-// Импорт иконок для конфигурации
 import Config1 from '../../assets/Station/Config1.svg';
 import Config2 from '../../assets/Station/Config2.svg';
 import Config3 from '../../assets/Station/Config3.svg';
@@ -47,6 +34,9 @@ interface StationRowProps {
   totalCells?: number; filledCells?: number; templateNomenclatureCount?: number; remainingNomenclatureCount?: number;
   maxReadyParts?: number; readyPartsCount?: number;
   onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
+  // Новые пропсы
+  isConfigMode?: boolean;
+  onConfigToggle?: (uid: string) => void;
 }
 
 const StationRow: React.FC<StationRowProps> = ({
@@ -55,11 +45,12 @@ const StationRow: React.FC<StationRowProps> = ({
   filledCellsPercent = 0, remainingNomenclaturePercent = 0, readyPartsPercent = 0,
   totalCells = 0, filledCells = 0, templateNomenclatureCount = 0, remainingNomenclatureCount = 0,
   readyPartsCount = 0, onOpenSchablonPopup,
+  isConfigMode = false,
+  onConfigToggle,
 }) => {
   const navigate = useNavigate();
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
-  const [isConfigMode, setIsConfigMode] = useState(false);
   const [animatedFilled, setAnimatedFilled] = useState(0);
   const [animatedRemaining, setAnimatedRemaining] = useState(0);
   const [animatedReady, setAnimatedReady] = useState(0);
@@ -130,8 +121,7 @@ const StationRow: React.FC<StationRowProps> = ({
     transition: 'background 0.3s ease, transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
   });
 
-  const handleRightButtonClick = (e: React.MouseEvent) => { e.stopPropagation(); setIsConfigMode(true); };
-  const handleBackClick = (e: React.MouseEvent) => { e.stopPropagation(); setIsConfigMode(false); };
+  const handleRightButtonClick = (e: React.MouseEvent) => { e.stopPropagation(); onConfigToggle?.(uid || ''); };
   const handleSchablonClick = (e: React.MouseEvent) => { e.stopPropagation(); if (onOpenSchablonPopup) onOpenSchablonPopup({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' }); };
   const handleSettingsClick = (e: React.MouseEvent) => { e.stopPropagation(); if (uid) navigate(`/references/stations/edit/${uid}`); };
 
@@ -222,7 +212,7 @@ const StationRow: React.FC<StationRowProps> = ({
         </div>
 
         <button
-          onClick={isConfigMode ? handleBackClick : handleRightButtonClick}
+          onClick={handleRightButtonClick}
           onMouseEnter={() => setArrowHovered(true)} onMouseLeave={() => { setArrowHovered(false); setArrowPressed(false); }}
           onMouseDown={() => setArrowPressed(true)} onMouseUp={() => setTimeout(() => setArrowPressed(false), 100)}
           style={{ ...getGlassBtnStyle(arrowHovered, arrowPressed, roundBtnSize, roundBtnSize, '50%'), right: `${arrowBtnRight}px`, top: '50%', overflow: 'hidden' }}

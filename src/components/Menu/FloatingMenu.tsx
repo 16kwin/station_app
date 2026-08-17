@@ -1,4 +1,4 @@
-// components/Menu/FloatingMenu.tsx
+// FloatingMenu.tsx — ИСПРАВЛЕННЫЙ (добавлены Расположения в referencesItems)
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useAuth } from '../../services/AuthContext';
@@ -39,6 +39,7 @@ const menuItems: MenuItem[] = [
 ];
 
 const referencesItems = [
+  { label: 'Расположения', path: '/references/locations' },
   { label: 'Холдинги', path: '/references/holdings' },
   { label: 'Номенклатура', path: '/references/nomenclature' },
   { label: 'Группы учета', path: '/references/accounting-groups' },

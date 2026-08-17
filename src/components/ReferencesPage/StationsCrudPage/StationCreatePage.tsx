@@ -1,4 +1,4 @@
-// StationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (холдинг подтягивается автоматом при выборе предприятия)
+// StationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлен loadModelInfo для автовыбора типовой конфигурации)
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -10,9 +10,14 @@ import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import StationMainTab from './StationMainTab';
 import StationConfigurationTab from './StationConfigurationTab';
 import StationFilesTab from './StationFilesTab';
-import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
+import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
+import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
+import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
+import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
+
+const USER_ID = 1;
 
 const StationCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -87,7 +92,6 @@ const StationCreatePage = () => {
       if (d.modelId) {
         setModelId(d.modelId); setModelName(d.modelName || '');
         setArticle(d.article || ''); setTypeName(d.stationType || ''); setRevision(d.revision || '');
-        if (d.stationType) setTypeName(d.stationType);
         await loadModelInfo(d.modelId);
       }
       if (d.configurationUid) { setConfigurationUid(d.configurationUid); setConfigurationName(d.configurationName || ''); }
@@ -104,31 +108,42 @@ const StationCreatePage = () => {
       setArticle(d.article || '');
       setRevision(d.revision || '');
       if (d.typeName) setTypeName(d.typeName);
+      if (d.name) setModelName(d.name);
+      
       const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(modelUid));
       if (imgRes.data && imgRes.data.length > 0) {
         setModelImageUrl(imgRes.data[0].url ? ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, '') : '');
       } else {
         setModelImageUrl('');
       }
-      setConfigurationUid('');
-      setConfigurationName('');
+      
+      // Автовыбор типовой конфигурации
+      const configsRes = await AxiosService.get(`${ConstantInfo.restApiStationConfigurations}?modelId=${modelUid}`);
+      const configsList = Array.isArray(configsRes.data) ? configsRes.data : (configsRes.data?.data || []);
+      
+      console.log('Configs for model:', modelUid, configsList);
+      
+      if (configsList.length > 0) {
+        const defaultConfig = configsList.find((c: any) => 
+          c.name && (c.name.toLowerCase().includes('типовая') || c.name.toLowerCase().includes('типовая конфигурация') || c.name.toLowerCase().includes('default') || c.name.toLowerCase().includes('по умолчанию'))
+        ) || configsList[0];
+        
+        setConfigurationUid(defaultConfig.uid || defaultConfig.id);
+        setConfigurationName(defaultConfig.name);
+      } else {
+        setConfigurationUid('');
+        setConfigurationName('');
+      }
     } catch (e) { console.error(e); }
   };
 
   const fetchEnterpriseHolding = async (entId: number) => {
     try {
-      const res = await AxiosService.get(`${ConstantInfo.restApiEnterprises}/${entId}`);
+      const res = await AxiosService.get(ConstantInfo.restApiEnterprise(entId));
       const ent = res.data;
-      if (ent.holdingId) {
-        setHoldingId(ent.holdingId);
-        setHoldingName(ent.holdingName || '');
-      } else {
-        setHoldingId(null);
-        setHoldingName('');
-      }
-    } catch (e) {
-      console.error('Ошибка загрузки холдинга предприятия:', e);
-    }
+      if (ent.holdingId) { setHoldingId(ent.holdingId); setHoldingName(ent.holdingName || ''); }
+      else { setHoldingId(null); setHoldingName(''); }
+    } catch (e) { console.error(e); }
   };
 
   const handleSave = async () => {
@@ -146,9 +161,9 @@ const StationCreatePage = () => {
         enterpriseId: enterpriseId || null, workshopId: workshopId || null, sectionId: sectionId || null,
       };
       if (isEdit) {
-        await AxiosService.patch(`${ConstantInfo.restApiStationsCrud}/${uid}`, body);
+        await AxiosService.patch(ConstantInfo.restApiStationCrud(uid), body);
       } else {
-        await AxiosService.post(ConstantInfo.restApiStationsCrud, body);
+        await AxiosService.post(ConstantInfo.restApiStationsCrud(USER_ID).split('?')[0], body);
       }
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
       if (!isEdit) { setIsEdit(true); navigate(`/references/stations/edit/${uid}`, { replace: true }); }
@@ -167,17 +182,16 @@ const StationCreatePage = () => {
 
   const handlePopupSelect = (id: string, nm: string) => {
     switch (popupType) {
-      case 'stationModel':
-        setModelId(id); setModelName(nm);
-        loadModelInfo(id);
+      case 'stationModel': 
+        setModelId(id); 
+        setModelName(nm); 
+        loadModelInfo(id); 
         break;
       case 'stationConfiguration': setConfigurationUid(id); setConfigurationName(nm); break;
       case 'enterprise':
-        const entId = Number(id);
-        setEnterpriseId(entId); setEnterpriseName(nm);
+        const entId = Number(id); setEnterpriseId(entId); setEnterpriseName(nm);
         setWorkshopId(null); setWorkshopName(''); setSectionId(null); setSectionName('');
-        fetchEnterpriseHolding(entId);
-        break;
+        fetchEnterpriseHolding(entId); break;
       case 'workshop': setWorkshopId(Number(id)); setWorkshopName(nm); setSectionId(null); setSectionName(''); break;
       case 'section': setSectionId(Number(id)); setSectionName(nm); break;
     }
@@ -196,93 +210,114 @@ const StationCreatePage = () => {
     color: isActive ? '#FFFFFF' : '#2D4059',
     transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21,
   });
-  const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
+
+  const buttonStyle = (isActive: boolean): React.CSSProperties => ({
+    width: 151, height: 40, borderRadius: 10,
+    backgroundColor: isActive ? '#666EFE' : '#FFFFFF',
+    border: 'none', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 0, flexShrink: 0,
+    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400,
+    color: isActive ? '#FFFFFF' : '#2D4059',
+    transition: 'all 0.3s ease', overflow: 'hidden',
+  });
+
+  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
-      <h1 style={{ position: 'absolute', top: 35, left: 60, fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
-        {isEdit ? 'Справочник: Станции (Редактирование)' : 'Справочник: Станции (Создание)'}
-      </h1>
-      <button onClick={() => setShowClosePopup(true)} style={{ position: 'absolute', top: 40, right: 40, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
-        <img src={Icon7} alt="Закрыть" style={{ width: 18, height: 18 }} />
-      </button>
+      <div style={{ position: 'absolute', top: 35, left: 60 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {isEdit ? 'Справочник: Станции (Редактирование)' : 'Справочник: Станции (Создание)'}
+        </h1>
+      </div>
 
-      <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
+      <div style={{ position: 'absolute', top: 99, left: 60, right: 60, height: 40, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
           <button onClick={() => setActiveTab(0)} style={mainButtonStyle(activeTab === 0)}>
             <span>Основное</span>
-            <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+            <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
             </button>
           </button>
           <AnimatePresence>
             {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => (
-              <motion.button key={tab} onClick={() => setActiveTab(i + 1)} style={mainButtonStyle(activeTab === i + 1)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
+              <motion.button key={tab} onClick={() => setActiveTab(i + 1)} style={buttonStyle(activeTab === i + 1)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
                 <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
               </motion.button>
             ))}
           </AnimatePresence>
         </div>
+        <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
+          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16 }} /></button>
+        </div>
       </div>
 
-      {activeTab === 0 && (
-        <StationMainTab
-          uid={uid} code={code} name={name}
-          modelId={modelId} modelName={modelName}
-          article={article} typeName={typeName} revision={revision}
-          modelImageUrl={modelImageUrl}
-          serialNumber={serialNumber} productionDate={productionDate}
-          holdingId={holdingId} holdingName={holdingName}
-          enterpriseId={enterpriseId} enterpriseName={enterpriseName}
-          workshopId={workshopId} workshopName={workshopName}
-          sectionId={sectionId} sectionName={sectionName}
-          setHoldingId={setHoldingId} setHoldingName={setHoldingName}
-          setEnterpriseId={setEnterpriseId} setEnterpriseName={setEnterpriseName}
-          setWorkshopId={setWorkshopId} setWorkshopName={setWorkshopName}
-          setSectionId={setSectionId} setSectionName={setSectionName}
-          hasError={hasError} setHasError={setHasError}
-          isTmc={isTmc} setIsTmc={setIsTmc}
-          isSgd={isSgd} setIsSgd={setIsSgd}
-          isOk={isOk} setIsOk={setIsOk}
-          isAdditionalModule={isAdditionalModule} setIsAdditionalModule={setIsAdditionalModule}
-          hasAdditionalModule={hasAdditionalModule} setHasAdditionalModule={setHasAdditionalModule}
-          status={status} setStatus={setStatus}
-          description={description} setDescription={setDescription}
-          ipAddress={ipAddress} setIpAddress={setIpAddress}
-          networkPort={networkPort} setNetworkPort={setNetworkPort}
-          parentUid={parentUid} setParentUid={setParentUid}
-          setName={setName} setSerialNumber={setSerialNumber}
-          setProductionDate={setProductionDate}
-          openPopup={openPopup} isEdit={isEdit}
-        />
-      )}
-      {activeTab === 1 && (
-        <StationConfigurationTab
-          configurationUid={configurationUid}
-          configurationName={configurationName}
-          modelId={modelId}
-          ipAddress={ipAddress}
-          networkPort={networkPort}
-          setConfigurationUid={setConfigurationUid}
-          setConfigurationName={setConfigurationName}
-          setIpAddress={setIpAddress}
-          setNetworkPort={setNetworkPort}
-          openPopup={openPopup}
-        />
-      )}
-      {activeTab === 2 && (
-        <StationFilesTab
-          stationUid={uid || ''}
-          isEdit={isEdit}
-        />
-      )}
+      <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96 }}>
+        {activeTab === 0 && (
+          <StationMainTab
+            uid={uid} code={code} name={name}
+            modelId={modelId} modelName={modelName}
+            article={article} typeName={typeName} revision={revision}
+            modelImageUrl={modelImageUrl}
+            serialNumber={serialNumber} productionDate={productionDate}
+            holdingId={holdingId} holdingName={holdingName}
+            enterpriseId={enterpriseId} enterpriseName={enterpriseName}
+            workshopId={workshopId} workshopName={workshopName}
+            sectionId={sectionId} sectionName={sectionName}
+            setHoldingId={setHoldingId} setHoldingName={setHoldingName}
+            setEnterpriseId={setEnterpriseId} setEnterpriseName={setEnterpriseName}
+            setWorkshopId={setWorkshopId} setWorkshopName={setWorkshopName}
+            setSectionId={setSectionId} setSectionName={setSectionName}
+            hasError={hasError} setHasError={setHasError}
+            isTmc={isTmc} setIsTmc={setIsTmc}
+            isSgd={isSgd} setIsSgd={setIsSgd}
+            isOk={isOk} setIsOk={setIsOk}
+            isAdditionalModule={isAdditionalModule} setIsAdditionalModule={setIsAdditionalModule}
+            hasAdditionalModule={hasAdditionalModule} setHasAdditionalModule={setHasAdditionalModule}
+            status={status} setStatus={setStatus}
+            description={description} setDescription={setDescription}
+            ipAddress={ipAddress} setIpAddress={setIpAddress}
+            networkPort={networkPort} setNetworkPort={setNetworkPort}
+            parentUid={parentUid} setParentUid={setParentUid}
+            setName={setName} setSerialNumber={setSerialNumber}
+            setProductionDate={setProductionDate}
+            openPopup={openPopup} isEdit={isEdit}
+          />
+        )}
+        {activeTab === 1 && (
+          <StationConfigurationTab
+            configurationUid={configurationUid}
+            configurationName={configurationName}
+            modelId={modelId}
+            modelName={modelName}
+            ipAddress={ipAddress}
+            networkPort={networkPort}
+            setConfigurationUid={setConfigurationUid}
+            setConfigurationName={setConfigurationName}
+            setIpAddress={setIpAddress}
+            setNetworkPort={setNetworkPort}
+            openPopup={openPopup}
+          />
+        )}
+        {activeTab === 2 && (
+          <StationFilesTab
+            stationUid={uid || ''}
+            isEdit={isEdit}
+          />
+        )}
+      </div>
 
       <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-        <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
-        <button onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving} style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave && !isSaving ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
-        <button onClick={() => setShowClosePopup(true)} style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
+        <button onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving} style={{ width: 154, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059', opacity: canSave ? 1 : 0.5 }}>
+          <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21, flexShrink: 0 }} />
+          <span style={{ marginLeft: 17 }}>{isSaving ? 'Сохранение...' : 'Записать'}</span>
+        </button>
+        <button onClick={() => setShowClosePopup(true)} style={{ width: 116, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Закрыть</button>
       </div>
 
       <CatalogSelectPopup isOpen={popupOpen} onClose={handlePopupClose} onSelect={handlePopupSelect} popupType={popupType} filterParam={popupFilterParam} />

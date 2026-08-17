@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (обработка ListResponse для новых эндпоинтов)
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import CustomScrollbar from '../../../components/CustomScrollbar';
@@ -69,6 +69,8 @@ interface PopupConfig {
   isFlat?: boolean;
   hasCreateButton?: boolean;
 }
+
+const USER_ID = 1;
 
 const getPopupConfig = (type: PopupType): PopupConfig => {
   switch (type) {
@@ -206,6 +208,12 @@ const flattenGroups = (items: TreeItem[]): { uid: string; name: string }[] => {
   return result;
 };
 
+const getDataArray = (respData: any): any[] => {
+  if (Array.isArray(respData)) return respData;
+  if (respData && Array.isArray(respData.data)) return respData.data;
+  return [];
+};
+
 interface CatalogSelectPopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -262,20 +270,20 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     try {
       if (popupType === 'nomenclatureGroup') {
         const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials);
-        setTypeMaterials(res.data || []);
+        setTypeMaterials(getDataArray(res.data));
       } else if (popupType === 'nomenclatureType') {
         const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTypePurposes);
-        setTypePurposes(res.data || []);
+        setTypePurposes(getDataArray(res.data));
       } else if (popupType === 'brand') {
         const res = await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers);
-        setManufacturers(res.data || []);
+        setManufacturers(getDataArray(res.data));
       } else if (popupType === 'model') {
         const [mRes, bRes] = await Promise.all([
           AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers),
           AxiosService.get(ConstantInfo.restApiNomenclatureBrands),
         ]);
-        setManufacturers(mRes.data || []);
-        setAllBrands(bRes.data || []);
+        setManufacturers(getDataArray(mRes.data));
+        setAllBrands(getDataArray(bRes.data));
       }
     } catch (e) { console.error('Ошибка загрузки справочных данных:', e); }
   };
@@ -285,47 +293,47 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     try {
       if (isCatalog) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-        const converted = convertBackendTree(response.data);
+        const converted = convertBackendTree(getDataArray(response.data));
         setData(converted);
         if (converted.length > 0) setOpenFolders(new Set([converted[0].id]));
       } else if (isAnalogSelect) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-        const converted = convertBackendTreeWithMaterials(response.data, excludeUids);
+        const converted = convertBackendTreeWithMaterials(getDataArray(response.data), excludeUids);
         setData(converted);
         if (converted.length > 0) setOpenFolders(new Set([converted[0].id]));
       } else if (isTemplateCategory) {
         const response = await AxiosService.get(ConstantInfo.restApiTemplatesCategories);
-        setData((response.data || []).map((item: any) => ({ id: String(item.id), name: item.name })));
+        setData(getDataArray(response.data).map((item: any) => ({ id: String(item.id), name: item.name })));
       } else if (popupType === 'nomenclatureGroup') {
         const url = filterParam ? `${ConstantInfo.restApiNomenclatureTypePurposes}?typeMaterialUid=${filterParam}` : ConstantInfo.restApiNomenclatureTypePurposes;
-        setData(convertFlatReference((await AxiosService.get(url)).data));
+        setData(convertFlatReference(getDataArray((await AxiosService.get(url)).data)));
       } else if (popupType === 'nomenclatureType') {
         const url = filterParam ? `${ConstantInfo.restApiNomenclatureTypeProducts}?typePurposeUid=${filterParam}` : ConstantInfo.restApiNomenclatureTypeProducts;
-        setData(convertFlatReference((await AxiosService.get(url)).data));
+        setData(convertFlatReference(getDataArray((await AxiosService.get(url)).data)));
       } else if (popupType === 'attributeType') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes)).data)));
       } else if (popupType === 'unit') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiNomenclatureMeasures)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureMeasures)).data)));
       } else if (popupType === 'supplier') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiSuppliersList)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiSuppliersList)).data)));
       } else if (popupType === 'shortDescription') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiSupplierDescriptionTypes)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiSupplierDescriptionTypes)).data)));
       } else if (popupType === 'manufacturer') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers)).data)));
       } else if (popupType === 'brand') {
         const url = filterParam ? `${ConstantInfo.restApiNomenclatureBrands}?manufacturerUid=${filterParam}` : ConstantInfo.restApiNomenclatureBrands;
-        setData(convertGenericFlat((await AxiosService.get(url)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(url)).data)));
       } else if (popupType === 'model') {
         const url = filterParam ? `${ConstantInfo.restApiNomenclatureModels}?brandUid=${filterParam}` : ConstantInfo.restApiNomenclatureModels;
-        setData(convertGenericFlat((await AxiosService.get(url)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(url)).data)));
       } else if (popupType === 'country') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiNomenclatureCountries)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureCountries)).data)));
       } else if (popupType === 'stationType') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiStationTypes)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.restApiStationTypes}?userId=${USER_ID}`)).data)));
       } else if (popupType === 'stationManufacturer') {
-        setData(convertGenericFlat((await AxiosService.get(ConstantInfo.restApiStationManufacturers)).data));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.restApiStationManufacturers}?userId=${USER_ID}`)).data)));
       } else if (popupType === 'stationModel') {
-        setData(((await AxiosService.get(ConstantInfo.restApiStationModels)).data || []).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(`${ConstantInfo.restApiStationModels}?userId=${USER_ID}`)).data).map((item: any) => ({
           id: item.uid, name: item.name,
           code: item.code ? String(item.code).padStart(4, '0') : '',
           article: item.article || '',
@@ -333,26 +341,26 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'stationConfiguration') {
         const url = filterParam 
           ? `${ConstantInfo.restApiStationConfigurations}?modelId=${filterParam}` 
-          : ConstantInfo.restApiStationConfigurations;
-        setData(((await AxiosService.get(url)).data || []).map((item: any) => ({
+          : `${ConstantInfo.restApiStationConfigurations}?userId=${USER_ID}`;
+        setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: item.uid, name: item.name, modelName: item.modelName || '',
         })));
       } else if (popupType === 'holding') {
-        setData(((await AxiosService.get(ConstantInfo.restApiHoldings)).data || []).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(`${ConstantInfo.restApiHoldings}?userId=${USER_ID}`)).data).map((item: any) => ({
           id: String(item.id), name: item.name,
         })));
       } else if (popupType === 'enterprise') {
-        setData(((await AxiosService.get(ConstantInfo.restApiEnterprises)).data || []).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(`${ConstantInfo.restApiEnterprises}?userId=${USER_ID}`)).data).map((item: any) => ({
           id: String(item.id), name: item.name,
         })));
       } else if (popupType === 'workshop') {
-        const url = filterParam ? `${ConstantInfo.restApiWorkshops}?enterpriseId=${filterParam}` : ConstantInfo.restApiWorkshops;
-        setData(((await AxiosService.get(url)).data || []).map((item: any) => ({
+        const url = filterParam ? `${ConstantInfo.restApiWorkshops}?enterpriseId=${filterParam}` : `${ConstantInfo.restApiWorkshops}?userId=${USER_ID}`;
+        setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: String(item.id), name: item.name, enterpriseName: item.enterpriseName || '',
         })));
       } else if (popupType === 'section') {
-        const url = filterParam ? `${ConstantInfo.restApiSections}?workshopId=${filterParam}` : ConstantInfo.restApiSections;
-        setData(((await AxiosService.get(url)).data || []).map((item: any) => ({
+        const url = filterParam ? `${ConstantInfo.restApiSections}?workshopId=${filterParam}` : `${ConstantInfo.restApiSections}?userId=${USER_ID}`;
+        setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: String(item.id), name: item.name, workshopName: item.workshopName || '',
         })));
       }
@@ -392,7 +400,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     try {
       await AxiosService.post('/api/nomenclature/groups', { name: groupName, parentUid: parentUid });
       const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-      setData(isAnalogSelect ? convertBackendTreeWithMaterials(response.data, excludeUids) : convertBackendTree(response.data));
+      setData(isAnalogSelect ? convertBackendTreeWithMaterials(getDataArray(response.data), excludeUids) : convertBackendTree(getDataArray(response.data)));
       setShowCreateGroup(false);
     } catch (error) { console.error('Ошибка создания группы:', error); }
     finally { setIsCreatingGroup(false); }
@@ -403,7 +411,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     try {
       await AxiosService.post(ConstantInfo.restApiTemplatesCategories, { name: groupName });
       const response = await AxiosService.get(ConstantInfo.restApiTemplatesCategories);
-      setData((response.data || []).map((item: any) => ({ id: String(item.id), name: item.name })));
+      setData(getDataArray(response.data).map((item: any) => ({ id: String(item.id), name: item.name })));
       setShowCreateGroup(false);
     } catch (error) { console.error('Ошибка создания категории шаблонов:', error); }
     finally { setIsCreatingGroup(false); }

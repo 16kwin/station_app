@@ -28,6 +28,23 @@ interface ConfigCell {
   deleted?: boolean;
 }
 
+interface CellData {
+  uid?: string;
+  numberCell?: number;
+  columnNumber?: number;
+  drumNumber?: number;
+  materialUid?: string | null;
+  materialName?: string | null;
+  materialArticle?: string | null;
+  quantity?: number | null;
+  typeMainUid?: string | null;
+  typeMainName?: string | null;
+  purposeMaterial?: string | null;
+  purposeSgd?: string | null;
+  maxQuantity?: number | null;
+  dimensions?: string | null;
+}
+
 interface SchablonTableProps {
   isMultiSelect: boolean;
   onEnableMultiSelect: () => void;
@@ -42,13 +59,16 @@ interface SchablonTableProps {
   isBlurred: boolean;
   modelCells: ModelCell[];
   configCells: ConfigCell[];
+  cellsData: CellData[];
+  onCellCleared: () => void;
+  onOpenDetails: (rowId: number, column: number, cellData?: CellData) => void;
 }
 
 const SchablonTable: React.FC<SchablonTableProps> = ({ 
   isMultiSelect, onEnableMultiSelect, onSelectionChange, 
   totalRows, totalColumns, totalDrums, cellType,
   selectedDrum, onDrumChange, onCellDoubleClick, isBlurred,
-  modelCells, configCells
+  modelCells, configCells, cellsData, onCellCleared, onOpenDetails
 }) => {
   const [selectedColumn, setSelectedColumn] = useState<number>(1);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -63,16 +83,12 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   const ROW_HEIGHT = 80;
   const VISIBLE_ROWS = 6;
 
-  const modelCellToConfigMap = new Map<string, ConfigCell>();
-  configCells.forEach(cc => cc.modelCellIds.forEach(mid => modelCellToConfigMap.set(mid, cc)));
-
   const displayModelCells = cellType === 'drum' 
     ? modelCells.filter(c => c.drum === selectedDrum)
     : modelCells;
 
   const activeConfigCells = configCells.filter(cc => !cc.deleted);
 
-  // Строим маппинг объединённых колонок (целиком)
   const mergedColumns = new Map<number, { colStart: number; colEnd: number }>();
   
   activeConfigCells.forEach(cc => {
@@ -92,7 +108,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     }
   });
 
-  // Строим список колонок для хидера с учётом объединений
   const headerColumns: { label: string; key: number; originalCol: number }[] = [];
   for (let i = 1; i <= totalColumns; i++) {
     const merged = mergedColumns.get(i);
@@ -105,7 +120,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     }
   }
 
-  // Группируем строки по configCell
   const configCellRows = new Map<string, { rowStart: number; rowEnd: number; colStart: number; colEnd: number; isMerged: boolean; mergeCount: number; modelCellIds: string[] }>();
   
   activeConfigCells.forEach(cc => {
@@ -117,7 +131,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     const colStart = cols[0] || 1;
     const colEnd = cols[cols.length - 1] || 1;
     
-    // Находим modelCells для выбранной колонки
     const columnCells = relatedModelCells.filter(mc => mc.column === selectedColumn);
     
     if (columnCells.length > 0) {
@@ -137,7 +150,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     }
   });
 
-  // Сортируем по rowStart
   const rows: TableRow[] = [...configCellRows.values()]
     .sort((a, b) => a.rowStart - b.rowStart)
     .map(r => ({ 
@@ -154,15 +166,11 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
 
   const emptyRows = Math.max(0, VISIBLE_ROWS - rows.length);
 
-  useEffect(() => {
-    onSelectionChange(selectedCellIds);
-  }, [selectedCellIds, onSelectionChange]);
+  useEffect(() => { onSelectionChange(selectedCellIds); }, [selectedCellIds, onSelectionChange]);
 
   const prevMultiSelect = useRef(isMultiSelect);
   useEffect(() => {
-    if (prevMultiSelect.current && !isMultiSelect) {
-      setSelectedCellIds(new Set());
-    }
+    if (prevMultiSelect.current && !isMultiSelect) setSelectedCellIds(new Set());
     prevMultiSelect.current = isMultiSelect;
   }, [isMultiSelect]);
 
@@ -172,37 +180,20 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     if (!cellElement || !container) return;
     const containerRect = container.getBoundingClientRect();
     const cellRect = cellElement.getBoundingClientRect();
-    if (cellRect.top < containerRect.top) {
-      container.scrollTop -= (containerRect.top - cellRect.top);
-    } else if (cellRect.bottom > containerRect.bottom) {
-      container.scrollTop += (cellRect.bottom - containerRect.bottom);
-    }
+    if (cellRect.top < containerRect.top) container.scrollTop -= (containerRect.top - cellRect.top);
+    else if (cellRect.bottom > containerRect.bottom) container.scrollTop += (cellRect.bottom - containerRect.bottom);
   };
 
   const handleSelect = (id: number, ctrlKey: boolean) => {
     if (isMultiSelect || ctrlKey) {
       if (ctrlKey && !isMultiSelect) onEnableMultiSelect();
-      setSelectedCellIds(prev => {
-        const next = new Set(prev);
-        next.has(id) ? next.delete(id) : next.add(id);
-        return next;
-      });
+      setSelectedCellIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
       return;
     }
-    setSelectedCellIds(prev => {
-      if (prev.has(id) && prev.size === 1) return new Set();
-      return new Set([id]);
-    });
+    setSelectedCellIds(prev => prev.has(id) && prev.size === 1 ? new Set() : new Set([id]));
   };
 
-  const handleDoubleClick = (id: number) => {
-    setSelectedCellIds(prev => {
-      const next = isMultiSelect ? new Set(prev) : new Set<number>();
-      next.add(id);
-      onCellDoubleClick(id, selectedColumn, next);
-      return next;
-    });
-  };
+  const handleDoubleClick = (id: number) => {};
 
   const setCellRef = (id: number, element: HTMLDivElement | null) => {
     if (element) cellRefsMap.current.set(id, element);
@@ -217,15 +208,10 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
         setSelectedCellIds(prev => {
           const currentId = prev.values().next().value || null;
           let newId: number;
-          if (currentId === null) {
-            newId = rows[0]?.id || 1;
-          } else {
+          if (currentId === null) newId = rows[0]?.id || 1;
+          else {
             const currentIndex = rows.findIndex(r => r.id === currentId);
-            if (e.key === 'ArrowUp') {
-              newId = rows[Math.max(0, currentIndex - 1)]?.id || currentId;
-            } else {
-              newId = rows[Math.min(rows.length - 1, currentIndex + 1)]?.id || currentId;
-            }
+            newId = e.key === 'ArrowUp' ? rows[Math.max(0, currentIndex - 1)]?.id || currentId : rows[Math.min(rows.length - 1, currentIndex + 1)]?.id || currentId;
           }
           setTimeout(() => scrollToCell(newId), 0);
           return new Set([newId]);
@@ -237,66 +223,39 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   }, [isMultiSelect, rows]);
 
   const handleColumnClick = useCallback((targetCol: number) => {
-    if (isAnimating || targetCol === selectedColumn) {
-      setSelectedColumn(targetCol);
-      return;
-    }
+    if (isAnimating || targetCol === selectedColumn) { setSelectedColumn(targetCol); return; }
     setIsAnimating(true);
-    const start = selectedColumn;
-    const end = targetCol;
-    const step = start < end ? 1 : -1;
+    const start = selectedColumn, end = targetCol, step = start < end ? 1 : -1;
     let current = start;
     const animate = () => {
       current += step;
       setAnimationHighlight(current);
-      if (current === end) {
-        animationTimerRef.current = setTimeout(() => {
-          setSelectedColumn(end);
-          setAnimationHighlight(null);
-          setIsAnimating(false);
-        }, 50);
-      } else {
-        animationTimerRef.current = setTimeout(animate, 50);
-      }
+      if (current === end) animationTimerRef.current = setTimeout(() => { setSelectedColumn(end); setAnimationHighlight(null); setIsAnimating(false); }, 50);
+      else animationTimerRef.current = setTimeout(animate, 50);
     };
     animate();
-    return () => { if (animationTimerRef.current) clearTimeout(animationTimerRef.current); };
   }, [isAnimating, selectedColumn]);
 
   useEffect(() => { return () => { if (animationTimerRef.current) clearTimeout(animationTimerRef.current); }; }, []);
 
   const trackHeight = TABLE_HEIGHT - HEADER_HEIGHT;
-
-  const DRUM_BUTTON_WIDTH = 144;
-  const DRUM_GAP = 40;
-  const DRUM_LEFT_OFFSET = 30;
-  const TEXT_HEIGHT = 17;
-  const TEXT_TO_LINE = 7;
-  const LINE_THICKNESS = 3;
-  const TEXT_TOP = 30;
-  const COLUMN_BLOCK_SIZE = 35;
-  const COLUMN_LINE_WIDTH = 29;
-  const COLUMN_GAP = 14;
+  const DRUM_BUTTON_WIDTH = 144, DRUM_GAP = 40, DRUM_LEFT_OFFSET = 30, TEXT_HEIGHT = 17, TEXT_TO_LINE = 7, LINE_THICKNESS = 3, TEXT_TOP = 30;
+  const COLUMN_BLOCK_SIZE = 35, COLUMN_LINE_WIDTH = 29, COLUMN_GAP = 14;
   const COLUMNS_LABEL_LEFT = totalDrums > 1 ? 405 : 0;
   const LINE_TOP = TEXT_TOP + TEXT_HEIGHT + TEXT_TO_LINE;
   const LINE_BOTTOM = HEADER_HEIGHT - LINE_TOP - LINE_THICKNESS;
 
-  const getColumnColor = (col: number) => {
-    if (animationHighlight === col) return '#2D4059';
-    if (isAnimating) return 'rgba(45, 64, 89, 0.6)';
-    return selectedColumn === col ? '#2D4059' : 'rgba(45, 64, 89, 0.6)';
-  };
+  const getColumnColor = (col: number) => animationHighlight === col ? '#2D4059' : isAnimating ? 'rgba(45, 64, 89, 0.6)' : selectedColumn === col ? '#2D4059' : 'rgba(45, 64, 89, 0.6)';
+  const getColumnLineColor = (col: number) => animationHighlight === col ? '#666EFE' : isAnimating ? 'rgba(45, 64, 89, 0.06)' : selectedColumn === col ? '#666EFE' : 'rgba(45, 64, 89, 0.06)';
 
-  const getColumnLineColor = (col: number) => {
-    if (animationHighlight === col) return '#666EFE';
-    if (isAnimating) return 'rgba(45, 64, 89, 0.06)';
-    return selectedColumn === col ? '#666EFE' : 'rgba(45, 64, 89, 0.06)';
-  };
+  const handleDrumClick = (drum: number) => { if (drum === selectedDrum) return; onDrumChange(drum); setSelectedCellIds(new Set()); };
 
-  const handleDrumClick = (drum: number) => {
-    if (drum === selectedDrum) return;
-    onDrumChange(drum);
-    setSelectedCellIds(new Set());
+  const getCellDataForRow = (row: TableRow): CellData | undefined => {
+    return cellsData.find(cd => 
+      cd.numberCell === row.id && 
+      cd.columnNumber === selectedColumn && 
+      (cd.drumNumber == null || cd.drumNumber === selectedDrum)
+    );
   };
 
   return (
@@ -313,90 +272,28 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
               ))}
             </div>
           )}
-
           <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', letterSpacing: '1px', color: '#2D4059', whiteSpace: 'nowrap', flexShrink: 0, alignSelf: 'center', marginLeft: totalDrums > 1 ? '0px' : '30px' }}>Столбцы:</span>
-
           <div style={{ display: 'flex', gap: `${COLUMN_GAP}px`, height: '100%', position: 'relative', marginLeft: 'auto', marginRight: '30px' }}>
             {headerColumns.map((hc) => {
               const merged = mergedColumns.get(hc.originalCol);
-              const blockWidth = merged && hc.originalCol === merged.colStart 
-                ? COLUMN_BLOCK_SIZE * (merged.colEnd - merged.colStart + 1) + COLUMN_GAP * (merged.colEnd - merged.colStart)
-                : COLUMN_BLOCK_SIZE;
-              
+              const blockWidth = merged && hc.originalCol === merged.colStart ? COLUMN_BLOCK_SIZE * (merged.colEnd - merged.colStart + 1) + COLUMN_GAP * (merged.colEnd - merged.colStart) : COLUMN_BLOCK_SIZE;
               return (
                 <div key={hc.key} style={{ width: `${blockWidth}px`, height: '100%', position: 'relative' }}>
-                  <button
-                    onClick={() => handleColumnClick(hc.originalCol)}
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      width: '100%',
-                      height: `${TEXT_HEIGHT}px`,
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      cursor: 'pointer',
-                      fontFamily: 'Inter, sans-serif',
-                      fontWeight: 600,
-                      fontSize: '13px',
-                      letterSpacing: '1px',
-                      color: getColumnColor(hc.originalCol),
-                      lineHeight: `${TEXT_HEIGHT}px`,
-                      textAlign: 'center',
-                      transition: 'color 0.15s ease',
-                    }}
-                  >
-                    {hc.label}
-                  </button>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: `${LINE_BOTTOM}px`,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: `${merged ? COLUMN_LINE_WIDTH * (merged.colEnd - merged.colStart + 1) + COLUMN_GAP * (merged.colEnd - merged.colStart) : COLUMN_LINE_WIDTH}px`,
-                      height: `${LINE_THICKNESS}px`,
-                      backgroundColor: getColumnLineColor(hc.originalCol),
-                      borderRadius: '1.5px',
-                      transition: 'background-color 0.15s ease',
-                    }}
-                  />
+                  <button onClick={() => handleColumnClick(hc.originalCol)} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', height: `${TEXT_HEIGHT}px`, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', letterSpacing: '1px', color: getColumnColor(hc.originalCol), lineHeight: `${TEXT_HEIGHT}px`, textAlign: 'center', transition: 'color 0.15s ease' }}>{hc.label}</button>
+                  <div style={{ position: 'absolute', bottom: `${LINE_BOTTOM}px`, left: '50%', transform: 'translateX(-50%)', width: `${merged ? COLUMN_LINE_WIDTH * (merged.colEnd - merged.colStart + 1) + COLUMN_GAP * (merged.colEnd - merged.colStart) : COLUMN_LINE_WIDTH}px`, height: `${LINE_THICKNESS}px`, backgroundColor: getColumnLineColor(hc.originalCol), borderRadius: '1.5px', transition: 'background-color 0.15s ease' }} />
                 </div>
               );
             })}
           </div>
         </div>
-
         <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {rows.map((row) => (
-            <SchablonTableCell
-              key={row.id}
-              row={row}
-              isSelected={selectedCellIds.has(row.id)}
-              isMultiSelect={isMultiSelect}
-              selectedColumn={selectedColumn}
-              isMerged={row.isMerged}
-              mergeCount={row.mergeCount}
-              rowStart={row.rowStart}
-              rowEnd={row.rowEnd}
-              colStart={row.colStart}
-              colEnd={row.colEnd}
-              onSelect={handleSelect}
-              onDoubleClick={handleDoubleClick}
-              setRef={setCellRef}
-            />
+            <SchablonTableCell key={row.id} row={row} isSelected={selectedCellIds.has(row.id)} isMultiSelect={isMultiSelect} selectedColumn={selectedColumn} isMerged={row.isMerged} mergeCount={row.mergeCount} rowStart={row.rowStart} rowEnd={row.rowEnd} colStart={row.colStart} colEnd={row.colEnd} cellData={getCellDataForRow(row)} onSelect={handleSelect} onDoubleClick={handleDoubleClick} onClear={onCellCleared} onOpenDetails={() => onOpenDetails(row.rowStart, selectedColumn, getCellDataForRow(row))} setRef={setCellRef} />
           ))}
-          {Array.from({ length: emptyRows }).map((_, i) => (
-            <div key={`empty-${i}`} style={{ height: `${ROW_HEIGHT}px`, backgroundColor: '#FFFFFF', boxSizing: 'border-box', borderTop: '0.5px solid #E5E7EB', borderBottom: '0.5px solid #E5E7EB' }} />
-          ))}
+          {Array.from({ length: emptyRows }).map((_, i) => <div key={`empty-${i}`} style={{ height: `${ROW_HEIGHT}px`, backgroundColor: '#FFFFFF', boxSizing: 'border-box', borderTop: '0.5px solid #E5E7EB', borderBottom: '0.5px solid #E5E7EB' }} />)}
         </div>
       </div>
-
-      <div style={{ marginLeft: '15px', marginTop: `${HEADER_HEIGHT}px` }}>
-        <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={trackHeight} />
-      </div>
+      <div style={{ marginLeft: '15px', marginTop: `${HEADER_HEIGHT}px` }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={trackHeight} /></div>
     </div>
   );
 };

@@ -249,6 +249,11 @@ const StationsPage = () => {
     configurationUid?: string;
   }>({ isOpen: false });
 
+  // Состояния для управления переворотами карточек и конфигом строк
+  const [flippedCellUid, setFlippedCellUid] = useState<string | null>(null);
+  const [flippedCellSide, setFlippedCellSide] = useState<'back1' | 'back2' | null>(null);
+  const [configRowUid, setConfigRowUid] = useState<string | null>(null);
+
   const isTmcEnabled = selectedTypes.includes('ТМЦ');
   const isSgdEnabled = selectedTypes.includes('СГД');
   const minOstatokEnabled = selectedStatuses.includes('Минимальный остаток');
@@ -335,6 +340,33 @@ const StationsPage = () => {
   const handleCloseSchablonPopup = () => {
     setSchablonPopupData({ isOpen: false });
     fetchFilteredStations();
+  };
+
+  // Обработчики переворотов карточек
+  const handleCellFlip = (cellUid: string, side: 'back1' | 'back2') => {
+    if (flippedCellUid === cellUid && flippedCellSide === side) {
+      setFlippedCellUid(null);
+      setFlippedCellSide(null);
+      return;
+    }
+    setFlippedCellUid(cellUid);
+    setFlippedCellSide(side);
+    setConfigRowUid(null);
+  };
+
+  const handleCellFlipBack = () => {
+    setFlippedCellUid(null);
+    setFlippedCellSide(null);
+  };
+
+  const handleRowConfigToggle = (rowUid: string) => {
+    if (configRowUid === rowUid) {
+      setConfigRowUid(null);
+      return;
+    }
+    setConfigRowUid(rowUid);
+    setFlippedCellUid(null);
+    setFlippedCellSide(null);
   };
 
   useEffect(() => {
@@ -1394,7 +1426,36 @@ const StationsPage = () => {
       style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 220px)', gap: '30px', paddingTop: '10px', paddingBottom: '10px', paddingLeft: '40px', paddingRight: '15px', width: 'max-content' }}>
       {stationsStatic.map((station) => {
         const dynamic = stationsDynamic.get(station.uid);
-        return <StationCell key={station.uid} uid={station.uid} name={station.name} workshop={station.workshop} section={station.section} status={station.status} stationType={station.stationType} parentUid={station.parentUid} hasError={station.hasError} isTmc={station.isTmc} isSgd={station.isSgd} isOk={station.isOk} filledCellsPercent={dynamic?.filledCellsPercent} remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent} readyPartsPercent={dynamic?.readyPartsPercent} totalCells={dynamic?.totalCells} filledCells={dynamic?.filledCells} templateNomenclatureCount={dynamic?.templateNomenclatureCount} remainingNomenclatureCount={dynamic?.remainingNomenclatureCount} maxReadyParts={dynamic?.maxReadyParts} readyPartsCount={dynamic?.readyPartsCount} onOpenSchablonPopup={handleOpenSchablonPopup} />;
+        return (
+          <StationCell
+            key={station.uid}
+            uid={station.uid}
+            name={station.name}
+            workshop={station.workshop}
+            section={station.section}
+            status={station.status}
+            stationType={station.stationType}
+            parentUid={station.parentUid}
+            hasError={station.hasError}
+            isTmc={station.isTmc}
+            isSgd={station.isSgd}
+            isOk={station.isOk}
+            filledCellsPercent={dynamic?.filledCellsPercent}
+            remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent}
+            readyPartsPercent={dynamic?.readyPartsPercent}
+            totalCells={dynamic?.totalCells}
+            filledCells={dynamic?.filledCells}
+            templateNomenclatureCount={dynamic?.templateNomenclatureCount}
+            remainingNomenclatureCount={dynamic?.remainingNomenclatureCount}
+            maxReadyParts={dynamic?.maxReadyParts}
+            readyPartsCount={dynamic?.readyPartsCount}
+            onOpenSchablonPopup={handleOpenSchablonPopup}
+            isFlipped={flippedCellUid === station.uid}
+            flippedSide={flippedCellUid === station.uid ? flippedCellSide : null}
+            onFlip={handleCellFlip}
+            onFlipBack={handleCellFlipBack}
+          />
+        );
       })}
     </motion.div>
   );
@@ -1404,7 +1465,34 @@ const StationsPage = () => {
       style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingLeft: '40px', paddingRight: '15px', width: 'max-content' }}>
       {stationsStatic.map((station) => {
         const dynamic = stationsDynamic.get(station.uid);
-        return <StationRow key={station.uid} uid={station.uid} name={station.name} workshop={station.workshop} section={station.section} status={station.status} stationType={station.stationType} parentUid={station.parentUid} hasError={station.hasError} isTmc={station.isTmc} isSgd={station.isSgd} isOk={station.isOk} filledCellsPercent={dynamic?.filledCellsPercent} remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent} readyPartsPercent={dynamic?.readyPartsPercent} totalCells={dynamic?.totalCells} filledCells={dynamic?.filledCells} templateNomenclatureCount={dynamic?.templateNomenclatureCount} remainingNomenclatureCount={dynamic?.remainingNomenclatureCount} maxReadyParts={dynamic?.maxReadyParts} readyPartsCount={dynamic?.readyPartsCount} onOpenSchablonPopup={handleOpenSchablonPopup} />;
+        return (
+          <StationRow
+            key={station.uid}
+            uid={station.uid}
+            name={station.name}
+            workshop={station.workshop}
+            section={station.section}
+            status={station.status}
+            stationType={station.stationType}
+            parentUid={station.parentUid}
+            hasError={station.hasError}
+            isTmc={station.isTmc}
+            isSgd={station.isSgd}
+            isOk={station.isOk}
+            filledCellsPercent={dynamic?.filledCellsPercent}
+            remainingNomenclaturePercent={dynamic?.remainingNomenclaturePercent}
+            readyPartsPercent={dynamic?.readyPartsPercent}
+            totalCells={dynamic?.totalCells}
+            filledCells={dynamic?.filledCells}
+            templateNomenclatureCount={dynamic?.templateNomenclatureCount}
+            remainingNomenclatureCount={dynamic?.remainingNomenclatureCount}
+            maxReadyParts={dynamic?.maxReadyParts}
+            readyPartsCount={dynamic?.readyPartsCount}
+            onOpenSchablonPopup={handleOpenSchablonPopup}
+            isConfigMode={configRowUid === station.uid}
+            onConfigToggle={handleRowConfigToggle}
+          />
+        );
       })}
     </motion.div>
   );

@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен LocationsPage)
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -34,6 +34,7 @@ import StationConfigurationsPage from './components/ReferencesPage/StationConfig
 import StationConfigurationCreatePage from './components/ReferencesPage/StationConfigurationsPage/StationConfigurationCreatePage';
 import StationsCrudPage from './components/ReferencesPage/StationsCrudPage/StationsCrudPage';
 import StationCreatePage from './components/ReferencesPage/StationsCrudPage/StationCreatePage';
+import LocationsPage from './components/ReferencesPage/LocationsPage/LocationsPage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -90,6 +91,7 @@ const AppContent = () => {
                 <Route path="main" element={<MainPage />} />
                 <Route path="stations" element={<StationsPage />} />
                 <Route path="references" element={<ReferencesPage />} />
+                <Route path="references/locations" element={<LocationsPage />} />
                 <Route path="references/holdings" element={<HoldingsPage />} />
                 <Route path="references/nomenclature" element={<NomenclaturePage />} />
                 <Route path="references/nomenclature/create/:uid/:code" element={<NomenclatureCreatePage />} />
