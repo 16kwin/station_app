@@ -1,4 +1,4 @@
-// HistoryTable.tsx — ПОЛНЫЙ ФАЙЛ (скроллбар под шапкой)
+// HistoryTable.tsx — ПОЛНЫЙ ФАЙЛ (без поиска)
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,6 +25,7 @@ interface HistoryTableProps {
   dateLabel?: string;
   authorLabel?: string;
   eventLabel?: string;
+  searchValue?: string;
 }
 
 const RESIZER_WIDTH = 60;
@@ -46,6 +47,19 @@ const formatDate = (dateStr: string) => {
   } catch { return dateStr; }
 };
 
+const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, highlight }) => {
+  if (!highlight) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(highlight.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span style={{ backgroundColor: 'rgba(102, 110, 254, 0.2)', color: '#2D4059' }}>{text.slice(idx, idx + highlight.length)}</span>
+      {text.slice(idx + highlight.length)}
+    </>
+  );
+};
+
 const HistoryTable: React.FC<HistoryTableProps> = ({
   events,
   isLoading,
@@ -59,6 +73,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
   dateLabel = 'Дата и время',
   authorLabel = 'Автор',
   eventLabel = 'Событие',
+  searchValue = '',
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
@@ -77,6 +92,17 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
   
   const contentWidth = tableWidth;
 
+  const filteredEvents = React.useMemo(() => {
+    if (!searchValue.trim()) return events;
+    const q = searchValue.toLowerCase();
+    return events.filter(event => {
+      const dateText = formatDate(event.createdAt);
+      const authorText = event.author || '';
+      const eventText = event.eventDescription || '';
+      return [dateText, authorText, eventText].some(v => v && String(v).toLowerCase().includes(q));
+    });
+  }, [events, searchValue]);
+
   const checkScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -89,7 +115,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
       checkScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [events, checkScroll]);
+  }, [filteredEvents, checkScroll]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -120,7 +146,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
     setTooltip(null);
   }, []);
 
-  const emptyRows = Math.max(0, visibleRows - events.length);
+  const emptyRows = Math.max(0, visibleRows - filteredEvents.length);
 
   return (
     <div style={{ width: tableWidth, height: tableHeight, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -149,7 +175,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
           </div>
         ) : (
           <>
-            {events.map((event, idx) => {
+            {filteredEvents.map((event, idx) => {
               const isFirst = idx === 0;
               const dateText = formatDate(event.createdAt);
               const authorText = event.author || '-';
@@ -166,7 +192,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
                       onMouseEnter={(e) => handleMouseEnter(e, dateText)} 
                       onMouseLeave={handleMouseLeave}
                     >
-                      {dateText}
+                      {searchValue.trim() ? <HighlightedText text={dateText} highlight={searchValue.trim()} /> : dateText}
                     </span>
                   </span>
                   
@@ -176,7 +202,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
                       onMouseEnter={(e) => handleMouseEnter(e, authorText)} 
                       onMouseLeave={handleMouseLeave}
                     >
-                      {authorText}
+                      {searchValue.trim() ? <HighlightedText text={authorText} highlight={searchValue.trim()} /> : authorText}
                     </span>
                   </span>
                   
@@ -186,7 +212,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
                       onMouseEnter={(e) => handleMouseEnter(e, eventText)} 
                       onMouseLeave={handleMouseLeave}
                     >
-                      {eventText}
+                      {searchValue.trim() ? <HighlightedText text={eventText} highlight={searchValue.trim()} /> : eventText}
                     </span>
                   </span>
                 </div>
@@ -194,13 +220,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
             })}
 
             {Array.from({ length: emptyRows }).map((_, i) => {
-              const isFirstEmpty = events.length === 0 && i === 0;
+              const isFirstEmpty = filteredEvents.length === 0 && i === 0;
               return (
-                <div key={`empty-${i}`} style={{ height: rowHeight, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', position: 'relative', borderTop: isFirstEmpty ? 'none' : `1px solid ${borderColor}`, minWidth: contentWidth }}>
-                  <div style={{ position: 'absolute', left: ICON_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', width: ICON_SIZE, height: '100%' }}>
-                    <img src={HistoryIcon18Black} alt="" style={{ width: ICON_SIZE, height: ICON_SIZE, flexShrink: 0, opacity: 0.3 }} />
-                  </div>
-                </div>
+                <div key={`empty-${i}`} style={{ height: rowHeight, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', position: 'relative', borderTop: isFirstEmpty ? 'none' : `1px solid ${borderColor}`, minWidth: contentWidth }} />
               );
             })}
           </>
@@ -214,7 +236,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
         <AnimatePresence>
           {tooltip && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-              style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, transform: 'translateX(-50%)', backgroundColor: '#2D4059', color: '#FFFFFF', padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', zIndex: 9999, pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+              style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, transform: 'translateX(-50%)', backgroundColor: '#2D4059', color: '#FFFFFF', padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif', whiteSpace: 'normal', maxWidth: 500, zIndex: 9999, pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', wordBreak: 'break-word' }}>
               {tooltip.text}
             </motion.div>
           )}

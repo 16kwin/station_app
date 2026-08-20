@@ -1,4 +1,4 @@
-// ConstantInfo.ts — полный файл (добавлены все недостающие эндпоинты)
+// ConstantInfo.ts — полный файл (добавлены эндпоинты настроек номенклатуры)
 const ConstantInfo = {
   // База
   serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''),
@@ -73,6 +73,19 @@ const ConstantInfo = {
   restApiNomenclatureGroups: '/api/nomenclature/groups',
   restApiNomenclatureGetMaterial: (uid: string) => `/api/nomenclature/${uid}`,
   restApiNomenclatureRenameGroup: (uid: string) => `/api/nomenclature/groups/${uid}`,
+  
+  // Номенклатура — настройки (колонки, фильтры, сортировка, путь)
+  restApiNomenclatureTreeWithSettings: (userId: number) => `/api/nomenclature/tree-with-settings?userId=${userId}`,
+  restApiNomenclatureAllSettings: (userId: number) => `/api/nomenclature/settings?userId=${userId}`,
+  restApiNomenclatureAllSettingsSave: (userId: number) => `/api/nomenclature/settings?userId=${userId}`,
+  restApiNomenclatureColumnsSettings: (userId: number) => `/api/nomenclature/columns-settings?userId=${userId}`,
+  restApiNomenclatureColumnsSettingsSave: (userId: number) => `/api/nomenclature/columns-settings?userId=${userId}`,
+  restApiNomenclatureFiltersSettings: (userId: number) => `/api/nomenclature/filters-settings?userId=${userId}`,
+  restApiNomenclatureFiltersSettingsSave: (userId: number) => `/api/nomenclature/filters-settings?userId=${userId}`,
+  restApiNomenclatureSortSettings: (userId: number) => `/api/nomenclature/sort-settings?userId=${userId}`,
+  restApiNomenclatureSortSettingsSave: (userId: number) => `/api/nomenclature/sort-settings?userId=${userId}`,
+  restApiNomenclatureCurrentPath: (userId: number) => `/api/nomenclature/current-path?userId=${userId}`,
+  restApiNomenclatureCurrentPathSave: (userId: number) => `/api/nomenclature/current-path?userId=${userId}`,
   
   // Справочники для формы номенклатуры
   restApiNomenclatureTypeMaterials: '/api/nomenclature/type-materials',
@@ -310,21 +323,22 @@ const ConstantInfo = {
   restApiStationConfigurationFiltersSettingsSave: (userId: number) => `/api/station-configurations/filters-settings?userId=${userId}`,
   restApiStationConfigurationSortSettings: (userId: number) => `/api/station-configurations/sort-settings?userId=${userId}`,
   restApiStationConfigurationSortSettingsSave: (userId: number) => `/api/station-configurations/sort-settings?userId=${userId}`,
+  
   // Расположения — все настройки
-restApiLocationAllSettings: (userId: number) => `/api/locations-crud/settings?userId=${userId}`,
-restApiLocationSortSettings: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
-restApiLocationSortSettingsSave: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
-restApiLocationFiltersSettings: (userId: number) => `/api/locations-crud/filters-settings?userId=${userId}`,
-restApiLocationFiltersSettingsSave: (userId: number) => `/api/locations-crud/filters-settings?userId=${userId}`,
-restApiEnterpriseAllSettings: (userId: number) => `/api/enterprises/settings?userId=${userId}`,
-restApiSectionAllSettings: (userId: number) => `/api/sections/settings?userId=${userId}`,
-restApiWorkshopAllSettings: (userId: number) => `/api/workshops/settings?userId=${userId}`,
-restApiStationTypeAllSettings: (userId: number) => `/api/station-types/settings?userId=${userId}`,
-restApiStationManufacturerAllSettings: (userId: number) => `/api/station-manufacturers/settings?userId=${userId}`,
-
-restApiStationModelAllSettings: (userId: number) => `/api/station-models/settings?userId=${userId}`,
-// Конфигурации станций — все настройки
-restApiStationConfigurationAllSettings: (userId: number) => `/api/station-configurations/settings?userId=${userId}`,
+  restApiLocationAllSettings: (userId: number) => `/api/locations-crud/settings?userId=${userId}`,
+  restApiLocationSortSettings: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
+  restApiLocationSortSettingsSave: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
+  restApiLocationFiltersSettings: (userId: number) => `/api/locations-crud/filters-settings?userId=${userId}`,
+  restApiLocationFiltersSettingsSave: (userId: number) => `/api/locations-crud/filters-settings?userId=${userId}`,
+  restApiEnterpriseAllSettings: (userId: number) => `/api/enterprises/settings?userId=${userId}`,
+  restApiSectionAllSettings: (userId: number) => `/api/sections/settings?userId=${userId}`,
+  restApiWorkshopAllSettings: (userId: number) => `/api/workshops/settings?userId=${userId}`,
+  restApiStationTypeAllSettings: (userId: number) => `/api/station-types/settings?userId=${userId}`,
+  restApiStationManufacturerAllSettings: (userId: number) => `/api/station-manufacturers/settings?userId=${userId}`,
+  restApiStationModelAllSettings: (userId: number) => `/api/station-models/settings?userId=${userId}`,
+  restApiStationConfigurationAllSettings: (userId: number) => `/api/station-configurations/settings?userId=${userId}`,
+  restApiStationModelRenameDocument: (documentUid: string, documentName: string) => `/api/station-models/documents/${documentUid}/rename?documentName=${encodeURIComponent(documentName)}`,
+  restApiStationEventsByUid: (uid: string) => `/api/stations/crud/${uid}/events`,
 };
 
 export default ConstantInfo;

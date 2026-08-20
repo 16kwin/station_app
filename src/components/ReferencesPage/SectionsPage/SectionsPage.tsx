@@ -1,4 +1,4 @@
-// SectionsPage.tsx — ПОЛНЫЙ ФАЙЛ (фильтрация по id, findParentValues по id)
+// SectionsPage.tsx — ПОЛНЫЙ ФАЙЛ (добавлена иконка SectionIcon18Black, исправлено сохранение колонок)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +12,7 @@ import ContextMenu from '../../elements/ContextMenu';
 import type { ContextMenuItem } from '../../elements/ContextMenu';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
+import SectionIcon18Black from '../../../assets/Icons/SectionIcons/SectionIcon18Black.svg';
 
 interface SectionRowData { [key: string]: any; }
 interface SectionListResponse { 
@@ -82,13 +83,15 @@ const SectionsPage = () => {
   const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
   const [placementSelections, setPlacementSelections] = useState<PlacementSelections>(EMPTY_PLACEMENT);
   const [hierarchy, setHierarchy] = useState<HierarchyDTO | null>(null);
-  const [workshopList, setWorkshopList] = useState<{ id: string; name: string }[]>([]);
+  const [workshopList, setWorkshopList] = useState<{ id: string; name: string; enterpriseId: string }[]>([]);
+  const [enterpriseList, setEnterpriseList] = useState<{ id: string; name: string }[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
 
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editItem, setEditItem] = useState<SectionRowData | null>(null);
   const [formName, setFormName] = useState('');
+  const [formEnterpriseId, setFormEnterpriseId] = useState<string>('');
   const [formWorkshopId, setFormWorkshopId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -101,7 +104,11 @@ const SectionsPage = () => {
         uid: String(item.id),
       }));
       setResponseData({ ...response, data: mappedData });
-      setVisibleColumns(new Set(response.columns));
+      
+      const visible = new Set(response.columns);
+      requiredColumns.forEach(key => visible.add(key));
+      setVisibleColumns(visible);
+      
       if (response.columnWidths) {
         setColumnWidths(response.columnWidths);
       }
@@ -121,7 +128,7 @@ const SectionsPage = () => {
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
-        visible: visibleColumns.has(col.key),
+        visible: requiredColumns.has(col.key) ? true : visibleColumns.has(col.key),
         width: widths[col.key] || 0,
         required: requiredColumns.has(col.key),
       };
@@ -236,13 +243,24 @@ const SectionsPage = () => {
       const r = await AxiosService.get(`${ConstantInfo.restApiWorkshops}?userId=${USER_ID}`); 
       const respData = r.data as any;
       const items = Array.isArray(respData) ? respData : (respData.data || []);
-      setWorkshopList(items.map((item: any) => ({ id: String(item.id), name: item.name }))); 
+      setWorkshopList(items.map((item: any) => ({ id: String(item.id), name: item.name, enterpriseId: String(item.enterpriseId) }))); 
     } catch (e) { 
       console.error(e); 
     } 
   };
 
-  useEffect(() => { fetchData(); fetchHierarchy(); fetchWorkshops(); fetchSettings(); }, []);
+  const fetchEnterprises = async () => { 
+    try { 
+      const r = await AxiosService.get(`${ConstantInfo.restApiEnterprises}?userId=${USER_ID}`); 
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setEnterpriseList(items.map((item: any) => ({ id: String(item.id), name: item.name }))); 
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+
+  useEffect(() => { fetchData(); fetchHierarchy(); fetchWorkshops(); fetchEnterprises(); fetchSettings(); }, []);
 
   const hasPlacementSelections = useMemo(() => (Object.values(placementSelections) as Set<string>[]).some(s => s.size > 0), [placementSelections]);
   
@@ -270,9 +288,14 @@ const SectionsPage = () => {
   useEffect(() => {
     if (!contextMenu) return;
     const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick, true);
-    return () => document.removeEventListener('click', handleClick, true);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
   }, [contextMenu]);
+
+  const filteredWorkshops = useMemo(() => {
+    if (!formEnterpriseId) return [];
+    return workshopList.filter(w => w.enterpriseId === formEnterpriseId);
+  }, [workshopList, formEnterpriseId]);
 
   const toggleSelectItem = (id: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -291,9 +314,21 @@ const SectionsPage = () => {
   const handleSaveColumns = (cols: Set<string>) => { 
     const finalCols = new Set(cols);
     requiredColumns.forEach(key => finalCols.add(key));
+    
     setVisibleColumns(finalCols); 
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
     setColumnWidths({});
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key) ? true : finalCols.has(col.key),
+        width: 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiSectionColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   };
   
   const handleHistoryClick = () => { 
@@ -304,7 +339,7 @@ const SectionsPage = () => {
     });
   };
 
-  const handleCreateClick = () => { setFormName(''); setFormWorkshopId(''); setEditItem(null); setShowCreatePopup(true); };
+  const handleCreateClick = () => { setFormName(''); setFormEnterpriseId(''); setFormWorkshopId(''); setEditItem(null); setShowCreatePopup(true); };
   const handleCreateSubmit = async () => {
     if (!formName.trim() || !formWorkshopId) return;
     setIsSaving(true);
@@ -324,6 +359,7 @@ const SectionsPage = () => {
     if (item) { 
       setEditItem(item); 
       setFormName(item.name); 
+      setFormEnterpriseId(item.enterpriseId ? String(item.enterpriseId) : ''); 
       setFormWorkshopId(item.workshopId ? String(item.workshopId) : ''); 
       setShowEditPopup(true); 
     }
@@ -569,6 +605,7 @@ const SectionsPage = () => {
                 onWidthsChange={handleColumnWidthsChange}
                 requiredColumns={requiredColumns}
                 onResetToBase={handleResetToBase}
+                rowIcon={SectionIcon18Black}
               />
             </motion.div>
           )}
@@ -592,7 +629,8 @@ const SectionsPage = () => {
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание участка</h3>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Введите название" autoFocus style={inputStyle} /></div>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value)} style={selectStyle}><option value="">Выберите цех</option>{workshopList.map(w => (<option key={w.id} value={w.id}>{w.name}</option>))}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Предприятие</label><select value={formEnterpriseId} onChange={e => { setFormEnterpriseId(e.target.value); setFormWorkshopId(''); }} style={selectStyle}><option value="">Выберите предприятие</option>{enterpriseList.map(e => (<option key={e.id} value={e.id}>{e.name}</option>))}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value)} disabled={!formEnterpriseId} style={{ ...selectStyle, opacity: formEnterpriseId ? 1 : 0.5, cursor: formEnterpriseId ? 'pointer' : 'not-allowed' }}><option value="">Выберите цех</option>{filteredWorkshops.map(w => (<option key={w.id} value={w.id}>{w.name}</option>))}</select></div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleCreateSubmit} disabled={isSaving || !formName.trim() || !formWorkshopId} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && formWorkshopId && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && formWorkshopId && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Создать'}</button>
@@ -606,7 +644,8 @@ const SectionsPage = () => {
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование участка</h3>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={formName} onChange={e => setFormName(e.target.value)} autoFocus style={inputStyle} /></div>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value)} style={selectStyle}><option value="">Выберите цех</option>{workshopList.map(w => (<option key={w.id} value={w.id}>{w.name}</option>))}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Предприятие</label><select value={formEnterpriseId} onChange={e => { setFormEnterpriseId(e.target.value); setFormWorkshopId(''); }} style={selectStyle}><option value="">Выберите предприятие</option>{enterpriseList.map(e => (<option key={e.id} value={e.id}>{e.name}</option>))}</select></div>
+            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Цех</label><select value={formWorkshopId} onChange={e => setFormWorkshopId(e.target.value)} disabled={!formEnterpriseId} style={{ ...selectStyle, opacity: formEnterpriseId ? 1 : 0.5, cursor: formEnterpriseId ? 'pointer' : 'not-allowed' }}><option value="">Выберите цех</option>{filteredWorkshops.map(w => (<option key={w.id} value={w.id}>{w.name}</option>))}</select></div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditSubmit} disabled={isSaving || !formName.trim() || !formWorkshopId} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formName.trim() && formWorkshopId && !isSaving ? '#666EFE' : '#BCC8FF', cursor: formName.trim() && formWorkshopId && !isSaving ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isSaving ? 'Сохранение...' : 'Сохранить'}</button>

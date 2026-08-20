@@ -1,4 +1,4 @@
-// StationConfigurationTab.tsx — ПОЛНЫЙ ФАЙЛ (кнопка Тест слева под текстом Интернет)
+// StationConfigurationTab.tsx — ПОЛНЫЙ ФАЙЛ (убран modelImageUrl, всегда "Нет изображения")
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
@@ -50,7 +50,6 @@ const StationConfigurationTab: React.FC<StationConfigurationTabProps> = ({ confi
   const [drums, setDrums] = useState(0);
   const [selectedDrum, setSelectedDrum] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [modelImageUrl, setModelImageUrl] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState('');
 
@@ -98,10 +97,6 @@ const StationConfigurationTab: React.FC<StationConfigurationTabProps> = ({ confi
             if (!rowsCount) setRowsCount(modelStruct.cellsPerColumn || modelStruct.rowsPerColumn || 0);
             if (!drums) setDrums(modelStruct.drums || 0);
           }
-          const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(configData.modelId));
-          if (imgRes.data && imgRes.data.length > 0) {
-            setModelImageUrl(imgRes.data[0].url ? ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, '') : '');
-          } else setModelImageUrl('');
         } catch {}
       }
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
@@ -393,11 +388,7 @@ const StationConfigurationTab: React.FC<StationConfigurationTabProps> = ({ confi
 
         {/* ИЗОБРАЖЕНИЕ */}
         <div style={{ width: IMAGE_AREA_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginTop: expanded ? 22 : 42, paddingRight: 30 }}>
-          {modelImageUrl ? (
-            <img src={modelImageUrl} alt="Модель" style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 10 }} />
-          ) : (
-            <span style={{ fontFamily: 'Inter', fontSize: 14, color: '#9CA3AF' }}>Нет изображения</span>
-          )}
+          <span style={{ fontFamily: 'Inter', fontSize: 14, color: '#9CA3AF' }}>Нет изображения</span>
         </div>
       </div>
 

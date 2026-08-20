@@ -1,4 +1,4 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (скроллбар под шапкой)
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (возвращена старая логика адаптивной ширины)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -158,6 +158,9 @@ const DataTable: React.FC<DataTableProps> = ({
     setHeaderContextMenu(null);
     if (onResetToBase) {
       onResetToBase();
+    } else {
+      setCustomWidths({});
+      isInitializedRef.current = false;
     }
   }, [onResetToBase]);
 

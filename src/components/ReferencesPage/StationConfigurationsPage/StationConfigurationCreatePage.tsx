@@ -1,5 +1,5 @@
-// StationConfigurationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (обновленный внешний вид)
-import React, { useState, useEffect, useCallback } from 'react';
+// StationConfigurationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (поиск в истории)
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import AxiosService from '../../../services/AxiosService';
@@ -13,6 +13,9 @@ import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18
 import StructureIcon18Black from '../../../assets/Icons/StructureIcons/StructureIcon18Black.svg';
 import UnificationIcon12White from '../../../assets/Icons/UnificationIcons/UnificationIcon12White.svg';
 import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
+import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
+import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
+import { motion } from 'framer-motion';
 
 interface CellData {
   id: string;
@@ -27,6 +30,9 @@ interface CellData {
 const CELL_GAP_V = 5;
 const CELL_GAP_H = 8;
 const MERGED_MIN_WIDTH = 46;
+
+const BTN_COLLAPSED = 40;
+const BTN_SEARCH_EXPANDED = 280;
 
 const StationConfigurationCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -54,6 +60,21 @@ const StationConfigurationCreatePage = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearchValue, setHistorySearchValue] = useState('');
+  const [historySearchExpanded, setHistorySearchExpanded] = useState(false);
+  const historySearchInputRef = useRef<HTMLInputElement>(null);
+
+  const [initialState, setInitialState] = useState<{
+    name: string;
+    modelId: string;
+    cells: CellData[];
+    gridType: 'postamat' | 'drum' | null;
+    columns: number | null;
+    cellsPerColumn: number | null;
+    drums: number | null;
+    columnsPerDrum: number | null;
+    rowsPerColumn: number | null;
+  } | null>(null);
 
   const getPopupOpenKey = () => `station_config_popup_open_${uid}`;
   const [popupOpen, setPopupOpen] = useState(() => sessionStorage.getItem(getPopupOpenKey()) === 'true');
@@ -71,12 +92,26 @@ const StationConfigurationCreatePage = () => {
     if (cp.includes('/edit/')) loadConfigData(uid);
   }, [uid]);
 
+  useEffect(() => { if (historySearchExpanded && historySearchInputRef.current) setTimeout(() => historySearchInputRef.current?.focus(), 100); }, [historySearchExpanded]);
+
   const loadConfigData = async (configUid: string) => {
     setIsLoading(true);
     try {
       const d = (await AxiosService.get(ConstantInfo.restApiStationConfiguration(configUid))).data;
       setName(d.name || '');
       if (d.modelId) { setModelId(d.modelId); setModelName(d.modelName || ''); await loadModelCells(d.modelId, d.cellsStructure); }
+      
+      setInitialState({
+        name: d.name || '',
+        modelId: d.modelId || '',
+        cells: [],
+        gridType: null,
+        columns: null,
+        cellsPerColumn: null,
+        drums: null,
+        columnsPerDrum: null,
+        rowsPerColumn: null,
+      });
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
@@ -85,24 +120,79 @@ const StationConfigurationCreatePage = () => {
       const d = (await AxiosService.get(ConstantInfo.restApiStationModel(mid))).data;
       if (d.cellsStructure) {
         const parsed = JSON.parse(d.cellsStructure);
+        const newGridType = parsed.type;
+        let newColumns = null;
+        let newCellsPerColumn = null;
+        let newDrums = null;
+        let newColumnsPerDrum = null;
+        let newRowsPerColumn = null;
+        let newCells: CellData[] = [];
+        
         setGridType(parsed.type);
-        if (parsed.type === 'postamat') { setColumns(parsed.columns); setCellsPerColumn(parsed.cellsPerColumn); }
-        else if (parsed.type === 'drum') { setDrums(parsed.drums); setColumnsPerDrum(parsed.columnsPerDrum); setRowsPerColumn(parsed.rowsPerColumn); }
+        if (parsed.type === 'postamat') { 
+          newColumns = parsed.columns; newCellsPerColumn = parsed.cellsPerColumn;
+          setColumns(parsed.columns); setCellsPerColumn(parsed.cellsPerColumn); 
+        }
+        else if (parsed.type === 'drum') { 
+          newDrums = parsed.drums; newColumnsPerDrum = parsed.columnsPerDrum; newRowsPerColumn = parsed.rowsPerColumn;
+          setDrums(parsed.drums); setColumnsPerDrum(parsed.columnsPerDrum); setRowsPerColumn(parsed.rowsPerColumn); 
+        }
+        
         if (existingStructure) {
           try {
             const existing = JSON.parse(existingStructure);
-            if (existing.cells?.length > 0) { setCells(existing.cells); return; }
+            if (existing.cells?.length > 0) { 
+              newCells = existing.cells;
+              setCells(existing.cells); 
+            }
           } catch {}
         }
-        if (parsed.cells?.length > 0) setCells(parsed.cells.map((c: any) => ({ ...c, colSpan: c.colSpan || 1, rowSpan: c.rowSpan || 1, deleted: c.deleted || false })));
+        
+        if (newCells.length === 0 && parsed.cells?.length > 0) {
+          newCells = parsed.cells.map((c: any) => ({ ...c, colSpan: c.colSpan || 1, rowSpan: c.rowSpan || 1, deleted: c.deleted || false }));
+          setCells(newCells);
+        }
+
+        setInitialState({
+          name: name,
+          modelId: mid,
+          cells: JSON.parse(JSON.stringify(newCells)),
+          gridType: newGridType,
+          columns: newColumns,
+          cellsPerColumn: newCellsPerColumn,
+          drums: newDrums,
+          columnsPerDrum: newColumnsPerDrum,
+          rowsPerColumn: newRowsPerColumn,
+        });
       }
     } catch (e) { console.error(e); }
   };
 
+  const isDirty = useMemo(() => {
+    if (!isEdit || !initialState) return name.trim().length > 0 && modelId.length > 0;
+    
+    const cellsChanged = JSON.stringify(cells) !== JSON.stringify(initialState.cells);
+    
+    return (
+      name !== initialState.name ||
+      modelId !== initialState.modelId ||
+      gridType !== initialState.gridType ||
+      columns !== initialState.columns ||
+      cellsPerColumn !== initialState.cellsPerColumn ||
+      drums !== initialState.drums ||
+      columnsPerDrum !== initialState.columnsPerDrum ||
+      rowsPerColumn !== initialState.rowsPerColumn ||
+      cellsChanged
+    );
+  }, [isEdit, initialState, name, modelId, gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn, cells]);
+
+  const canSave = isDirty && name.trim().length > 0 && modelId.length > 0;
+
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
-      setHistoryEvents([]);
+      const r = await AxiosService.get(ConstantInfo.restApiStationConfigurationEventsByUid(uid || ''));
+      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription })));
     } catch (e) { console.error(e); } finally { setHistoryLoading(false); }
   };
 
@@ -252,6 +342,19 @@ const StationConfigurationCreatePage = () => {
       const body = { uid, name: name.trim(), modelId: modelId || null, cellsStructure };
       if (isEdit) await AxiosService.patch(`${ConstantInfo.restApiStationConfigurations}/${uid}`, body);
       else await AxiosService.post(ConstantInfo.restApiStationConfigurations, body);
+      
+      setInitialState({
+        name: name.trim(),
+        modelId: modelId,
+        cells: JSON.parse(JSON.stringify(cells)),
+        gridType: gridType,
+        columns: columns,
+        cellsPerColumn: cellsPerColumn,
+        drums: drums,
+        columnsPerDrum: columnsPerDrum,
+        rowsPerColumn: rowsPerColumn,
+      });
+      
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
       if (!isEdit) { setIsEdit(true); navigate(`/references/station-configurations/edit/${uid}`, { replace: true }); }
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
@@ -260,7 +363,6 @@ const StationConfigurationCreatePage = () => {
   const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); if (uid) sessionStorage.removeItem(getPopupOpenKey()); };
   const handleCloseWithoutSaving = () => { if (uid) sessionStorage.removeItem(getPopupOpenKey()); handleClose(); };
   const handleSaveAndClose = async () => { await handleSave(); handleClose(); };
-  const canSave = name.trim().length > 0 && modelId.length > 0;
 
   const CONTENT_LEFT = 30;
   const CONTENT_TOP = 30;
@@ -367,6 +469,9 @@ const StationConfigurationCreatePage = () => {
     color: '#2D4059',
   };
 
+  const historySearchWidth = historySearchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
+  const tween = { type: 'tween' as const, duration: 0.2 };
+
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#F5F6FA' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
@@ -391,8 +496,26 @@ const StationConfigurationCreatePage = () => {
       </div>
 
       {showHistory ? (
-        <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96, backgroundColor: '#FFFFFF', borderRadius: 15, border: '1px solid rgba(102, 110, 254, 0.15)', overflow: 'hidden', padding: 20 }}>
-          <HistoryTable events={historyEvents} isLoading={historyLoading} tableWidth={window.innerWidth - 60 - 60 - 40} visibleRows={12} rowHeight={58} headerHeight={58} dateLabel="Дата и время" authorLabel="Автор" eventLabel="Событие" />
+        <div style={{ position: 'absolute', top: 155, left: 30, right: 30, bottom: 96 }}>
+          <div style={{ position: 'absolute', top: 0, left: 15, zIndex: 10, height: 40 }}>
+            <motion.div 
+              style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
+              animate={{ width: historySearchWidth }} 
+              transition={tween}
+            >
+              <div onClick={historySearchExpanded ? () => { setHistorySearchExpanded(false); setHistorySearchValue(''); } : () => setHistorySearchExpanded(true)} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+                <img src={historySearchExpanded ? SearchIcon18White : SearchIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+              </div>
+              {historySearchExpanded && (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}>
+                  <input ref={historySearchInputRef} type="text" value={historySearchValue} onChange={e => setHistorySearchValue(e.target.value)} placeholder="Поиск" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
+                </div>
+              )}
+            </motion.div>
+          </div>
+          <div style={{ position: 'absolute', top: 52, left: 0 }}>
+            <HistoryTable events={historyEvents} isLoading={historyLoading} tableWidth={1740} visibleRows={8} rowHeight={58} headerHeight={58} dateLabel="Дата и время" authorLabel="Автор" eventLabel="Событие" searchValue={historySearchValue} />
+          </div>
         </div>
       ) : (
         <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96, backgroundColor: '#FFFFFF', borderRadius: 15, border: '1px solid rgba(102, 110, 254, 0.15)', overflow: 'hidden', display: 'flex' }}>

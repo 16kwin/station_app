@@ -1,4 +1,4 @@
-// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (SUBMENU_MAX_WIDTH = 700, +5px запас)
+// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (адаптирован для номенклатуры)
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,9 +40,9 @@ type PlacementSelections = Record<string, Set<string>>;
 interface TableToolbarProps {
   sortFields: SortField[];
   filterFields: FilterField[];
-  placementLevels: PlacementLevel[];
-  accountingTypes: readonly string[];
-  accountingColumnKeys: readonly string[];
+  placementLevels?: PlacementLevel[];
+  accountingTypes?: readonly string[];
+  accountingColumnKeys?: readonly string[];
   filterOptions?: Record<string, { uid: string; name: string }[]>;
   
   searchValue: string;
@@ -50,36 +50,38 @@ interface TableToolbarProps {
   
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc';
-  accountingIndex: number;
+  accountingIndex?: number;
   onSortSelect: (col: string) => void;
-  onAccountingClick: () => void;
+  onAccountingClick?: () => void;
   onClearSort: () => void;
   
   activeFilters: Set<string>;
   filterValues: Record<string, Set<string>>;
-  placementSelections: PlacementSelections;
-  hasPlacementSelections: boolean;
+  placementSelections?: PlacementSelections;
+  hasPlacementSelections?: boolean;
   onFilterToggle: (key: string) => void;
   onCheckFilterOption: (filterKey: string, optionUid: string) => void;
-  onPlacementLevelClick: (level: string) => void;
-  onPlacementCheck: (level: string, value: string) => void;
+  onPlacementLevelClick?: (level: string) => void;
+  onPlacementCheck?: (level: string, value: string) => void;
   onClearFilters: () => void;
   
-  hierarchy: HierarchyDTO | null;
-  modelList: { uid: string; name: string; article: string }[];
-  configList: string[];
-  onFetchHierarchy: () => void;
-  onFetchModels: () => void;
-  onFetchConfigurations: () => void;
+  hierarchy?: HierarchyDTO | null;
+  modelList?: { uid: string; name: string; article: string }[];
+  configList?: string[];
+  onFetchHierarchy?: () => void;
+  onFetchModels?: () => void;
+  onFetchConfigurations?: () => void;
   
   selectedCount: number;
   onCreate: () => void;
   onDelete: () => void;
-  onPrint: () => void;
-  onPrintPdf: () => void;
-  showHistory: boolean;
-  onHistory: () => void;
-  onConfiguration: () => void;
+  onPrint?: () => void;
+  onPrintPdf?: () => void;
+  showHistory?: boolean;
+  onHistory?: () => void;
+  onConfiguration?: () => void;
+  
+  extraButtons?: React.ReactNode;
   
   expanded: 'search' | 'sort' | 'filter' | null;
   setExpanded: React.Dispatch<React.SetStateAction<'search' | 'sort' | 'filter' | null>>;
@@ -113,9 +115,9 @@ const getTextWidth = (text: string, fontSize: number, fontWeight: number): numbe
 const TableToolbar: React.FC<TableToolbarProps> = ({
   sortFields,
   filterFields,
-  placementLevels,
-  accountingTypes,
-  accountingColumnKeys,
+  placementLevels = [],
+  accountingTypes = [],
+  accountingColumnKeys = [],
   filterOptions = {},
   
   searchValue,
@@ -123,24 +125,24 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   
   sortColumn,
   sortDirection,
-  accountingIndex,
+  accountingIndex = -1,
   onSortSelect,
   onAccountingClick,
   onClearSort,
   
   activeFilters,
   filterValues,
-  placementSelections,
-  hasPlacementSelections,
+  placementSelections = {},
+  hasPlacementSelections = false,
   onFilterToggle,
   onCheckFilterOption,
   onPlacementLevelClick,
   onPlacementCheck,
   onClearFilters,
   
-  hierarchy,
-  modelList,
-  configList,
+  hierarchy = null,
+  modelList = [],
+  configList = [],
   onFetchHierarchy,
   onFetchModels,
   onFetchConfigurations,
@@ -150,9 +152,11 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   onDelete,
   onPrint,
   onPrintPdf,
-  showHistory,
+  showHistory = false,
   onHistory,
   onConfiguration,
+  
+  extraButtons,
   
   expanded,
   setExpanded,
@@ -168,6 +172,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   const hasFilterFields = filterFields.length > 0;
   const hasActiveSort = sortColumn !== null;
   const hasActiveFilter = activeFilters.size > 0 || hasPlacementSelections;
+  const hasPlacement = placementLevels.length > 0;
 
   const getIndicatorTarget = useCallback((idx: number): number => TOP_PAD + idx * ROW_STEP + (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, []);
   
@@ -227,7 +232,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   };
   
   const handleSortFieldClick = (field: SortField) => {
-    if (field.isAccounting) {
+    if (field.isAccounting && onAccountingClick) {
       onAccountingClick();
     } else {
       onSortSelect(field.key);
@@ -246,7 +251,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   };
   
   const getSortLabel = (field: SortField): string => { 
-    if (field.isAccounting && accountingIndex >= 0) return `${field.label} (${accountingTypes[accountingIndex]})`; 
+    if (field.isAccounting && accountingIndex >= 0 && accountingTypes.length > 0) return `${field.label} (${accountingTypes[accountingIndex]})`; 
     return field.label; 
   };
 
@@ -299,11 +304,11 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   
   const handlePlacementLevelClick = (level: string) => {
     setPlacementOpen(prev => prev === level ? null : level);
-    onPlacementLevelClick(level);
+    onPlacementLevelClick?.(level);
   };
   
   const handlePlacementCheck = (level: string, value: string) => { 
-    onPlacementCheck(level, value);
+    onPlacementCheck?.(level, value);
   };
 
   const isPlacementChecked = (level: string, value: string): boolean => 
@@ -322,7 +327,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
     filterValues[filterKey]?.has(optionUid) || false;
 
   const getSubmenuOptions = (key: string): { uid: string; name: string }[] => {
-    if (key === 'sectionName') return [];
+    if (key === 'sectionName' && hasPlacement) return [];
     if (filterOptions[key]) return filterOptions[key];
     const field = filterFields.find(f => f.key === key);
     if (field?.options) return field.options;
@@ -468,7 +473,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                 
                 <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
                   {filterFields.map((field) => { 
-                    const isActive = field.key === 'sectionName' ? hasPlacementSelections : activeFilters.has(field.key); 
+                    const isActive = field.key === 'sectionName' && hasPlacement ? hasPlacementSelections : activeFilters.has(field.key); 
                     return (
                       <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleFilterToggle(field.key)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: filterFields.indexOf(field) < filterFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
                         <div style={{ width: TEXT_WIDTH, display: 'flex', alignItems: 'center', position: 'relative' }}>
@@ -485,7 +490,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                 </div>
 
                 <AnimatePresence>
-                  {submenuOpen && submenuOpen !== 'sectionName' && (
+                  {submenuOpen && (!hasPlacement || submenuOpen !== 'sectionName') && (
                     <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
                       style={{ position: 'absolute', left: BTN_FILTER_EXPANDED + SUBMENU_OFFSET, top: getSubmenuTop(submenuOpen), width: getSubmenuWidth(submenuOpen), height: getSubmenuHeight(submenuOpen), backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'hidden' }}>
                       <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none', maxHeight: SUBMENU_MAX_HEIGHT }}>
@@ -513,61 +518,63 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                   )}
                 </AnimatePresence>
 
-                <AnimatePresence>
-                  {submenuOpen === 'sectionName' && (
-                    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} 
-                      style={{ position: 'absolute', left: BTN_FILTER_EXPANDED + SUBMENU_OFFSET, top: getSubmenuTop('sectionName'), width: SUBMENU_WIDTH, height: placementSubmenuHeight, backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'visible' }}>
-                      <div style={{ position: 'relative', height: '100%' }}>
-                        {placementLevels.map((level, i) => {
-                          const hasSelection = placementSelections[level.key] && placementSelections[level.key]!.size > 0;
-                          return (
-                            <div key={level.key} onMouseDown={(e) => e.preventDefault()} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'absolute', top: TOP_PAD + i * ROW_STEP, left: LEFT_OFFSET, right: 20, userSelect: 'none' }}>
-                              <div onClick={() => handlePlacementLevelClick(level.key)} style={{ display: 'flex', alignItems: 'center', flex: 1, position: 'relative' }}>
-                                {hasSelection && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: -LEFT_OFFSET + INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
-                                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: hasSelection ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: SUBMENU_WIDTH - LEFT_OFFSET - 40, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {level.label}
-                                </span>
+                {hasPlacement && (
+                  <AnimatePresence>
+                    {submenuOpen === 'sectionName' && (
+                      <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} 
+                        style={{ position: 'absolute', left: BTN_FILTER_EXPANDED + SUBMENU_OFFSET, top: getSubmenuTop('sectionName'), width: SUBMENU_WIDTH, height: placementSubmenuHeight, backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'visible' }}>
+                        <div style={{ position: 'relative', height: '100%' }}>
+                          {placementLevels.map((level, i) => {
+                            const hasSelection = placementSelections[level.key] && placementSelections[level.key]!.size > 0;
+                            return (
+                              <div key={level.key} onMouseDown={(e) => e.preventDefault()} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'absolute', top: TOP_PAD + i * ROW_STEP, left: LEFT_OFFSET, right: 20, userSelect: 'none' }}>
+                                <div onClick={() => handlePlacementLevelClick(level.key)} style={{ display: 'flex', alignItems: 'center', flex: 1, position: 'relative' }}>
+                                  {hasSelection && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: -LEFT_OFFSET + INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
+                                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: hasSelection ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: SUBMENU_WIDTH - LEFT_OFFSET - 40, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {level.label}
+                                  </span>
+                                </div>
+                                <div onClick={() => handlePlacementLevelClick(level.key)} style={{ position: 'absolute', right: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <img src={hasSelection ? ArrowIcon6Blue : ArrowIcon6Black} alt="" style={{ width: 6, height: 10 }} />
+                                </div>
                               </div>
-                              <div onClick={() => handlePlacementLevelClick(level.key)} style={{ position: 'absolute', right: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <img src={hasSelection ? ArrowIcon6Blue : ArrowIcon6Black} alt="" style={{ width: 6, height: 10 }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                        
-                        <AnimatePresence>
-                          {placementOpen && (
-                            <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
-                              style={{ position: 'absolute', left: SUBMENU_WIDTH + SUBMENU_OFFSET, top: placementLevels.findIndex(l => l.key === placementOpen) * ROW_STEP, width: SUBMENU_WIDTH, maxHeight: 260, backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 30, overflow: 'hidden' }}>
-                              <div style={{ overflowY: 'auto', overflowX: 'hidden', maxHeight: 260, scrollbarWidth: 'none', msOverflowStyle: 'none', paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
-                                {getPlacementOptions(placementOpen).length === 0 ? (
-                                  <div style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: LEFT_OFFSET, paddingRight: 20 }}>
-                                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#9CA3AF' }}>
-                                      {placementLevels.find(l => l.key === placementOpen)?.emptyText || 'Нет данных'}
-                                    </span>
-                                  </div>
-                                ) : getPlacementOptions(placementOpen).map((option, j) => {
-                                  const checked = isPlacementChecked(placementOpen, option.uid);
-                                  return (
-                                    <div key={option.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => handlePlacementCheck(placementOpen, option.uid)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: j < getPlacementOptions(placementOpen).length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
-                                      {checked && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
-                                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: checked ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: SUBMENU_WIDTH - LEFT_OFFSET - 40, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {option.name}
+                            );
+                          })}
+                          
+                          <AnimatePresence>
+                            {placementOpen && (
+                              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
+                                style={{ position: 'absolute', left: SUBMENU_WIDTH + SUBMENU_OFFSET, top: placementLevels.findIndex(l => l.key === placementOpen) * ROW_STEP, width: SUBMENU_WIDTH, maxHeight: 260, backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 30, overflow: 'hidden' }}>
+                                <div style={{ overflowY: 'auto', overflowX: 'hidden', maxHeight: 260, scrollbarWidth: 'none', msOverflowStyle: 'none', paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
+                                  {getPlacementOptions(placementOpen).length === 0 ? (
+                                    <div style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: LEFT_OFFSET, paddingRight: 20 }}>
+                                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#9CA3AF' }}>
+                                        {placementLevels.find(l => l.key === placementOpen)?.emptyText || 'Нет данных'}
                                       </span>
-                                      <div style={{ position: 'absolute', right: 20, width: 20, height: 20 }}>
-                                        <img src={checked ? CheckboxIcon18OnBlue : CheckboxIcon18OffBlack} alt="" style={{ width: 20, height: 20 }} />
-                                      </div>
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                                  ) : getPlacementOptions(placementOpen).map((option, j) => {
+                                    const checked = isPlacementChecked(placementOpen, option.uid);
+                                    return (
+                                      <div key={option.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => handlePlacementCheck(placementOpen, option.uid)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: j < getPlacementOptions(placementOpen).length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                                        {checked && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
+                                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: checked ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: SUBMENU_WIDTH - LEFT_OFFSET - 40, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {option.name}
+                                        </span>
+                                        <div style={{ position: 'absolute', right: 20, width: 20, height: 20 }}>
+                                          <img src={checked ? CheckboxIcon18OnBlue : CheckboxIcon18OffBlack} alt="" style={{ width: 20, height: 20 }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -596,6 +603,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
           <img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14, marginLeft: 12 }} />
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
         </button>
+        {extraButtons}
         <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
           onClick={onDelete}>
           <img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} />
@@ -603,20 +611,28 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
       </motion.div>
       
       <div style={{ position: 'absolute', right: 0, top: 0, display: 'flex', gap: 15 }}>
-        <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
-          <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
-        </button>
-        <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrintPdf}>
-          <img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} />
-        </button>
-        <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF', border: showHistory ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
-          onClick={onHistory}>
-          <img src={showHistory ? HistoryIcon18White : HistoryIcon18Black} alt="" style={{ width: 18, height: 16 }} />
-        </button>
-        <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
-          onClick={onConfiguration}>
-          <img src={ConfigurationIcon18Black} alt="" style={{ width: 18, height: 18 }} />
-        </button>
+        {onPrint && (
+          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
+            <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+          </button>
+        )}
+        {onPrintPdf && (
+          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrintPdf}>
+            <img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} />
+          </button>
+        )}
+        {onHistory && (
+          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF', border: showHistory ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+            onClick={onHistory}>
+            <img src={showHistory ? HistoryIcon18White : HistoryIcon18Black} alt="" style={{ width: 18, height: 16 }} />
+          </button>
+        )}
+        {onConfiguration && (
+          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+            onClick={onConfiguration}>
+            <img src={ConfigurationIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+          </button>
+        )}
       </div>
 
       {createPortal(

@@ -1,4 +1,4 @@
-// CountriesPage.tsx — ПОЛНЫЙ ФАЙЛ (с сохранением сортировки, как HoldingsPage)
+// CountriesPage.tsx — ПОЛНЫЙ ФАЙЛ (добавлена иконка CountrieIcon14Black, исправлено сохранение колонок)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +12,7 @@ import ContextMenu from '../../elements/ContextMenu';
 import type { ContextMenuItem } from '../../elements/ContextMenu';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
+import CountrieIcon14Black from '../../../assets/Icons/CountrieIcons/CountrieIcon14Black.svg';
 
 interface CountryRowData { [key: string]: any; }
 interface CountryListResponse { 
@@ -70,7 +71,11 @@ const CountriesPage = () => {
       const r = await AxiosService.get(`${ConstantInfo.restApiCountriesCrud}?userId=${USER_ID}`); 
       const response = r.data as CountryListResponse;
       setResponseData(response); 
-      setVisibleColumns(new Set(response.columns));
+      
+      const visible = new Set(response.columns);
+      requiredColumns.forEach(key => visible.add(key));
+      setVisibleColumns(visible);
+      
       if (response.columnWidths) {
         setColumnWidths(response.columnWidths);
       }
@@ -90,7 +95,7 @@ const CountriesPage = () => {
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
-        visible: visibleColumns.has(col.key),
+        visible: requiredColumns.has(col.key) ? true : visibleColumns.has(col.key),
         width: widths[col.key] || 0,
         required: requiredColumns.has(col.key),
       };
@@ -187,8 +192,8 @@ const CountriesPage = () => {
   useEffect(() => {
     if (!contextMenu) return;
     const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick, true);
-    return () => document.removeEventListener('click', handleClick, true);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
   }, [contextMenu]);
 
   const toggleSelectItem = (uid: string) => {
@@ -212,6 +217,17 @@ const CountriesPage = () => {
     setVisibleColumns(finalCols); 
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
     setColumnWidths({});
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key) ? true : finalCols.has(col.key),
+        width: 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiCountryColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   };
   
   const handleHistoryClick = () => { 
@@ -379,6 +395,7 @@ const CountriesPage = () => {
                 onWidthsChange={handleColumnWidthsChange}
                 requiredColumns={requiredColumns}
                 onResetToBase={handleResetToBase}
+                rowIcon={CountrieIcon14Black}
               />
             </motion.div>
           )}

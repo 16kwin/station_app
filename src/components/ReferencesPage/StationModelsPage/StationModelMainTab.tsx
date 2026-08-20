@@ -1,4 +1,4 @@
-// StationModelMainTab.tsx — ПОЛНЫЙ ФАЙЛ (исправлено удаление — перезапрос после удаления)
+// StationModelMainTab.tsx — ПОЛНЫЙ ФАЙЛ (локальное удаление серверного изображения)
 import React, { useRef } from 'react';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import FormField from '../../elements/FormField';
@@ -21,9 +21,10 @@ import RevisionIcon18Blue from '../../../assets/Icons/RevisionIcons/RevisionIcon
 import CreateIcon14Gray from '../../../assets/Icons/СreateIcons/СreateIcon14Gray.svg';
 import DeleteIcon16Blue from '../../../assets/Icons/DeleteIcons/DeleteIcon16Blue.svg';
 
-interface LocalImageItem {
+export interface LocalImageItem {
   file: File;
   url: string;
+  isNew?: boolean;
 }
 
 interface StationModelMainTabProps {
@@ -45,6 +46,8 @@ interface StationModelMainTabProps {
   setRevision: (v: string) => void;
   setDescription: (v: string) => void;
   setModelImageUrl?: (v: string) => void;
+  deletedImageUid?: string | null;
+  setDeletedImageUid?: (v: string | null) => void;
   openPopup: (type: PopupType, filter?: string) => void;
   isEdit: boolean;
 }
@@ -60,6 +63,7 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   code, name, article, revision, description,
   typeId, typeName, manufacturerId, manufacturerName,
   modelImageUrl, localImage, setLocalImage, setModelImageUrl,
+  deletedImageUid, setDeletedImageUid,
   setName, setArticle, setRevision, setDescription,
   openPopup, uid,
 }) => {
@@ -82,7 +86,7 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     if (localImage) URL.revokeObjectURL(localImage.url);
-    setLocalImage?.({ file, url: URL.createObjectURL(file) });
+    setLocalImage?.({ file, url: URL.createObjectURL(file), isNew: true });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -94,26 +98,16 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   const handleServerImageDelete = async () => {
     if (!uid) return;
     try {
-      // Получаем список изображений
       const res = await AxiosService.get(ConstantInfo.restApiStationModelImages(uid));
       if (res.data?.length > 0) {
-        // Удаляем первое
-        await AxiosService.delete(`${ConstantInfo.restApiStationModels}/images/${res.data[0].uid}`);
-      }
-      // Перезапрашиваем и обновляем URL
-      const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(uid));
-      if (imgRes.data && imgRes.data.length > 0) {
-        const newUrl = imgRes.data[0].url 
-          ? (imgRes.data[0].url.startsWith('http') ? imgRes.data[0].url : ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, ''))
-          : '';
-        setModelImageUrl?.(newUrl);
-      } else {
+        const imageUid = res.data[0].uid;
+        setDeletedImageUid?.(imageUid);
         setModelImageUrl?.('');
       }
     } catch (err) { console.error('Ошибка удаления изображения:', err); }
   };
 
-  const displayImageUrl = localImage ? localImage.url : modelImageUrl;
+  const displayImageUrl = localImage ? localImage.url : (deletedImageUid ? '' : modelImageUrl);
   const hasImage = !!displayImageUrl;
 
   const col1Fields = [

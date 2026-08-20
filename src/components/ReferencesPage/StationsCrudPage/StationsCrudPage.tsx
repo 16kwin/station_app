@@ -1,4 +1,4 @@
-// StationsCrudPage.tsx — ПОЛНЫЙ ФАЙЛ (исправлены fetchModels и fetchConfigurations)
+// StationsCrudPage.tsx — ПОЛНЫЙ ФАЙЛ (русские типы напрямую, загрузка с бекенда)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -74,11 +74,7 @@ const FILTER_FIELDS = [
   ]},
   { key: 'sectionName', label: 'Размещение' },
   { key: 'modelName', label: 'Модель станции' },
-  { key: 'stationType', label: 'Тип станции', options: [
-    { uid: 'DRUM_TYPE', name: 'Барабанного типа' },
-    { uid: 'POSTAMAT_TYPE', name: 'Постамат' },
-    { uid: 'ADDITIONAL_MODULE', name: 'Дополнительный модуль' },
-  ]},
+  { key: 'stationType', label: 'Тип станции' },
   { key: 'isTmc', label: 'Вид учета', options: [
     { uid: 'isTmc', name: 'ТМЦ' },
     { uid: 'isSgd', name: 'СГД' },
@@ -116,12 +112,6 @@ const USER_ID = 1;
 
 const EMPTY_PLACEMENT: PlacementSelections = { holdingName: new Set(), enterpriseName: new Set(), workshopName: new Set(), sectionName: new Set() };
 
-const STATION_TYPE_ORDER: Record<string, number> = {
-  'DRUM_TYPE': 0,
-  'POSTAMAT_TYPE': 1,
-  'ADDITIONAL_MODULE': 2,
-};
-
 const STATUS_ORDER: Record<string, number> = {
   'WORKING': 0,
   'OFFLINE': 1,
@@ -156,17 +146,18 @@ const StationsCrudPage = () => {
   const [hierarchy, setHierarchy] = useState<HierarchyDTO | null>(null);
   const [modelList, setModelList] = useState<{ uid: string; name: string; article: string }[]>([]);
   const [configList, setConfigList] = useState<string[]>([]);
+  const [typeList, setTypeList] = useState<{ uid: string; name: string }[]>([]);
 
   const filterOptions = useMemo(() => ({
     status: FILTER_FIELDS.find(f => f.key === 'status')?.options || [],
-    stationType: FILTER_FIELDS.find(f => f.key === 'stationType')?.options || [],
+    stationType: typeList.map(t => ({ uid: t.name, name: t.name })),
     isTmc: FILTER_FIELDS.find(f => f.key === 'isTmc')?.options || [],
     hasError: FILTER_FIELDS.find(f => f.key === 'hasError')?.options || [],
     hasAdditionalModule: FILTER_FIELDS.find(f => f.key === 'hasAdditionalModule')?.options || [],
     modelName: modelList.map(m => ({ uid: m.uid, name: m.name })),
     configurationName: configList.map(c => ({ uid: c, name: c })),
     article: modelList.filter(m => m.article).map(m => ({ uid: m.article, name: m.article })),
-  }), [modelList, configList]);
+  }), [typeList, modelList, configList]);
 
   const fetchData = async () => { 
     try { 
@@ -335,8 +326,17 @@ const StationsCrudPage = () => {
       console.error(e); 
     } 
   };
+  
+  const fetchTypes = async () => { 
+    try { 
+      const r = await AxiosService.get(`${ConstantInfo.restApiStationTypes}?userId=${USER_ID}`); 
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setTypeList(items.map((item: any) => ({ uid: item.uid, name: item.name }))); 
+    } catch (e) { console.error(e); } 
+  };
 
-  useEffect(() => { fetchData(); fetchHierarchy(); fetchSettings(); }, []);
+  useEffect(() => { fetchData(); fetchHierarchy(); fetchSettings(); fetchTypes(); }, []);
 
   const hasPlacementSelections = useMemo(() => (Object.values(placementSelections) as Set<string>[]).some(s => s.size > 0), [placementSelections]);
   
@@ -473,6 +473,9 @@ const StationsCrudPage = () => {
     }
     if (key === 'isTmc') {
       ensureAccountingColumnsVisible();
+    }
+    if (key === 'stationType') {
+      fetchTypes();
     }
   };
 
@@ -641,14 +644,7 @@ const StationsCrudPage = () => {
         };
         return statusMap[val] || val;
       }
-      case 'stationType': {
-        const typeMap: Record<string, string> = {
-          'DRUM_TYPE': 'Барабанного типа',
-          'POSTAMAT_TYPE': 'Постамат',
-          'ADDITIONAL_MODULE': 'Дополнительный модуль',
-        };
-        return typeMap[val] || val;
-      }
+      case 'stationType': return String(val);
       default: return String(val); 
     } 
   };
@@ -688,8 +684,7 @@ const StationsCrudPage = () => {
       }
       case 'stationType': {
         const t = row['stationType'] || '';
-        const order = STATION_TYPE_ORDER[t] ?? 99;
-        return `${order}|${code}`;
+        return `0|${t}|${code}`;
       }
       case 'status': {
         const s = row['status'] || '';

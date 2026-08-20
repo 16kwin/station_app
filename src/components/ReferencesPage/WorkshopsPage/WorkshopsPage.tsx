@@ -1,4 +1,4 @@
-// WorkshopsPage.tsx — ПОЛНЫЙ ФАЙЛ (как HoldingsPage + address, фильтры по id/uid)
+// WorkshopsPage.tsx — ПОЛНЫЙ ФАЙЛ (исправлены колонки, фильтр по размещению: холдинг → предприятие)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +12,7 @@ import ContextMenu from '../../elements/ContextMenu';
 import type { ContextMenuItem } from '../../elements/ContextMenu';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
+import WorkshopIcon16Black from '../../../assets/Icons/WorkshopIcons/WorkshopIcon16Black.svg';
 
 interface WorkshopRowData { [key: string]: any; }
 interface WorkshopListResponse { 
@@ -35,16 +36,28 @@ const REQUIRED_COLUMNS = new Set(['name']);
 
 const SORT_FIELDS = [
   { key: 'name', label: 'Наименование', iconType: '19' as const },
-  { key: 'locationName', label: 'Расположение' },
+  { key: 'sectionName', label: 'Размещение' },
 ];
 
 const FILTER_FIELDS = [
-  { key: 'enterpriseName', label: 'Предприятие' },
-  { key: 'holdingName', label: 'Холдинг' },
-  { key: 'locationName', label: 'Расположение' },
+  { key: 'sectionName', label: 'Размещение' },
 ];
 
-const PLACEMENT_LEVELS: { key: string; label: string; emptyText: string }[] = [];
+const PLACEMENT_LEVELS = [
+  { key: 'holdingName', label: 'Холдинг', emptyText: 'Нет холдингов' },
+  { key: 'enterpriseName', label: 'Предприятие', emptyText: 'Нет предприятий' },
+];
+
+interface HierarchyDTO { holdings: HoldingDTO[] }
+interface HoldingDTO { id: number; name: string; enterprises: EnterpriseDTO[] }
+interface EnterpriseDTO { id: number; name: string; holdingId: number; workshops: WorkshopDTO[] }
+interface WorkshopDTO { id: number; name: string; enterpriseId: number; holdingId: number }
+
+type PlacementKey = typeof PLACEMENT_LEVELS[number]['key'];
+type PlacementSelections = Record<PlacementKey, Set<string>>;
+
+const EMPTY_PLACEMENT: PlacementSelections = { holdingName: new Set(), enterpriseName: new Set() };
+
 const USER_ID = 1;
 
 const WorkshopsPage = () => {
@@ -68,8 +81,9 @@ const WorkshopsPage = () => {
   const [accountingIndex, setAccountingIndex] = useState(-1);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
+  const [placementSelections, setPlacementSelections] = useState<PlacementSelections>(EMPTY_PLACEMENT);
+  const [hierarchy, setHierarchy] = useState<HierarchyDTO | null>(null);
   const [enterpriseList, setEnterpriseList] = useState<{ id: string; name: string }[]>([]);
-  const [holdingList, setHoldingList] = useState<{ id: string; name: string }[]>([]);
   const [locationList, setLocationList] = useState<{ uid: string; name: string }[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
 
@@ -83,11 +97,7 @@ const WorkshopsPage = () => {
   const [formLocationId, setFormLocationId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const filterOptions = useMemo(() => ({
-    enterpriseName: enterpriseList.map(e => ({ uid: e.id, name: e.name })),
-    holdingName: holdingList.map(h => ({ uid: h.id, name: h.name })),
-    locationName: locationList.map(l => ({ uid: l.uid, name: l.name })),
-  }), [enterpriseList, holdingList, locationList]);
+  const filterOptions = useMemo(() => ({}), []);
 
   const fetchData = async () => { 
     try { 
@@ -98,7 +108,11 @@ const WorkshopsPage = () => {
         uid: String(item.id),
       }));
       setResponseData({ ...response, data: mappedData });
-      setVisibleColumns(new Set(response.columns));
+      
+      const visible = new Set(response.columns);
+      requiredColumns.forEach(key => visible.add(key));
+      setVisibleColumns(visible);
+      
       if (response.columnWidths) {
         setColumnWidths(response.columnWidths);
       }
@@ -118,7 +132,7 @@ const WorkshopsPage = () => {
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
-        visible: visibleColumns.has(col.key),
+        visible: requiredColumns.has(col.key) ? true : visibleColumns.has(col.key),
         width: widths[col.key] || 0,
         required: requiredColumns.has(col.key),
       };
@@ -146,6 +160,7 @@ const WorkshopsPage = () => {
         const newActiveFilters = new Set<string>();
         
         Object.entries(filters).forEach(([key, values]) => {
+          if (key === 'placementSelections') return;
           if (Array.isArray(values) && values.length > 0) {
             newFilterValues[key] = new Set(values as string[]);
             newActiveFilters.add(key);
@@ -154,6 +169,14 @@ const WorkshopsPage = () => {
         
         setFilterValues(newFilterValues);
         setActiveFilters(newActiveFilters);
+        
+        const placementData = filters.placementSelections as any;
+        if (placementData && typeof placementData === 'object') {
+          setPlacementSelections({
+            holdingName: Array.isArray(placementData.holdingName) ? new Set<string>(placementData.holdingName) : new Set<string>(),
+            enterpriseName: Array.isArray(placementData.enterpriseName) ? new Set<string>(placementData.enterpriseName) : new Set<string>(),
+          });
+        }
       }
       
       if (settings.sortJson && settings.sortJson !== '{}') {
@@ -168,13 +191,26 @@ const WorkshopsPage = () => {
     } 
   };
   
-  const saveFilters = useCallback((filters: Record<string, Set<string>>) => {
+  const saveFilters = useCallback((filters: Record<string, Set<string>>, placement: PlacementSelections) => {
     const filtersJsonObj: Record<string, any> = {};
+    
     Object.entries(filters).forEach(([key, values]) => {
       if (values.size > 0) {
         filtersJsonObj[key] = Array.from(values);
       }
     });
+    
+    const placementObj: Record<string, string[]> = {};
+    (Object.keys(placement) as PlacementKey[]).forEach(key => {
+      if (placement[key].size > 0) {
+        placementObj[key] = Array.from(placement[key]);
+      }
+    });
+    
+    if (Object.keys(placementObj).length > 0) {
+      filtersJsonObj.placementSelections = placementObj;
+    }
+    
     const filtersJson = JSON.stringify(filtersJsonObj);
     AxiosService.patch(ConstantInfo.restApiWorkshopFiltersSettingsSave(USER_ID), { filtersJson }).catch(e => console.error(e));
   }, []);
@@ -196,21 +232,21 @@ const WorkshopsPage = () => {
     } 
   };
   
+  const fetchHierarchy = async () => { 
+    try { 
+      const r = await AxiosService.get(ConstantInfo.restApiLocationHierarchy); 
+      setHierarchy(r.data); 
+    } catch (e) { 
+      console.error(e); 
+    } 
+  };
+  
   const fetchEnterprises = async () => { 
     try { 
       const r = await AxiosService.get(`${ConstantInfo.restApiEnterprises}?userId=${USER_ID}`); 
       const respData = r.data as any;
       const items = Array.isArray(respData) ? respData : (respData.data || []);
       setEnterpriseList(items.map((item: any) => ({ id: String(item.id), name: item.name }))); 
-    } catch (e) { console.error(e); } 
-  };
-  
-  const fetchHoldings = async () => { 
-    try { 
-      const r = await AxiosService.get(`${ConstantInfo.restApiHoldings}?userId=${USER_ID}`); 
-      const respData = r.data as any;
-      const items = Array.isArray(respData) ? respData : (respData.data || []);
-      setHoldingList(items.map((item: any) => ({ id: String(item.id), name: item.name }))); 
     } catch (e) { console.error(e); } 
   };
   
@@ -223,13 +259,24 @@ const WorkshopsPage = () => {
     } catch (e) { console.error(e); } 
   };
 
-  useEffect(() => { fetchData(); fetchEnterprises(); fetchHoldings(); fetchLocations(); fetchSettings(); }, []);
+  useEffect(() => { fetchData(); fetchHierarchy(); fetchEnterprises(); fetchLocations(); fetchSettings(); }, []);
+
+  const hasPlacementSelections = useMemo(() => (Object.values(placementSelections) as Set<string>[]).some(s => s.size > 0), [placementSelections]);
+  
+  useEffect(() => { 
+    setActiveFilters(prev => { 
+      const next = new Set(prev); 
+      if (hasPlacementSelections) next.add('sectionName'); 
+      else next.delete('sectionName'); 
+      return next; 
+    }); 
+  }, [hasPlacementSelections]);
 
   useEffect(() => {
     if (!isLoading) {
-      saveFilters(filterValues);
+      saveFilters(filterValues, placementSelections);
     }
-  }, [filterValues, isLoading, saveFilters]);
+  }, [filterValues, placementSelections, isLoading, saveFilters]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -240,9 +287,80 @@ const WorkshopsPage = () => {
   useEffect(() => {
     if (!contextMenu) return;
     const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick, true);
-    return () => document.removeEventListener('click', handleClick, true);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
   }, [contextMenu]);
+
+  const ensurePlacementColumnsVisible = useCallback(() => {
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      PLACEMENT_LEVELS.forEach(level => {
+        if (!next.has(level.key)) {
+          next.add(level.key);
+          changed = true;
+        }
+      });
+      if (changed) {
+        setResponseData(prevData => {
+          const newColumns = [...prevData.columns];
+          PLACEMENT_LEVELS.forEach(level => {
+            if (!newColumns.includes(level.key)) {
+              newColumns.push(level.key);
+            }
+          });
+          return { ...prevData, columns: newColumns };
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const findParentValues = (level: PlacementKey, value: string): Partial<Record<PlacementKey, string>> => { 
+    if (!hierarchy) return {}; 
+    const result: Partial<Record<PlacementKey, string>> = {}; 
+    if (level === 'enterpriseName') { 
+      for (const h of hierarchy.holdings) { 
+        const e = h.enterprises.find(e => String(e.id) === value); 
+        if (e) { 
+          result.holdingName = String(h.id); 
+          return result; 
+        } 
+      } 
+    } 
+    return result; 
+  };
+
+  const handlePlacementCheck = (level: PlacementKey, value: string) => { 
+    ensurePlacementColumnsVisible();
+    setPlacementSelections(prev => { 
+      const current = new Set(prev[level] || []); 
+      if (current.has(value)) { 
+        current.delete(value); 
+        const next = { ...prev, [level]: current }; 
+        const idx = PLACEMENT_LEVELS.findIndex(l => l.key === level); 
+        for (let i = idx + 1; i < PLACEMENT_LEVELS.length; i++) 
+          next[PLACEMENT_LEVELS[i].key] = new Set(); 
+        if (current.size === 0) next[level] = new Set(); 
+        return next; 
+      } else { 
+        current.add(value); 
+        const next = { ...prev, [level]: current }; 
+        const parents = findParentValues(level, value); 
+        (Object.keys(parents) as PlacementKey[]).forEach((key) => { 
+          if (parents[key] && !next[key]?.has(parents[key]!)) 
+            next[key] = new Set([...(next[key] || []), parents[key]!]); 
+        }); 
+        return next; 
+      } 
+    }); 
+  };
+
+  const handleClearFilters = () => { 
+    setActiveFilters(new Set()); 
+    setFilterValues({}); 
+    setPlacementSelections(EMPTY_PLACEMENT); 
+  };
 
   const toggleSelectItem = (id: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -261,9 +379,21 @@ const WorkshopsPage = () => {
   const handleSaveColumns = (cols: Set<string>) => { 
     const finalCols = new Set(cols);
     requiredColumns.forEach(key => finalCols.add(key));
+    
     setVisibleColumns(finalCols); 
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
     setColumnWidths({});
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key) ? true : finalCols.has(col.key),
+        width: 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiWorkshopColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   };
   
   const handleHistoryClick = () => { 
@@ -352,18 +482,14 @@ const WorkshopsPage = () => {
     const code = String(row['name'] || '');
     
     switch (sortKey) {
-      case 'locationName': {
+      case 'sectionName': {
         const holding = row['holdingName'] || '';
         const enterprise = row['enterpriseName'] || '';
-        const workshop = row['name'] || '';
-        const location = row['locationName'] || '';
         
         if (!holding) return `999|${code}`;
         if (!enterprise) return `998|${holding}|${code}`;
-        if (!workshop) return `997|${holding}|${enterprise}|${code}`;
-        if (!location) return `996|${holding}|${enterprise}|${workshop}|${code}`;
         
-        return `0|${location}|${holding}|${enterprise}|${workshop}|${code}`;
+        return `0|${holding}|${enterprise}|${code}`;
       }
       default: {
         const val = row[sortKey];
@@ -381,20 +507,17 @@ const WorkshopsPage = () => {
         return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
       });
     }
-    if (filterValues['enterpriseName'] && filterValues['enterpriseName'].size > 0) {
-      result = result.filter(row => filterValues['enterpriseName'].has(String(row['enterpriseId'])));
-    }
-    if (filterValues['holdingName'] && filterValues['holdingName'].size > 0) {
-      result = result.filter(row => filterValues['holdingName'].has(String(row['holdingId'])));
-    }
-    if (filterValues['locationName'] && filterValues['locationName'].size > 0) {
-      result = result.filter(row => filterValues['locationName'].has(String(row['locationUid'])));
-    }
+    
+    if (placementSelections['holdingName'] && placementSelections['holdingName'].size > 0) 
+      result = result.filter(row => placementSelections['holdingName'].has(String(row['holdingId'])));
+    if (placementSelections['enterpriseName'] && placementSelections['enterpriseName'].size > 0) 
+      result = result.filter(row => placementSelections['enterpriseName'].has(String(row['enterpriseId'])));
+    
     if (sortColumn) {
       result.sort((a, b) => {
         const aVal = getSortValue(a, sortColumn);
         const bVal = getSortValue(b, sortColumn);
-        if (sortColumn === 'locationName') {
+        if (sortColumn === 'sectionName') {
           return aVal.localeCompare(bVal);
         }
         if (sortColumn === 'name') {
@@ -404,7 +527,7 @@ const WorkshopsPage = () => {
       });
     }
     return result;
-  }, [responseData.data, searchValue, filterValues, sortColumn, sortDirection]);
+  }, [responseData.data, searchValue, placementSelections, sortColumn, sortDirection]);
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
@@ -450,42 +573,17 @@ const WorkshopsPage = () => {
           onClearSort={() => { setSortColumn(null); setAccountingIndex(-1); }}
           activeFilters={activeFilters}
           filterValues={filterValues}
-          placementSelections={{}}
-          hasPlacementSelections={false}
-          onFilterToggle={(key) => {
-            if (key === 'enterpriseName') fetchEnterprises();
-            if (key === 'holdingName') fetchHoldings();
-            if (key === 'locationName') fetchLocations();
-          }}
-          onCheckFilterOption={(filterKey, optionUid) => {
-            setActiveFilters(prev => {
-              const next = new Set(prev);
-              next.add(filterKey);
-              return next;
-            });
-            setFilterValues(prev => {
-              const current = new Set(prev[filterKey] || []);
-              if (current.has(optionUid)) current.delete(optionUid);
-              else current.add(optionUid);
-              if (current.size === 0) {
-                const { [filterKey]: _, ...rest } = prev;
-                setActiveFilters(prev2 => {
-                  const n = new Set(prev2);
-                  n.delete(filterKey);
-                  return n;
-                });
-                return rest;
-              }
-              return { ...prev, [filterKey]: current };
-            });
-          }}
+          placementSelections={placementSelections}
+          hasPlacementSelections={hasPlacementSelections}
+          onFilterToggle={(key) => { if (key === 'sectionName') fetchHierarchy(); }}
+          onCheckFilterOption={() => {}}
           onPlacementLevelClick={() => {}}
-          onPlacementCheck={() => {}}
-          onClearFilters={() => { setActiveFilters(new Set()); setFilterValues({}); }}
-          hierarchy={null}
+          onPlacementCheck={handlePlacementCheck}
+          onClearFilters={handleClearFilters}
+          hierarchy={hierarchy}
           modelList={[]}
           configList={[]}
-          onFetchHierarchy={() => {}}
+          onFetchHierarchy={fetchHierarchy}
           onFetchModels={() => {}}
           onFetchConfigurations={() => {}}
           selectedCount={selectedIds.size}
@@ -525,6 +623,7 @@ const WorkshopsPage = () => {
                 onWidthsChange={handleColumnWidthsChange}
                 requiredColumns={requiredColumns}
                 onResetToBase={handleResetToBase}
+                rowIcon={WorkshopIcon16Black}
               />
             </motion.div>
           )}

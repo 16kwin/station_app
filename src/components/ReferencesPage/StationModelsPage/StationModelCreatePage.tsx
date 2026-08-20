@@ -1,5 +1,5 @@
-// StationModelCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (с историей-затычкой и тремя кнопками)
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// StationModelCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлено сохранение изображения)
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,6 +9,7 @@ import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import StationModelMainTab from './StationModelMainTab';
 import StationModelGridTab from './StationModelGridTab';
+import type { LocalDocumentItem, DocumentChange } from './StationModelFilesTab';
 import StationModelFilesTab from './StationModelFilesTab';
 import HistoryTable from '../../elements/HistoryTable';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
@@ -17,6 +18,8 @@ import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.
 import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
 import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
 import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
+import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
+import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
 
 interface CellData {
   id: string;
@@ -31,13 +34,29 @@ interface CellData {
 interface LocalImageItem {
   file: File;
   url: string;
+  serverImageUid?: string;
+  isNew?: boolean;
 }
 
-interface LocalDocumentItem {
-  localId: string;
-  documentName: string;
-  file: File;
+interface InitialState {
+  name: string;
+  article: string;
+  revision: string;
+  description: string;
+  typeId: string;
+  manufacturerId: string;
+  gridType: 'postamat' | 'drum' | null;
+  columns: number | null;
+  cellsPerColumn: number | null;
+  drums: number | null;
+  columnsPerDrum: number | null;
+  rowsPerColumn: number | null;
+  cells: CellData[];
+  modelImageUrl: string;
 }
+
+const BTN_COLLAPSED = 40;
+const BTN_SEARCH_EXPANDED = 280;
 
 const StationModelCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -59,6 +78,8 @@ const StationModelCreatePage = () => {
   const [modelImageUrl, setModelImageUrl] = useState('');
   const [localImage, setLocalImage] = useState<LocalImageItem | null>(null);
   const [localDocuments, setLocalDocuments] = useState<LocalDocumentItem[]>([]);
+  const [documentChanges, setDocumentChanges] = useState<DocumentChange[]>([]);
+  const [deletedImageUid, setDeletedImageUid] = useState<string | null>(null);
 
   const [gridType, setGridType] = useState<'postamat' | 'drum' | null>(null);
   const [columns, setColumns] = useState<number | null>(null);
@@ -76,6 +97,11 @@ const StationModelCreatePage = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearchValue, setHistorySearchValue] = useState('');
+  const [historySearchExpanded, setHistorySearchExpanded] = useState(false);
+  const historySearchInputRef = useRef<HTMLInputElement>(null);
+
+  const [initialState, setInitialState] = useState<InitialState | null>(null);
 
   const cellsLoadedRef = useRef(false);
 
@@ -107,6 +133,8 @@ const StationModelCreatePage = () => {
     if (cp.includes('/edit/')) loadModelData(uid);
   }, [uid]);
 
+  useEffect(() => { if (historySearchExpanded && historySearchInputRef.current) setTimeout(() => historySearchInputRef.current?.focus(), 100); }, [historySearchExpanded]);
+
   const loadModelData = async (modelUid: string) => {
     setIsLoading(true);
     cellsLoadedRef.current = false;
@@ -116,34 +144,101 @@ const StationModelCreatePage = () => {
       setDescription(d.purpose || ''); setModelCode(d.code || 0);
       if (d.typeId) { setTypeId(d.typeId); setTypeName(d.typeName || ''); }
       if (d.manufacturerId) { setManufacturerId(d.manufacturerId); setManufacturerName(d.manufacturerName || ''); }
+      
+      let loadedGridType: 'postamat' | 'drum' | null = null;
+      let loadedColumns: number | null = null;
+      let loadedCellsPerColumn: number | null = null;
+      let loadedDrums: number | null = null;
+      let loadedColumnsPerDrum: number | null = null;
+      let loadedRowsPerColumn: number | null = null;
+      let loadedCells: CellData[] = [];
+      let loadedImageUrl = '';
+
       if (d.cellsStructure) {
         try {
           const cs = JSON.parse(d.cellsStructure);
-          setGridType(cs.type);
+          loadedGridType = cs.type;
           if (cs.type === 'postamat') {
+            loadedColumns = cs.columns ?? null;
+            loadedCellsPerColumn = cs.cellsPerColumn ?? null;
             setColumns(cs.columns ?? null); setCellsPerColumn(cs.cellsPerColumn ?? null);
             setDrums(null); setColumnsPerDrum(null); setRowsPerColumn(null);
           } else if (cs.type === 'drum') {
+            loadedDrums = cs.drums ?? null;
+            loadedColumnsPerDrum = cs.columnsPerDrum ?? null;
+            loadedRowsPerColumn = cs.rowsPerColumn ?? null;
             setDrums(cs.drums ?? null); setColumnsPerDrum(cs.columnsPerDrum ?? null); setRowsPerColumn(cs.rowsPerColumn ?? null);
             setColumns(null); setCellsPerColumn(null);
           }
+          setGridType(cs.type);
           if (cs.cells?.length > 0) {
+            loadedCells = cs.cells;
             setCells(cs.cells);
             cellsLoadedRef.current = true;
           }
         } catch (e) {}
       }
+
       try {
         const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(modelUid));
-        if (imgRes.data?.length > 0) setModelImageUrl(imgRes.data[0].url ? ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, '') : '');
+        if (imgRes.data?.length > 0) {
+          loadedImageUrl = imgRes.data[0].url ? ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, '') : '';
+          setModelImageUrl(loadedImageUrl);
+        }
       } catch (e) {}
+
+      setInitialState({
+        name: d.name || '',
+        article: d.article || '',
+        revision: d.revision || '',
+        description: d.purpose || '',
+        typeId: d.typeId || '',
+        manufacturerId: d.manufacturerId || '',
+        gridType: loadedGridType,
+        columns: loadedColumns,
+        cellsPerColumn: loadedCellsPerColumn,
+        drums: loadedDrums,
+        columnsPerDrum: loadedColumnsPerDrum,
+        rowsPerColumn: loadedRowsPerColumn,
+        cells: JSON.parse(JSON.stringify(loadedCells)),
+        modelImageUrl: loadedImageUrl,
+      });
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
+
+  const isDirty = useMemo(() => {
+    if (!isEdit || !initialState) return name.trim().length > 0 || localImage !== null || localDocuments.length > 0 || documentChanges.length > 0 || deletedImageUid !== null;
+    
+    const cellsChanged = JSON.stringify(cells) !== JSON.stringify(initialState.cells);
+    const imageChanged = localImage !== null || deletedImageUid !== null;
+    const documentsChanged = localDocuments.length > 0 || documentChanges.length > 0;
+    
+    return (
+      name !== initialState.name ||
+      article !== initialState.article ||
+      revision !== initialState.revision ||
+      description !== initialState.description ||
+      typeId !== initialState.typeId ||
+      manufacturerId !== initialState.manufacturerId ||
+      gridType !== initialState.gridType ||
+      columns !== initialState.columns ||
+      cellsPerColumn !== initialState.cellsPerColumn ||
+      drums !== initialState.drums ||
+      columnsPerDrum !== initialState.columnsPerDrum ||
+      rowsPerColumn !== initialState.rowsPerColumn ||
+      cellsChanged ||
+      imageChanged ||
+      documentsChanged
+    );
+  }, [isEdit, initialState, name, article, revision, description, typeId, manufacturerId, gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn, cells, localImage, localDocuments, documentChanges, deletedImageUid]);
+
+  const canSave = isDirty && name.trim().length > 0;
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
-      setHistoryEvents([]);
+      const r = await AxiosService.get(ConstantInfo.restApiStationModelEventsByUid(uid || ''));
+      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription })));
     } catch (e) { console.error(e); } finally { setHistoryLoading(false); }
   };
 
@@ -173,26 +268,67 @@ const StationModelCreatePage = () => {
       if (isEdit) await AxiosService.patch(`${ConstantInfo.restApiStationModels}/${uid}`, body);
       else await AxiosService.post(ConstantInfo.restApiStationModels, body);
 
-      if (localImage) {
-        const fd = new FormData(); fd.append('file', localImage.file);
-        await AxiosService.post(ConstantInfo.restApiStationModelImages(uid), fd);
-        setLocalImage(null);
-      }
       for (const doc of localDocuments) {
-        const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName);
-        await AxiosService.post(ConstantInfo.restApiStationModelDocuments(uid), fd);
+        if (doc.isNew) {
+          const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName);
+          await AxiosService.post(ConstantInfo.restApiStationModelDocuments(uid), fd);
+        }
       }
       setLocalDocuments([]);
 
-      if (uid) sessionStorage.removeItem(getPopupOpenKey());
-      if (wasCreate) { setIsEdit(true); navigate(`/references/station-models/edit/${uid}`, { replace: true }); }
+      for (const change of documentChanges.filter(c => c.action === 'rename' && c.serverUid)) {
+        await AxiosService.patch(`${ConstantInfo.restApiStationModels}/documents/${change.serverUid}/rename?documentName=${encodeURIComponent(change.documentName || '')}`);
+      }
 
-      if (wasCreate || localImage) {
+      for (const change of documentChanges.filter(c => c.action === 'delete' && c.serverUid)) {
+        await AxiosService.delete(ConstantInfo.restApiStationModelDeleteDocument(change.serverUid!));
+      }
+      setDocumentChanges([]);
+
+      // Обработка изображения: новое
+      if (localImage?.isNew) {
+        const fd = new FormData(); fd.append('file', localImage.file);
+        await AxiosService.post(ConstantInfo.restApiStationModelImages(uid), fd);
+        
+        // Получаем URL загруженного изображения
         try {
           const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(uid));
-          if (imgRes.data?.length > 0) setModelImageUrl(imgRes.data[0].url ? ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, '') : '');
+          if (imgRes.data?.length > 0) {
+            const newUrl = imgRes.data[0].url 
+              ? (imgRes.data[0].url.startsWith('http') ? imgRes.data[0].url : ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, ''))
+              : '';
+            setModelImageUrl(newUrl);
+          }
         } catch (e) {}
       }
+      
+      // Обработка изображения: удаление
+      if (deletedImageUid) {
+        await AxiosService.delete(ConstantInfo.restApiStationModelDeleteImage(deletedImageUid));
+        setDeletedImageUid(null);
+        setModelImageUrl('');
+      }
+      setLocalImage(null);
+
+      setInitialState({
+        name: name.trim(),
+        article: article.trim(),
+        revision: revision.trim(),
+        description: description.trim(),
+        typeId: typeId,
+        manufacturerId: manufacturerId,
+        gridType: gridType,
+        columns: columns,
+        cellsPerColumn: cellsPerColumn,
+        drums: drums,
+        columnsPerDrum: columnsPerDrum,
+        rowsPerColumn: rowsPerColumn,
+        cells: JSON.parse(JSON.stringify(cells)),
+        modelImageUrl: modelImageUrl,
+      });
+
+      if (uid) sessionStorage.removeItem(getPopupOpenKey());
+      if (wasCreate) { setIsEdit(true); navigate(`/references/station-models/edit/${uid}`, { replace: true }); }
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
@@ -205,19 +341,34 @@ const StationModelCreatePage = () => {
   const handlePopupSelect = (id: string, nm: string) => {
     cellsLoadedRef.current = false;
     switch (popupType) {
-      case 'stationType': setTypeId(id); setTypeName(nm); if (nm === 'ADDITIONAL_MODULE' || nm === 'POSTAMAT_TYPE' || nm === 'Дополнительный модуль' || nm === 'Постамат') { setGridType('postamat'); setDrums(null); setColumnsPerDrum(null); setRowsPerColumn(null); } else { setGridType('drum'); setColumns(null); setCellsPerColumn(null); } break;
-      case 'stationManufacturer': setManufacturerId(id); setManufacturerName(nm); break;
+      case 'stationType': 
+        setTypeId(id); 
+        setTypeName(nm); 
+        if (nm === 'Постамат' || nm === 'Дополнительный модуль') {
+          setGridType('postamat'); 
+          setDrums(null); setColumnsPerDrum(null); setRowsPerColumn(null);
+        } else {
+          setGridType('drum'); 
+          setColumns(null); setCellsPerColumn(null);
+        }
+        break;
+      case 'stationManufacturer': 
+        setManufacturerId(id); 
+        setManufacturerName(nm); 
+        break;
     }
   };
 
   const handlePopupClose = () => { setPopupOpen(false); if (uid) sessionStorage.removeItem(getPopupOpenKey()); };
-  const canSave = name.trim().length > 0;
 
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
   const buttonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden' });
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
+
+  const historySearchWidth = historySearchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
+  const tween = { type: 'tween' as const, duration: 0.2 };
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
@@ -253,21 +404,47 @@ const StationModelCreatePage = () => {
       </div>
 
       {showHistory ? (
-        <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96, backgroundColor: '#FFFFFF', borderRadius: 15, border: '1px solid rgba(102, 110, 254, 0.15)', overflow: 'hidden', padding: 20 }}>
-          <HistoryTable
-            events={historyEvents}
-            isLoading={historyLoading}
-            tableWidth={window.innerWidth - 60 - 60 - 40}
-            visibleRows={12}
-            rowHeight={58}
-            headerHeight={58}
-            dateLabel="Дата и время"
-            authorLabel="Автор"
-            eventLabel="Событие"
-          />
+        <div style={{ position: 'absolute', top: 155, left: 30, right: 30, bottom: 96 }}>
+          <div style={{ position: 'absolute', top: 0, left: 15, zIndex: 10, height: 40 }}>
+            <motion.div 
+              style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
+              animate={{ width: historySearchWidth }} 
+              transition={tween}
+            >
+              <div onClick={historySearchExpanded ? () => { setHistorySearchExpanded(false); setHistorySearchValue(''); } : () => setHistorySearchExpanded(true)} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+                <img src={historySearchExpanded ? SearchIcon18White : SearchIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+              </div>
+              {historySearchExpanded && (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}>
+                  <input ref={historySearchInputRef} type="text" value={historySearchValue} onChange={e => setHistorySearchValue(e.target.value)} placeholder="Поиск" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
+                </div>
+              )}
+            </motion.div>
+          </div>
+          <div style={{ position: 'absolute', top: 52, left: 0 }}>
+            <HistoryTable
+              events={historyEvents}
+              isLoading={historyLoading}
+              tableWidth={1740}
+              visibleRows={8}
+              rowHeight={58}
+              headerHeight={58}
+              dateLabel="Дата и время"
+              authorLabel="Автор"
+              eventLabel="Событие"
+              searchValue={historySearchValue}
+            />
+          </div>
         </div>
       ) : activeTab === 2 ? (
-        <StationModelFilesTab modelUid={uid || ''} isEdit={isEdit} localDocuments={localDocuments} setLocalDocuments={setLocalDocuments} />
+        <StationModelFilesTab 
+          modelUid={uid || ''} 
+          isEdit={isEdit} 
+          localDocuments={localDocuments} 
+          setLocalDocuments={setLocalDocuments}
+          documentChanges={documentChanges}
+          setDocumentChanges={setDocumentChanges}
+        />
       ) : (
         <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96, backgroundColor: '#FFFFFF', borderRadius: 15, border: '1px solid rgba(102, 110, 254, 0.15)', overflow: 'hidden' }}>
           {activeTab === 0 && (
@@ -276,6 +453,7 @@ const StationModelCreatePage = () => {
               typeId={typeId} typeName={typeName} manufacturerId={manufacturerId} manufacturerName={manufacturerName}
               modelImageUrl={modelImageUrl} localImage={localImage} setLocalImage={setLocalImage}
               setModelImageUrl={setModelImageUrl}
+              deletedImageUid={deletedImageUid} setDeletedImageUid={setDeletedImageUid}
               setName={setName} setArticle={setArticle} setRevision={setRevision} setDescription={setDescription}
               openPopup={openPopup} isEdit={isEdit}
             />
