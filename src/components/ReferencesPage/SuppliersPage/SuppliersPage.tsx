@@ -1,103 +1,459 @@
-// SuppliersPage.tsx — ПОЛНЫЙ ФАЙЛ (единый стиль)
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import Icon1 from '../../../assets/References/Icon1.svg';
-import Icon2 from '../../../assets/References/Icon2.svg';
-import Icon3 from '../../../assets/References/Icon3.svg';
-import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon7 from '../../../assets/References/Icon7.svg';
-import Icon8 from '../../../assets/References/Icon8.svg';
-import Icon9 from '../../../assets/References/Icon9.svg';
-import Icon10 from '../../../assets/References/Icon10.svg';
-import Icon19 from '../../../assets/References/Icon19.svg';
+import ConfigurationPopup from '../../elements/ConfigurationPopup';
+import HistoryTable from '../../elements/HistoryTable';
+import DataTable from '../../elements/DataTable';
+import TableToolbar from '../../elements/TableToolbar';
+import type { ContextMenuItem } from '../../elements/ContextMenu';
+import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
+import ContextMenuCopyIcon16 from '../../../assets/Icons/CopyIcons/CopyIcon16Black.svg';
+import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 import Popup10 from '../../../assets/References/popup10.svg';
 
-interface SupplierItem {
-  uid: string;
-  name: string;
-  code?: number;
+interface SupplierRowData { [key: string]: any; }
+interface SupplierListResponse {
+  columns: string[];
+  data: SupplierRowData[];
+  columnWidths?: Record<string, number>;
+  requiredColumns?: string[];
 }
 
+interface ColumnItem { key: string; label: string; }
+
+const ALL_COLUMNS: ColumnItem[] = [
+  { key: 'code', label: 'Код' },
+  { key: 'name', label: 'Наименование' },
+  { key: 'shortDescriptionName', label: 'Направление' },
+  { key: 'countryName', label: 'Страна' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'phone', label: 'Телефон' },
+  { key: 'address', label: 'Адрес' },
+];
+
+const REQUIRED_COLUMNS = new Set(['code', 'name', 'shortDescriptionName']);
+
+const SORT_FIELDS = [
+  { key: 'code', label: 'Код', iconType: '19' as const },
+  { key: 'name', label: 'Наименование', iconType: '20' as const },
+  { key: 'shortDescriptionName', label: 'Направление' },
+  { key: 'countryName', label: 'Страна' },
+];
+
+const FILTER_FIELDS = [
+  { key: 'shortDescriptionName', label: 'Направление' },
+  { key: 'countryName', label: 'Страна' },
+];
+
+const USER_ID = 1;
+
 const SuppliersPage = () => {
-  const { activeTabId, openTab } = useTabs();
-  const tabIdRef = useRef<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
-  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<SupplierItem[]>([]);
+  const { openTab } = useTabs();
+  const [responseData, setResponseData] = useState<SupplierListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
+  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | null>(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [accountingIndex, setAccountingIndex] = useState(-1);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
+  const [filterOptions, setFilterOptions] = useState<Record<string, { uid: string; name: string }[]>>({});
 
-  const TABLE_WIDTH = 1720;
-  const ROW_HEIGHT = 58;
-  const HEADER_HEIGHT = 58;
-  const VISIBLE_ROWS = 10;
-  const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
+  const fetchData = useCallback(async () => {
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiSuppliersList);
+      const items = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+      const columns = ['code', 'name', 'shortDescriptionName', 'countryName', 'email', 'phone', 'address'];
+      setResponseData({
+        columns,
+        data: items,
+        columnWidths: {},
+        requiredColumns: ['code', 'name', 'shortDescriptionName'],
+      });
+      setVisibleColumns(new Set(columns));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { tabIdRef.current = activeTabId; }, []);
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const [directionsR, countriesR] = await Promise.all([
+        AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/supplier-directions?userId=${USER_ID}`),
+        AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/countries-crud?userId=${USER_ID}`),
+      ]);
+      const directions = directionsR.data?.data || directionsR.data || [];
+      const countries = countriesR.data?.data || countriesR.data || [];
+      setFilterOptions({
+        shortDescriptionName: directions.map((d: any) => ({ uid: d.uid || d.name, name: d.name || d.typeName })),
+        countryName: countries.map((c: any) => ({ uid: c.uid || c.name, name: c.name || c.typeName })),
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
-  const fetchData = async () => {
-    try { const r = await AxiosService.get(ConstantInfo.restApiSuppliersList); setData(r.data || []); }
-    catch (e) { console.error(e); } finally { setIsLoading(false); }
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const allSuppliers = responseData.data;
+      const allEvents: any[] = [];
+      
+      for (const supplier of allSuppliers) {
+        try {
+          const r = await AxiosService.get(ConstantInfo.restApiSupplierEvents(supplier.uid));
+          const events = r.data || [];
+          allEvents.push(...events.map((e: any) => ({
+            uid: e.uid,
+            createdAt: e.createdAt,
+            author: e.author,
+            eventDescription: e.eventDescription,
+          })));
+        } catch (e) {
+          // пропускаем
+        }
+      }
+      
+      allEvents.sort((a, b) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      
+      setHistoryEvents(allEvents);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [responseData.data]);
+
+  useEffect(() => {
+    fetchData();
+    fetchFilterOptions();
+  }, []);
+
+  const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
+    setColumnWidths(widths);
+  }, []);
+
+  const handleResetToBase = useCallback(() => {
+    const baseCols = new Set(REQUIRED_COLUMNS);
+    setVisibleColumns(baseCols);
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+  }, []);
+
+  const handleSaveColumns = (cols: Set<string>) => {
+    const finalCols = new Set(cols);
+    REQUIRED_COLUMNS.forEach(key => finalCols.add(key));
+    setVisibleColumns(finalCols);
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
   };
-
-  useEffect(() => { fetchData(); }, []);
-  useEffect(() => { if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) fetchData(); }, [activeTabId]);
-  useEffect(() => { if (!contextMenu) return; const h = () => setContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [contextMenu]);
-
-  const checkScroll = () => { const c = scrollContainerRef.current; if (!c) return; setHasVerticalScroll(c.scrollHeight > c.clientHeight); setHasHorizontalScroll(c.scrollWidth > c.clientWidth); };
-  useEffect(() => { const t = setTimeout(checkScroll, 350); return () => clearTimeout(t); }, [data]);
-  useEffect(() => { const c = scrollContainerRef.current; if (!c) return; checkScroll(); c.addEventListener('scroll', checkScroll); const ro = new ResizeObserver(checkScroll); ro.observe(c); return () => { c.removeEventListener('scroll', checkScroll); ro.disconnect(); }; }, []);
-
-  const toggleSelectItem = (uid: string) => { setSelectedIds(p => { const n = new Set(p); if (n.has(uid)) n.delete(uid); else n.add(uid); return n; }); };
-  const isAllSelected = data.length > 0 && data.every(i => selectedIds.has(i.uid));
-  const toggleSelectAll = () => { if (isAllSelected) setSelectedIds(new Set()); else setSelectedIds(new Set(data.map(i => i.uid))); };
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, uid, name }); };
 
   const handleCreateClick = async () => {
-    try { const r = await AxiosService.get(ConstantInfo.restApiSupplierGenerate); const { uid, code } = r.data; openTab(`/references/suppliers/create/${uid}/${code}`, 'Поставщик (новый)', null); }
-    catch { const newUid = crypto.randomUUID(); openTab(`/references/suppliers/create/${newUid}/0`, 'Поставщик (новый)', null); }
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiSupplierGenerate);
+      const { uid, code } = r.data;
+      openTab(`/references/suppliers/create/${uid}/${code}`, 'Поставщик (новый)', null);
+    } catch {
+      const newUid = crypto.randomUUID();
+      openTab(`/references/suppliers/create/${newUid}/0`, 'Поставщик (новый)', null);
+    }
   };
 
-  const handleContextOpen = () => { if (!contextMenu) return; const { uid } = contextMenu; setContextMenu(null); openTab(`/references/suppliers/edit/${uid}`, 'Поставщик', null); };
-  const handleDeleteClick = () => { if (selectedIds.size === 0) return; setShowDeleteConfirm(true); };
-  const confirmDelete = async () => { try { for (const uid of selectedIds) { await AxiosService.delete(ConstantInfo.restApiSupplierDelete(uid)); } await fetchData(); setSelectedIds(new Set()); setShowDeleteConfirm(false); } catch (e) { console.error(e); } };
-  const handleContextDelete = () => { if (!contextMenu) return; setSelectedIds(new Set([contextMenu.uid])); setContextMenu(null); setTimeout(() => setShowDeleteConfirm(true), 50); };
+  const handleDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+    setDeleteTargetUid(null);
+    setShowDeleteConfirm(true);
+  };
 
-  const emptyRows = Math.max(0, VISIBLE_ROWS - data.length);
-  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const mediumButtonStyle: React.CSSProperties = { height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
-  const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (<div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}</div>);
-  const contextMenuButtonStyle: React.CSSProperties = { width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
+  const confirmDelete = async () => {
+    try {
+      if (deleteTargetUid) {
+        await AxiosService.delete(ConstantInfo.restApiSupplierDelete(deleteTargetUid));
+      } else {
+        for (const uid of selectedIds) {
+          await AxiosService.delete(ConstantInfo.restApiSupplierDelete(uid));
+        }
+      }
+      await fetchData();
+      setSelectedIds(new Set());
+      setDeleteTargetUid(null);
+      setShowDeleteConfirm(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
-  if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
+  const handleHistoryClick = () => {
+    setShowHistory(prev => {
+      const next = !prev;
+      if (next) fetchHistory();
+      return next;
+    });
+  };
+
+  const toggleSelectItem = (uid: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  };
+
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleSelectItem(uid);
+  };
+
+  const handleRowClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleSelectItem(uid);
+  };
+
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const all = filteredData.length > 0 && filteredData.every(d => selectedIds.has(d.uid));
+    if (all) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredData.map(d => d.uid)));
+  };
+
+  const handleDoubleClick = (uid: string, name: string) => {
+    openTab(`/references/suppliers/edit/${uid}`, 'Поставщик', null);
+  };
+
+  const rowContextMenuItems = useCallback((uid: string, name: string): ContextMenuItem[] => {
+    return [
+      { id: 'open', label: 'Открыть', icon: ContextMenuOpenIcon16, onClick: () => {
+        openTab(`/references/suppliers/edit/${uid}`, 'Поставщик', null);
+      } },
+      { id: 'copy', label: 'Копировать', icon: ContextMenuCopyIcon16, onClick: () => {
+        navigator.clipboard.writeText(uid).catch(() => {});
+      } },
+      { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => {
+        setDeleteTargetUid(uid);
+        setTimeout(() => setShowDeleteConfirm(true), 50);
+      } },
+    ];
+  }, [openTab]);
+
+  const renderCell = (key: string, item: SupplierRowData): string => {
+    const val = item[key];
+    if (val === null || val === undefined) return '—';
+    if (key === 'code' && typeof val === 'number') return String(val).padStart(4, '0');
+    return String(val);
+  };
+
+  const isGrayColumn = (key: string): boolean => {
+    return !['code', 'name', 'shortDescriptionName'].includes(key);
+  };
+
+  const filteredData = useMemo(() => {
+    let result = [...responseData.data];
+    if (searchValue.trim()) {
+      const q = searchValue.toLowerCase();
+      result = result.filter(row => {
+        return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
+      });
+    }
+    if (filterValues['shortDescriptionName'] && filterValues['shortDescriptionName'].size > 0) {
+      result = result.filter(row => filterValues['shortDescriptionName'].has(String(row['shortDescriptionUid'])));
+    }
+    if (filterValues['countryName'] && filterValues['countryName'].size > 0) {
+      result = result.filter(row => filterValues['countryName'].has(String(row['countryUid'])));
+    }
+    if (sortColumn) {
+      result.sort((a, b) => {
+        if (sortColumn === 'code') {
+          return sortDirection === 'asc' ? Number(a.code) - Number(b.code) : Number(b.code) - Number(a.code);
+        }
+        const aVal = String(a[sortColumn] || '');
+        const bVal = String(b[sortColumn] || '');
+        if (sortColumn === 'name') {
+          return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        return aVal.localeCompare(bVal);
+      });
+    }
+    return result;
+  }, [responseData.data, searchValue, filterValues, sortColumn, sortDirection]);
+
+  if (isLoading) {
+    return (
+      <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
-      <div style={{ position: 'absolute', top: 35, left: 60 }}><h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Поставщики</h1></div>
-      <div style={{ position: 'absolute', top: 99, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 15 }}><button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button><button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button><button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button></div>
-        <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}><button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateClick}><img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} /><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span></button><button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button></div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}><button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button><button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button><button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button></div>
+    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 35, left: 60 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {showHistory ? 'Справочник: Поставщики (История изменений)' : 'Справочник: Поставщики'}
+        </h1>
       </div>
-      <div style={{ position: 'absolute', top: 154, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}><EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} /><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span></div>
-          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {data.map(item => { const isSelected = selectedIds.has(item.uid); return (<div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.name)}><div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}><EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} /></div><img src={Popup10} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} /><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span></div>); })}
-            {Array.from({ length: emptyRows }).map((_, i) => (<div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare isSelected={false} onClick={() => {}} /></div>))}
+
+      <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
+        <TableToolbar
+          sortFields={SORT_FIELDS}
+          filterFields={FILTER_FIELDS}
+          placementLevels={[]}
+          accountingTypes={[]}
+          accountingColumnKeys={[]}
+          filterOptions={filterOptions}
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
+          sortColumn={sortColumn}
+          sortDirection={sortDirection}
+          accountingIndex={accountingIndex}
+          onSortSelect={(col) => {
+            if (sortColumn === col) {
+              if (col === 'code' || col === 'name') {
+                setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+              }
+            } else {
+              setSortColumn(col);
+              setSortDirection('asc');
+            }
+          }}
+          onAccountingClick={() => {}}
+          onClearSort={() => { setSortColumn(null); setAccountingIndex(-1); }}
+          activeFilters={activeFilters}
+          filterValues={filterValues}
+          placementSelections={{}}
+          hasPlacementSelections={false}
+          onFilterToggle={(key) => {
+            if (key === 'shortDescriptionName' || key === 'countryName') fetchFilterOptions();
+          }}
+          onCheckFilterOption={(filterKey, optionUid) => {
+            setActiveFilters(prev => {
+              const next = new Set(prev);
+              next.add(filterKey);
+              return next;
+            });
+            setFilterValues(prev => {
+              const current = new Set(prev[filterKey] || []);
+              if (current.has(optionUid)) current.delete(optionUid);
+              else current.add(optionUid);
+              if (current.size === 0) {
+                const { [filterKey]: _, ...rest } = prev;
+                setActiveFilters(prev2 => {
+                  const n = new Set(prev2);
+                  n.delete(filterKey);
+                  return n;
+                });
+                return rest;
+              }
+              return { ...prev, [filterKey]: current };
+            });
+          }}
+          onPlacementLevelClick={() => {}}
+          onPlacementCheck={() => {}}
+          onClearFilters={() => { setActiveFilters(new Set()); setFilterValues({}); }}
+          hierarchy={null}
+          modelList={[]}
+          configList={[]}
+          onFetchHierarchy={() => {}}
+          onFetchModels={() => {}}
+          onFetchConfigurations={() => {}}
+          selectedCount={selectedIds.size}
+          onCreate={handleCreateClick}
+          onDelete={handleDeleteClick}
+          onPrint={() => {}}
+          onPrintPdf={() => {}}
+          showHistory={showHistory}
+          onHistory={handleHistoryClick}
+          onConfiguration={() => setShowConfigurationPopup(true)}
+          expanded={expanded}
+          setExpanded={setExpanded}
+        />
+      </div>
+
+      <div style={{ position: 'absolute', top: 162, left: 40, right: 15, bottom: 0, overflow: 'hidden' }}>
+        <AnimatePresence initial={false}>
+          {showHistory ? (
+            <motion.div
+              key="history"
+              initial={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+            >
+              <HistoryTable events={historyEvents} isLoading={historyLoading} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="data"
+              initial={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+            >
+              <DataTable
+                columns={ALL_COLUMNS}
+                visibleKeys={responseData.columns}
+                data={filteredData}
+                selectedIds={selectedIds}
+                onCheckboxClick={handleCheckboxClick}
+                onSelectAll={handleSelectAll}
+                onRowClick={handleRowClick}
+                onDoubleClick={handleDoubleClick}
+                renderCell={renderCell}
+                isGrayColumn={isGrayColumn}
+                highlightText={searchValue.trim() || undefined}
+                initialWidths={columnWidths}
+                onWidthsChange={handleColumnWidthsChange}
+                rowContextMenuItems={rowContextMenuItems}
+                requiredColumns={requiredColumns}
+                onResetToBase={handleResetToBase}
+                rowIcon={Popup10}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <ConfigurationPopup
+        isOpen={showConfigurationPopup}
+        onClose={() => setShowConfigurationPopup(false)}
+        title="Справочник: Поставщики (Настройки списка)"
+        columns={ALL_COLUMNS}
+        visibleColumns={visibleColumns}
+        requiredColumns={requiredColumns}
+        onSave={handleSaveColumns}
+      />
+
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
+            </div>
           </div>
         </div>
-        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
-        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
-      </div>
-      {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}><button style={contextMenuButtonStyle} onClick={handleContextOpen}>Открыть</button><button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button></div>)}
-      {showDeleteConfirm && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}><div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3><p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button><button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button></div></div></div>)}
+      )}
     </div>
   );
 };

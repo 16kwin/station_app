@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useTabs } from '../../context/TabContext';
 import AxiosService from '../../services/AxiosService';
 import ConstantInfo from '../../info/ConstantInfo';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from '../elements/CustomScrollbar';
 import Icon7 from '../../assets/References/NomenclatureCreatePage/Icon7.svg';
 
 interface TkpProduct {

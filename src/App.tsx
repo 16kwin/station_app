@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен LocationsPage)
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен ManufacturerCreatePage)
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -13,12 +13,17 @@ import NomenclatureCreatePage from './components/ReferencesPage/NomenclaturePage
 import AccountingGroupsPage from './components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
 import NomenclatureGroupsPage from './components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage';
 import NomenclatureTypesPage from './components/ReferencesPage/NomenclatureTypesPage/NomenclatureTypesPage';
+import AttributeGroupsPage from './components/ReferencesPage/AttributeGroupsPage/AttributeGroupsPage';
 import AttributeTypesPage from './components/ReferencesPage/AttributeTypesPage/AttributeTypesPage';
 import UnitsPage from './components/ReferencesPage/UnitsPage/UnitsPage';
+import NomenclatureUnitsPage from './components/ReferencesPage/NomenclatureUnitsPage/NomenclatureUnitsPage';
+import ProductionDirectionsPage from './components/ReferencesPage/ProductionDirectionsPage/ProductionDirectionsPage';
+import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/ManufacturersPage';
+import ManufacturerCreatePage from './components/ReferencesPage/ManufacturersPage/ManufacturerCreatePage';
 import BrandsPage from './components/ReferencesPage/BrandsPage/BrandsPage';
 import ModelsPage from './components/ReferencesPage/ModelsPage/ModelsPage';
-import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPage';
-import ManufacturersPage from './components/ReferencesPage/ManufacturersPage/ManufacturersPage';
+import SupplierDirectionsPage from './components/ReferencesPage/SupplierDirectionsPage/SupplierDirectionsPage';
+import SupplierBrandsPage from './components/ReferencesPage/SupplierBrandsPage/SupplierBrandsPage';
 import SuppliersPage from './components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from './components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import TemplatesPage from './components/ReferencesPage/TemplatesPage/TemplatesPage';
@@ -35,6 +40,7 @@ import StationConfigurationCreatePage from './components/ReferencesPage/StationC
 import StationsCrudPage from './components/ReferencesPage/StationsCrudPage/StationsCrudPage';
 import StationCreatePage from './components/ReferencesPage/StationsCrudPage/StationCreatePage';
 import LocationsPage from './components/ReferencesPage/LocationsPage/LocationsPage';
+import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
@@ -99,12 +105,18 @@ const AppContent = () => {
                 <Route path="references/accounting-groups" element={<AccountingGroupsPage />} />
                 <Route path="references/nomenclature-groups" element={<NomenclatureGroupsPage />} />
                 <Route path="references/nomenclature-types" element={<NomenclatureTypesPage />} />
+                <Route path="references/attribute-groups" element={<AttributeGroupsPage />} />
                 <Route path="references/attribute-types" element={<AttributeTypesPage />} />
                 <Route path="references/units" element={<UnitsPage />} />
+                <Route path="references/nomenclature-units" element={<NomenclatureUnitsPage />} />
+                <Route path="references/production-directions" element={<ProductionDirectionsPage />} />
+                <Route path="references/manufacturers" element={<ManufacturersPage />} />
+                <Route path="references/manufacturers/create/:uid/:code" element={<ManufacturerCreatePage />} />
+                <Route path="references/manufacturers/edit/:uid/:code" element={<ManufacturerCreatePage />} />
                 <Route path="references/brands" element={<BrandsPage />} />
                 <Route path="references/models" element={<ModelsPage />} />
-                <Route path="references/countries" element={<CountriesPage />} />
-                <Route path="references/manufacturers" element={<ManufacturersPage />} />
+                <Route path="references/supplier-directions" element={<SupplierDirectionsPage />} />
+                <Route path="references/supplier-brands" element={<SupplierBrandsPage />} />
                 <Route path="references/suppliers" element={<SuppliersPage />} />
                 <Route path="references/suppliers/create/:uid/:code" element={<SupplierCreatePage />} />
                 <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />

@@ -1,4 +1,4 @@
-// StationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (обработка документов при сохранении + поиск в истории)
+// StationCreatePage.tsx — ИСПРАВЛЕННЫЙ (replaceTab вместо navigate при сохранении)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -52,7 +52,7 @@ interface InitialState {
 const StationCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
   const navigate = useNavigate();
-  const { tabs, activeTabId, closeTab } = useTabs();
+  const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
   const [activeTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
@@ -275,7 +275,6 @@ const StationCreatePage = () => {
         await AxiosService.post(ConstantInfo.restApiStationsCrud(USER_ID).split('?')[0], body);
       }
 
-      // Отправка документов
       for (const doc of localDocuments) {
         if (doc.isNew) {
           const fd = new FormData();
@@ -319,7 +318,12 @@ const StationCreatePage = () => {
       });
       
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
-      if (wasCreate) { setIsEdit(true); navigate(`/references/stations/edit/${uid}`, { replace: true }); }
+      if (wasCreate && activeTabId) {
+        setIsEdit(true);
+        const newPath = `/references/stations/edit/${uid}`;
+        const newLabel = `Станция: ${name.trim()}`;
+        replaceTab(activeTabId, newPath, newLabel, <StationCreatePage />);
+      }
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 

@@ -1,9 +1,11 @@
-// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (адаптирован для номенклатуры)
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (forwardRef + focusBarcodeSearch)
+import React, { useState, useRef, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import SearchIcon18Black from '../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../assets/Icons/SearchIcons/SearchIcon18White.svg';
+import BarcodeIcon28Black from '../../assets/Icons/BarcodeIcons/BarcodeIcon28Black.svg';
+import BarcodeIcon26White from '../../assets/Icons/BarcodeIcons/BarcodeIcon26White.svg';
 import SortingIcon20Black from '../../assets/Icons/SortingIcons/SortingIcon20Black.svg';
 import SortingIcon20White from '../../assets/Icons/SortingIcons/SortingIcon20White.svg';
 import FilterIcon18Black from '../../assets/Icons/FilterIcons/FilterIcon18Black.svg';
@@ -37,6 +39,10 @@ interface SectionDTO { id: number; name: string; workshopId: number; enterpriseI
 type PlacementKey = string;
 type PlacementSelections = Record<string, Set<string>>;
 
+export interface TableToolbarRef {
+  focusBarcodeSearch: () => void;
+}
+
 interface TableToolbarProps {
   sortFields: SortField[];
   filterFields: FilterField[];
@@ -47,6 +53,9 @@ interface TableToolbarProps {
   
   searchValue: string;
   onSearchChange: (value: string) => void;
+  
+  barcodeSearchValue?: string;
+  onBarcodeSearchChange?: (value: string) => void;
   
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc';
@@ -83,15 +92,24 @@ interface TableToolbarProps {
   
   extraButtons?: React.ReactNode;
   
-  expanded: 'search' | 'sort' | 'filter' | null;
-  setExpanded: React.Dispatch<React.SetStateAction<'search' | 'sort' | 'filter' | null>>;
+  expanded: 'search' | 'sort' | 'filter' | 'barcodeSearch' | null;
+  setExpanded: React.Dispatch<React.SetStateAction<'search' | 'sort' | 'filter' | 'barcodeSearch' | null>>;
 }
 
-const BTN_COLLAPSED = 40; const BTN_SEARCH_EXPANDED = 280; const BTN_SORT_EXPANDED = 230; const BTN_FILTER_EXPANDED = 230;
-const BTN_GAP = 15; const GROUP_GAP = 110; const BTN_HEADER = 40; const BTN_CLEAR = 44;
-const TEXT_HEIGHT = 18; const ITEM_GAP = 20; const TOP_PAD = 20; const BOTTOM_PAD = 20;
-const LEFT_OFFSET = 30; const TEXT_WIDTH = 180; const INDICATOR_LEFT = 15; const INDICATOR_WIDTH = 2;
-const INDICATOR_HEIGHT = 22; const ICON_RIGHT_PAD = 4;
+const BTN_COLLAPSED = 40;
+const BTN_SEARCH_EXPANDED = 280;
+const BTN_GAP = 15;
+const GROUP_GAP = 110;
+const BTN_HEADER = 40;
+const BTN_CLEAR = 44;
+const TEXT_HEIGHT = 18;
+const ITEM_GAP = 20;
+const TOP_PAD = 20;
+const BOTTOM_PAD = 20;
+const LEFT_OFFSET = 30;
+const INDICATOR_LEFT = 15;
+const INDICATOR_WIDTH = 2;
+const INDICATOR_HEIGHT = 22;
 const SUBMENU_WIDTH = 262;
 const SUBMENU_OFFSET = 3;
 const ROW_STEP = TEXT_HEIGHT + ITEM_GAP;
@@ -103,6 +121,12 @@ const SUBMENU_TEXT_TO_CHECKBOX_GAP = 20;
 const SUBMENU_CHECKBOX_WIDTH = 20;
 const SUBMENU_RIGHT_PAD = 20;
 const SUBMENU_WIDTH_EXTRA = 5;
+const SORT_FILTER_MIN_WIDTH = 200;
+const SORT_FILTER_MAX_WIDTH = 1000;
+const FILTER_RIGHT_PAD = 20;
+const FILTER_ARROW_WIDTH = 18;
+const FILTER_TEXT_TO_ARROW_GAP = 8;
+const SORT_RIGHT_PAD = 20;
 
 const getTextWidth = (text: string, fontSize: number, fontWeight: number): number => {
   const canvas = document.createElement('canvas');
@@ -112,7 +136,7 @@ const getTextWidth = (text: string, fontSize: number, fontWeight: number): numbe
   return ctx.measureText(text).width;
 };
 
-const TableToolbar: React.FC<TableToolbarProps> = ({
+const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
   sortFields,
   filterFields,
   placementLevels = [],
@@ -122,6 +146,9 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   
   searchValue,
   onSearchChange,
+  
+  barcodeSearchValue = '',
+  onBarcodeSearchChange,
   
   sortColumn,
   sortDirection,
@@ -160,8 +187,9 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   
   expanded,
   setExpanded,
-}) => {
+}, ref) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const barcodeSearchInputRef = useRef<HTMLInputElement>(null);
   const [sortIndicatorY, setSortIndicatorY] = useState(0);
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
   const [placementOpen, setPlacementOpen] = useState<string | null>(null);
@@ -169,10 +197,20 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  useImperativeHandle(ref, () => ({
+    focusBarcodeSearch: () => {
+      setExpanded('barcodeSearch');
+      setTimeout(() => {
+        barcodeSearchInputRef.current?.focus();
+      }, 150);
+    },
+  }));
+
   const hasFilterFields = filterFields.length > 0;
   const hasActiveSort = sortColumn !== null;
   const hasActiveFilter = activeFilters.size > 0 || hasPlacementSelections;
   const hasPlacement = placementLevels.length > 0;
+  const hasBarcodeSearch = onBarcodeSearchChange !== undefined;
 
   const getIndicatorTarget = useCallback((idx: number): number => TOP_PAD + idx * ROW_STEP + (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, []);
   
@@ -193,6 +231,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
 
   useEffect(() => { if (expanded === 'sort') { const idx = sortFields.findIndex(f => f.key === sortColumn); if (idx >= 0) setSortIndicatorY(getIndicatorTarget(idx)); } }, [expanded]);
   useEffect(() => { if (expanded === 'search' && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [expanded]);
+  useEffect(() => { if (expanded === 'barcodeSearch' && barcodeSearchInputRef.current) setTimeout(() => barcodeSearchInputRef.current?.focus(), 100); }, [expanded]);
 
   const handleMouseEnter = useCallback((e: React.MouseEvent, text: string) => {
     const target = e.currentTarget as HTMLElement;
@@ -210,10 +249,15 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
     setTooltip(null);
   }, []);
 
-  const toggleExpand = (type: 'search' | 'sort' | 'filter') => { 
+  const toggleExpand = (type: 'search' | 'sort' | 'filter' | 'barcodeSearch') => { 
     if (type === 'search' && expanded === 'search') { 
       setExpanded(null); 
       onSearchChange(''); 
+      return; 
+    }
+    if (type === 'barcodeSearch' && expanded === 'barcodeSearch') { 
+      setExpanded(null); 
+      onBarcodeSearchChange?.(''); 
       return; 
     }
     if (type === 'filter' && expanded === 'filter') {
@@ -229,6 +273,12 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
     e.stopPropagation(); 
     setExpanded(null); 
     onSearchChange(''); 
+  };
+  
+  const handleBarcodeSearchClose = (e: React.MouseEvent) => { 
+    e.stopPropagation(); 
+    setExpanded(null); 
+    onBarcodeSearchChange?.(''); 
   };
   
   const handleSortFieldClick = (field: SortField) => {
@@ -356,12 +406,38 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
     return Math.min(Math.max(calculated, SUBMENU_MIN_WIDTH), SUBMENU_MAX_WIDTH);
   };
 
+  const getSortListWidth = useMemo((): number => {
+    let maxWidth = 0;
+    sortFields.forEach(field => {
+      const label = getSortLabel(field);
+      const textWidth = getTextWidth(label, 15, 500);
+      const iconWidth = field.iconType === '19' ? 19 : field.iconType === '20' ? 20 : 0;
+      const totalWidth = LEFT_OFFSET + textWidth + (iconWidth > 0 ? 8 + iconWidth : 0) + SORT_RIGHT_PAD;
+      if (totalWidth > maxWidth) maxWidth = totalWidth;
+    });
+    return Math.min(Math.max(maxWidth, SORT_FILTER_MIN_WIDTH), SORT_FILTER_MAX_WIDTH);
+  }, [sortFields, accountingIndex, accountingTypes]);
+
+  const getFilterListWidth = useMemo((): number => {
+    let maxWidth = 0;
+    filterFields.forEach(field => {
+      const textWidth = getTextWidth(field.label, 15, 500);
+      const totalWidth = LEFT_OFFSET + textWidth + FILTER_TEXT_TO_ARROW_GAP + FILTER_ARROW_WIDTH + FILTER_RIGHT_PAD;
+      if (totalWidth > maxWidth) maxWidth = totalWidth;
+    });
+    return Math.min(Math.max(maxWidth, SORT_FILTER_MIN_WIDTH), SORT_FILTER_MAX_WIDTH);
+  }, [filterFields]);
+
   const searchWidth = expanded === 'search' ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED; 
-  const sortWidth = expanded === 'sort' ? BTN_SORT_EXPANDED : BTN_COLLAPSED; 
-  const filterWidth = expanded === 'filter' ? BTN_FILTER_EXPANDED : BTN_COLLAPSED;
+  const sortWidth = expanded === 'sort' ? getSortListWidth : BTN_COLLAPSED; 
+  const filterWidth = expanded === 'filter' ? getFilterListWidth : BTN_COLLAPSED;
+  const barcodeSearchWidth = expanded === 'barcodeSearch' ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
+  
   const sortX = searchWidth + BTN_GAP; 
-  const filterX = searchWidth + sortWidth + BTN_GAP * 2; 
-  const createGroupX = searchWidth + sortWidth + (hasFilterFields ? filterWidth + BTN_GAP * 3 : BTN_GAP) + GROUP_GAP;
+  const filterX = searchWidth + sortWidth + BTN_GAP * 2;
+  const barcodeSearchX = searchWidth + sortWidth + (hasFilterFields ? filterWidth + BTN_GAP * 3 : BTN_GAP);
+  const createGroupX = searchWidth + sortWidth + (hasFilterFields ? filterWidth + BTN_GAP * 3 : BTN_GAP) + barcodeSearchWidth + BTN_GAP + GROUP_GAP;
+  
   const spring = { type: 'spring' as const, stiffness: 300, damping: 25 }; 
   const tween = { type: 'tween' as const, duration: 0.2 };
   const sortListHeight = TOP_PAD + sortFields.length * TEXT_HEIGHT + (sortFields.length - 1) * ITEM_GAP + BOTTOM_PAD;
@@ -370,6 +446,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
 
   return (
     <div style={{ position: 'relative', height: 40 }}>
+      {/* Поиск */}
       <motion.div 
         style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: expanded === 'search' ? '#666EFE' : '#FFFFFF', border: expanded === 'search' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
         animate={{ width: searchWidth }} 
@@ -385,6 +462,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
         )}
       </motion.div>
 
+      {/* Сортировка */}
       <motion.div 
         style={{ position: 'absolute', left: 0, top: 0, borderRadius: 10, backgroundColor: '#FFFFFF', border: expanded === 'sort' ? 'none' : (hasActiveSort ? 'none' : '1px solid rgba(102, 110, 254, 0.15)'), boxShadow: expanded === 'sort' ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'hidden', zIndex: expanded === 'sort' ? 20 : 1 }} 
         animate={{ x: sortX, width: sortWidth, height: expanded === 'sort' ? BTN_HEADER + sortListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
@@ -410,16 +488,13 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                   const sortIcon = getSortIcon(field); 
                   const label = getSortLabel(field); 
                   const iconWidth = field.iconType === '19' ? 19 : field.iconType === '20' ? 20 : 0; 
-                  const textMaxWidth = sortIcon ? TEXT_WIDTH - iconWidth - ICON_RIGHT_PAD : TEXT_WIDTH; 
                   
                   return (
-                    <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSortFieldClick(field)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: sortFields.indexOf(field) < sortFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
-                      <div style={{ width: TEXT_WIDTH, display: 'flex', alignItems: 'center', position: 'relative' }}>
-                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isSelected ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', maxWidth: textMaxWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {label}
-                        </span>
-                        {sortIcon && <img src={sortIcon} alt="" style={{ width: iconWidth, height: field.iconType === '19' ? 12 : 10, position: 'absolute', right: ICON_RIGHT_PAD }} />}
-                      </div>
+                    <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSortFieldClick(field)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: sortFields.indexOf(field) < sortFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, paddingRight: SORT_RIGHT_PAD, position: 'relative', userSelect: 'none' }}>
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isSelected ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {label}
+                      </span>
+                      {sortIcon && <img src={sortIcon} alt="" style={{ width: iconWidth, height: field.iconType === '19' ? 12 : 10, marginLeft: 8, flexShrink: 0 }} />}
                     </div>
                   ); 
                 })}
@@ -445,6 +520,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
         </AnimatePresence>
       </motion.div>
 
+      {/* Фильтр */}
       {hasFilterFields && (
         <motion.div 
           style={{ position: 'absolute', left: 0, top: 0, borderRadius: 10, backgroundColor: '#FFFFFF', border: expanded === 'filter' ? 'none' : (hasActiveFilter ? 'none' : '1px solid rgba(102, 110, 254, 0.15)'), boxShadow: expanded === 'filter' ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'visible', zIndex: expanded === 'filter' ? 20 : 1 }} 
@@ -472,17 +548,15 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                 })}
                 
                 <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
-                  {filterFields.map((field) => { 
+                  {filterFields.map((field, fieldIdx) => { 
                     const isActive = field.key === 'sectionName' && hasPlacement ? hasPlacementSelections : activeFilters.has(field.key); 
                     return (
-                      <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleFilterToggle(field.key)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: filterFields.indexOf(field) < filterFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
-                        <div style={{ width: TEXT_WIDTH, display: 'flex', alignItems: 'center', position: 'relative' }}>
-                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isActive ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', maxWidth: TEXT_WIDTH - 22, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {field.label}
-                          </span>
-                          <div style={{ position: 'absolute', right: ICON_RIGHT_PAD, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <img src={isActive ? ArrowIcon6Blue : ArrowIcon6Black} alt="" style={{ width: 6, height: 10 }} />
-                          </div>
+                      <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleFilterToggle(field.key)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: fieldIdx < filterFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isActive ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          {field.label}
+                        </span>
+                        <div style={{ position: 'absolute', right: FILTER_RIGHT_PAD, width: FILTER_ARROW_WIDTH, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <img src={isActive ? ArrowIcon6Blue : ArrowIcon6Black} alt="" style={{ width: 6, height: 10 }} />
                         </div>
                       </div>
                     ); 
@@ -492,7 +566,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                 <AnimatePresence>
                   {submenuOpen && (!hasPlacement || submenuOpen !== 'sectionName') && (
                     <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
-                      style={{ position: 'absolute', left: BTN_FILTER_EXPANDED + SUBMENU_OFFSET, top: getSubmenuTop(submenuOpen), width: getSubmenuWidth(submenuOpen), height: getSubmenuHeight(submenuOpen), backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'hidden' }}>
+                      style={{ position: 'absolute', left: filterWidth + SUBMENU_OFFSET, top: getSubmenuTop(submenuOpen), width: getSubmenuWidth(submenuOpen), height: getSubmenuHeight(submenuOpen), backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'hidden' }}>
                       <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none', maxHeight: SUBMENU_MAX_HEIGHT }}>
                         {getSubmenuOptions(submenuOpen).map((option) => { 
                           const checked = isFilterOptionChecked(submenuOpen, option.uid); 
@@ -522,7 +596,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
                   <AnimatePresence>
                     {submenuOpen === 'sectionName' && (
                       <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} 
-                        style={{ position: 'absolute', left: BTN_FILTER_EXPANDED + SUBMENU_OFFSET, top: getSubmenuTop('sectionName'), width: SUBMENU_WIDTH, height: placementSubmenuHeight, backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'visible' }}>
+                        style={{ position: 'absolute', left: filterWidth + SUBMENU_OFFSET, top: getSubmenuTop('sectionName'), width: SUBMENU_WIDTH, height: placementSubmenuHeight, backgroundColor: '#FFFFFF', borderRadius: '0 15px 15px 15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(102, 110, 254, 0.15)', zIndex: 25, overflow: 'visible' }}>
                         <div style={{ position: 'relative', height: '100%' }}>
                           {placementLevels.map((level, i) => {
                             const hasSelection = placementSelections[level.key] && placementSelections[level.key]!.size > 0;
@@ -597,6 +671,32 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
         </motion.div>
       )}
 
+      {/* Поиск по штрихкоду/SKU */}
+      {hasBarcodeSearch && (
+        <motion.div 
+          style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: expanded === 'barcodeSearch' ? '#666EFE' : '#FFFFFF', border: expanded === 'barcodeSearch' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden', zIndex: expanded === 'barcodeSearch' ? 20 : 1 }} 
+          animate={{ x: barcodeSearchX, width: barcodeSearchWidth }} 
+          transition={{ x: spring, width: tween }}
+        >
+          <div onClick={expanded === 'barcodeSearch' ? handleBarcodeSearchClose : () => setExpanded('barcodeSearch')} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+            <img 
+              src={expanded === 'barcodeSearch' ? BarcodeIcon26White : BarcodeIcon28Black} 
+              alt="" 
+              style={expanded === 'barcodeSearch' 
+                ? { width: 26, height: 18 } 
+                : { width: 28, height: 20 }
+              } 
+            />
+          </div>
+          {expanded === 'barcodeSearch' && (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}>
+              <input ref={barcodeSearchInputRef} type="text" value={barcodeSearchValue} onChange={e => onBarcodeSearchChange?.(e.target.value)} placeholder="Штрихкод / SKU" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Кнопка Создать */}
       <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
         <button style={{ height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, width: 130 }} 
           onClick={onCreate}>
@@ -610,6 +710,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
         </button>
       </motion.div>
       
+      {/* Правые кнопки */}
       <div style={{ position: 'absolute', right: 0, top: 0, display: 'flex', gap: 15 }}>
         {onPrint && (
           <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
@@ -648,6 +749,8 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
       )}
     </div>
   );
-};
+});
+
+TableToolbar.displayName = 'TableToolbar';
 
 export default TableToolbar;

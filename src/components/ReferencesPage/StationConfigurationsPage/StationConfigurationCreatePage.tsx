@@ -1,4 +1,4 @@
-// StationConfigurationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (поиск в истории)
+// StationConfigurationCreatePage.tsx — ИСПРАВЛЕННЫЙ (replaceTab вместо navigate при сохранении)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -37,7 +37,7 @@ const BTN_SEARCH_EXPANDED = 280;
 const StationConfigurationCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
   const navigate = useNavigate();
-  const { tabs, activeTabId, closeTab } = useTabs();
+  const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
   const [name, setName] = useState('');
   const [modelId, setModelId] = useState('');
@@ -340,6 +340,7 @@ const StationConfigurationCreatePage = () => {
     try {
       const cellsStructure = JSON.stringify({ type: gridType, columns: gridType === 'postamat' ? columns : undefined, cellsPerColumn: gridType === 'postamat' ? cellsPerColumn : undefined, drums: gridType === 'drum' ? drums : undefined, columnsPerDrum: gridType === 'drum' ? columnsPerDrum : undefined, rowsPerColumn: gridType === 'drum' ? rowsPerColumn : undefined, cells });
       const body = { uid, name: name.trim(), modelId: modelId || null, cellsStructure };
+      const wasCreate = !isEdit;
       if (isEdit) await AxiosService.patch(`${ConstantInfo.restApiStationConfigurations}/${uid}`, body);
       else await AxiosService.post(ConstantInfo.restApiStationConfigurations, body);
       
@@ -356,7 +357,12 @@ const StationConfigurationCreatePage = () => {
       });
       
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
-      if (!isEdit) { setIsEdit(true); navigate(`/references/station-configurations/edit/${uid}`, { replace: true }); }
+      if (wasCreate && activeTabId) {
+        setIsEdit(true);
+        const newPath = `/references/station-configurations/edit/${uid}`;
+        const newLabel = name.trim() || 'Конфигурация станции';
+        replaceTab(activeTabId, newPath, newLabel, <StationConfigurationCreatePage />);
+      }
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 

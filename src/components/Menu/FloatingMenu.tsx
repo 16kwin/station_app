@@ -1,4 +1,3 @@
-// FloatingMenu.tsx — ИСПРАВЛЕННЫЙ (добавлены Расположения в referencesItems)
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useAuth } from '../../services/AuthContext';
@@ -45,8 +44,11 @@ const referencesItems = [
   { label: 'Группы учета', path: '/references/accounting-groups' },
   { label: 'Группы номенклатуры', path: '/references/nomenclature-groups' },
   { label: 'Виды номенклатуры', path: '/references/nomenclature-types' },
+  { label: 'Группы характеристик', path: '/references/attribute-groups' },
   { label: 'Виды характеристик', path: '/references/attribute-types' },
-  { label: 'Единицы измерения', path: '/references/units' },
+  { label: 'Единицы измерения характеристик', path: '/references/units' },
+  { label: 'Единицы измерения', path: '/references/nomenclature-units' },
+  { label: 'Направления производства', path: '/references/production-directions' },
   { label: 'Производители', path: '/references/manufacturers' },
   { label: 'Бренды', path: '/references/brands' },
   { label: 'Модели', path: '/references/models' },
@@ -61,6 +63,8 @@ const referencesItems = [
   { label: 'Модели станций', path: '/references/station-models' },
   { label: 'Конфигурации станций', path: '/references/station-configurations' },
   { label: 'Станции', path: '/references/stations' },
+  { label: 'Направления поставщиков', path: '/references/supplier-directions' },
+  { label: 'Бренды поставщиков', path: '/references/supplier-brands' },
 ];
 
 const getPopupContent = (popupIndex: number) => {
@@ -359,7 +363,7 @@ const FloatingMenu = () => {
                   backgroundColor: '#3F3E3F',
                   borderRadius: '40px',
                   marginBottom: '-1px',
-                  padding: '30px 40px',
+                  padding: '25px 35px',
                   overflow: 'auto',
                   display: 'flex',
                   flexDirection: 'column',
@@ -368,7 +372,7 @@ const FloatingMenu = () => {
               >
                 <h2 style={{
                   fontFamily: 'Inter, sans-serif',
-                  fontSize: '16px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   color: '#FFFFFF',
                   margin: 0,
@@ -380,14 +384,14 @@ const FloatingMenu = () => {
                   width: '280px',
                   height: '2px',
                   backgroundColor: '#FFFFFF',
-                  marginTop: '11px',
+                  marginTop: '9px',
                 }} />
 
                 <div style={{ 
-                  marginTop: '20px', 
+                  marginTop: '16px', 
                   display: 'flex', 
                   flexWrap: 'wrap', 
-                  gap: '12px 40px',
+                  gap: '8px 30px',
                   width: '100%',
                 }}>
                   {popupType === 'references' && referencesItems.map((item, i) => (
@@ -397,21 +401,21 @@ const FloatingMenu = () => {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '5px',
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
                       }}
                     >
                       <div style={{
-                        width: '6px',
-                        height: '6px',
+                        width: '5px',
+                        height: '5px',
                         borderRadius: '50%',
                         backgroundColor: '#FFFFFF',
                         flexShrink: 0,
                       }} />
                       <span style={{
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: '15px',
+                        fontSize: '13px',
                         fontWeight: 400,
                         color: '#FFFFFF',
                       }}>
@@ -422,7 +426,7 @@ const FloatingMenu = () => {
                   {popupType === 'documents' && (
                     <span style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: '15px',
+                      fontSize: '13px',
                       fontWeight: 400,
                       color: 'rgba(255,255,255,0.5)',
                     }}>
@@ -432,7 +436,7 @@ const FloatingMenu = () => {
                   {popupType === 'reports' && (
                     <span style={{
                       fontFamily: 'Inter, sans-serif',
-                      fontSize: '15px',
+                      fontSize: '13px',
                       fontWeight: 400,
                       color: 'rgba(255,255,255,0.5)',
                     }}>

@@ -6,7 +6,7 @@ import StationRow from './StationRow';
 import SchablonPopup from './SchablonPopup';
 import ConstantInfo from '../../info/ConstantInfo';
 import AxiosService from '../../services/AxiosService';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from '../elements/CustomScrollbar';
 
 import Icon1 from '../../assets/Station/1.svg';
 import Icon2 from '../../assets/Station/2.svg';

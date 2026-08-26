@@ -1,6 +1,6 @@
 // SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import CustomScrollbar from '../../elements/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
 
 interface TableRow {

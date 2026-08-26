@@ -1,206 +1,481 @@
-// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (как DocumentsTab)
+// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (как StationModelFilesTab)
 import React, { useState, useRef, useEffect } from 'react';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import { motion, AnimatePresence } from 'framer-motion';
+import DataTable from '../../elements/DataTable';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
+import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
+import SortingIcon20Black from '../../../assets/Icons/SortingIcons/SortingIcon20Black.svg';
+import SortingIcon20White from '../../../assets/Icons/SortingIcons/SortingIcon20White.svg';
+import SortingIcon19BlueDown from '../../../assets/Icons/SortingIcons/SortingIcon19BlueDown.svg';
+import SortingIcon19BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon19BlueUp.svg';
+import SortingIcon20BlueDown from '../../../assets/Icons/SortingIcons/SortingIcon20BlueDown.svg';
+import SortingIcon20BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon20BlueUp.svg';
+import CreateIcon14Black from '../../../assets/Icons/СreateIcons/СreateIcon14Black.svg';
+import DeleteIcon18Black from '../../../assets/Icons/DeleteIcons/DeleteIcon18Black.svg';
+import FilesIcon14Black from '../../../assets/Icons/FilesIcons/FilesIcon14Black.svg';
+import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
+import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 import type { CommonSupplierProps } from './SupplierCreatePage';
-import Button1 from '../../../assets/References/NomenclatureCreatePage/button1.svg';
-import Button4 from '../../../assets/References/NomenclatureCreatePage/button4.svg';
-import Button5 from '../../../assets/References/NomenclatureCreatePage/button5.svg';
+
+interface DocumentItem {
+  uid: string;
+  documentName: string;
+  originalName: string;
+  url: string;
+  createdAt: string;
+}
+
+interface LocalDocumentItem {
+  localId: string;
+  documentName: string;
+  file: File;
+}
+
+const FILE_COLUMNS = [
+  { key: 'documentName', label: 'Наименование' },
+  { key: 'originalName', label: 'Файл' },
+  { key: 'createdAt', label: 'Дата' },
+];
+
+const BTN_COLLAPSED = 40;
+const BTN_SEARCH_EXPANDED = 280;
+const BTN_SORT_EXPANDED = 230;
+const BTN_GAP = 15;
+const BTN_HEADER = 40;
+const BTN_CLEAR = 44;
+const TEXT_HEIGHT = 18;
+const ITEM_GAP = 20;
+const TOP_PAD = 20;
+const BOTTOM_PAD = 20;
+const LEFT_OFFSET = 30;
+const TEXT_WIDTH = 180;
+const INDICATOR_LEFT = 15;
+const INDICATOR_WIDTH = 2;
+const INDICATOR_HEIGHT = 22;
+const ICON_RIGHT_PAD = 4;
 
 const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
-  const { uid, isEdit } = props;
+  const { uid, isEdit, localDocuments = [], setLocalDocuments = () => {} } = props;
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasScroll, setHasScroll] = useState(false);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [serverDocuments, setServerDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
-
-  const [showAddDocPopup, setShowAddDocPopup] = useState(false);
-  const [showEditDocPopup, setShowEditDocPopup] = useState(false);
-  const [editingDoc, setEditingDoc] = useState<any>(null);
-  const [editDocName, setEditDocName] = useState('');
-  const [newDocName, setNewDocName] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileLocalRef = useRef<HTMLInputElement>(null);
-
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; docUid: string; docName: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const fileLocalRef = useRef<HTMLInputElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string; isLocal: boolean } | null>(null);
 
-  const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
-  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
+  const [showAddPopup, setShowAddPopup] = useState(false);
+  const [showEditPopup, setShowEditPopup] = useState(false);
+  const [editDocUid, setEditDocUid] = useState('');
+  const [editDocName, setEditDocName] = useState('');
+  const [editIsLocal, setEditIsLocal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [formDocName, setFormDocName] = useState('');
 
-  const TABLE_WIDTH = 1660;
-  const TABLE_HEIGHT = 464;
-  const ROW_HEIGHT = 58;
-  const HEADER_HEIGHT = 58;
-  const VISIBLE_ROWS = 7;
+  const [expanded, setExpanded] = useState<'search' | 'sort' | null>(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortIndicatorY, setSortIndicatorY] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const rafRef = useRef<number | null>(null);
 
-  const COL_NAME = 50;
-  const COL_FILE = 720;
-  const COL_DATE = 1265;
+  const SORT_FIELDS = [
+    { key: 'documentName', label: 'Наименование', iconType: '20' as const },
+    { key: 'createdAt', label: 'Дата', iconType: '19' as const },
+  ];
+
+  const hasActiveSort = sortColumn !== null;
+
+  const getIndicatorTarget = (idx: number): number => TOP_PAD + idx * (TEXT_HEIGHT + ITEM_GAP) + (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2;
+
+  const animateSortIndicator = (to: number) => { 
+    if (rafRef.current) cancelAnimationFrame(rafRef.current); 
+    const from = sortIndicatorY; 
+    const duration = 200; 
+    const startTime = performance.now(); 
+    const animate = (currentTime: number) => { 
+      const elapsed = currentTime - startTime; 
+      const progress = Math.min(elapsed / duration, 1); 
+      const eased = 1 - Math.pow(1 - progress, 3); 
+      setSortIndicatorY(from + (to - from) * eased); 
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate); 
+    }; 
+    rafRef.current = requestAnimationFrame(animate); 
+  };
 
   const fetchDocuments = async () => {
-    if (!uid) return;
     setIsLoading(true);
     try {
-      const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid));
-      setDocuments((res.data || []).map((doc: any) => ({
-        ...doc,
+      const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid!));
+      setServerDocuments((res.data || []).map((doc: any) => ({
+        uid: doc.uid,
+        documentName: doc.documentName,
+        originalName: doc.originalName,
         url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '',
+        createdAt: doc.createdAt,
       })));
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
   useEffect(() => { if (uid && isEdit) fetchDocuments(); }, [uid, isEdit]);
-  useEffect(() => { const handler = () => { if (uid) fetchDocuments(); }; window.addEventListener('refreshSupplierDocuments', handler); return () => window.removeEventListener('refreshSupplierDocuments', handler); }, [uid]);
   useEffect(() => { if (!contextMenu) return; const h = () => setContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [contextMenu]);
+  useEffect(() => { if (expanded === 'search' && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [expanded]);
+  useEffect(() => { if (expanded === 'sort') { const idx = SORT_FIELDS.findIndex(f => f.key === sortColumn); if (idx >= 0) setSortIndicatorY(getIndicatorTarget(idx)); } }, [expanded]);
 
-  const checkScroll = () => { const c = scrollContainerRef.current; if (c) setHasScroll(c.scrollHeight > c.clientHeight); };
-  useEffect(() => { const t = setTimeout(checkScroll, 100); return () => clearTimeout(t); }, [documents]);
-  useEffect(() => { const c = scrollContainerRef.current; if (!c) return; checkScroll(); c.addEventListener('scroll', checkScroll); const ro = new ResizeObserver(checkScroll); ro.observe(c); return () => { c.removeEventListener('scroll', checkScroll); ro.disconnect(); }; }, []);
+  const allDocuments: DocumentItem[] = [
+    ...serverDocuments,
+    ...localDocuments.map(d => ({
+      uid: d.localId,
+      documentName: d.documentName,
+      originalName: d.file.name,
+      url: '',
+      createdAt: new Date().toISOString(),
+    })),
+  ];
 
-  const formatDate = (dateStr: string) => { if (!dateStr) return ''; try { return new Date(dateStr).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return dateStr; } };
-
-  const toggleSelect = (docUid: string, e: React.MouseEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      setSelectedIds(prev => { const next = new Set(prev); if (next.has(docUid)) next.delete(docUid); else next.add(docUid); return next; });
-    } else if (e.shiftKey && lastSelectedId) {
-      const allIds = documents.map(d => d.uid);
-      const lastIdx = allIds.indexOf(lastSelectedId);
-      const currentIdx = allIds.indexOf(docUid);
-      if (lastIdx !== -1 && currentIdx !== -1) {
-        const start = Math.min(lastIdx, currentIdx);
-        const end = Math.max(lastIdx, currentIdx);
-        const rangeIds = allIds.slice(start, end + 1);
-        setSelectedIds(prev => { const next = new Set(prev); rangeIds.forEach(id => next.add(id)); return next; });
-      }
-    } else {
-      if (selectedIds.has(docUid) && selectedIds.size === 1) setSelectedIds(new Set());
-      else setSelectedIds(new Set([docUid]));
+  const filteredDocuments = React.useMemo(() => {
+    let result = [...allDocuments];
+    if (searchValue.trim()) {
+      const q = searchValue.toLowerCase();
+      result = result.filter(doc => {
+        return [doc.documentName, doc.originalName].some(v => v && String(v).toLowerCase().includes(q));
+      });
     }
-    setLastSelectedId(docUid);
+    if (sortColumn) {
+      result.sort((a, b) => {
+        const aVal = String((a as any)[sortColumn] || '');
+        const bVal = String((b as any)[sortColumn] || '');
+        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      });
+    }
+    return result;
+  }, [allDocuments, searchValue, sortColumn, sortDirection]);
+
+  const getFullUrl = (url: string): string => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return ConstantInfo.fileDir + url.replace(/^\//, '');
+  };
+
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
+  const handleSelectAll = (e: React.MouseEvent) => { e.stopPropagation(); const all = filteredDocuments.length > 0 && filteredDocuments.every(d => selectedIds.has(d.uid)); all ? setSelectedIds(new Set()) : setSelectedIds(new Set(filteredDocuments.map(d => d.uid))); };
+  const handleRowClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
+  
+  const handleContextMenu = (e: React.MouseEvent, uid: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const doc = allDocuments.find(d => d.uid === uid);
+    const isLocal = localDocuments.some(d => d.localId === uid);
+    setContextMenu({ x: e.clientX, y: e.clientY, uid, name: doc?.documentName || '', isLocal });
+  };
+  
+  const handleDoubleClick = (uid: string) => {
+    const doc = allDocuments.find(x => x.uid === uid);
+    if (!doc) return;
+    
+    if (doc.url) {
+      const fullUrl = getFullUrl(doc.url);
+      window.open(fullUrl, '_blank');
+      return;
+    }
+    
+    const localDoc = localDocuments.find(d => d.localId === uid);
+    if (localDoc) {
+      const blobUrl = URL.createObjectURL(localDoc.file);
+      window.open(blobUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    }
   };
 
   const handleDeleteSelected = () => { if (selectedIds.size === 0) return; setShowDeleteConfirm(true); };
 
-  const confirmDeleteSelected = async () => {
+  const confirmDelete = async () => {
     try {
-      for (const docUid of selectedIds) { await AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(docUid)); }
-      setSelectedIds(new Set()); setShowDeleteConfirm(false); await fetchDocuments();
+      for (const uid of selectedIds) {
+        const isLocal = localDocuments.some(d => d.localId === uid);
+        if (isLocal) {
+          setLocalDocuments((prev: any[]) => prev.filter((d: any) => d.localId !== uid));
+        } else {
+          await AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(uid));
+        }
+      }
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+      await fetchDocuments();
+      window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
     } catch (e) { console.error(e); }
   };
 
-  const handleAddClick = () => { setNewDocName(''); setSelectedFile(null); setShowAddDocPopup(true); };
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); };
+  const handleAddClick = () => {
+    setSelectedFile(null);
+    setFormDocName('');
+    setShowAddPopup(true);
+  };
 
-  const handleAddDocSubmit = async () => {
-    if (!uid || !newDocName.trim() || !selectedFile) return;
-    setIsUploading(true);
-    try {
-      const fd = new FormData(); fd.append('file', selectedFile); fd.append('documentName', newDocName.trim());
-      await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd);
-      await fetchDocuments(); setShowAddDocPopup(false);
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setFormDocName(file.name);
+    }
+    if (fileLocalRef.current) fileLocalRef.current.value = '';
+  };
+
+  const handleAddSubmit = async () => {
+    if (!selectedFile || !formDocName.trim() || !uid) return;
+    
+    if (isEdit) {
+      try {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        fd.append('documentName', formDocName.trim());
+        await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd);
+        await fetchDocuments();
+        window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
+      } catch (e) { console.error(e); }
+    } else {
+      const localId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setLocalDocuments((prev: any[]) => [...prev, { localId, documentName: formDocName.trim(), file: selectedFile }]);
+    }
+    setShowAddPopup(false);
+    setSelectedFile(null);
+    setFormDocName('');
+  };
+
+  const handleEditClick = () => {
+    if (!contextMenu) return;
+    setEditDocUid(contextMenu.uid);
+    setEditDocName(contextMenu.name);
+    setEditIsLocal(contextMenu.isLocal);
+    setContextMenu(null);
+    setShowEditPopup(true);
+  };
+
+  const handleEditSubmit = () => {
+    if (!editDocName.trim()) return;
+    
+    if (editIsLocal) {
+      setLocalDocuments((prev: any[]) => prev.map((d: any) => d.localId === editDocUid ? { ...d, documentName: editDocName.trim() } : d));
+    } else {
+      // Для серверных документов — пока просто обновляем локально
+      // В будущем можно добавить PATCH на бекенд
+      setServerDocuments(prev => prev.map(d => d.uid === editDocUid ? { ...d, documentName: editDocName.trim() } : d));
       window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
-    } catch (e) { console.error(e); } finally { setIsUploading(false); }
+    }
+    setShowEditPopup(false);
   };
 
-  const handleContextMenu = (e: React.MouseEvent, docUid: string, docName: string) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!selectedIds.has(docUid)) setSelectedIds(new Set([docUid]));
-    setContextMenu({ x: e.clientX, y: e.clientY, docUid, docName });
+  const handleSortFieldClick = (field: { key: string; label: string; iconType?: '19' | '20' | null }) => {
+    if (sortColumn === field.key) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(field.key);
+      setSortDirection('asc');
+    }
+    const idx = SORT_FIELDS.findIndex(f => f.key === field.key);
+    if (idx >= 0) animateSortIndicator(getIndicatorTarget(idx));
   };
 
-  const handleContextEdit = () => {
-    if (!contextMenu) return;
-    const doc = documents.find(d => d.uid === contextMenu.docUid);
-    if (doc) { setEditingDoc(doc); setEditDocName(doc.documentName); setShowEditDocPopup(true); }
-    setContextMenu(null);
+  const getSortIcon = (field: { key: string; iconType?: '19' | '20' | null }): string | null => {
+    if (!field.iconType || sortColumn !== field.key) return null;
+    if (field.iconType === '19') return sortDirection === 'asc' ? SortingIcon19BlueUp : SortingIcon19BlueDown;
+    if (field.iconType === '20') return sortDirection === 'asc' ? SortingIcon20BlueUp : SortingIcon20BlueDown;
+    return null;
   };
 
-  const handleContextDelete = () => {
-    if (!contextMenu) return;
-    if (!confirm('Удалить документ?')) { setContextMenu(null); return; }
-    const uidsToDelete = selectedIds.has(contextMenu.docUid) ? selectedIds : new Set([contextMenu.docUid]);
-    Promise.all(Array.from(uidsToDelete).map(uid => AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(uid))))
-      .then(() => { setSelectedIds(new Set()); fetchDocuments(); }).catch(e => console.error(e));
-    setContextMenu(null);
-  };
+  const formatDate = (d: string) => { if (!d) return ''; try { return new Date(d).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return d; } };
+  const renderCell = (key: string, item: any): string => { const v = item[key]; if (v === null || v === undefined) return '-'; if (key === 'createdAt') return formatDate(v); return String(v); };
+  const isGrayColumn = (key: string): boolean => key !== 'documentName';
+  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
+  const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
 
-  const handleEditDocSubmit = async () => {
-    if (!editingDoc || !editDocName.trim()) return;
-    setIsUploading(true);
-    try {
-      if (selectedFile) {
-        const fd = new FormData(); fd.append('file', selectedFile); fd.append('documentName', editDocName.trim());
-        await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid!), fd);
-        await AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(editingDoc.uid));
-      }
-      await fetchDocuments(); setShowEditDocPopup(false); setEditingDoc(null); setSelectedFile(null);
-    } catch (e) { console.error(e); } finally { setIsUploading(false); }
-  };
-
-  const totalRows = Math.max(documents.length, VISIBLE_ROWS);
-
-  const getRowSeparator = (index: number, isRealData: boolean): React.CSSProperties => {
-    if (!isRealData) return { borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' };
-    const isFirst = index === 0; const isLast = index === documents.length - 1;
-    return { borderTop: isFirst ? 'none' : '0.5px solid #E5ECF5', borderBottom: isLast ? 'none' : '0.5px solid #E5ECF5' };
-  };
-
-  const contextMenuButtonStyle: React.CSSProperties = { width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
+  const sortListHeight = TOP_PAD + SORT_FIELDS.length * TEXT_HEIGHT + (SORT_FIELDS.length - 1) * ITEM_GAP + BOTTOM_PAD;
+  const searchWidth = expanded === 'search' ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
+  const sortWidth = expanded === 'sort' ? BTN_SORT_EXPANDED : BTN_COLLAPSED;
+  const sortX = searchWidth + BTN_GAP;
+  const createGroupX = searchWidth + sortWidth + BTN_GAP * 2;
+  const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
+  const tween = { type: 'tween' as const, duration: 0.2 };
 
   return (
-    <div style={cs}>
-      <div style={{ ...blockStyle, width: 1740, height: 565, position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 34, left: 40, display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Button1} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button onClick={handleAddClick} style={smallButtonStyle}><img src={Button4} alt="" style={{ width: 14, height: 14 }} /></button>
-          <button onClick={handleDeleteSelected} style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }}><img src={Button5} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ position: 'absolute', top: 83, left: 25, display: 'flex', gap: 10 }}>
-          <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-            <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 0, paddingRight: 0, boxSizing: 'border-box' }}>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_NAME }}>НАИМЕНОВАНИЕ</span>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_FILE }}>ФАЙЛ</span>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_DATE }}>ДАТА</span>
+    <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96 }}>
+      <div style={{ position: 'absolute', top: 0, left: 15, display: 'flex', gap: 15, zIndex: 10 }}>
+        <motion.div 
+          style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: expanded === 'search' ? '#666EFE' : '#FFFFFF', border: expanded === 'search' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
+          animate={{ width: searchWidth }} 
+          transition={tween}
+        >
+          <div onClick={expanded === 'search' ? () => { setExpanded(null); setSearchValue(''); } : () => setExpanded('search')} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+            <img src={expanded === 'search' ? SearchIcon18White : SearchIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+          </div>
+          {expanded === 'search' && (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}>
+              <input ref={searchInputRef} type="text" value={searchValue} onChange={e => setSearchValue(e.target.value)} placeholder="Поиск" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
             </div>
-            <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <div style={{ minWidth: TABLE_WIDTH }}>
-                {isLoading ? <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span></div> : (
-                  <>
-                    {Array.from({ length: totalRows }).map((_, index) => {
-                      const doc = documents[index]; const isRealData = !!doc; const isSelected = doc && selectedIds.has(doc.uid);
-                      if (!isRealData) return (<div key={`empty-${index}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} />);
-                      return (
-                        <div key={doc.uid} onClick={(e) => toggleSelect(doc.uid, e)} onContextMenu={(e) => handleContextMenu(e, doc.uid, doc.documentName)} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#DEEEFF' : '#FFFFFF', position: 'relative', boxSizing: 'border-box', cursor: 'pointer', userSelect: 'none', ...getRowSeparator(index, true) }}>
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ position: 'absolute', left: 21, flexShrink: 0 }}><rect x="1" y="1" width="14" height="14" rx="2" stroke="#666EFE" strokeWidth="1.5"/><line x1="5" y1="5" x2="11" y2="5" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                          <span style={{ position: 'absolute', left: COL_NAME, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_FILE - COL_NAME - 30 }}>{doc.documentName}</span>
-                          <span style={{ position: 'absolute', left: COL_FILE, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DATE - COL_FILE - 30 }}>{doc.originalName}</span>
-                          <span style={{ position: 'absolute', left: COL_DATE, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: TABLE_WIDTH - COL_DATE - 60 }}>{formatDate(doc.createdAt)}</span>
+          )}
+        </motion.div>
+
+        <motion.div 
+          style={{ position: 'absolute', left: 0, top: 0, borderRadius: 10, backgroundColor: '#FFFFFF', border: expanded === 'sort' ? 'none' : (hasActiveSort ? 'none' : '1px solid rgba(102, 110, 254, 0.15)'), boxShadow: expanded === 'sort' ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'hidden', zIndex: expanded === 'sort' ? 20 : 1 }} 
+          animate={{ x: sortX, width: sortWidth, height: expanded === 'sort' ? BTN_HEADER + sortListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
+          transition={{ x: spring, width: tween, height: tween }}
+        >
+          <div onClick={() => setExpanded(prev => prev === 'sort' ? null : 'sort')} style={{ height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'sort' || hasActiveSort ? '#666EFE' : 'transparent', borderRadius: expanded === 'sort' ? '10px 10px 0 0' : 10, userSelect: 'none' }}>
+            {expanded === 'sort' ? <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>Сортировка</span> : <img src={hasActiveSort ? SortingIcon20White : SortingIcon20Black} alt="" style={{ width: 20, height: 14 }} />}
+          </div>
+          
+          <AnimatePresence>
+            {expanded === 'sort' && (
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
+                exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
+                style={{ position: 'relative', height: sortListHeight, userSelect: 'none', overflow: 'hidden' }}
+              >
+                {sortColumn && <motion.div style={{ position: 'absolute', left: INDICATOR_LEFT, top: 0, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} animate={{ y: sortIndicatorY }} transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
+                
+                <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
+                  {SORT_FIELDS.map((field) => { 
+                    const isSelected = sortColumn === field.key; 
+                    const sortIcon = getSortIcon(field); 
+                    const iconWidth = field.iconType === '19' ? 19 : field.iconType === '20' ? 20 : 0; 
+                    const textMaxWidth = sortIcon ? TEXT_WIDTH - iconWidth - ICON_RIGHT_PAD : TEXT_WIDTH; 
+                    
+                    return (
+                      <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSortFieldClick(field)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: SORT_FIELDS.indexOf(field) < SORT_FIELDS.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                        <div style={{ width: TEXT_WIDTH, display: 'flex', alignItems: 'center', position: 'relative' }}>
+                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isSelected ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', maxWidth: textMaxWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {field.label}
+                          </span>
+                          {sortIcon && <img src={sortIcon} alt="" style={{ width: iconWidth, height: field.iconType === '19' ? 12 : 10, position: 'absolute', right: ICON_RIGHT_PAD }} />}
                         </div>
-                      );
-                    })}
-                  </>
-                )}
+                      </div>
+                    ); 
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          <AnimatePresence>
+            {expanded === 'sort' && (
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
+                exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
+                style={{ userSelect: 'none' }}
+              >
+                <div style={{ height: 3, backgroundColor: 'transparent', borderTop: '1px solid rgba(45, 64, 89, 0.1)' }} />
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => { setSortColumn(null); setSortDirection('asc'); }} style={{ width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 13, lineHeight: '18px', userSelect: 'none' }}>
+                  Очистить сортировку
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
+          <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>
+          <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5 }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+        </motion.div>
+      </div>
+      <div style={{ position: 'absolute', top: 52, left: 0 }}>
+        <DataTable
+          columns={FILE_COLUMNS}
+          visibleKeys={['documentName', 'originalName', 'createdAt']}
+          data={filteredDocuments}
+          selectedIds={selectedIds}
+          onCheckboxClick={handleCheckboxClick}
+          onSelectAll={handleSelectAll}
+          onRowClick={handleRowClick}
+          onContextMenu={handleContextMenu}
+          onDoubleClick={handleDoubleClick}
+          renderCell={renderCell}
+          isGrayColumn={isGrayColumn}
+          tableWidth={1740}
+          visibleRows={8}
+          rowHeight={58}
+          headerHeight={58}
+          firstColLeft={60}
+          rowIcon={FilesIcon14Black}
+          rowIconSize={20}
+          noWrapColumns={['documentName', 'originalName', 'createdAt']}
+          highlightText={searchValue.trim() || undefined}
+        />
+      </div>
+      
+      {contextMenu && (
+        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button onClick={handleEditClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+            <img src={ContextMenuOpenIcon16} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
+            Редактировать
+          </button>
+          <button onClick={() => { setSelectedIds(new Set([contextMenu.uid])); setContextMenu(null); setTimeout(() => setShowDeleteConfirm(true), 50); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+            <img src={ContextMenuDeleteIcon16} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+            Удалить
+          </button>
+        </div>
+      )}
+
+      {showAddPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddPopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление документа</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Файл</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button onClick={() => fileLocalRef.current?.click()} style={{ height: 44, paddingLeft: 20, paddingRight: 20, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', whiteSpace: 'nowrap' }}>
+                  Выбрать файл
+                </button>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedFile ? selectedFile.name : 'Файл не выбран'}
+                </span>
               </div>
+              <input ref={fileLocalRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label>
+              <input type="text" value={formDocName} onChange={e => setFormDocName(e.target.value)} placeholder="Введите название" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleAddSubmit} disabled={!selectedFile || !formDocName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: selectedFile && formDocName.trim() ? '#666EFE' : '#BCC8FF', cursor: selectedFile && formDocName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Добавить</button>
             </div>
           </div>
-          {hasScroll && <div style={{ width: 10, height: TABLE_HEIGHT, paddingTop: HEADER_HEIGHT }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>}
         </div>
-      </div>
+      )}
 
-      {contextMenu && (<div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}><button style={contextMenuButtonStyle} onClick={handleContextEdit}>Редактировать</button><button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button></div>)}
+      {showEditPopup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
+          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование документа</h3>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label>
+              <input type="text" value={editDocName} onChange={e => setEditDocName(e.target.value)} placeholder="Введите название" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleEditSubmit} disabled={!editDocName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editDocName.trim() ? '#666EFE' : '#BCC8FF', cursor: editDocName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {showAddDocPopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddDocPopup(false)}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление документа</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={newDocName} onChange={e => setNewDocName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddDocSubmit(); else if (e.key === 'Escape') setShowAddDocPopup(false); }} placeholder="Введите название документа" autoFocus style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Файл</label><div onClick={() => fileLocalRef.current?.click()} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px dashed rgba(102, 110, 254, 0.3)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 10 }}><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/></svg><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedFile ? '#666EFE' : '#9CA3AF' }}>{selectedFile ? selectedFile.name : 'Выберите файл'}</span></div><input ref={fileLocalRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} /></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={handleAddDocSubmit} disabled={!newDocName.trim() || !selectedFile || isUploading} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newDocName.trim() && selectedFile && !isUploading ? '#666EFE' : '#BCC8FF', cursor: newDocName.trim() && selectedFile && !isUploading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isUploading ? 'Загрузка...' : 'Добавить'}</button><button onClick={() => setShowAddDocPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div></div></div>)}
-
-      {showEditDocPopup && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setShowEditDocPopup(false); setSelectedFile(null); }}><div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование документа</h3><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={editDocName} onChange={e => setEditDocName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditDocSubmit(); else if (e.key === 'Escape') { setShowEditDocPopup(false); setSelectedFile(null); } }} placeholder="Введите название документа" autoFocus style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }} /></div><div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Файл (необязательно)</label><div onClick={() => fileLocalRef.current?.click()} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px dashed rgba(102, 110, 254, 0.3)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 10 }}><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/></svg><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedFile ? '#666EFE' : '#9CA3AF' }}>{selectedFile ? selectedFile.name : 'Выберите новый файл'}</span></div><input ref={fileLocalRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} /></div><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={handleEditDocSubmit} disabled={!editDocName.trim() || isUploading} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editDocName.trim() && !isUploading ? '#666EFE' : '#BCC8FF', cursor: editDocName.trim() && !isUploading ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isUploading ? 'Сохранение...' : 'Сохранить'}</button><button onClick={() => { setShowEditDocPopup(false); setSelectedFile(null); }} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div></div></div>)}
-
-      {showDeleteConfirm && (<div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}><div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}><h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3><p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p><div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={confirmDeleteSelected} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button><button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div></div></div>)}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные файлы?</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

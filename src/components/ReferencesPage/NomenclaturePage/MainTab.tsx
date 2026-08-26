@@ -1,4 +1,4 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (с использованием FormField)
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (с комбинированными select-полями)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
@@ -92,6 +92,46 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const [fullscreenCode, setFullscreenCode] = useState<string | null>(null);
   const [fullscreenCodeContextMenu, setFullscreenCodeContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // Данные для поиска
+  const [catalogOptions, setCatalogOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [nomenclatureGroupOptions, setNomenclatureGroupOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [nomenclatureTypeOptions, setNomenclatureTypeOptions] = useState<{ uid: string; name: string }[]>([]);
+
+  const fetchCatalogOptions = async () => {
+    try {
+      const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
+      const allGroups: { uid: string; name: string }[] = [];
+      const flatten = (nodes: any[]) => {
+        nodes.forEach((node: any) => {
+          allGroups.push({ uid: node.uid, name: node.name });
+          if (node.children) flatten(node.children);
+        });
+      };
+      flatten(res.data || []);
+      setCatalogOptions(allGroups);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchNomenclatureGroupOptions = async () => {
+    if (!selectedAccountingGroupId) { setNomenclatureGroupOptions([]); return; }
+    try {
+      const res = await AxiosService.get(`${ConstantInfo.restApiNomenclatureTypePurposes}?typeMaterialUid=${selectedAccountingGroupId}`);
+      setNomenclatureGroupOptions((res.data || []).map((p: any) => ({ uid: p.uid, name: p.typeName })));
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchNomenclatureTypeOptions = async () => {
+    if (!selectedNomenclatureGroupId) { setNomenclatureTypeOptions([]); return; }
+    try {
+      const res = await AxiosService.get(`${ConstantInfo.restApiNomenclatureTypeProducts}?typePurposeUid=${selectedNomenclatureGroupId}`);
+      setNomenclatureTypeOptions((res.data || []).map((p: any) => ({ uid: p.uid, name: p.typeName })));
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => { fetchCatalogOptions(); }, []);
+  useEffect(() => { fetchNomenclatureGroupOptions(); }, [selectedAccountingGroupId]);
+  useEffect(() => { fetchNomenclatureTypeOptions(); }, [selectedNomenclatureGroupId]);
 
   const enrichedServerBarcodes: any[] = useMemo(() => {
     if (!uid) return serverBarcodes;
@@ -525,9 +565,11 @@ const MainTab: React.FC<CommonProps> = (props) => {
               value={selectedCatalog}
               placeholder="Выберите группу"
               type="select"
-              rightIcon={Icon41} rightIconActive={Icon42}
-              onRightIconClick={(e) => { e.stopPropagation(); clearFieldError('catalog'); openPopup('catalog'); }}
-              onClick={() => { clearFieldError('catalog'); openPopup('catalog'); }}
+              searchOptions={catalogOptions}
+              onSelectOption={(uid, name) => { setSelectedCatalogId(uid); setSelectedCatalog(name); clearFieldError('catalog'); }}
+              onOpenFullList={() => { clearFieldError('catalog'); openPopup('catalog'); }}
+              searchTitle="Найденный каталог"
+              searchNotFoundText="Каталоги не найдены"
             />
           </div>
         </div>
@@ -583,9 +625,11 @@ const MainTab: React.FC<CommonProps> = (props) => {
             placeholder={selectedAccountingGroupId ? 'Выбрать группу' : 'Сначала выберите группу учета'}
             type="select"
             locked={!selectedAccountingGroupId}
-            rightIcon={Icon41} rightIconActive={Icon42}
-            onRightIconClick={(e) => { e.stopPropagation(); clearFieldError('nomenclatureGroup'); openPopup('nomenclatureGroup'); }}
-            onClick={() => { clearFieldError('nomenclatureGroup'); openPopup('nomenclatureGroup'); }}
+            searchOptions={nomenclatureGroupOptions}
+            onSelectOption={(uid, name) => { setSelectedNomenclatureGroupId(uid); setSelectedNomenclatureGroup(name); setSelectedNomenclatureType(''); setSelectedNomenclatureTypeId(''); clearFieldError('nomenclatureGroup'); }}
+            onOpenFullList={() => { clearFieldError('nomenclatureGroup'); openPopup('nomenclatureGroup'); }}
+            searchTitle="Найденная группа"
+            searchNotFoundText="Группы не найдены"
           />
         </div>
         <div style={{ position: 'absolute', top: 250, left: 30, right: 30 }}>
@@ -597,9 +641,11 @@ const MainTab: React.FC<CommonProps> = (props) => {
             placeholder={selectedNomenclatureGroupId ? 'Выбрать вид' : 'Сначала выберите группу номенклатуры'}
             type="select"
             locked={!selectedNomenclatureGroupId}
-            rightIcon={Icon41} rightIconActive={Icon42}
-            onRightIconClick={(e) => { e.stopPropagation(); clearFieldError('nomenclatureType'); openPopup('nomenclatureType'); }}
-            onClick={() => { clearFieldError('nomenclatureType'); openPopup('nomenclatureType'); }}
+            searchOptions={nomenclatureTypeOptions}
+            onSelectOption={(uid, name) => { setSelectedNomenclatureTypeId(uid); setSelectedNomenclatureType(name); clearFieldError('nomenclatureType'); }}
+            onOpenFullList={() => { clearFieldError('nomenclatureType'); openPopup('nomenclatureType'); }}
+            searchTitle="Найденный вид"
+            searchNotFoundText="Виды не найдены"
           />
         </div>
         

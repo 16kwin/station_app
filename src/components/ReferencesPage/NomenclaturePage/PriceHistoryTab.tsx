@@ -1,6 +1,6 @@
 // PriceHistoryTab.tsx — ПОЛНЫЙ ФАЙЛ (график с зумом от минут до месяцев)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import CustomScrollbar from '../../elements/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import type { CommonProps } from './NomenclatureCreatePage';

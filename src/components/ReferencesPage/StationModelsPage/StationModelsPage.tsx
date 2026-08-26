@@ -1,4 +1,4 @@
-// StationModelsPage.tsx — ПОЛНЫЙ ФАЙЛ (добавлена иконка ModelIcon16Black, исправлено сохранение колонок)
+// StationModelsPage.tsx — ИСПРАВЛЕННЫЙ (пустые columns заполняются обязательными колонками с адаптивной шириной)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -86,18 +86,72 @@ const StationModelsPage = () => {
     try { 
       const r = await AxiosService.get(`${ConstantInfo.restApiStationModels}?userId=${USER_ID}`); 
       const response = r.data as StationModelListResponse;
-      setResponseData(response); 
       
-      const visible = new Set(response.columns);
-      requiredColumns.forEach(key => visible.add(key));
+      let effectiveColumns = response.columns;
+      let effectiveRequiredColumns = new Set(REQUIRED_COLUMNS);
+      
+      if (response.requiredColumns && response.requiredColumns.length > 0) {
+        effectiveRequiredColumns = new Set(response.requiredColumns);
+      }
+      
+      let effectiveColumnWidths = response.columnWidths || {};
+      
+      // Если columns пустой — заполняем обязательными колонками
+      if (!effectiveColumns || effectiveColumns.length === 0) {
+        effectiveColumns = ALL_COLUMNS.filter(c => effectiveRequiredColumns.has(c.key)).map(c => c.key);
+        
+        // Рассчитываем адаптивную ширину для каждой колонки
+        if (effectiveColumns.length > 0 && Object.keys(effectiveColumnWidths).length === 0) {
+          const tableWidth = 1720;
+          const effectiveFirstColLeft = 17 + 24 + 17 + 20 + 17;
+          const lastColumnRightPadding = 30;
+          const resizerWidth = 60;
+          const totalResizerWidth = resizerWidth * (effectiveColumns.length - 1);
+          const availableWidth = tableWidth - effectiveFirstColLeft - lastColumnRightPadding - totalResizerWidth;
+          const columnWidth = availableWidth / effectiveColumns.length;
+          
+          effectiveColumns.forEach(key => {
+            effectiveColumnWidths[key] = columnWidth;
+          });
+        }
+      } else {
+        // Добавляем обязательные колонки, если их нет в списке
+        effectiveRequiredColumns.forEach(key => {
+          if (!effectiveColumns.includes(key)) {
+            effectiveColumns = [...effectiveColumns, key];
+          }
+        });
+        
+        // Если ширины пустые — заполняем адаптивно
+        if (Object.keys(effectiveColumnWidths).length === 0) {
+          const tableWidth = 1720;
+          const effectiveFirstColLeft = 17 + 24 + 17 + 20 + 17;
+          const lastColumnRightPadding = 30;
+          const resizerWidth = 60;
+          const totalResizerWidth = resizerWidth * (effectiveColumns.length - 1);
+          const availableWidth = tableWidth - effectiveFirstColLeft - lastColumnRightPadding - totalResizerWidth;
+          const columnWidth = availableWidth / effectiveColumns.length;
+          
+          effectiveColumns.forEach(key => {
+            effectiveColumnWidths[key] = columnWidth;
+          });
+        }
+      }
+      
+      setRequiredColumns(effectiveRequiredColumns);
+      
+      const visible = new Set(effectiveColumns);
+      effectiveRequiredColumns.forEach(key => visible.add(key));
       setVisibleColumns(visible);
       
-      if (response.columnWidths) {
-        setColumnWidths(response.columnWidths);
-      }
-      if (response.requiredColumns && response.requiredColumns.length > 0) {
-        setRequiredColumns(new Set(response.requiredColumns));
-      }
+      setColumnWidths(effectiveColumnWidths);
+      
+      setResponseData({
+        ...response,
+        columns: effectiveColumns,
+        columnWidths: effectiveColumnWidths,
+        requiredColumns: Array.from(effectiveRequiredColumns),
+      });
     } catch (e) { 
       console.error(e); 
     } finally { 

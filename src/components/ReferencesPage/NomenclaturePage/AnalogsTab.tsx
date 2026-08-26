@@ -1,6 +1,6 @@
 // AnalogsTab.tsx — ПОЛНЫЙ ФАЙЛ (выделение строк, удаление выделенных, кнопки button1/button4/button5)
 import React, { useState, useRef, useEffect } from 'react';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import CustomScrollbar from '../../elements/CustomScrollbar';
 import CatalogSelectPopup from './CatalogSelectPopup';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';

@@ -1,8 +1,7 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (возвращена старая логика адаптивной ширины)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from './CustomScrollbar';
 import ContextMenu from './ContextMenu';
 import type { ContextMenuItem } from './ContextMenu';
 import CheckboxIcon18OffBlack from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OffBlack.svg';
@@ -28,6 +27,7 @@ interface DataTableProps {
   onContextMenu?: (e: React.MouseEvent, uid: string, name: string) => void;
   onDoubleClick: (uid: string, name: string) => void;
   renderCell: (key: string, item: any) => string;
+  renderCellNode?: (key: string, item: any) => React.ReactNode;
   isGrayColumn?: (key: string) => boolean;
   tableWidth?: number; rowHeight?: number; headerHeight?: number; visibleRows?: number;
   checkboxLeft?: number; firstColLeft?: number; minGap?: number; colPadding?: number;
@@ -74,7 +74,7 @@ const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, 
 const DataTable: React.FC<DataTableProps> = ({
   columns, visibleKeys, data, selectedIds,
   onCheckboxClick, onSelectAll, onRowClick, onContextMenu, onDoubleClick,
-  renderCell, isGrayColumn,
+  renderCell, renderCellNode, isGrayColumn,
   tableWidth = 1720, rowHeight = 58, headerHeight = 58, visibleRows = 10,
   checkboxLeft = CHECKBOX_LEFT, firstColLeft = 47, minGap = 0, colPadding = 0,
   scrollOffset = 15, headerColor = '#666EFE', selectedColor = '#DEEEFF', borderColor = '#E5ECF5',
@@ -566,13 +566,17 @@ const DataTable: React.FC<DataTableProps> = ({
                 const noWrap = noWrapColumns.includes(col.key);
                 return (
                   <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
-                    <span 
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
-                      onMouseEnter={(e) => handleMouseEnter(e, cellText)} 
-                      onMouseLeave={handleMouseLeave}
-                    >
-                      {highlightText ? <HighlightedText text={cellText} highlight={highlightText} /> : cellText}
-                    </span>
+                    {renderCellNode ? (
+                      renderCellNode(col.key, item)
+                    ) : (
+                      <span 
+                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
+                        onMouseEnter={(e) => handleMouseEnter(e, cellText)} 
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        {highlightText ? <HighlightedText text={cellText} highlight={highlightText} /> : cellText}
+                      </span>
+                    )}
                   </span>
                 );
               })}

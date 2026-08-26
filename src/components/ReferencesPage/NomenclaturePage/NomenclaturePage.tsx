@@ -1,24 +1,19 @@
-// NomenclaturePage.tsx — ПОЛНЫЙ ФАЙЛ (responseData.columns для visibleKeys)
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+// NomenclaturePage.tsx — ПОЛНЫЙ ФАЙЛ (с обработчиком клавиш и barcodeHighlightText)
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CreateGroupPopup from './CreateGroupPopup';
 import CatalogSelectPopup from './CatalogSelectPopup';
-import DataTable from '../../elements/DataTable';
+import NomenclatureDataTable from '../../elements/NomenclatureDataTable';
 import TableToolbar from '../../elements/TableToolbar';
+import type { TableToolbarRef } from '../../elements/TableToolbar';
 import ConfigurationPopup from '../../elements/ConfigurationPopup';
 import HistoryTable from '../../elements/HistoryTable';
 import { useTabs } from '../../../context/TabContext';
-import Icon4 from '../../../assets/References/Icon4.svg';
 import Icon5 from '../../../assets/References/Icon5.svg';
 import Icon11 from '../../../assets/References/Icon11.svg';
 import Icon12 from '../../../assets/References/Icon12.svg';
-import Icon14 from '../../../assets/References/Icon14.svg';
-import Icon15 from '../../../assets/References/Icon15.svg';
-import Icon16 from '../../../assets/References/Icon16.svg';
-import Icon17 from '../../../assets/References/Icon17.svg';
-import Icon19 from '../../../assets/References/Icon19.svg';
 import Icon20 from '../../../assets/References/Icon20.svg';
 import Icon21 from '../../../assets/References/Icon21.svg';
 import Icon22 from '../../../assets/References/Icon22.svg';
@@ -68,22 +63,13 @@ interface NomenclatureTreeResponse {
   currentPathJson?: string;
 }
 
-type ContextMenuType = 'folder' | 'material';
-
-interface ContextMenuState {
-  x: number;
-  y: number;
-  uid: string;
-  name: string;
-  type: ContextMenuType;
-}
-
 interface ColumnItem { key: string; label: string; }
 
 interface RowItem { 
   uid: string; 
   name: string; 
-  type: 'parent' | 'folder' | 'material'; 
+  type: 'folder' | 'material'; 
+  depth: number;
   code?: number | null;
   article?: string;
   typeMainName?: string;
@@ -103,6 +89,7 @@ interface RowItem {
   lastPrice?: number;
   folderData?: GroupTreeNode;
   materialData?: MaterialItem;
+  isExpanded?: boolean;
 }
 
 const REQUIRED_COLUMNS = new Set([
@@ -181,10 +168,10 @@ const USER_ID = 1;
 const NomenclaturePage = () => {
   const navigate = useNavigate();
   const { openTab } = useTabs();
-  const breadcrumbsRef = useRef<HTMLDivElement>(null);
-  const [currentPath, setCurrentPath] = useState<string[]>([]);
+  const tableToolbarRef = useRef<TableToolbarRef>(null);
   const [treeData, setTreeData] = useState<GroupTreeNode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -192,14 +179,12 @@ const NomenclaturePage = () => {
   const [showCopyPopup, setShowCopyPopup] = useState(false);
   const [showCopySelectPopup, setShowCopySelectPopup] = useState(false);
   const [showMoveSelectPopup, setShowMoveSelectPopup] = useState(false);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [hoveredCrumb, setHoveredCrumb] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string; type: 'folder' | 'material' } | null>(null);
   const [createGroupPreselectedParent, setCreateGroupPreselectedParent] = useState<{ uid: string; name: string } | null>(null);
   const [showRenamePopup, setShowRenamePopup] = useState(false);
   const [renameGroupUid, setRenameGroupUid] = useState<string | null>(null);
   const [renameGroupName, setRenameGroupName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
@@ -210,14 +195,42 @@ const NomenclaturePage = () => {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
   const [searchValue, setSearchValue] = useState('');
+  const [barcodeSearchValue, setBarcodeSearchValue] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | null>(null);
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | 'barcodeSearch' | null>(null);
   const [filterOptions, setFilterOptions] = useState<Record<string, { uid: string; name: string }[]>>({});
 
-  const MAX_BREADCRUMBS_WIDTH = 500;
+  // Обработчик клавиш — автооткрытие поиска по штрихкоду
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'Tab' || e.key === 'Shift' || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'F1' || e.key === 'F2' || e.key === 'F3' || e.key === 'F4' || e.key === 'F5' || e.key === 'F6' || e.key === 'F7' || e.key === 'F8' || e.key === 'F9' || e.key === 'F10' || e.key === 'F11' || e.key === 'F12') return;
+      
+      if (e.key.length === 1) {
+        e.preventDefault();
+        
+        if (expanded === 'barcodeSearch') {
+          setBarcodeSearchValue(prev => prev + e.key);
+        } else {
+          setExpanded('barcodeSearch');
+          setBarcodeSearchValue(e.key);
+        }
+        
+        setTimeout(() => {
+          tableToolbarRef.current?.focusBarcodeSearch();
+        }, 50);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [expanded]);
 
   const fetchTreeWithSettings = useCallback(async () => {
     try {
@@ -254,8 +267,12 @@ const NomenclaturePage = () => {
         }
       }
       if (data.currentPathJson && data.currentPathJson !== '[]') {
-        const path = JSON.parse(data.currentPathJson) as string[];
-        setCurrentPath(path);
+        try {
+          const path = JSON.parse(data.currentPathJson) as string[];
+          if (Array.isArray(path) && path.length > 0) {
+            setExpandedFolders(new Set(path));
+          }
+        } catch (e) { /* игнорируем */ }
       }
     } catch (error) {
       console.error('Ошибка загрузки дерева с настройками:', error);
@@ -295,10 +312,16 @@ const NomenclaturePage = () => {
     fetchFilterOptions();
   }, []);
 
-  const saveCurrentPath = useCallback((path: string[]) => {
-    const currentPathJson = JSON.stringify(path);
+  const saveExpandedFolders = useCallback((folders: Set<string>) => {
+    const currentPathJson = JSON.stringify(Array.from(folders));
     AxiosService.patch(ConstantInfo.restApiNomenclatureCurrentPathSave(USER_ID), { currentPathJson }).catch(e => console.error(e));
   }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveExpandedFolders(expandedFolders);
+    }
+  }, [expandedFolders, isLoading]);
 
   const saveFilters = useCallback((filters: Record<string, Set<string>>) => {
     const filtersJsonObj: Record<string, string[]> = {};
@@ -329,10 +352,6 @@ const NomenclaturePage = () => {
   }, [requiredColumns]);
 
   useEffect(() => {
-    if (!isLoading) saveCurrentPath(currentPath);
-  }, [currentPath, isLoading]);
-
-  useEffect(() => {
     if (!isLoading) saveFilters(filterValues);
   }, [filterValues, isLoading]);
 
@@ -350,42 +369,6 @@ const NomenclaturePage = () => {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, [contextMenu]);
-
-  const rootNode = treeData.length > 0 ? treeData[0] : null;
-
-  const getNodeByPath = (path: string[]): GroupTreeNode | null => {
-    if (!rootNode) return null;
-    if (path.length === 0) return rootNode;
-    let level = rootNode.children || [];
-    let result: GroupTreeNode | null = null;
-    for (const uid of path) {
-      const found = level.find(n => n.uid === uid);
-      if (!found) return null;
-      result = found;
-      level = found.children || [];
-    }
-    return result;
-  };
-
-  const currentNode = getNodeByPath(currentPath);
-
-  const collectChildrenUids = useCallback((node: GroupTreeNode): string[] => {
-    const uids: string[] = [];
-    if (node.children) {
-      node.children.forEach(child => {
-        uids.push(child.uid);
-        uids.push(...collectChildrenUids(child));
-      });
-    }
-    if (node.materials) {
-      node.materials.forEach(m => uids.push(m.uid));
-    }
-    return uids;
-  }, []);
-
-  const collectAllUidsWithSelf = useCallback((node: GroupTreeNode): string[] => {
-    return [node.uid, ...collectChildrenUids(node)];
-  }, [collectChildrenUids]);
 
   const findNodeById = (nodes: GroupTreeNode[], uid: string): GroupTreeNode | null => {
     for (const node of nodes) {
@@ -412,11 +395,24 @@ const NomenclaturePage = () => {
     return null;
   };
 
-  const addToSelected = (uid: string, type: ContextMenuType) => {
+  const collectAllUids = useCallback((node: GroupTreeNode): string[] => {
+    const uids: string[] = [node.uid];
+    if (node.children) {
+      node.children.forEach(child => {
+        uids.push(...collectAllUids(child));
+      });
+    }
+    if (node.materials) {
+      node.materials.forEach(m => uids.push(m.uid));
+    }
+    return uids;
+  }, []);
+
+  const addToSelected = (uid: string, type: 'folder' | 'material') => {
     if (type === 'folder') {
       const folder = findNodeById(treeData, uid);
       if (folder) {
-        const allUids = collectAllUidsWithSelf(folder);
+        const allUids = collectAllUids(folder);
         setSelectedIds(prev => {
           const next = new Set(prev);
           allUids.forEach(id => next.add(id));
@@ -432,43 +428,6 @@ const NomenclaturePage = () => {
     }
   };
 
-  const getCurrentLevelUids = (): string[] => {
-    if (!currentNode) return [];
-    return collectChildrenUids(currentNode);
-  };
-
-  const isHeaderSelected = (): boolean => {
-    const allUids = getCurrentLevelUids();
-    if (allUids.length === 0) return false;
-    return allUids.every(uid => selectedIds.has(uid));
-  };
-
-  const toggleSelectAll = () => {
-    const allUids = getCurrentLevelUids();
-    if (allUids.length === 0) return;
-    const allSelected = allUids.every(uid => selectedIds.has(uid));
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (allSelected) allUids.forEach(uid => next.delete(uid));
-      else allUids.forEach(uid => next.add(uid));
-      return next;
-    });
-  };
-
-  const toggleSelectNode = (node: GroupTreeNode) => {
-    const allUids = collectAllUidsWithSelf(node);
-    const allSelected = allUids.every(uid => selectedIds.has(uid));
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (allSelected) {
-        allUids.forEach(uid => next.delete(uid));
-      } else {
-        allUids.forEach(uid => next.add(uid));
-      }
-      return next;
-    });
-  };
-
   const toggleSelectItem = (uid: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -478,14 +437,44 @@ const NomenclaturePage = () => {
     });
   };
 
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string, type: ContextMenuType) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, uid, name, type });
+  const toggleFolder = (folderUid: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderUid)) next.delete(folderUid);
+      else next.add(folderUid);
+      return next;
+    });
   };
 
-  const isMultipleSelected = (uid: string): boolean => {
-    return selectedIds.size > 1 && selectedIds.has(uid);
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const item = rowItems.find(r => r.uid === uid);
+    if (item?.type === 'folder') {
+      const folder = findNodeById(treeData, uid);
+      if (folder) {
+        const allUids = collectAllUids(folder);
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          const allSelected = allUids.every(id => next.has(id));
+          if (allSelected) {
+            allUids.forEach(id => next.delete(id));
+          } else {
+            allUids.forEach(id => next.add(id));
+          }
+          return next;
+        });
+      }
+    } else {
+      toggleSelectItem(uid);
+    }
+  };
+
+  const handleRowClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const item = rowItems.find(r => r.uid === uid);
+    if (item?.type === 'folder') {
+      toggleFolder(uid);
+    }
   };
 
   const handleContextCreateNomenclature = async () => {
@@ -519,21 +508,9 @@ const NomenclaturePage = () => {
     setShowRenamePopup(true);
   };
 
-  const handleContextOpen = () => {
-    if (!contextMenu) return;
-    const { uid } = contextMenu;
-    const material = findMaterialById(treeData, uid);
-    const code = material?.code || '';
-    setContextMenu(null);
-    navigate(`/references/nomenclature/edit/${uid}/${code}`);
-  };
-
-  const handleDoubleClick = (uid: string, name: string) => {
-    const item = rowItems.find(r => r.uid === uid);
-    if (item?.type === 'folder') {
-      enterFolder(uid);
-    } else if (item?.type === 'material') {
-      const material = item.materialData;
+  const handleDoubleClick = (uid: string, name: string, type: string) => {
+    if (type === 'material') {
+      const material = findMaterialById(treeData, uid);
       if (material) {
         openTab(`/references/nomenclature/edit/${uid}/${material.code || ''}`, `Номенклатура: ${material.name || ''}`, null);
       }
@@ -556,66 +533,6 @@ const NomenclaturePage = () => {
     }
   };
 
-  const getBreadcrumbs = (): GroupTreeNode[] => {
-    if (!rootNode) return [];
-    const crumbs: GroupTreeNode[] = [rootNode];
-    let level = rootNode.children || [];
-    for (const uid of currentPath) {
-      const found = level.find(n => n.uid === uid);
-      if (found) { crumbs.push(found); level = found.children || []; }
-      else break;
-    }
-    return crumbs;
-  };
-
-  const breadcrumbs = getBreadcrumbs();
-
-  useEffect(() => {
-    const checkWidth = () => {
-      const container = breadcrumbsRef.current;
-      if (!container) return;
-      setIsCollapsed(container.scrollWidth > MAX_BREADCRUMBS_WIDTH);
-    };
-    checkWidth();
-    const ro = new ResizeObserver(checkWidth);
-    if (breadcrumbsRef.current) ro.observe(breadcrumbsRef.current);
-    return () => ro.disconnect();
-  }, [breadcrumbs]);
-
-  const enterFolder = (folderUid: string) => {
-    setCurrentPath(prev => {
-      const next = [...prev, folderUid];
-      saveCurrentPath(next);
-      return next;
-    });
-    setSelectedIds(new Set());
-  };
-
-  const goBack = () => {
-    setCurrentPath(prev => {
-      const next = prev.slice(0, -1);
-      saveCurrentPath(next);
-      return next;
-    });
-    setSelectedIds(new Set());
-  };
-
-  const goToBreadcrumb = (index: number) => {
-    if (index === breadcrumbs.length - 1) return;
-    setSelectedIds(new Set());
-    if (index === 0) {
-      setCurrentPath([]);
-      saveCurrentPath([]);
-    } else {
-      const pathIndex = index - 1;
-      if (pathIndex < currentPath.length) {
-        const next = currentPath.slice(0, pathIndex);
-        setCurrentPath(next);
-        saveCurrentPath(next);
-      }
-    }
-  };
-
   const getAllGroupsFlat = (nodes: GroupTreeNode[]): { uid: string; name: string }[] => {
     let result: { uid: string; name: string }[] = [];
     nodes.forEach(node => {
@@ -625,25 +542,10 @@ const NomenclaturePage = () => {
     return result;
   };
 
-  const getCurrentFolderUid = (): string | null => {
-    if (currentPath.length === 0) return rootNode?.uid || null;
-    return currentNode?.uid || null;
-  };
-
-  const getCurrentFolderName = (): string => {
-    if (currentPath.length === 0) return rootNode?.name || '';
-    return currentNode?.name || '';
-  };
-
   const handleCreateClick = async () => {
     try {
       const response = await AxiosService.get(ConstantInfo.restApiNomenclatureGenerate);
       const { uid, code } = response.data;
-      const folderUid = getCurrentFolderUid();
-      const folderName = getCurrentFolderName();
-      if (folderUid) {
-        sessionStorage.setItem('nomenclature_preselected_group', JSON.stringify({ groupUid: folderUid, groupName: folderName }));
-      }
       navigate(`/references/nomenclature/create/${uid}/${code}`);
     } catch (error) {
       console.error('Ошибка генерации кода:', error);
@@ -651,11 +553,7 @@ const NomenclaturePage = () => {
   };
 
   const handleCreateGroupFromButton = () => {
-    if (currentPath.length === 0) {
-      setCreateGroupPreselectedParent({ uid: rootNode?.uid || '', name: rootNode?.name || '' });
-    } else {
-      setCreateGroupPreselectedParent({ uid: currentNode?.uid || '', name: currentNode?.name || '' });
-    }
+    setCreateGroupPreselectedParent(null);
     setShowCreateGroup(true);
   };
 
@@ -680,10 +578,8 @@ const NomenclaturePage = () => {
 
   const confirmDelete = async () => {
     const { groupUids, materialUids } = getFilteredSelectedIds();
-    const isCurrentNodeDeleted = currentNode && groupUids.includes(currentNode.uid);
     try {
       await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteItems, { data: { groupUids, materialUids } });
-      if (isCurrentNodeDeleted) goBack();
       await fetchTreeWithSettings();
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
@@ -694,18 +590,31 @@ const NomenclaturePage = () => {
   };
 
   const getFilteredSelectedIds = (): { groupUids: string[], materialUids: string[] } => {
-    const allGroupUids = getAllGroupUids(treeData);
+    const allGroupUids = new Set<string>();
+    const collectGroups = (nodes: GroupTreeNode[]) => {
+      nodes.forEach(node => {
+        allGroupUids.add(node.uid);
+        if (node.children) collectGroups(node.children);
+      });
+    };
+    collectGroups(treeData);
+    
     const selectedGroupUids: string[] = [];
     const selectedMaterialUids: string[] = [];
     selectedIds.forEach(uid => {
       if (allGroupUids.has(uid)) selectedGroupUids.push(uid);
       else selectedMaterialUids.push(uid);
     });
+    
     const childUidsToExclude = new Set<string>();
     selectedGroupUids.forEach(groupUid => {
       const node = findNodeById(treeData, groupUid);
-      if (node) collectChildrenUids(node).forEach(uid => childUidsToExclude.add(uid));
+      if (node) {
+        collectAllUids(node).forEach(uid => childUidsToExclude.add(uid));
+        childUidsToExclude.delete(groupUid);
+      }
     });
+    
     const groupUids = selectedGroupUids.filter(uid => !childUidsToExclude.has(uid));
     const materialUids = selectedMaterialUids.filter(uid => !childUidsToExclude.has(uid));
     return { groupUids, materialUids };
@@ -714,19 +623,6 @@ const NomenclaturePage = () => {
   const handleCopyClick = () => {
     if (selectedIds.size === 0) return;
     setShowCopyPopup(true);
-  };
-
-  const handleCopyToCurrent = async () => {
-    const { groupUids, materialUids } = getFilteredSelectedIds();
-    try {
-      await AxiosService.post(ConstantInfo.restApiNomenclatureCopyItems, { groupUids, materialUids, targetParentUid: getCurrentFolderUid() });
-      await fetchTreeWithSettings();
-      setSelectedIds(new Set());
-      setShowCopyPopup(false);
-      contextMenuUidRef.current = null;
-    } catch (error) {
-      console.error('Ошибка копирования:', error);
-    }
   };
 
   const handleCopyToOther = () => {
@@ -765,19 +661,7 @@ const NomenclaturePage = () => {
     }
   };
 
-  const getAllGroupUids = (nodes: GroupTreeNode[]): Set<string> => {
-    const uids = new Set<string>();
-    nodes.forEach(node => {
-      uids.add(node.uid);
-      if (node.children) {
-        const childUids = getAllGroupUids(node.children);
-        childUids.forEach(uid => uids.add(uid));
-      }
-    });
-    return uids;
-  };
-
-  const applyFilters = (material: MaterialItem): boolean => {
+  const applyFiltersToMaterial = (material: MaterialItem): boolean => {
     if (searchValue.trim()) {
       const q = searchValue.toLowerCase();
       const searchableText = [
@@ -787,6 +671,12 @@ const NomenclaturePage = () => {
         material.countryName, material.brandName, material.modelName
       ].join(' ').toLowerCase();
       if (!searchableText.includes(q)) return false;
+    }
+    if (barcodeSearchValue.trim()) {
+      const q = barcodeSearchValue.toLowerCase();
+      const barcodeText = (material.barcode || '').toLowerCase();
+      const skuText = (material.sku || '').toLowerCase();
+      if (!barcodeText.includes(q) && !skuText.includes(q)) return false;
     }
     if (filterValues['typeMainName']?.size) {
       if (!material.typeMainName || !filterValues['typeMainName'].has(material.typeMainName)) return false;
@@ -848,37 +738,87 @@ const NomenclaturePage = () => {
     });
   };
 
+  const hasActiveSearchOrFilter = searchValue.trim() !== '' || barcodeSearchValue.trim() !== '' || activeFilters.size > 0;
+
   const rowItems = useMemo((): RowItem[] => {
-    if (!currentNode) return [];
     const items: RowItem[] = [];
     
-    if (currentPath.length > 0) {
-      items.push({
-        uid: currentNode.uid,
-        name: currentNode.name,
-        type: 'parent',
-        code: currentNode.code,
-        folderData: currentNode,
-      });
-    }
+    const rootNode = treeData.length > 0 ? treeData[0] : null;
     
-    (currentNode.children || []).forEach(folder => {
-      items.push({
-        uid: folder.uid,
-        name: folder.name,
-        type: 'folder',
-        code: folder.code,
-        folderData: folder,
-      });
-    });
+    if (!rootNode) return items;
     
-    const filteredMaterials = (currentNode.materials || []).filter(applyFilters);
-    const sortedMaterials = sortMaterials(filteredMaterials);
-    sortedMaterials.forEach(material => {
+    const buildRows = (nodes: GroupTreeNode[], depth: number) => {
+      nodes.forEach(folder => {
+        const folderMatchesSearch = searchValue.trim() !== '' && folder.name.toLowerCase().includes(searchValue.toLowerCase());
+        
+        const filteredMaterials = (folder.materials || []).filter(applyFiltersToMaterial);
+        const sortedMaterials = sortMaterials(filteredMaterials);
+        
+        const hasMatchingChildren = (folder.children || []).some(child => {
+          const childMatchesSearch = searchValue.trim() !== '' && child.name.toLowerCase().includes(searchValue.toLowerCase());
+          const childMaterials = (child.materials || []).filter(applyFiltersToMaterial);
+          return childMatchesSearch || childMaterials.length > 0 || (child.children || []).length > 0;
+        });
+        
+        const shouldShowFolder = !hasActiveSearchOrFilter || folderMatchesSearch || sortedMaterials.length > 0 || hasMatchingChildren;
+        
+        if (!shouldShowFolder) return;
+        
+        const isExpanded = hasActiveSearchOrFilter ? true : expandedFolders.has(folder.uid);
+        
+        items.push({
+          uid: folder.uid,
+          name: folder.name,
+          type: 'folder',
+          depth,
+          code: folder.code,
+          folderData: folder,
+          isExpanded,
+        });
+        
+        if (isExpanded) {
+          if (hasMatchingChildren) {
+            buildRows(folder.children || [], depth + 1);
+          }
+          sortedMaterials.forEach(material => {
+            items.push({
+              uid: material.uid,
+              name: material.name || '',
+              type: 'material',
+              depth: depth + 1,
+              code: material.code,
+              article: material.article,
+              typeMainName: material.typeMainName,
+              typePurposeName: material.typePurposeName,
+              typeProductName: material.typeProductName,
+              barcode: material.barcode,
+              sku: material.sku,
+              rating: material.rating,
+              description: material.description,
+              usage: material.usage,
+              wasteMaterial: material.wasteMaterial,
+              recycleMaterial: material.recycleMaterial,
+              manufacturerName: material.manufacturerName,
+              countryName: material.countryName,
+              brandName: material.brandName,
+              modelName: material.modelName,
+              lastPrice: material.lastPrice,
+              materialData: material,
+            });
+          });
+        }
+      });
+    };
+    
+    const rootFilteredMaterials = (rootNode.materials || []).filter(applyFiltersToMaterial);
+    const rootSortedMaterials = sortMaterials(rootFilteredMaterials);
+    
+    rootSortedMaterials.forEach(material => {
       items.push({
         uid: material.uid,
         name: material.name || '',
         type: 'material',
+        depth: 0,
         code: material.code,
         article: material.article,
         typeMainName: material.typeMainName,
@@ -900,13 +840,15 @@ const NomenclaturePage = () => {
       });
     });
     
+    buildRows(rootNode.children || [], 0);
+    
     return items;
-  }, [currentNode, currentPath, filterValues, searchValue, sortColumn, sortDirection]);
+  }, [treeData, expandedFolders, searchValue, barcodeSearchValue, filterValues, activeFilters, sortColumn, sortDirection, hasActiveSearchOrFilter]);
 
   const renderCell = (key: string, item: any): string => {
     const rowType = item.type;
     
-    if (rowType === 'folder' || rowType === 'parent') {
+    if (rowType === 'folder') {
       if (key === 'name') return item.name || '';
       if (key === 'code') return item.code !== null && item.code !== undefined ? String(item.code).padStart(5, '0') : '—';
       return '';
@@ -926,10 +868,6 @@ const NomenclaturePage = () => {
     return !['name', 'code', 'article', 'typeMainName', 'typePurposeName', 'typeProductName', 'barcode', 'sku', 'rating'].includes(key);
   };
 
-  const getRowType = useCallback((item: any): 'default' | 'folder' | 'parent' | 'material' => {
-    return item.type || 'default';
-  }, []);
-
   if (isLoading) {
     return (
       <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -940,61 +878,15 @@ const NomenclaturePage = () => {
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
-      <style>{`
-        @keyframes crumbFadeIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes crumbTextIn { from { opacity: 0; max-width: 0; } to { opacity: 1; max-width: 200px; } }
-        @keyframes tooltipIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-        .crumb-item { animation: crumbFadeIn 0.3s ease-out both; }
-        .crumb-text-enter { animation: crumbTextIn 0.25s ease-out both; overflow: hidden; white-space: nowrap; }
-        .crumb-tooltip { animation: tooltipIn 0.2s ease-out both; }
-      `}</style>
-
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
         <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 700, color: '#2D4059', margin: 0, lineHeight: '29px', height: 29 }}>
           {showHistory ? 'Справочник: Номенклатура (История изменений)' : 'Справочник: Номенклатура'}
         </h1>
       </div>
 
-      <div ref={breadcrumbsRef} style={{ position: 'absolute', top: 79, left: 60, right: 40, height: 17, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-        {breadcrumbs.map((crumb, index) => {
-          const isLast = index === breadcrumbs.length - 1;
-          const showOnlyIcon = isCollapsed && !isLast;
-          return (
-            <React.Fragment key={crumb.uid}>
-              {index > 0 && (
-                <span className="crumb-item" style={{ display: 'flex', alignItems: 'center', animationDelay: `${index * 0.05}s`, flexShrink: 0 }}>
-                  <span style={{ width: 15, flexShrink: 0 }} />
-                  <img src={Icon15} alt="" style={{ width: 7, height: 11, flexShrink: 0 }} />
-                  <span style={{ width: 15, flexShrink: 0 }} />
-                </span>
-              )}
-              <div
-                className="crumb-item"
-                onMouseEnter={() => showOnlyIcon && setHoveredCrumb(index)}
-                onMouseLeave={() => setHoveredCrumb(null)}
-                style={{ display: 'flex', alignItems: 'center', position: 'relative', cursor: isLast ? 'default' : 'pointer', animationDelay: `${index * 0.05}s`, flexShrink: isLast ? 1 : (showOnlyIcon ? 0 : 1), minWidth: 0 }}
-                onClick={() => !isLast && goToBreadcrumb(index)}
-              >
-                <img src={index === 0 ? Icon14 : Icon16} alt="" style={{ width: index === 0 ? 18 : 17, height: 15, flexShrink: 0 }} />
-                {!showOnlyIcon && (
-                  <>
-                    <span style={{ width: 7, flexShrink: 0 }} />
-                    <span className="crumb-text-enter" style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: 'rgba(45, 64, 89, 0.67)', lineHeight: '17px', height: 17, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isLast ? 'none' : 200 }}>{crumb.name}</span>
-                  </>
-                )}
-                {showOnlyIcon && hoveredCrumb === index && (
-                  <div className="crumb-tooltip" style={{ position: 'absolute', top: 22, left: '50%', transform: 'translateX(-50%)', backgroundColor: '#2D4059', color: '#FFFFFF', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 400, padding: '4px 8px', borderRadius: 4, whiteSpace: 'nowrap', zIndex: 10000, pointerEvents: 'none' }}>
-                    {crumb.name}
-                  </div>
-                )}
-              </div>
-            </React.Fragment>
-          );
-        })}
-      </div>
-
       <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
         <TableToolbar
+          ref={tableToolbarRef}
           sortFields={SORT_FIELDS}
           filterFields={FILTER_FIELDS}
           placementLevels={[]}
@@ -1003,6 +895,8 @@ const NomenclaturePage = () => {
           filterOptions={filterOptions}
           searchValue={searchValue}
           onSearchChange={setSearchValue}
+          barcodeSearchValue={barcodeSearchValue}
+          onBarcodeSearchChange={setBarcodeSearchValue}
           sortColumn={sortColumn}
           sortDirection={sortDirection}
           accountingIndex={-1}
@@ -1046,7 +940,39 @@ const NomenclaturePage = () => {
           onPrint={() => {}}
           onPrintPdf={() => {}}
           showHistory={showHistory}
-          onHistory={() => setShowHistory(prev => !prev)}
+          onHistory={() => {
+            setShowHistory(prev => {
+              const next = !prev;
+              if (next) {
+                setHistoryLoading(true);
+                const allEvents: any[] = [];
+                const collectEvents = async (nodes: GroupTreeNode[]) => {
+                  for (const node of nodes) {
+                    if (node.materials) {
+                      for (const mat of node.materials) {
+                        try {
+                          const r = await AxiosService.get(ConstantInfo.restApiNomenclatureEvents(mat.uid));
+                          allEvents.push(...(r.data || []).map((e: any) => ({
+                            uid: e.uid,
+                            createdAt: e.createdAt,
+                            author: e.author,
+                            eventDescription: e.eventDescription,
+                          })));
+                        } catch (e) { /* пропускаем */ }
+                      }
+                    }
+                    if (node.children) await collectEvents(node.children);
+                  }
+                };
+                collectEvents(treeData).then(() => {
+                  allEvents.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                  setHistoryEvents(allEvents);
+                  setHistoryLoading(false);
+                });
+              }
+              return next;
+            });
+          }}
           onConfiguration={() => setShowConfigurationPopup(true)}
           extraButtons={
             <button style={{ height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0 15px', flexShrink: 0 }}
@@ -1064,44 +990,31 @@ const NomenclaturePage = () => {
         {showHistory ? (
           <HistoryTable events={historyEvents} isLoading={historyLoading} />
         ) : (
-          <DataTable
+          <NomenclatureDataTable
             columns={ALL_COLUMNS}
             visibleKeys={responseColumns}
             data={rowItems}
             selectedIds={selectedIds}
-            onCheckboxClick={(uid, e) => { e.stopPropagation(); toggleSelectItem(uid); }}
-            onSelectAll={(e) => { e.stopPropagation(); toggleSelectAll(); }}
-            onRowClick={(uid, e) => { e.stopPropagation(); }}
-            onDoubleClick={handleDoubleClick}
+            onCheckboxClick={handleCheckboxClick}
+            onSelectAll={(e) => { e.stopPropagation(); }}
+            onRowClick={handleRowClick}
+            onDoubleClick={(uid, name) => {
+              const item = rowItems.find(r => r.uid === uid);
+              if (item) handleDoubleClick(uid, name, item.type);
+            }}
             renderCell={renderCell}
             isGrayColumn={isGrayColumn}
             highlightText={searchValue.trim() || undefined}
+            barcodeHighlightText={barcodeSearchValue.trim() || undefined}
             initialWidths={columnWidths}
             onWidthsChange={setColumnWidths}
             requiredColumns={requiredColumns}
-            getRowType={getRowType}
-            rowIcons={{
-              folder: Icon11,
-              parent: Icon12,
-              material: Popup1,
-              back: Icon17,
-            }}
-            rowFontWeight={{
-              folder: 700,
-              parent: 700,
-              material: 400,
-              default: 400,
-            }}
-            onFolderClick={(uid) => enterFolder(uid)}
-            onParentBack={() => goBack()}
-            showHeaderCheckbox={true}
-            totalRowsCount={rowItems.length}
             rowContextMenuItems={(uid, name) => {
               const item = rowItems.find(r => r.uid === uid);
               if (!item) return [];
               if (item.type === 'folder') {
                 return [
-                  { id: 'create-nomenclature', label: 'Создать номенклатуру', icon: Icon20, onClick: () => { const folder = findNodeById(treeData, uid); setContextMenu({ x: 0, y: 0, uid, name, type: 'folder' }); handleContextCreateNomenclature(); } },
+                  { id: 'create-nomenclature', label: 'Создать номенклатуру', icon: Icon20, onClick: () => { setContextMenu({ x: 0, y: 0, uid, name, type: 'folder' }); handleContextCreateNomenclature(); } },
                   { id: 'create-folder', label: 'Создать каталог', icon: Icon21, onClick: () => { setCreateGroupPreselectedParent({ uid: item.uid, name: item.name }); setShowCreateGroup(true); } },
                   { id: 'move', label: 'Переместить', icon: Icon22, onClick: () => { contextMenuUidRef.current = uid; addToSelected(uid, 'folder'); setTimeout(() => setShowMoveSelectPopup(true), 50); } },
                   { id: 'rename', label: 'Переименовать', icon: Icon23, onClick: () => { setRenameGroupUid(uid); setRenameGroupName(name); setShowRenamePopup(true); } },
@@ -1109,14 +1022,8 @@ const NomenclaturePage = () => {
                   { id: 'delete', label: 'Удалить', icon: Icon25, onClick: () => { contextMenuUidRef.current = uid; addToSelected(uid, 'folder'); setTimeout(() => setShowDeleteConfirm(true), 50); } },
                 ];
               }
-              if (item.type === 'parent') {
-                return [
-                  { id: 'back', label: 'Назад', icon: Icon17, onClick: () => goBack() },
-                  { id: 'rename', label: 'Переименовать', icon: Icon23, onClick: () => { setRenameGroupUid(uid); setRenameGroupName(name); setShowRenamePopup(true); } },
-                ];
-              }
               return [
-                { id: 'open', label: 'Открыть', icon: Icon20, onClick: () => handleDoubleClick(uid, name) },
+                { id: 'open', label: 'Открыть', icon: Icon20, onClick: () => { const material = findMaterialById(treeData, uid); if (material) handleDoubleClick(uid, name, 'material'); } },
                 { id: 'move', label: 'Переместить', icon: Icon22, onClick: () => { contextMenuUidRef.current = uid; addToSelected(uid, 'material'); setTimeout(() => setShowMoveSelectPopup(true), 50); } },
                 { id: 'copy', label: 'Скопировать', icon: Icon24, onClick: () => { contextMenuUidRef.current = uid; addToSelected(uid, 'material'); setTimeout(() => setShowCopyPopup(true), 50); } },
                 { id: 'delete', label: 'Удалить', icon: Icon25, onClick: () => { contextMenuUidRef.current = uid; addToSelected(uid, 'material'); setTimeout(() => setShowDeleteConfirm(true), 50); } },
@@ -1125,6 +1032,19 @@ const NomenclaturePage = () => {
             onResetToBase={() => {
               setResponseColumns(ALL_COLUMNS.filter(c => requiredColumns.has(c.key)).map(c => c.key));
               setColumnWidths({});
+            }}
+            getRowIcon={(item: any) => {
+              if (item.type === 'folder') {
+                return item.isExpanded ? Icon12 : Icon11;
+              }
+              return Popup1;
+            }}
+            getRowFontWeight={(item: any) => {
+              if (item.type === 'folder') return 700;
+              return 400;
+            }}
+            getRowNameIndent={(item: any) => {
+              return item.depth * 20;
             }}
           />
         )}
@@ -1188,7 +1108,6 @@ const NomenclaturePage = () => {
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Копирование</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Выберите куда скопировать выбранные элементы</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={handleCopyToCurrent} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>В текущую группу</button>
               <button onClick={handleCopyToOther} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>В другую группу</button>
               <button onClick={() => setShowCopyPopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
             </div>

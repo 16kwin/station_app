@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from '../elements/CustomScrollbar';
 import AxiosService from '../../services/AxiosService';
 import ConstantInfo from '../../info/ConstantInfo';
 import { useTabs } from '../../context/TabContext';

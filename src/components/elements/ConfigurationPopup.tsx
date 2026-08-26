@@ -1,7 +1,7 @@
 // ConfigurationPopup.tsx — ПОЛНЫЙ ФАЙЛ (пустые строки как в DataTable)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from './CustomScrollbar';
 import CheckboxIcon18OffBlack from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OffBlack.svg';
 import CheckboxIcon18OnBlue from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OnBlue.svg';
 import CloseIcon24Black from '../../assets/Icons/CloseIcons/CloseIcon24Black.svg';

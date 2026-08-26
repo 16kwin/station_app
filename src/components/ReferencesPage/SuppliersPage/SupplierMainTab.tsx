@@ -1,4 +1,4 @@
-// SupplierMainTab.tsx — ПОЛНЫЙ ФАЙЛ (иконки Icon8 во втором блоке, рейтинг как в MainTab)
+// SupplierMainTab.tsx — ПОЛНЫЙ ФАЙЛ (убран бренд)
 import React, { useState, useEffect, useRef } from 'react';
 import type { CommonSupplierProps, LocalImageItem } from './SupplierCreatePage';
 import Icon8 from '../../../assets/References/NomenclatureCreatePage/Icon8.svg';
@@ -25,8 +25,6 @@ import Sup71 from '../../../assets/References/SupplierCreatePage/Sup71.svg';
 import Sup72 from '../../../assets/References/SupplierCreatePage/Sup72.svg';
 import Sup81 from '../../../assets/References/SupplierCreatePage/Sup81.svg';
 import Sup82 from '../../../assets/References/SupplierCreatePage/Sup82.svg';
-import Sup91 from '../../../assets/References/SupplierCreatePage/Sup91.svg';
-import Sup92 from '../../../assets/References/SupplierCreatePage/Sup92.svg';
 
 const StarRatingSmall = ({ value, size = 18 }: { value: number; size?: number }) => {
   const stars = [];
@@ -56,8 +54,6 @@ const SupplierMainTab: React.FC<CommonSupplierProps> = (props) => {
     email = '',
     website = '',
     phone = '',
-    selectedBrand = '',
-    selectedBrandId = '',
     averageRating = 0,
     images = [],
     localImages = [],
@@ -220,23 +216,13 @@ const SupplierMainTab: React.FC<CommonSupplierProps> = (props) => {
             <img src={phone.trim() ? Sup82 : Sup81} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
             <input style={inputStyle} value={phone} onChange={e => { setPhone(e.target.value); clearFieldError('phone'); }} placeholder="Введите телефон" />
           </div>
-          
-          <div style={{ marginTop: 25, display: 'flex', alignItems: 'center' }}>
-            <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-            <span style={{ ...labelStyle, marginLeft: 9 }}>Бренд</span>
-          </div>
-          <div onClick={() => { clearFieldError('brand'); openPopup('brand'); }} style={{ ...selectBase('100%'), border: getSelectBorderStyle('brand', !!selectedBrandId) }}>
-            <img src={selectedBrandId ? Sup92 : Sup91} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: 10, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedBrandId ? '#666EFE' : '#9CA3AF' }}>{selectedBrand || 'Выберите бренд'}</span>
-            <img src={selectedBrandId ? Icon42 : Icon41} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-          </div>
         </div>
         
         <div style={{ position: 'absolute', top: 460, left: 30, right: 30 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#2D4059', marginLeft: 9 }}>Рейтинг поставщика:</span>
-            <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 5 } }))} style={{ marginLeft: 9, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+            <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 6 } }))} style={{ marginLeft: 9, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
               <img src={IconRating} alt="Рейтинг" style={{ width: 18, height: 18 }} />
             </button>
           </div>

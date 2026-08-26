@@ -6,7 +6,7 @@ import AxiosService from '../../services/AxiosService';
 import ConstantInfo from '../../info/ConstantInfo';
 import CatalogSelectPopup from '../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from '../elements/CustomScrollbar';
 import Icon7 from '../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import Icon31 from '../../assets/References/NomenclatureCreatePage/Icon31.svg';
 import Icon32 from '../../assets/References/NomenclatureCreatePage/Icon32.svg';

@@ -1,6 +1,5 @@
-// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (правые кнопки как в NomenclatureCreatePage)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
@@ -10,6 +9,7 @@ import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import SupplierMainTab from './SupplierMainTab';
 import SupplierRequisitesTab from './SupplierRequisitesTab';
 import SupplierDocumentsTab from './SupplierDocumentsTab';
+import SupplierBrandsTab from './SupplierBrandsTab';
 import SupplierDeliveriesTab from './SupplierDeliveriesTab';
 import SupplierAssortmentTab from './SupplierAssortmentTab';
 import SupplierRatingTab from './SupplierRatingTab';
@@ -35,7 +35,6 @@ export interface CommonSupplierProps {
   selectedCountry: string; selectedCountryId: string;
   address: string; selectedShortDescription: string; selectedShortDescriptionId: string;
   description: string; email: string; website: string; phone: string;
-  selectedBrand: string; selectedBrandId: string;
   inn: string; ogrn: string; kpp: string;
   contactPerson: string; contactPosition: string; contactPhone: string;
   director: string; directorPosition: string;
@@ -47,7 +46,6 @@ export interface CommonSupplierProps {
   setSelectedCountry: (v: string) => void; setSelectedCountryId: (v: string) => void;
   setAddress: (v: string) => void; setSelectedShortDescription: (v: string) => void; setSelectedShortDescriptionId: (v: string) => void;
   setDescription: (v: string) => void; setEmail: (v: string) => void; setWebsite: (v: string) => void; setPhone: (v: string) => void;
-  setSelectedBrand: (v: string) => void; setSelectedBrandId: (v: string) => void;
   setInn: (v: string) => void; setOgrn: (v: string) => void; setKpp: (v: string) => void;
   setContactPerson: (v: string) => void; setContactPosition: (v: string) => void; setContactPhone: (v: string) => void;
   setDirector: (v: string) => void; setDirectorPosition: (v: string) => void;
@@ -62,6 +60,70 @@ export interface CommonSupplierProps {
   fetchAverageRating?: () => void;
   averageRating?: number;
 }
+
+// ==================== IndexedDB хелпер ====================
+
+const DB_NAME = 'supplier_drafts_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'draft_files';
+
+const openDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveFileToIndexedDB = async (key: string, file: File): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(file, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+const getFileFromIndexedDB = async (key: string): Promise<File | null> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const clearAllFilesForDraft = async (uid: string): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        if ((cursor.key as string).startsWith(`${uid}_`)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+// ==================== localStorage для метаданных ====================
 
 const getDraftKey = (uid: string) => `supplier_draft_${uid}`;
 
@@ -78,8 +140,6 @@ interface DraftData {
   email: string;
   website: string;
   phone: string;
-  selectedBrand: string;
-  selectedBrandId: string;
   inn: string;
   ogrn: string;
   kpp: string;
@@ -92,6 +152,8 @@ interface DraftData {
   bik: string;
   correspondentAccount: string;
   settlementAccount: string;
+  localImagesMeta: { key: string; fileName: string }[];
+  localDocumentsMeta: { key: string; localId: string; documentName: string; fileName: string }[];
   isEdit: boolean;
   timestamp: number;
 }
@@ -106,47 +168,27 @@ const loadDraftFromStorage = (uid: string): DraftData | null => {
     const raw = localStorage.getItem(getDraftKey(uid));
     if (!raw) return null;
     const data = JSON.parse(raw) as DraftData;
-    if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) { localStorage.removeItem(getDraftKey(uid)); return null; }
+    if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(getDraftKey(uid));
+      clearAllFilesForDraft(uid);
+      return null;
+    }
     return data;
-  } catch (e) { localStorage.removeItem(getDraftKey(uid)); return null; }
+  } catch (e) {
+    localStorage.removeItem(getDraftKey(uid));
+    clearAllFilesForDraft(uid);
+    return null;
+  }
 };
 
-const clearDraftStorage = (uid: string) => { localStorage.removeItem(getDraftKey(uid)); };
-
-const applyDraftToState = (draft: DraftData, setters: any) => {
-  setters.setName(draft.name || '');
-  setters.setCode(draft.code);
-  setters.setSelectedCountry(draft.selectedCountry || '');
-  setters.setSelectedCountryId(draft.selectedCountryId || '');
-  setters.setAddress(draft.address || '');
-  setters.setSelectedShortDescription(draft.selectedShortDescription || '');
-  setters.setSelectedShortDescriptionId(draft.selectedShortDescriptionId || '');
-  setters.setDescription(draft.description || '');
-  setters.setEmail(draft.email || '');
-  setters.setWebsite(draft.website || '');
-  setters.setPhone(draft.phone || '');
-  setters.setSelectedBrand(draft.selectedBrand || '');
-  setters.setSelectedBrandId(draft.selectedBrandId || '');
-  setters.setInn(draft.inn || '');
-  setters.setOgrn(draft.ogrn || '');
-  setters.setKpp(draft.kpp || '');
-  setters.setContactPerson(draft.contactPerson || '');
-  setters.setContactPosition(draft.contactPosition || '');
-  setters.setContactPhone(draft.contactPhone || '');
-  setters.setDirector(draft.director || '');
-  setters.setDirectorPosition(draft.directorPosition || '');
-  setters.setBankName(draft.bankName || '');
-  setters.setBik(draft.bik || '');
-  setters.setCorrespondentAccount(draft.correspondentAccount || '');
-  setters.setSettlementAccount(draft.settlementAccount || '');
-  setters.setIsDataSaved(draft.isEdit);
-  setters.setIsDataLoaded(true);
+const clearDraftStorage = async (uid: string) => {
+  localStorage.removeItem(getDraftKey(uid));
+  await clearAllFilesForDraft(uid);
 };
 
 const SupplierCreatePage = () => {
   const { uid, code: codeParam } = useParams<{ uid: string; code: string }>();
-  const navigate = useNavigate();
-  const { tabs, activeTabId, closeTab } = useTabs();
+  const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
   const [activeTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
@@ -163,7 +205,6 @@ const SupplierCreatePage = () => {
   const [selectedShortDescription, setSelectedShortDescription] = useState(''); const [selectedShortDescriptionId, setSelectedShortDescriptionId] = useState('');
   const [description, setDescription] = useState(''); const [email, setEmail] = useState('');
   const [website, setWebsite] = useState(''); const [phone, setPhone] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState(''); const [selectedBrandId, setSelectedBrandId] = useState('');
 
   const [inn, setInn] = useState(''); const [ogrn, setOgrn] = useState(''); const [kpp, setKpp] = useState('');
   const [contactPerson, setContactPerson] = useState(''); const [contactPosition, setContactPosition] = useState('');
@@ -188,20 +229,99 @@ const SupplierCreatePage = () => {
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
   const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
 
-  const tabs_list = ['Основное', 'Реквизиты', 'Документы', 'Поставки', 'Ассортимент', 'Рейтинг', 'Интеграции'];
+  const tabs_list = ['Основное', 'Реквизиты', 'Документы', 'Бренды', 'Поставки', 'Ассортимент', 'Рейтинг', 'Интеграции'];
   const EVENT_LOG_TAB = tabs_list.length;
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  const setters = { setName, setCode, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setSelectedBrand, setSelectedBrandId, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setIsDataSaved, setIsDataLoaded };
-
-  const saveDraftToLocalStorage = useCallback(() => {
+  const saveDraftToLocalStorage = useCallback(async () => {
     if (!uid || !isDataLoaded) return;
-    const draft: DraftData = { uid, code, name, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, isEdit, timestamp: Date.now() };
+    
+    for (const img of localImages) {
+      const key = `${uid}_img_${img.url}`;
+      await saveFileToIndexedDB(key, img.file);
+    }
+    for (const doc of localDocuments) {
+      const key = `${uid}_doc_${doc.localId}`;
+      await saveFileToIndexedDB(key, doc.file);
+    }
+    
+    const draft: DraftData = {
+      uid,
+      code,
+      name,
+      selectedCountry,
+      selectedCountryId,
+      address,
+      selectedShortDescription,
+      selectedShortDescriptionId,
+      description,
+      email,
+      website,
+      phone,
+      inn,
+      ogrn,
+      kpp,
+      contactPerson,
+      contactPosition,
+      contactPhone,
+      director,
+      directorPosition,
+      bankName,
+      bik,
+      correspondentAccount,
+      settlementAccount,
+      localImagesMeta: localImages.map(img => ({ key: `${uid}_img_${img.url}`, fileName: img.file.name })),
+      localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
+      isEdit,
+      timestamp: Date.now(),
+    };
     saveDraftToStorage(uid, draft);
-  }, [uid, code, name, isEdit, isDataLoaded, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount]);
+  }, [
+    uid, code, name, isEdit, isDataLoaded,
+    selectedCountry, selectedCountryId, address,
+    selectedShortDescription, selectedShortDescriptionId,
+    description, email, website, phone,
+    inn, ogrn, kpp,
+    contactPerson, contactPosition, contactPhone,
+    director, directorPosition,
+    bankName, bik, correspondentAccount, settlementAccount,
+    localImages, localDocuments,
+  ]);
 
-  useEffect(() => { if (!uid || !isDataLoaded) return; const t = setTimeout(() => saveDraftToLocalStorage(), 500); return () => clearTimeout(t); }, [saveDraftToLocalStorage, uid, isDataLoaded]);
+  useEffect(() => {
+    if (!uid || !isDataLoaded) return;
+    const timer = setTimeout(() => {
+      saveDraftToLocalStorage();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [saveDraftToLocalStorage, uid, isDataLoaded]);
+
+  const restoreLocalFiles = useCallback(async (draft: DraftData) => {
+    if (!uid) return;
+    
+    const restoredImages: LocalImageItem[] = [];
+    for (const imgMeta of (draft.localImagesMeta || [])) {
+      const file = await getFileFromIndexedDB(imgMeta.key);
+      if (file) {
+        restoredImages.push({ file, url: URL.createObjectURL(file) });
+      }
+    }
+    setLocalImages(restoredImages);
+    
+    const restoredDocuments: LocalDocument[] = [];
+    for (const docMeta of (draft.localDocumentsMeta || [])) {
+      const file = await getFileFromIndexedDB(docMeta.key);
+      if (file) {
+        restoredDocuments.push({
+          localId: docMeta.localId,
+          documentName: docMeta.documentName,
+          file,
+        });
+      }
+    }
+    setLocalDocuments(restoredDocuments);
+  }, [uid]);
 
   useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
 
@@ -210,14 +330,74 @@ const SupplierCreatePage = () => {
     const cp = window.location.pathname;
     const isEditMode = cp.includes('/edit/');
     setIsEdit(isEditMode);
+    
     if (isEditMode) {
       setIsDataSaved(true);
-      loadSupplierData(uid).then(() => { const draft = loadDraftFromStorage(uid); if (draft && draft.uid === uid) applyDraftToState(draft, setters); else setIsDataLoaded(true); });
+      loadSupplierData(uid).then(async () => {
+        const draft = loadDraftFromStorage(uid);
+        if (draft && draft.uid === uid && draft.isEdit) {
+          setName(draft.name);
+          setCode(draft.code);
+          setSelectedCountry(draft.selectedCountry);
+          setSelectedCountryId(draft.selectedCountryId);
+          setAddress(draft.address);
+          setSelectedShortDescription(draft.selectedShortDescription);
+          setSelectedShortDescriptionId(draft.selectedShortDescriptionId);
+          setDescription(draft.description);
+          setEmail(draft.email);
+          setWebsite(draft.website);
+          setPhone(draft.phone);
+          setInn(draft.inn);
+          setOgrn(draft.ogrn);
+          setKpp(draft.kpp);
+          setContactPerson(draft.contactPerson);
+          setContactPosition(draft.contactPosition);
+          setContactPhone(draft.contactPhone);
+          setDirector(draft.director);
+          setDirectorPosition(draft.directorPosition);
+          setBankName(draft.bankName);
+          setBik(draft.bik);
+          setCorrespondentAccount(draft.correspondentAccount);
+          setSettlementAccount(draft.settlementAccount);
+          await restoreLocalFiles(draft);
+        }
+        setIsDataLoaded(true);
+      });
       fetchImages(); fetchDocuments(); fetchAverageRating();
     } else {
       const draft = loadDraftFromStorage(uid);
-      if (draft && draft.uid === uid) applyDraftToState(draft, setters);
-      else { setIsDataSaved(false); setIsDataLoaded(true); if (codeParam) setCode(parseInt(codeParam)); }
+      if (draft && draft.uid === uid) {
+        setName(draft.name);
+        setCode(draft.code);
+        setSelectedCountry(draft.selectedCountry);
+        setSelectedCountryId(draft.selectedCountryId);
+        setAddress(draft.address);
+        setSelectedShortDescription(draft.selectedShortDescription);
+        setSelectedShortDescriptionId(draft.selectedShortDescriptionId);
+        setDescription(draft.description);
+        setEmail(draft.email);
+        setWebsite(draft.website);
+        setPhone(draft.phone);
+        setInn(draft.inn);
+        setOgrn(draft.ogrn);
+        setKpp(draft.kpp);
+        setContactPerson(draft.contactPerson);
+        setContactPosition(draft.contactPosition);
+        setContactPhone(draft.contactPhone);
+        setDirector(draft.director);
+        setDirectorPosition(draft.directorPosition);
+        setBankName(draft.bankName);
+        setBik(draft.bik);
+        setCorrespondentAccount(draft.correspondentAccount);
+        setSettlementAccount(draft.settlementAccount);
+        restoreLocalFiles(draft);
+        setIsDataSaved(false);
+        setIsDataLoaded(true);
+      } else {
+        setIsDataSaved(false);
+        setIsDataLoaded(true);
+        if (codeParam) setCode(parseInt(codeParam));
+      }
     }
   }, [uid]);
 
@@ -238,7 +418,6 @@ const SupplierCreatePage = () => {
       setAddress(d.address || ''); 
       if (d.shortDescriptionUid) { setSelectedShortDescriptionId(d.shortDescriptionUid); setSelectedShortDescription(d.shortDescriptionName || ''); } else { setSelectedShortDescriptionId(''); setSelectedShortDescription(''); }
       setDescription(d.description || ''); setEmail(d.email || ''); setWebsite(d.website || ''); setPhone(d.phone || ''); 
-      if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); } else { setSelectedBrandId(''); setSelectedBrand(''); }
       setInn(d.inn || ''); setOgrn(d.ogrn || ''); setKpp(d.kpp || ''); 
       setContactPerson(d.contactPerson || ''); setContactPosition(d.contactPosition || ''); setContactPhone(d.contactPhone || ''); 
       setDirector(d.director || ''); setDirectorPosition(d.directorPosition || ''); 
@@ -250,7 +429,7 @@ const SupplierCreatePage = () => {
     const m = new Set<string>();
     if (!name.trim()) m.add('name'); if (!selectedCountryId) m.add('country'); if (!address.trim()) m.add('address');
     if (!selectedShortDescriptionId) m.add('shortDescription'); if (!email.trim()) m.add('email'); if (!website.trim()) m.add('website');
-    if (!phone.trim()) m.add('phone'); if (!selectedBrandId) m.add('brand');
+    if (!phone.trim()) m.add('phone');
     if (!inn.trim()) m.add('inn'); if (!ogrn.trim()) m.add('ogrn'); if (!kpp.trim()) m.add('kpp');
     if (!contactPerson.trim()) m.add('contactPerson'); if (!director.trim()) m.add('director');
     if (!bankName.trim()) m.add('bankName'); if (!bik.trim()) m.add('bik');
@@ -262,7 +441,7 @@ const SupplierCreatePage = () => {
     const l: string[] = [];
     if (!name.trim()) l.push('Наименование'); if (!selectedCountryId) l.push('Страна'); if (!address.trim()) l.push('Адрес');
     if (!selectedShortDescriptionId) l.push('Краткое описание'); if (!email.trim()) l.push('Email'); if (!website.trim()) l.push('Сайт');
-    if (!phone.trim()) l.push('Телефон'); if (!selectedBrandId) l.push('Бренд');
+    if (!phone.trim()) l.push('Телефон');
     if (!inn.trim()) l.push('ИНН'); if (!ogrn.trim()) l.push('ОГРН'); if (!kpp.trim()) l.push('КПП');
     if (!contactPerson.trim()) l.push('Контактное лицо'); if (!director.trim()) l.push('Руководитель');
     if (!bankName.trim()) l.push('Банк'); if (!bik.trim()) l.push('БИК');
@@ -273,20 +452,27 @@ const SupplierCreatePage = () => {
   const handleSave = async () => {
     if (!uid) return; setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiSupplierDraft, { uid, code, name, countryUid: selectedCountryId || null, address: address || null, shortDescriptionUid: selectedShortDescriptionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null, brandUid: selectedBrandId || null, inn: inn || null, ogrn: ogrn || null, kpp: kpp || null, contactPerson: contactPerson || null, contactPosition: contactPosition || null, contactPhone: contactPhone || null, director: director || null, directorPosition: directorPosition || null, bankName: bankName || null, bik: bik || null, correspondentAccount: correspondentAccount || null, settlementAccount: settlementAccount || null, author: 'Оператор' });
+      await AxiosService.post(ConstantInfo.restApiSupplierDraft, { uid, code, name, countryUid: selectedCountryId || null, address: address || null, shortDescriptionUid: selectedShortDescriptionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null, inn: inn || null, ogrn: ogrn || null, kpp: kpp || null, contactPerson: contactPerson || null, contactPosition: contactPosition || null, contactPhone: contactPhone || null, director: director || null, directorPosition: directorPosition || null, bankName: bankName || null, bik: bik || null, correspondentAccount: correspondentAccount || null, settlementAccount: settlementAccount || null, author: 'Оператор' });
       for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); }
       for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); }
       setLocalImages([]); setLocalDocuments([]); await fetchImages(); await fetchDocuments();
-      clearDraftStorage(uid);
+      await clearDraftStorage(uid);
       setIsDataSaved(true); setValidationErrors(new Set()); window.dispatchEvent(new CustomEvent('refreshSupplierEvents'));
-      if (!isEdit) { setIsEdit(true); navigate(`/references/suppliers/edit/${uid}/${code}`, { replace: true }); }
+      
+      const wasCreate = !isEdit;
+      if (wasCreate && activeTabId) {
+        setIsEdit(true);
+        const newPath = `/references/suppliers/edit/${uid}`;
+        const newLabel = name.trim() || 'Поставщик';
+        replaceTab(activeTabId, newPath, newLabel, <SupplierCreatePage />);
+      }
       return true;
     } catch (e) { console.error(e); return false; } finally { setIsSaving(false); }
   };
 
-  const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); };
+  const handleClose = () => { const t = tabs.find(tab => tab.id === activeTabId); if (t) closeTab(t.id); if (uid) clearDraftStorage(uid); };
   const handleSaveAndClose = async () => { if (await handleSave()) handleClose(); };
-  const handleCloseWithoutSaving = () => { if (uid) clearDraftStorage(uid); handleClose(); };
+  const handleCloseWithoutSaving = async () => { if (uid) await clearDraftStorage(uid); handleClose(); };
 
   const handleTabChange = (index: number) => {
     if (!isDataSaved && index > 1) { const m = getMissingFields(); setValidationErrors(m); setShowBlockedTabWarning(true); return; }
@@ -305,7 +491,6 @@ const SupplierCreatePage = () => {
   const handlePopupSelect = (id: string, nm: string) => { 
     switch (popupType) { 
       case 'country': setSelectedCountry(nm); setSelectedCountryId(id); setValidationErrors(p => { const n = new Set(p); n.delete('country'); return n; }); break; 
-      case 'brand': setSelectedBrand(nm); setSelectedBrandId(id); setValidationErrors(p => { const n = new Set(p); n.delete('brand'); return n; }); break; 
       case 'shortDescription': setSelectedShortDescription(nm); setSelectedShortDescriptionId(id); setValidationErrors(p => { const n = new Set(p); n.delete('shortDescription'); return n; }); break; 
     } 
   };
@@ -319,7 +504,7 @@ const SupplierCreatePage = () => {
   const hasRequisitesErrors = cef.some(f => validationErrors.has(f));
   const isEventLogActive = activeTab === EVENT_LOG_TAB;
 
-  const commonProps: CommonSupplierProps = { uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, selectedBrand, selectedBrandId, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setSelectedBrand, setSelectedBrandId, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setImages, setDocuments, handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors, fetchAverageRating, averageRating };
+  const commonProps: CommonSupplierProps = { uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setImages, setDocuments, handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors, fetchAverageRating, averageRating };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
@@ -360,7 +545,7 @@ const SupplierCreatePage = () => {
 
       {isEventLogActive ? <SupplierEventLogTab {...commonProps} /> : (
         <>
-          {(() => { switch (activeTab) { case 0: return <SupplierMainTab {...commonProps} />; case 1: return <SupplierRequisitesTab {...commonProps} />; case 2: return <SupplierDocumentsTab {...commonProps} />; case 3: return <SupplierDeliveriesTab {...commonProps} />; case 4: return <SupplierAssortmentTab {...commonProps} />; case 5: return <SupplierRatingTab {...commonProps} />; case 6: return <SupplierIntegrationTab {...commonProps} />; default: return null; } })()}
+          {(() => { switch (activeTab) { case 0: return <SupplierMainTab {...commonProps} />; case 1: return <SupplierRequisitesTab {...commonProps} />; case 2: return <SupplierDocumentsTab {...commonProps} />; case 3: return <SupplierBrandsTab {...commonProps} />; case 4: return <SupplierDeliveriesTab {...commonProps} />; case 5: return <SupplierAssortmentTab {...commonProps} />; case 6: return <SupplierRatingTab {...commonProps} />; case 7: return <SupplierIntegrationTab {...commonProps} />; default: return null; } })()}
           <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
             <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
             <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>

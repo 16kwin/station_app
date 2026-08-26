@@ -1,6 +1,6 @@
 // CharacteristicsTab.tsx — ПОЛНЫЙ ФАЙЛ (удаление только через правую кнопку мыши)
 import React, { useState, useEffect, useRef } from 'react';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import CustomScrollbar from '../../elements/CustomScrollbar';
 import Icon10 from '../../../assets/References/NomenclatureCreatePage/Icon10.svg';
 import Icon101 from '../../../assets/References/NomenclatureCreatePage/Icon101.svg';
 import IconChar11 from '../../../assets/References/NomenclatureCreatePage/Characteristics11.svg';

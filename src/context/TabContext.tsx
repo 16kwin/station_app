@@ -1,5 +1,5 @@
-// TabContext.tsx
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+// TabContext.tsx — ИСПРАВЛЕННЫЙ (добавлен replaceTab)
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,6 +20,7 @@ interface TabContextType {
   openNewTab: () => void;
   updateTabComponent: (id: string, component: ReactNode) => void;
   updateTabLabel: (id: string, label: string) => void;
+  replaceTab: (id: string, path: string, label: string, component: ReactNode) => void;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -128,6 +129,15 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     return newId;
   }, [tabs, activeTabId, navigate]);
 
+  const replaceTab = useCallback((id: string, path: string, label: string, component: ReactNode) => {
+    setTabs(prevTabs => 
+      prevTabs.map(tab => 
+        tab.id === id ? { ...tab, path, label, component } : tab
+      )
+    );
+    navigate(path, { replace: true });
+  }, [navigate]);
+
   const closeTab = useCallback((id: string) => {
     const tabToClose = tabs.find(tab => tab.id === id);
     
@@ -153,7 +163,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     setTabs(newTabs);
     
     if (activeTabId === id) {
-      // Если у закрываемой вкладки есть родитель — пробуем перейти на него
       if (tabToClose?.parentTabId) {
         const parentTab = newTabs.find(t => t.id === tabToClose.parentTabId);
         if (parentTab) {
@@ -163,7 +172,6 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
         }
       }
       
-      // Иначе переключаемся на ближайшую сверху
       const tabIndex = tabs.findIndex(tab => tab.id === id);
       const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
       const newActiveTab = newTabs[newActiveIndex];
@@ -214,6 +222,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       openNewTab, 
       updateTabComponent,
       updateTabLabel,
+      replaceTab,
     }}>
       {children}
     </TabContext.Provider>

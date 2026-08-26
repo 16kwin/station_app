@@ -1,7 +1,7 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (обработка ListResponse для новых эндпоинтов)
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (исправлены двойные userId)
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import CustomScrollbar from '../../elements/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import { useTabs } from '../../../context/TabContext';
@@ -60,7 +60,8 @@ export type PopupType =
   | 'holding'
   | 'enterprise'
   | 'workshop'
-  | 'section';
+  | 'section'
+  | 'direction';
 
 interface PopupConfig {
   title: string;
@@ -116,6 +117,8 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
       return { title: 'Справочник: Цеха (Выбор)', columns: [{ key: 'enterpriseName', title: 'ПРЕДПРИЯТИЕ', left: 500 }], isFlat: true, hasCreateButton: false };
     case 'section':
       return { title: 'Справочник: Участки (Выбор)', columns: [{ key: 'workshopName', title: 'ЦЕХ', left: 500 }], isFlat: true, hasCreateButton: false };
+    case 'direction':
+      return { title: 'Справочник: Направления производства (Выбор)', columns: [], createButtonLabel: 'Создать направление', isFlat: true, hasCreateButton: true };
     default:
       return { title: '', columns: [], isFlat: true, hasCreateButton: false };
   }
@@ -142,6 +145,7 @@ const getFlatPopupIcon = (type: PopupType): string | null => {
     case 'enterprise': return Popup9;
     case 'workshop': return Popup9;
     case 'section': return Popup9;
+    case 'direction': return Popup6;
     default: return null;
   }
 };
@@ -328,38 +332,40 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         setData(convertGenericFlat(getDataArray((await AxiosService.get(url)).data)));
       } else if (popupType === 'country') {
         setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureCountries)).data)));
+      } else if (popupType === 'direction') {
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/production-directions?userId=${USER_ID}`)).data)));
       } else if (popupType === 'stationType') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.restApiStationTypes}?userId=${USER_ID}`)).data)));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/station-types?userId=${USER_ID}`)).data)));
       } else if (popupType === 'stationManufacturer') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.restApiStationManufacturers}?userId=${USER_ID}`)).data)));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/station-manufacturers?userId=${USER_ID}`)).data)));
       } else if (popupType === 'stationModel') {
-        setData(getDataArray((await AxiosService.get(`${ConstantInfo.restApiStationModels}?userId=${USER_ID}`)).data).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/station-models?userId=${USER_ID}`)).data).map((item: any) => ({
           id: item.uid, name: item.name,
           code: item.code ? String(item.code).padStart(4, '0') : '',
           article: item.article || '',
         })));
       } else if (popupType === 'stationConfiguration') {
         const url = filterParam 
-          ? `${ConstantInfo.restApiStationConfigurations}?modelId=${filterParam}` 
-          : `${ConstantInfo.restApiStationConfigurations}?userId=${USER_ID}`;
+          ? `${ConstantInfo.apiBaseUrl}/api/station-configurations?modelId=${filterParam}` 
+          : `${ConstantInfo.apiBaseUrl}/api/station-configurations?userId=${USER_ID}`;
         setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: item.uid, name: item.name, modelName: item.modelName || '',
         })));
       } else if (popupType === 'holding') {
-        setData(getDataArray((await AxiosService.get(`${ConstantInfo.restApiHoldings}?userId=${USER_ID}`)).data).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/holdings?userId=${USER_ID}`)).data).map((item: any) => ({
           id: String(item.id), name: item.name,
         })));
       } else if (popupType === 'enterprise') {
-        setData(getDataArray((await AxiosService.get(`${ConstantInfo.restApiEnterprises}?userId=${USER_ID}`)).data).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/enterprises?userId=${USER_ID}`)).data).map((item: any) => ({
           id: String(item.id), name: item.name,
         })));
       } else if (popupType === 'workshop') {
-        const url = filterParam ? `${ConstantInfo.restApiWorkshops}?enterpriseId=${filterParam}` : `${ConstantInfo.restApiWorkshops}?userId=${USER_ID}`;
+        const url = filterParam ? `${ConstantInfo.apiBaseUrl}/api/workshops?enterpriseId=${filterParam}` : `${ConstantInfo.apiBaseUrl}/api/workshops?userId=${USER_ID}`;
         setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: String(item.id), name: item.name, enterpriseName: item.enterpriseName || '',
         })));
       } else if (popupType === 'section') {
-        const url = filterParam ? `${ConstantInfo.restApiSections}?workshopId=${filterParam}` : `${ConstantInfo.restApiSections}?userId=${USER_ID}`;
+        const url = filterParam ? `${ConstantInfo.apiBaseUrl}/api/sections?workshopId=${filterParam}` : `${ConstantInfo.apiBaseUrl}/api/sections?userId=${USER_ID}`;
         setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: String(item.id), name: item.name, workshopName: item.workshopName || '',
         })));
@@ -463,6 +469,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         case 'shortDescription': url = ConstantInfo.restApiSupplierDescriptionTypes; break;
         case 'stationType': url = ConstantInfo.restApiStationTypes; body.description = createFormDescription.trim(); break;
         case 'stationManufacturer': url = ConstantInfo.restApiStationManufacturers; body.description = createFormDescription.trim(); break;
+        case 'direction': url = ConstantInfo.restApiProductionDirectionCreate; break;
       }
       if (url) {
         await AxiosService.post(url, body);
@@ -545,6 +552,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       case 'shortDescription': return 'Создание типа описания';
       case 'stationType': return 'Создание типа станции';
       case 'stationManufacturer': return 'Создание производителя станций';
+      case 'direction': return 'Создание направления производства';
       default: return 'Создание';
     }
   };

@@ -1,4 +1,4 @@
-// StationModelCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлено сохранение изображения)
+// StationModelCreatePage.tsx — ИСПРАВЛЕННЫЙ (replaceTab вместо navigate при сохранении)
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -61,7 +61,7 @@ const BTN_SEARCH_EXPANDED = 280;
 const StationModelCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
   const navigate = useNavigate();
-  const { tabs, activeTabId, closeTab } = useTabs();
+  const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
   const [activeTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
@@ -285,12 +285,10 @@ const StationModelCreatePage = () => {
       }
       setDocumentChanges([]);
 
-      // Обработка изображения: новое
       if (localImage?.isNew) {
         const fd = new FormData(); fd.append('file', localImage.file);
         await AxiosService.post(ConstantInfo.restApiStationModelImages(uid), fd);
         
-        // Получаем URL загруженного изображения
         try {
           const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(uid));
           if (imgRes.data?.length > 0) {
@@ -302,7 +300,6 @@ const StationModelCreatePage = () => {
         } catch (e) {}
       }
       
-      // Обработка изображения: удаление
       if (deletedImageUid) {
         await AxiosService.delete(ConstantInfo.restApiStationModelDeleteImage(deletedImageUid));
         setDeletedImageUid(null);
@@ -328,7 +325,12 @@ const StationModelCreatePage = () => {
       });
 
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
-      if (wasCreate) { setIsEdit(true); navigate(`/references/station-models/edit/${uid}`, { replace: true }); }
+      if (wasCreate && activeTabId) {
+        setIsEdit(true);
+        const newPath = `/references/station-models/edit/${uid}`;
+        const newLabel = `Модель станции: ${name.trim()}`;
+        replaceTab(activeTabId, newPath, newLabel, <StationModelCreatePage />);
+      }
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 

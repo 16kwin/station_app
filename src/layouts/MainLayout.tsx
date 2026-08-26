@@ -1,4 +1,4 @@
-// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлен LocationsPage)
+// MainLayout.tsx — ИСПРАВЛЕННЫЙ (добавлен ManufacturerCreatePage)
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -22,12 +22,17 @@ import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePag
 import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
 import NomenclatureGroupsPage from '../components/ReferencesPage/NomenclatureGroupsPage/NomenclatureGroupsPage';
 import NomenclatureTypesPage from '../components/ReferencesPage/NomenclatureTypesPage/NomenclatureTypesPage';
+import AttributeGroupsPage from '../components/ReferencesPage/AttributeGroupsPage/AttributeGroupsPage';
 import AttributeTypesPage from '../components/ReferencesPage/AttributeTypesPage/AttributeTypesPage';
 import UnitsPage from '../components/ReferencesPage/UnitsPage/UnitsPage';
+import NomenclatureUnitsPage from '../components/ReferencesPage/NomenclatureUnitsPage/NomenclatureUnitsPage';
+import ProductionDirectionsPage from '../components/ReferencesPage/ProductionDirectionsPage/ProductionDirectionsPage';
+import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/ManufacturersPage';
+import ManufacturerCreatePage from '../components/ReferencesPage/ManufacturersPage/ManufacturerCreatePage';
 import BrandsPage from '../components/ReferencesPage/BrandsPage/BrandsPage';
 import ModelsPage from '../components/ReferencesPage/ModelsPage/ModelsPage';
-import CountriesPage from '../components/ReferencesPage/CountriesPage/CountriesPage';
-import ManufacturersPage from '../components/ReferencesPage/ManufacturersPage/ManufacturersPage';
+import SupplierDirectionsPage from '../components/ReferencesPage/SupplierDirectionsPage/SupplierDirectionsPage';
+import SupplierBrandsPage from '../components/ReferencesPage/SupplierBrandsPage/SupplierBrandsPage';
 import SuppliersPage from '../components/ReferencesPage/SuppliersPage/SuppliersPage';
 import SupplierCreatePage from '../components/ReferencesPage/SuppliersPage/SupplierCreatePage';
 import TemplatesPage from '../components/ReferencesPage/TemplatesPage/TemplatesPage';
@@ -44,6 +49,7 @@ import StationConfigurationCreatePage from '../components/ReferencesPage/Station
 import StationsCrudPage from '../components/ReferencesPage/StationsCrudPage/StationsCrudPage';
 import StationCreatePage from '../components/ReferencesPage/StationsCrudPage/StationCreatePage';
 import LocationsPage from '../components/ReferencesPage/LocationsPage/LocationsPage';
+import CountriesPage from '../components/ReferencesPage/CountriesPage/CountriesPage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
 
@@ -76,10 +82,17 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/settings': <SettingsPage />, '/account': <AccountPage />,
   '/references/nomenclature': <NomenclaturePage />, '/references/templates': <TemplatesPage />,
   '/references/accounting-groups': <AccountingGroupsPage />, '/references/nomenclature-groups': <NomenclatureGroupsPage />,
-  '/references/nomenclature-types': <NomenclatureTypesPage />, '/references/attribute-types': <AttributeTypesPage />,
-  '/references/units': <UnitsPage />, '/references/brands': <BrandsPage />, '/references/models': <ModelsPage />,
-  '/references/countries': <CountriesPage />, '/references/manufacturers': <ManufacturersPage />,
-  '/references/suppliers': <SuppliersPage />, '/references/holdings': <HoldingsPage />,
+  '/references/nomenclature-types': <NomenclatureTypesPage />, '/references/attribute-groups': <AttributeGroupsPage />,
+  '/references/attribute-types': <AttributeTypesPage />,
+  '/references/units': <UnitsPage />, '/references/nomenclature-units': <NomenclatureUnitsPage />,
+  '/references/production-directions': <ProductionDirectionsPage />,
+  '/references/manufacturers': <ManufacturersPage />,
+  '/references/brands': <BrandsPage />, '/references/models': <ModelsPage />,
+  '/references/supplier-directions': <SupplierDirectionsPage />,
+  '/references/supplier-brands': <SupplierBrandsPage />,
+  '/references/suppliers': <SuppliersPage />,
+  '/references/countries': <CountriesPage />,
+  '/references/holdings': <HoldingsPage />,
   '/references/enterprises': <EnterprisesPage />, '/references/workshops': <WorkshopsPage />,
   '/references/sections': <SectionsPage />, '/references/station-types': <StationTypesPage />,
   '/references/station-manufacturers': <StationManufacturersPage />, '/references/station-models': <StationModelsPage />,
@@ -92,6 +105,8 @@ const isChildPath = (path: string): boolean => {
     path.startsWith('/references/nomenclature/edit/') ||
     path.startsWith('/references/suppliers/create/') ||
     path.startsWith('/references/suppliers/edit/') ||
+    path.startsWith('/references/manufacturers/create/') ||
+    path.startsWith('/references/manufacturers/edit/') ||
     path.startsWith('/references/station-models/create/') ||
     path.startsWith('/references/station-models/edit/') ||
     path.startsWith('/references/station-configurations/create/') ||
@@ -110,6 +125,8 @@ const getComponentByPath = (path: string): React.ReactNode => {
   if (path.startsWith('/references/nomenclature/edit/')) return <NomenclatureCreatePage />;
   if (path.startsWith('/references/suppliers/create/')) return <SupplierCreatePage />;
   if (path.startsWith('/references/suppliers/edit/')) return <SupplierCreatePage />;
+  if (path.startsWith('/references/manufacturers/create/')) return <ManufacturerCreatePage />;
+  if (path.startsWith('/references/manufacturers/edit/')) return <ManufacturerCreatePage />;
   if (path.startsWith('/references/station-models/create/')) return <StationModelCreatePage />;
   if (path.startsWith('/references/station-models/edit/')) return <StationModelCreatePage />;
   if (path.startsWith('/references/station-configurations/create/')) return <StationConfigurationCreatePage />;
@@ -131,10 +148,17 @@ const getLabelByPath = (path: string): string => {
     '/settings': 'Настройки', '/account': 'Аккаунт',
     '/references/nomenclature': 'Справочник: Номенклатура', '/references/templates': 'Справочник: Шаблоны пополнения',
     '/references/accounting-groups': 'Справочник: Группы учета', '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
-    '/references/nomenclature-types': 'Справочник: Виды номенклатуры', '/references/attribute-types': 'Справочник: Виды характеристик',
-    '/references/units': 'Справочник: Единицы измерения', '/references/brands': 'Справочник: Бренды',
-    '/references/models': 'Справочник: Модели', '/references/countries': 'Справочник: Страны',
-    '/references/manufacturers': 'Справочник: Производители', '/references/suppliers': 'Справочник: Поставщики',
+    '/references/nomenclature-types': 'Справочник: Виды номенклатуры', '/references/attribute-groups': 'Справочник: Группы характеристик',
+    '/references/attribute-types': 'Справочник: Виды характеристик',
+    '/references/units': 'Справочник: Единицы измерения характеристик', '/references/nomenclature-units': 'Справочник: Единицы измерения',
+    '/references/production-directions': 'Справочник: Направления производства',
+    '/references/manufacturers': 'Справочник: Производители',
+    '/references/brands': 'Справочник: Бренды',
+    '/references/models': 'Справочник: Модели',
+    '/references/supplier-directions': 'Справочник: Направления поставщиков',
+    '/references/supplier-brands': 'Справочник: Бренды поставщиков',
+    '/references/suppliers': 'Справочник: Поставщики',
+    '/references/countries': 'Справочник: Страны',
     '/references/holdings': 'Справочник: Холдинги', '/references/enterprises': 'Справочник: Предприятия',
     '/references/workshops': 'Справочник: Цеха', '/references/sections': 'Справочник: Участки',
     '/references/station-types': 'Справочник: Типы станций', '/references/station-manufacturers': 'Справочник: Производители станций',
@@ -146,6 +170,8 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/references/nomenclature/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return nomenclatureInfoCache.get(uid) || 'Номенклатура'; }
   if (path.startsWith('/references/suppliers/create/')) { const code = path.split('/').pop(); return `Поставщик: ${code}`; }
   if (path.startsWith('/references/suppliers/edit/')) { const uid = path.split('/').pop() || ''; return supplierInfoCache.get(uid) || 'Поставщик'; }
+  if (path.startsWith('/references/manufacturers/create/')) { const code = path.split('/').pop(); return `Производитель: ${code}`; }
+  if (path.startsWith('/references/manufacturers/edit/')) { return 'Производитель'; }
   if (path.startsWith('/references/station-models/create/')) { const code = path.split('/').pop(); return `Модель станции: ${code}`; }
   if (path.startsWith('/references/station-models/edit/')) { const uid = path.split('/').pop(); return 'Модель станции'; }
   if (path.startsWith('/references/station-configurations/create/')) { const code = path.split('/').pop(); return `Конфигурация: ${code}`; }
@@ -167,23 +193,42 @@ const MainLayout = () => {
   const location = useLocation();
   const prevPathRef = useRef('');
 
-  const MIN_WIDTH = 1920; const MIN_HEIGHT = 900; const MAX_WIDTH = 1920; const MAX_HEIGHT = 1080;
+  const MIN_WIDTH = 1920; 
+  const MIN_HEIGHT = 920; 
+  const MAX_WIDTH = 1920; 
+  const MAX_HEIGHT = 1080;
+
+  const WHITE_BLOCK_WIDTH = 1800;
+  const WHITE_BLOCK_HEIGHT = 840;
+  const TAB_BAR_HEIGHT = 35;
+  const TAB_BAR_GAP = 5;
 
   useEffect(() => {
-    const width = window.innerWidth; const height = window.innerHeight;
-    let finalWidth = width; let finalHeight = height;
-    if (width < MIN_WIDTH || height < MIN_HEIGHT) { finalWidth = MIN_WIDTH; finalHeight = MIN_HEIGHT; }
-    if (width > MAX_WIDTH || height > MAX_HEIGHT) { finalWidth = MAX_WIDTH; finalHeight = MAX_HEIGHT; }
+    const width = window.innerWidth; 
+    const height = window.innerHeight;
+    let finalWidth = width; 
+    let finalHeight = height;
+    if (width < MIN_WIDTH || height < MIN_HEIGHT) { 
+      finalWidth = MIN_WIDTH; 
+      finalHeight = MIN_HEIGHT; 
+    }
+    if (width > MAX_WIDTH || height > MAX_HEIGHT) { 
+      finalWidth = MAX_WIDTH; 
+      finalHeight = MAX_HEIGHT; 
+    }
     setWindowSize({ width: finalWidth, height: finalHeight });
     setIsLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
+    
     tabs.forEach(tab => {
       if (tab.component === null) {
         const component = getComponentByPath(tab.path);
-        if (component) updateTabComponent(tab.id, component);
+        if (component) {
+          updateTabComponent(tab.id, component);
+        }
       }
     });
   }, [tabs, isLoaded, updateTabComponent]);
@@ -193,6 +238,7 @@ const MainLayout = () => {
     const fullPath = location.pathname + location.search;
     if (prevPathRef.current === fullPath) return;
     prevPathRef.current = fullPath;
+    
     const existingTab = tabs.find(tab => tab.path === fullPath);
     if (existingTab) {
       if (activeTabId !== existingTab.id) switchTab(existingTab.id);
@@ -202,35 +248,66 @@ const MainLayout = () => {
       }
       return;
     }
+    
     const label = getLabelByPath(fullPath);
     const component = getComponentByPath(location.pathname);
+    
     const parentTabId = isChildPath(location.pathname) ? (activeTabId ?? undefined) : undefined;
     const newTabId = openTab(fullPath, label, component, parentTabId);
+    
     if (location.pathname.startsWith('/documents/schablon/')) { const uid = location.pathname.replace('/documents/schablon/', ''); fetchTemplateName(uid).then(name => updateTabLabel(newTabId, `Шаблон - ${name}`)); }
     if (location.pathname.startsWith('/references/nomenclature/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
     if (location.pathname.startsWith('/references/suppliers/edit/')) { const uid = location.pathname.split('/').pop() || ''; if (uid) { fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); } }
   }, [location.pathname, location.search, isLoaded]);
 
-  useEffect(() => { const fullPath = location.pathname + location.search; const currentPathExists = tabs.some(tab => tab.path === fullPath); if (!currentPathExists) prevPathRef.current = ''; }, [tabs, location.pathname, location.search]);
+  useEffect(() => { 
+    const fullPath = location.pathname + location.search; 
+    const currentPathExists = tabs.some(tab => tab.path === fullPath); 
+    if (!currentPathExists) prevPathRef.current = ''; 
+  }, [tabs, location.pathname, location.search]);
 
   useEffect(() => {
-    const handleResize = () => { const width = window.innerWidth; const height = window.innerHeight; const scaleX = width / windowSize.width; const scaleY = height / windowSize.height; const scale = Math.min(scaleX, scaleY); if (scale > 1) setPadding(60 * scale); else setPadding(60); };
-    if (isLoaded) { handleResize(); window.addEventListener('resize', handleResize); }
+    const handleResize = () => { 
+      const width = window.innerWidth; 
+      const height = window.innerHeight; 
+      const scaleX = width / windowSize.width; 
+      const scaleY = height / windowSize.height; 
+      const scale = Math.min(scaleX, scaleY); 
+      if (scale > 1) setPadding(60 * scale); 
+      else setPadding(60); 
+    };
+    if (isLoaded) { 
+      handleResize(); 
+      window.addEventListener('resize', handleResize); 
+    }
     return () => window.removeEventListener('resize', handleResize);
   }, [windowSize, isLoaded]);
 
   if (!isLoaded) return null;
 
-  const tabBarHeight = 35; const topOffset = 20; const gapBetweenTabBarAndWhiteBlock = 5;
+  const whiteBlockTop = (windowSize.height - WHITE_BLOCK_HEIGHT) / 2;
+  const tabBarTop = whiteBlockTop - TAB_BAR_HEIGHT - TAB_BAR_GAP;
 
   return (
     <div className="w-full h-dvh relative overflow-auto" style={{ minWidth: `${windowSize.width}px`, minHeight: `${windowSize.height}px` }}>
       <div className="w-full h-full flex items-center justify-center">
         <div style={{ width: `${windowSize.width}px`, height: `${windowSize.height}px` }} className="relative">
-          <div className="absolute left-0 right-0 flex justify-center" style={{ top: `${topOffset}px` }}>
+          <div className="absolute left-0 right-0 flex justify-center" style={{ top: `${tabBarTop}px` }}>
             <div style={{ width: `${windowSize.width - padding * 2}px` }}><TabBar /></div>
           </div>
-          <div style={{ position: 'absolute', left: `${padding}px`, right: `${padding}px`, top: `${topOffset + tabBarHeight + gapBetweenTabBarAndWhiteBlock}px`, bottom: `${padding}px`, backgroundColor: '#FAFBFC' }} className="rounded-[20px] shadow overflow-auto white-block relative">
+          
+          <div 
+            style={{ 
+              position: 'absolute', 
+              left: '50%', 
+              marginLeft: `-${WHITE_BLOCK_WIDTH / 2}px`,
+              top: `${whiteBlockTop}px`,
+              width: `${WHITE_BLOCK_WIDTH}px`,
+              height: `${WHITE_BLOCK_HEIGHT}px`,
+              backgroundColor: '#FAFBFC',
+            }} 
+            className="rounded-[20px] shadow overflow-auto white-block relative"
+          >
             {tabs.map(tab => (
               <div key={tab.id} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
                 {tab.component}

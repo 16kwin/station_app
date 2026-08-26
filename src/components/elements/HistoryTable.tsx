@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import CustomScrollbar from '../../components/CustomScrollbar';
+import CustomScrollbar from './CustomScrollbar';
 import HistoryIcon18Black from '../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
 
 interface HistoryEvent {

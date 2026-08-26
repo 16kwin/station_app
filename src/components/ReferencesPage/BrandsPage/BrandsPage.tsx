@@ -1,130 +1,212 @@
-// BrandsPage.tsx — ПОЛНЫЙ ФАЙЛ (единый стиль)
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
-import CustomScrollbar from '../../../components/CustomScrollbar';
+import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import Icon1 from '../../../assets/References/Icon1.svg';
-import Icon2 from '../../../assets/References/Icon2.svg';
-import Icon3 from '../../../assets/References/Icon3.svg';
-import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon7 from '../../../assets/References/Icon7.svg';
-import Icon8 from '../../../assets/References/Icon8.svg';
-import Icon9 from '../../../assets/References/Icon9.svg';
-import Icon10 from '../../../assets/References/Icon10.svg';
-import Icon19 from '../../../assets/References/Icon19.svg';
+import ConfigurationPopup from '../../elements/ConfigurationPopup';
+import HistoryTable from '../../elements/HistoryTable';
+import DataTable from '../../elements/DataTable';
+import TableToolbar from '../../elements/TableToolbar';
+import type { ContextMenuItem } from '../../elements/ContextMenu';
+import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
+import ContextMenuCopyIcon16 from '../../../assets/Icons/CopyIcons/CopyIcon16Black.svg';
+import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 import Popup7 from '../../../assets/References/popup7.svg';
 
-interface BrandItem {
-  uid: string;
-  name: string;
-  description: string;
-  manufacturerUid: string;
-  manufacturerName: string;
+interface BrandRowData { [key: string]: any; }
+interface BrandListResponse {
+  columns: string[];
+  data: BrandRowData[];
+  columnWidths?: Record<string, number>;
+  requiredColumns?: string[];
 }
 
-interface ManufacturerOption {
-  uid: string;
-  name: string;
-}
+interface ColumnItem { key: string; label: string; }
+
+const ALL_COLUMNS: ColumnItem[] = [
+  { key: 'name', label: 'Наименование' },
+  { key: 'manufacturerName', label: 'Производитель' },
+  { key: 'description', label: 'Описание' },
+];
+
+const REQUIRED_COLUMNS = new Set(['name', 'manufacturerName']);
+
+const SORT_FIELDS = [
+  { key: 'name', label: 'Наименование', iconType: '19' as const },
+  { key: 'manufacturerName', label: 'Производитель' },
+];
+
+const FILTER_FIELDS = [
+  { key: 'manufacturerName', label: 'Производитель' },
+];
+
+const USER_ID = 1;
 
 const BrandsPage = () => {
-  const { activeTabId } = useTabs();
-  const tabIdRef = useRef<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
-  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [data, setData] = useState<BrandItem[]>([]);
+  const { openTab } = useTabs();
+  const [responseData, setResponseData] = useState<BrandListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
-  const [editItem, setEditItem] = useState<BrandItem | null>(null);
+  const [editItem, setEditItem] = useState<BrandRowData | null>(null);
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formManufacturerUid, setFormManufacturerUid] = useState('');
-  const [manufacturers, setManufacturers] = useState<ManufacturerOption[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
+  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | null>(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [accountingIndex, setAccountingIndex] = useState(-1);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
+  const [filterOptions, setFilterOptions] = useState<Record<string, { uid: string; name: string }[]>>({});
 
-  const TABLE_WIDTH = 1720;
-  const ROW_HEIGHT = 58;
-  const HEADER_HEIGHT = 58;
-  const VISIBLE_ROWS = 10;
-  const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
-  const COL_MANUFACTURER = 600;
-  const COL_DESCRIPTION = 900;
-
-  useEffect(() => { tabIdRef.current = activeTabId; }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureBrands);
-      setData(response.data || []);
-    } catch (error) {
-      console.error('Ошибка загрузки:', error);
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/brands-crud?userId=${USER_ID}`);
+      const response = r.data as BrandListResponse;
+      setResponseData(response);
+      setVisibleColumns(new Set(response.columns));
+      if (response.columnWidths) setColumnWidths(response.columnWidths);
+      if (response.requiredColumns && response.requiredColumns.length > 0) {
+        setRequiredColumns(new Set(response.requiredColumns));
+      }
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const loadManufacturers = async () => {
-    try {
-      const response = await AxiosService.get(ConstantInfo.restApiNomenclatureManufacturers);
-      setManufacturers(response.data || []);
-    } catch (error) {
-      console.error('Ошибка загрузки производителей:', error);
-    }
-  };
-
-  useEffect(() => { fetchData(); loadManufacturers(); }, []);
-  useEffect(() => {
-    if (activeTabId && activeTabId === tabIdRef.current && data.length > 0) fetchData();
-  }, [activeTabId]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [contextMenu]);
-
-  const checkScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    setHasVerticalScroll(container.scrollHeight > container.clientHeight);
-    setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
-  };
-
-  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [data]);
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    checkScroll();
-    container.addEventListener('scroll', checkScroll);
-    const ro = new ResizeObserver(checkScroll);
-    ro.observe(container);
-    return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, []);
 
-  const toggleSelectItem = (uid: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(uid)) next.delete(uid); else next.add(uid);
-      return next;
+  const fetchSettings = useCallback(async () => {
+    try {
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/brands-crud/settings?userId=${USER_ID}`);
+      const settings = r.data as { filtersJson: string; sortJson: string };
+      if (settings.filtersJson && settings.filtersJson !== '{}') {
+        const filters = JSON.parse(settings.filtersJson) as Record<string, string[]>;
+        const newFilterValues: Record<string, Set<string>> = {};
+        const newActiveFilters = new Set<string>();
+        Object.entries(filters).forEach(([key, values]) => {
+          if (Array.isArray(values) && values.length > 0) {
+            newFilterValues[key] = new Set(values);
+            newActiveFilters.add(key);
+          }
+        });
+        setFilterValues(newFilterValues);
+        setActiveFilters(newActiveFilters);
+      }
+      if (settings.sortJson && settings.sortJson !== '{}') {
+        const sort = JSON.parse(settings.sortJson) as { column?: string; direction?: 'asc' | 'desc' };
+        if (sort.column) {
+          setSortColumn(sort.column);
+          setSortDirection(sort.direction || 'asc');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud?userId=${USER_ID}`);
+      const items = r.data?.data || r.data || [];
+      setFilterOptions({
+        manufacturerName: items.map((m: any) => ({ uid: m.uid || m.name, name: m.name || m.typeName })),
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/brands-crud/events`);
+      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription })));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    fetchSettings();
+    fetchFilterOptions();
+  }, []);
+
+  const saveFilters = useCallback((filters: Record<string, Set<string>>) => {
+    const filtersJsonObj: Record<string, string[]> = {};
+    Object.entries(filters).forEach(([key, values]) => {
+      if (values.size > 0) filtersJsonObj[key] = Array.from(values);
     });
-  };
+    const filtersJson = JSON.stringify(filtersJsonObj);
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/brands-crud/filters-settings?userId=${USER_ID}`, { filtersJson }).catch(e => console.error(e));
+  }, []);
 
-  const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.uid));
-  const toggleSelectAll = () => {
-    if (isAllSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(data.map(item => item.uid)));
-  };
+  const saveSort = useCallback((column: string | null, direction: 'asc' | 'desc') => {
+    const sortJson = column ? JSON.stringify({ column, direction }) : '{}';
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/brands-crud/sort-settings?userId=${USER_ID}`, { sortJson }).catch(e => console.error(e));
+  }, []);
 
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, uid, name });
+  useEffect(() => {
+    if (!isLoading) saveFilters(filterValues);
+  }, [filterValues, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) saveSort(sortColumn, sortDirection);
+  }, [sortColumn, sortDirection, isLoading]);
+
+  const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
+    setColumnWidths(widths);
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: visibleColumns.has(col.key),
+        width: widths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/brands-crud/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
+  }, [visibleColumns, requiredColumns]);
+
+  const handleResetToBase = useCallback(() => {
+    const baseCols = new Set(requiredColumns);
+    setVisibleColumns(baseCols);
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+  }, [requiredColumns]);
+
+  const handleSaveColumns = (cols: Set<string>) => {
+    const finalCols = new Set(cols);
+    requiredColumns.forEach(key => finalCols.add(key));
+    setVisibleColumns(finalCols);
+    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
+    setColumnWidths({});
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key) ? true : finalCols.has(col.key),
+        width: 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/brands-crud/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
   };
 
   const handleCreateClick = () => {
@@ -139,38 +221,25 @@ const BrandsPage = () => {
     if (!formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiNomenclatureBrands, {
+      await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/brands-crud`, {
         name: formName.trim(),
         description: formDescription.trim(),
         manufacturerUid: formManufacturerUid || null,
       });
       await fetchData();
       setShowCreatePopup(false);
-    } catch (error) {
-      console.error('Ошибка создания:', error);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleEditClick = () => {
-    if (!contextMenu) return;
-    const item = data.find(d => d.uid === contextMenu.uid);
-    if (item) {
-      setEditItem(item);
-      setFormName(item.name);
-      setFormDescription(item.description || '');
-      setFormManufacturerUid(item.manufacturerUid || '');
-      setShowEditPopup(true);
-    }
-    setContextMenu(null);
   };
 
   const handleEditSubmit = async () => {
     if (!editItem || !formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.patch(`${ConstantInfo.restApiNomenclatureBrands}/${editItem.uid}`, {
+      await AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/brands-crud/${editItem.uid}`, {
         name: formName.trim(),
         description: formDescription.trim(),
         manufacturerUid: formManufacturerUid || null,
@@ -178,8 +247,8 @@ const BrandsPage = () => {
       await fetchData();
       setShowEditPopup(false);
       setEditItem(null);
-    } catch (error) {
-      console.error('Ошибка редактирования:', error);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsSaving(false);
     }
@@ -187,73 +256,132 @@ const BrandsPage = () => {
 
   const handleDeleteClick = () => {
     if (selectedIds.size === 0) return;
+    setDeleteTargetUid(null);
     setShowDeleteConfirm(true);
   };
 
   const confirmDelete = async () => {
     try {
-      for (const uid of selectedIds) {
-        await AxiosService.delete(`${ConstantInfo.restApiNomenclatureBrands}/${uid}`);
+      if (deleteTargetUid) {
+        await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/brands-crud/${deleteTargetUid}`);
+      } else {
+        for (const uid of selectedIds) {
+          await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/brands-crud/${uid}`);
+        }
       }
       await fetchData();
       setSelectedIds(new Set());
+      setDeleteTargetUid(null);
       setShowDeleteConfirm(false);
-    } catch (error) {
-      console.error('Ошибка удаления:', error);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleContextDelete = () => {
-    if (!contextMenu) return;
-    setSelectedIds(new Set([contextMenu.uid]));
-    setContextMenu(null);
-    setTimeout(() => setShowDeleteConfirm(true), 50);
+  const handleHistoryClick = () => {
+    setShowHistory(prev => {
+      const next = !prev;
+      if (next) fetchHistory();
+      return next;
+    });
   };
 
-  const emptyRows = Math.max(0, VISIBLE_ROWS - data.length);
-
-  const smallButtonStyle: React.CSSProperties = {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: 0, flexShrink: 0,
+  const toggleSelectItem = (uid: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
   };
 
-  const mediumButtonStyle: React.CSSProperties = {
-    height: 40, borderRadius: 10,
-    backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0,
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleSelectItem(uid);
   };
 
-  const EmptySquare = ({ isSelected, onClick }: { isSelected: boolean; onClick: (e: React.MouseEvent) => void }) => (
-    <div onClick={(e) => { e.stopPropagation(); onClick(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : '2px solid #2D4059', opacity: isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
-    </div>
-  );
-
-  const contextMenuButtonStyle: React.CSSProperties = {
-    width: 174, height: 40, border: 'none', background: 'transparent', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', paddingLeft: 20,
-    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059',
+  const handleRowClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleSelectItem(uid);
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', height: 44, borderRadius: 10,
-    border: '1px solid rgba(102, 110, 254, 0.15)',
-    paddingLeft: 12, paddingRight: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    color: '#2D4059', outline: 'none', boxSizing: 'border-box',
-    backgroundColor: '#FFFFFF',
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const all = filteredData.length > 0 && filteredData.every(d => selectedIds.has(d.uid));
+    if (all) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredData.map(d => d.uid)));
   };
 
-  const selectStyle: React.CSSProperties = {
-    width: '100%', height: 44, borderRadius: 10,
-    border: '1px solid rgba(102, 110, 254, 0.15)',
-    paddingLeft: 12, paddingRight: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    color: '#2D4059', outline: 'none', boxSizing: 'border-box',
-    backgroundColor: '#FFFFFF',
+  const handleDoubleClick = (uid: string, name: string) => {
+    const item = responseData.data.find(d => d.uid === uid);
+    if (item) {
+      setEditItem(item);
+      setFormName(item.name || '');
+      setFormDescription(item.description || '');
+      setFormManufacturerUid(item.manufacturerUid || '');
+      setShowEditPopup(true);
+    }
   };
+
+  const rowContextMenuItems = useCallback((uid: string, name: string): ContextMenuItem[] => {
+    return [
+      { id: 'edit', label: 'Редактировать', icon: ContextMenuOpenIcon16, onClick: () => {
+        const item = responseData.data.find(d => d.uid === uid);
+        if (item) {
+          setEditItem(item);
+          setFormName(item.name || '');
+          setFormDescription(item.description || '');
+          setFormManufacturerUid(item.manufacturerUid || '');
+          setShowEditPopup(true);
+        }
+      } },
+      { id: 'copy', label: 'Копировать', icon: ContextMenuCopyIcon16, onClick: () => {
+        navigator.clipboard.writeText(uid).catch(() => {});
+      } },
+      { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => {
+        setDeleteTargetUid(uid);
+        setTimeout(() => setShowDeleteConfirm(true), 50);
+      } },
+    ];
+  }, [responseData.data]);
+
+  const renderCell = (key: string, item: BrandRowData): string => {
+    const val = item[key];
+    if (val === null || val === undefined) return '—';
+    return String(val);
+  };
+
+  const isGrayColumn = (key: string): boolean => {
+    return !['name', 'manufacturerName'].includes(key);
+  };
+
+  const filteredData = useMemo(() => {
+    let result = [...responseData.data];
+    if (searchValue.trim()) {
+      const q = searchValue.toLowerCase();
+      result = result.filter(row => {
+        return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
+      });
+    }
+    if (filterValues['manufacturerName'] && filterValues['manufacturerName'].size > 0) {
+      result = result.filter(row => filterValues['manufacturerName'].has(String(row['manufacturerUid'])));
+    }
+    if (sortColumn) {
+      result.sort((a, b) => {
+        const aVal = String(a[sortColumn] || '');
+        const bVal = String(b[sortColumn] || '');
+        if (sortColumn === 'name') {
+          return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        return aVal.localeCompare(bVal);
+      });
+    }
+    return result;
+  }, [responseData.data, searchValue, filterValues, sortColumn, sortDirection]);
+
+  const manufacturersForForm = useMemo(() => {
+    return filterOptions['manufacturerName'] || [];
+  }, [filterOptions]);
 
   if (isLoading) {
     return (
@@ -263,84 +391,175 @@ const BrandsPage = () => {
     );
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', height: 44, borderRadius: 10,
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    paddingLeft: 12, paddingRight: 12,
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+    color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF',
+  };
+
+  const selectStyle: React.CSSProperties = {
+    width: '100%', height: 44, borderRadius: 10,
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    paddingLeft: 12, paddingRight: 12,
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+    color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF',
+  };
+
   return (
-    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
+    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>Справочник: Бренды</h1>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {showHistory ? 'Справочник: Бренды (История изменений)' : 'Справочник: Бренды'}
+        </h1>
       </div>
 
-      <div style={{ position: 'absolute', top: 99, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateClick}>
-            <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
-          </button>
-          <button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
-        </div>
+      <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
+        <TableToolbar
+          sortFields={SORT_FIELDS}
+          filterFields={FILTER_FIELDS}
+          placementLevels={[]}
+          accountingTypes={[]}
+          accountingColumnKeys={[]}
+          filterOptions={filterOptions}
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
+          sortColumn={sortColumn}
+          sortDirection={sortDirection}
+          accountingIndex={accountingIndex}
+          onSortSelect={(col) => {
+            if (sortColumn === col) {
+              if (col === 'name') {
+                setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+              }
+            } else {
+              setSortColumn(col);
+              setSortDirection('asc');
+            }
+          }}
+          onAccountingClick={() => {}}
+          onClearSort={() => { setSortColumn(null); setAccountingIndex(-1); }}
+          activeFilters={activeFilters}
+          filterValues={filterValues}
+          placementSelections={{}}
+          hasPlacementSelections={false}
+          onFilterToggle={(key) => {
+            if (key === 'manufacturerName') fetchFilterOptions();
+          }}
+          onCheckFilterOption={(filterKey, optionUid) => {
+            setActiveFilters(prev => {
+              const next = new Set(prev);
+              next.add(filterKey);
+              return next;
+            });
+            setFilterValues(prev => {
+              const current = new Set(prev[filterKey] || []);
+              if (current.has(optionUid)) current.delete(optionUid);
+              else current.add(optionUid);
+              if (current.size === 0) {
+                const { [filterKey]: _, ...rest } = prev;
+                setActiveFilters(prev2 => {
+                  const n = new Set(prev2);
+                  n.delete(filterKey);
+                  return n;
+                });
+                return rest;
+              }
+              return { ...prev, [filterKey]: current };
+            });
+          }}
+          onPlacementLevelClick={() => {}}
+          onPlacementCheck={() => {}}
+          onClearFilters={() => { setActiveFilters(new Set()); setFilterValues({}); }}
+          hierarchy={null}
+          modelList={[]}
+          configList={[]}
+          onFetchHierarchy={() => {}}
+          onFetchModels={() => {}}
+          onFetchConfigurations={() => {}}
+          selectedCount={selectedIds.size}
+          onCreate={handleCreateClick}
+          onDelete={handleDeleteClick}
+          onPrint={() => {}}
+          onPrintPdf={() => {}}
+          showHistory={showHistory}
+          onHistory={handleHistoryClick}
+          onConfiguration={() => setShowConfigurationPopup(true)}
+          expanded={expanded}
+          setExpanded={setExpanded}
+        />
       </div>
 
-      <div style={{ position: 'absolute', top: 154, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, position: 'relative' }}>
-            <EmptySquare isSelected={isAllSelected} onClick={toggleSelectAll} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', marginLeft: 47 }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_MANUFACTURER }}>ПРОИЗВОДИТЕЛЬ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: COL_DESCRIPTION }}>ОПИСАНИЕ</span>
-          </div>
-          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {data.map(item => {
-              const isSelected = selectedIds.has(item.uid);
-              return (
-                <div key={item.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, item.uid, item.name)}>
-                  <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
-                    <EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(item.uid)} />
-                  </div>
-                  <img src={Popup7} alt="" style={{ width: 20, height: 20, flexShrink: 0, marginLeft: 19 }} />
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_MANUFACTURER - 120 }}>{item.name}</span>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_MANUFACTURER, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: COL_DESCRIPTION - COL_MANUFACTURER - 20 }}>{item.manufacturerName || '—'}</span>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: COL_DESCRIPTION, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: TABLE_WIDTH - COL_DESCRIPTION - 60 }}>{item.description || '—'}</span>
-                </div>
-              );
-            })}
-            {Array.from({ length: emptyRows }).map((_, i) => (
-              <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare isSelected={false} onClick={() => {}} /></div>
-            ))}
-          </div>
-        </div>
-        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
-        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
+      <div style={{ position: 'absolute', top: 162, left: 40, right: 15, bottom: 0, overflow: 'hidden' }}>
+        <AnimatePresence initial={false}>
+          {showHistory ? (
+            <motion.div
+              key="history"
+              initial={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+            >
+              <HistoryTable events={historyEvents} isLoading={historyLoading} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="data"
+              initial={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+            >
+              <DataTable
+                columns={ALL_COLUMNS}
+                visibleKeys={responseData.columns}
+                data={filteredData}
+                selectedIds={selectedIds}
+                onCheckboxClick={handleCheckboxClick}
+                onSelectAll={handleSelectAll}
+                onRowClick={handleRowClick}
+                onDoubleClick={handleDoubleClick}
+                renderCell={renderCell}
+                isGrayColumn={isGrayColumn}
+                highlightText={searchValue.trim() || undefined}
+                initialWidths={columnWidths}
+                onWidthsChange={handleColumnWidthsChange}
+                rowContextMenuItems={rowContextMenuItems}
+                requiredColumns={requiredColumns}
+                onResetToBase={handleResetToBase}
+                rowIcon={Popup7}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {contextMenu && (
-        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
-          <button style={contextMenuButtonStyle} onClick={handleEditClick}>Редактировать</button>
-          <button style={contextMenuButtonStyle} onClick={handleContextDelete}>Удалить</button>
-        </div>
-      )}
+      <ConfigurationPopup
+        isOpen={showConfigurationPopup}
+        onClose={() => setShowConfigurationPopup(false)}
+        title="Справочник: Бренды (Настройки списка)"
+        columns={ALL_COLUMNS}
+        visibleColumns={visibleColumns}
+        requiredColumns={requiredColumns}
+        onSave={handleSaveColumns}
+      />
 
       {showCreatePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание бренда</h3>
             <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
-              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Наименование</label>
+              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите наименование" autoFocus style={inputStyle} />
             </div>
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Производитель</label>
               <select value={formManufacturerUid} onChange={e => setFormManufacturerUid(e.target.value)} style={selectStyle}>
-                <option value="">Выберите производителя</option>
-                {manufacturers.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}
+                <option value="">Без производителя</option>
+                {manufacturersForForm.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}
               </select>
             </div>
             <div>
@@ -357,17 +576,17 @@ const BrandsPage = () => {
 
       {showEditPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование бренда</h3>
             <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label>
-              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Наименование</label>
+              <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите наименование" autoFocus style={inputStyle} />
             </div>
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Производитель</label>
               <select value={formManufacturerUid} onChange={e => setFormManufacturerUid(e.target.value)} style={selectStyle}>
-                <option value="">Выберите производителя</option>
-                {manufacturers.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}
+                <option value="">Без производителя</option>
+                {manufacturersForForm.map(m => <option key={m.uid} value={m.uid}>{m.name}</option>)}
               </select>
             </div>
             <div>
