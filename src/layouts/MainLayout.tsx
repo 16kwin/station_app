@@ -1,4 +1,4 @@
-// MainLayout.tsx — ИСПРАВЛЕННЫЙ (добавлен ManufacturerCreatePage)
+// MainLayout.tsx — ИСПРАВЛЕННЫЙ (добавлена блокировка F1-F12)
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -218,6 +218,20 @@ const MainLayout = () => {
     }
     setWindowSize({ width: finalWidth, height: finalHeight });
     setIsLoaded(true);
+  }, []);
+
+  // Блокировка F1-F12 (включая F12 — DevTools)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key.startsWith('F') && e.key.length <= 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    };
+    
+    document.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
   }, []);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (с комбинированными select-полями)
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (с textsize: 8 для штрихкода)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
@@ -93,7 +93,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [fullscreenCode, setFullscreenCode] = useState<string | null>(null);
   const [fullscreenCodeContextMenu, setFullscreenCodeContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // Данные для поиска
   const [catalogOptions, setCatalogOptions] = useState<{ uid: string; name: string }[]>([]);
   const [nomenclatureGroupOptions, setNomenclatureGroupOptions] = useState<{ uid: string; name: string }[]>([]);
   const [nomenclatureTypeOptions, setNomenclatureTypeOptions] = useState<{ uid: string; name: string }[]>([]);
@@ -193,7 +192,15 @@ const MainTab: React.FC<CommonProps> = (props) => {
       try { 
         const canvas = document.createElement('canvas'); 
         /* @ts-ignore */ 
-        bwipjs.toCanvas(canvas, { bcid: barcodeType, text: barcodeValue, scale: 3, height: 10, includetext: true, textxalign: 'center' }); 
+        bwipjs.toCanvas(canvas, { 
+          bcid: barcodeType, 
+          text: barcodeValue, 
+          scale: 3, 
+          height: 10, 
+          includetext: true, 
+          textxalign: 'center',
+          textsize: 8  // ← ИСПРАВЛЕНИЕ: уменьшенный шрифт цифр на штрихкоде
+        }); 
         setBarcodePreview(canvas.toDataURL('image/png')); 
       } catch { setBarcodePreview(null); } 
     }, 150); 
