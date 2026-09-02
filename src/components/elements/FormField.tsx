@@ -1,3 +1,4 @@
+// FormField.tsx — ИСПРАВЛЕННЫЙ (max 5 позиций, кнопка "Весь список" стилизована)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -18,7 +19,6 @@ export interface FormFieldProps {
   value: string;
   placeholder?: string;
   active?: boolean;
-  locked?: boolean;
   type: 'input' | 'select' | 'display' | 'calendar';
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClear?: () => void;
@@ -34,26 +34,19 @@ export interface FormFieldProps {
   onOpenFullList?: () => void;
   searchTitle?: string;
   searchNotFoundText?: string;
+  disabled?: boolean;
+  labelMarginBottom?: number;
 }
-
-const labelStyle: React.CSSProperties = {
-  fontFamily: 'Inter, sans-serif',
-  fontSize: 14,
-  fontWeight: 600,
-  color: '#2D4059',
-  display: 'block',
-  marginBottom: 4,
-};
 
 const DROPDOWN_OFFSET = 8;
 const DROPDOWN_PADDING_TOP = 15;
 const DROPDOWN_ITEM_HEIGHT = 17;
 const DROPDOWN_ITEM_GAP = 15;
 const DROPDOWN_BTN_GAP = 20;
-const DROPDOWN_BTN_HEIGHT = 35;
+const DROPDOWN_BTN_HEIGHT = 34;
 const DROPDOWN_HORIZONTAL_PADDING = 40;
 const DROPDOWN_MAX_WIDTH = 500;
-const MAX_VISIBLE_ITEMS = 4;
+const MAX_VISIBLE_ITEMS = 5;
 
 const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, highlight }) => {
   if (!highlight) return <>{text}</>;
@@ -77,7 +70,6 @@ const FormField: React.FC<FormFieldProps> = ({
   value,
   placeholder,
   active,
-  locked,
   type,
   onChange,
   onClear,
@@ -93,6 +85,8 @@ const FormField: React.FC<FormFieldProps> = ({
   onOpenFullList,
   searchTitle = 'Найденная',
   searchNotFoundText = 'не найдены',
+  disabled = false,
+  labelMarginBottom = 4,
 }) => {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -192,7 +186,7 @@ const FormField: React.FC<FormFieldProps> = ({
   };
 
   const handleFieldClick = () => {
-    if (locked) return;
+    if (disabled) return;
     if (type === 'select') {
       setIsSearchMode(true);
       setSearchValue('');
@@ -204,7 +198,7 @@ const FormField: React.FC<FormFieldProps> = ({
 
   const handleRightIconClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (locked) return;
+    if (disabled) return;
     if (type === 'select' && onOpenFullList) {
       onOpenFullList();
     }
@@ -257,16 +251,16 @@ const FormField: React.FC<FormFieldProps> = ({
     backgroundColor: '#FFFFFF',
     position: 'relative',
     boxSizing: 'border-box',
-    border: locked
+    border: disabled
       ? '1px solid rgba(102, 110, 254, 0.6)'
       : isActive
       ? '1px solid #666EFE'
       : '1px solid #A0A3BD',
-    cursor: locked ? 'not-allowed' : type === 'select' || type === 'calendar' ? 'pointer' : 'default',
+    cursor: disabled ? 'not-allowed' : type === 'select' || type === 'calendar' ? 'pointer' : 'default',
   };
 
-  const textColor = locked
-    ? '#9CA3AF'
+  const textColor = disabled
+    ? 'rgba(102, 110, 254, 0.6)'
     : isActive
     ? '#666EFE'
     : '#A0A3BD';
@@ -315,9 +309,9 @@ const FormField: React.FC<FormFieldProps> = ({
       <>
         <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
           {iconSrc ? (
-            <img src={iconSrc} alt="" style={{ width: selectIconWidth, height: selectIconHeight, opacity: locked ? 0.6 : 1 }} />
+            <img src={iconSrc} alt="" style={{ width: selectIconWidth, height: selectIconHeight, opacity: disabled ? 0.6 : 1 }} />
           ) : (
-            <div style={{ width: selectIconWidth, height: selectIconHeight, backgroundColor: 'red', borderRadius: 2, opacity: locked ? 0.6 : 1 }} />
+            <div style={{ width: selectIconWidth, height: selectIconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? 0.6 : 1 }} />
           )}
         </div>
         <span
@@ -335,10 +329,10 @@ const FormField: React.FC<FormFieldProps> = ({
           {value || placeholder || 'Выберите'}
         </span>
         <div 
-          style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8, cursor: locked ? 'not-allowed' : 'pointer' }}
+          style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8, cursor: disabled ? 'not-allowed' : 'pointer' }}
           onClick={handleRightIconClick}
         >
-          <img src={isActive ? PopupIcon16Blue : PopupIcon16Gray} alt="" style={{ width: 16, height: 4, opacity: locked ? 0.6 : 1 }} />
+          <img src={isActive ? PopupIcon16Blue : PopupIcon16Gray} alt="" style={{ width: 16, height: 4, opacity: disabled ? 0.6 : 1 }} />
         </div>
       </>
     );
@@ -358,9 +352,9 @@ const FormField: React.FC<FormFieldProps> = ({
           <>
             <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
               {iconSrc ? (
-                <img src={iconSrc} alt="" style={{ width: iconWidth, height: iconHeight, opacity: locked ? 0.6 : 1 }} />
+                <img src={iconSrc} alt="" style={{ width: iconWidth, height: iconHeight, opacity: disabled ? 0.6 : 1 }} />
               ) : (
-                <div style={{ width: iconWidth, height: iconHeight, backgroundColor: 'red', borderRadius: 2, opacity: locked ? 0.6 : 1 }} />
+                <div style={{ width: iconWidth, height: iconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? 0.6 : 1 }} />
               )}
             </div>
             <input
@@ -376,14 +370,14 @@ const FormField: React.FC<FormFieldProps> = ({
                 color: textColor,
                 backgroundColor: 'transparent',
                 minWidth: 0,
-                cursor: locked ? 'not-allowed' : 'default',
+                cursor: disabled ? 'not-allowed' : 'default',
               }}
               value={value}
               onChange={onChange}
               placeholder={placeholder}
-              disabled={locked}
+              disabled={disabled}
             />
-            {isActive && onClear && !locked && (
+            {isActive && onClear && !disabled && (
               <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8, cursor: 'pointer' }}
                 onClick={(e) => { e.stopPropagation(); onClear(); }}
               >
@@ -398,9 +392,9 @@ const FormField: React.FC<FormFieldProps> = ({
           <>
             <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
               {iconSrc ? (
-                <img src={iconSrc} alt="" style={{ width: 16, height: 18, opacity: locked ? 0.6 : 1 }} />
+                <img src={iconSrc} alt="" style={{ width: 16, height: 18, opacity: disabled ? 0.6 : 1 }} />
               ) : (
-                <div style={{ width: 16, height: 18, backgroundColor: 'red', borderRadius: 2, opacity: locked ? 0.6 : 1 }} />
+                <div style={{ width: 16, height: 18, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? 0.6 : 1 }} />
               )}
             </div>
             <span
@@ -424,11 +418,11 @@ const FormField: React.FC<FormFieldProps> = ({
                 justifyContent: 'center',
                 flexShrink: 0,
                 marginLeft: 8,
-                cursor: locked ? 'not-allowed' : 'pointer',
-                opacity: locked ? 0.6 : 1,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.6 : 1,
               }}
               onClick={(e) => {
-                if (!locked) {
+                if (!disabled) {
                   e.stopPropagation();
                   onCalendarClick?.();
                 }
@@ -444,10 +438,20 @@ const FormField: React.FC<FormFieldProps> = ({
     }
   };
 
+  const labelStyle: React.CSSProperties = {
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#2D4059',
+    display: 'block',
+    marginBottom: labelMarginBottom,
+    lineHeight: '17px',
+  };
+
   return (
     <div ref={outerRef}>
       {label && <span style={labelStyle}>{label}</span>}
-      <div ref={fieldRef} style={fieldStyle} onClick={type === 'select' && !locked ? handleFieldClick : undefined}>
+      <div ref={fieldRef} style={fieldStyle} onClick={type === 'select' && !disabled ? handleFieldClick : undefined}>
         {renderContent()}
       </div>
 
@@ -513,14 +517,14 @@ const FormField: React.FC<FormFieldProps> = ({
                     style={{
                       width: 126,
                       height: DROPDOWN_BTN_HEIGHT,
-                      borderRadius: 12,
-                      backgroundColor: '#FFFFFF',
-                      border: '1px solid #000000',
+                      borderRadius: 8,
+                      backgroundColor: '#666EFE',
+                      border: 'none',
                       cursor: 'pointer',
                       fontFamily: 'Inter, sans-serif',
                       fontSize: 14,
                       fontWeight: 500,
-                      color: '#2D4059',
+                      color: '#FFFFFF',
                     }}
                   >
                     Весь список

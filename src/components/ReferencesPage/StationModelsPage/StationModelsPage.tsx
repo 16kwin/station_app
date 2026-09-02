@@ -1,4 +1,4 @@
-// StationModelsPage.tsx — ИСПРАВЛЕННЫЙ (пустые columns заполняются обязательными колонками с адаптивной шириной)
+// StationModelsPage.tsx — ПОЛНЫЙ ФАЙЛ (дефолтная инициализация + автосохранение при первом запуске)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,6 +52,32 @@ const FILTER_FIELDS = [
 const PLACEMENT_LEVELS: { key: string; label: string; emptyText: string }[] = [];
 const USER_ID = 1;
 
+const TABLE_WIDTH = 1720;
+const CHECKBOX_LEFT = 17;
+const CHECKBOX_BLOCK_WIDTH = 24;
+const CHECKBOX_TO_ICON_GAP = 17;
+const ROW_ICON_BLOCK_WIDTH = 20;
+const ICON_TO_FIRST_TEXT = 17;
+const LAST_COLUMN_RIGHT_PADDING = 30;
+const RESIZER_WIDTH = 60;
+
+const EFFECTIVE_FIRST_COL_LEFT = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
+
+const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> => {
+  if (columnKeys.length === 0) return {};
+  
+  const totalResizerWidth = RESIZER_WIDTH * (columnKeys.length - 1);
+  const availableWidth = TABLE_WIDTH - EFFECTIVE_FIRST_COL_LEFT - LAST_COLUMN_RIGHT_PADDING - totalResizerWidth;
+  const columnWidth = availableWidth / columnKeys.length;
+  
+  const widths: Record<string, number> = {};
+  columnKeys.forEach(key => {
+    widths[key] = columnWidth;
+  });
+  
+  return widths;
+};
+
 const StationModelsPage = () => {
   const { activeTabId, openTab } = useTabs();
   const [responseData, setResponseData] = useState<StationModelListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
@@ -60,14 +86,14 @@ const StationModelsPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(REQUIRED_COLUMNS));
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
   const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | null>(null);
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | 'barcodeSearch' | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -76,6 +102,7 @@ const StationModelsPage = () => {
   const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
   const [typeList, setTypeList] = useState<{ uid: string; name: string }[]>([]);
   const [manufacturerList, setManufacturerList] = useState<{ uid: string; name: string }[]>([]);
+  const [isFirstInit, setIsFirstInit] = useState(false);
 
   const filterOptions = useMemo(() => ({
     typeName: typeList.map(t => ({ uid: t.uid, name: t.name })),
@@ -96,26 +123,20 @@ const StationModelsPage = () => {
       
       let effectiveColumnWidths = response.columnWidths || {};
       
-      // Если columns пустой — заполняем обязательными колонками
+      // Если columns пустой — первый запуск, заполняем обязательными колонками
       if (!effectiveColumns || effectiveColumns.length === 0) {
-        effectiveColumns = ALL_COLUMNS.filter(c => effectiveRequiredColumns.has(c.key)).map(c => c.key);
+        setIsFirstInit(true);
         
-        // Рассчитываем адаптивную ширину для каждой колонки
-        if (effectiveColumns.length > 0 && Object.keys(effectiveColumnWidths).length === 0) {
-          const tableWidth = 1720;
-          const effectiveFirstColLeft = 17 + 24 + 17 + 20 + 17;
-          const lastColumnRightPadding = 30;
-          const resizerWidth = 60;
-          const totalResizerWidth = resizerWidth * (effectiveColumns.length - 1);
-          const availableWidth = tableWidth - effectiveFirstColLeft - lastColumnRightPadding - totalResizerWidth;
-          const columnWidth = availableWidth / effectiveColumns.length;
-          
-          effectiveColumns.forEach(key => {
-            effectiveColumnWidths[key] = columnWidth;
-          });
+        effectiveColumns = ALL_COLUMNS
+          .filter(c => effectiveRequiredColumns.has(c.key))
+          .map(c => c.key);
+        
+        // Адаптивная ширина
+        if (effectiveColumns.length > 0) {
+          effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
         }
       } else {
-        // Добавляем обязательные колонки, если их нет в списке
+        // Добавляем обязательные колонки, если их нет
         effectiveRequiredColumns.forEach(key => {
           if (!effectiveColumns.includes(key)) {
             effectiveColumns = [...effectiveColumns, key];
@@ -124,24 +145,13 @@ const StationModelsPage = () => {
         
         // Если ширины пустые — заполняем адаптивно
         if (Object.keys(effectiveColumnWidths).length === 0) {
-          const tableWidth = 1720;
-          const effectiveFirstColLeft = 17 + 24 + 17 + 20 + 17;
-          const lastColumnRightPadding = 30;
-          const resizerWidth = 60;
-          const totalResizerWidth = resizerWidth * (effectiveColumns.length - 1);
-          const availableWidth = tableWidth - effectiveFirstColLeft - lastColumnRightPadding - totalResizerWidth;
-          const columnWidth = availableWidth / effectiveColumns.length;
-          
-          effectiveColumns.forEach(key => {
-            effectiveColumnWidths[key] = columnWidth;
-          });
+          effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
         }
       }
       
       setRequiredColumns(effectiveRequiredColumns);
       
       const visible = new Set(effectiveColumns);
-      effectiveRequiredColumns.forEach(key => visible.add(key));
       setVisibleColumns(visible);
       
       setColumnWidths(effectiveColumnWidths);
@@ -158,6 +168,28 @@ const StationModelsPage = () => {
       setIsLoading(false); 
     } 
   };
+
+  // Сохраняем настройки при первом запуске
+  useEffect(() => {
+    if (isFirstInit && !isLoading) {
+      const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+      ALL_COLUMNS.forEach(col => {
+        columnsJsonObj[col.key] = {
+          visible: visibleColumns.has(col.key),
+          width: columnWidths[col.key] || 0,
+          required: requiredColumns.has(col.key),
+        };
+      });
+      
+      const columnsJson = JSON.stringify(columnsJsonObj);
+      AxiosService.patch(ConstantInfo.restApiStationModelColumnsSettingsSave(USER_ID), { columnsJson })
+        .then(() => setIsFirstInit(false))
+        .catch(e => {
+          console.error('Ошибка сохранения настроек колонок:', e);
+          setIsFirstInit(false);
+        });
+    }
+  }, [isFirstInit, isLoading, visibleColumns, columnWidths, requiredColumns]);
 
   const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
     setColumnWidths(widths);
@@ -179,7 +211,20 @@ const StationModelsPage = () => {
     const baseCols = new Set(requiredColumns);
     setVisibleColumns(baseCols);
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
-    setColumnWidths({});
+    
+    const newWidths = calculateAdaptiveWidths(ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key));
+    setColumnWidths(newWidths);
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key),
+        width: newWidths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiStationModelColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   }, [requiredColumns]);
 
   const fetchSettings = async () => { 
@@ -323,13 +368,15 @@ const StationModelsPage = () => {
     
     setVisibleColumns(finalCols); 
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
-    setColumnWidths({});
+    
+    const newWidths = calculateAdaptiveWidths(ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key));
+    setColumnWidths(newWidths);
     
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
         visible: requiredColumns.has(col.key) ? true : finalCols.has(col.key),
-        width: 0,
+        width: newWidths[col.key] || 0,
         required: requiredColumns.has(col.key),
       };
     });

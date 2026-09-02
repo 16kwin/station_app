@@ -1,3 +1,4 @@
+// SuppliersPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,6 +50,32 @@ const FILTER_FIELDS = [
 
 const USER_ID = 1;
 
+const TABLE_WIDTH = 1720;
+const CHECKBOX_LEFT = 17;
+const CHECKBOX_BLOCK_WIDTH = 24;
+const CHECKBOX_TO_ICON_GAP = 17;
+const ROW_ICON_BLOCK_WIDTH = 20;
+const ICON_TO_FIRST_TEXT = 17;
+const LAST_COLUMN_RIGHT_PADDING = 30;
+const RESIZER_WIDTH = 60;
+
+const EFFECTIVE_FIRST_COL_LEFT = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
+
+const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> => {
+  if (columnKeys.length === 0) return {};
+  
+  const totalResizerWidth = RESIZER_WIDTH * (columnKeys.length - 1);
+  const availableWidth = TABLE_WIDTH - EFFECTIVE_FIRST_COL_LEFT - LAST_COLUMN_RIGHT_PADDING - totalResizerWidth;
+  const columnWidth = availableWidth / columnKeys.length;
+  
+  const widths: Record<string, number> = {};
+  columnKeys.forEach(key => {
+    widths[key] = columnWidth;
+  });
+  
+  return widths;
+};
+
 const SuppliersPage = () => {
   const { openTab } = useTabs();
   const [responseData, setResponseData] = useState<SupplierListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
@@ -57,13 +84,13 @@ const SuppliersPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(REQUIRED_COLUMNS));
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
   const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | null>(null);
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | 'barcodeSearch' | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -76,14 +103,18 @@ const SuppliersPage = () => {
     try {
       const r = await AxiosService.get(ConstantInfo.restApiSuppliersList);
       const items = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-      const columns = ['code', 'name', 'shortDescriptionName', 'countryName', 'email', 'phone', 'address'];
+      
+      const effectiveColumns = ALL_COLUMNS.filter(c => REQUIRED_COLUMNS.has(c.key)).map(c => c.key);
+      const effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
+      
       setResponseData({
-        columns,
+        columns: effectiveColumns,
         data: items,
-        columnWidths: {},
-        requiredColumns: ['code', 'name', 'shortDescriptionName'],
+        columnWidths: effectiveColumnWidths,
+        requiredColumns: Array.from(REQUIRED_COLUMNS),
       });
-      setVisibleColumns(new Set(columns));
+      setVisibleColumns(new Set(effectiveColumns));
+      setColumnWidths(effectiveColumnWidths);
     } catch (e) {
       console.error(e);
     } finally {
@@ -153,16 +184,20 @@ const SuppliersPage = () => {
   const handleResetToBase = useCallback(() => {
     const baseCols = new Set(REQUIRED_COLUMNS);
     setVisibleColumns(baseCols);
-    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
-    setColumnWidths({});
+    const newCols = ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key);
+    setResponseData(prev => ({ ...prev, columns: newCols }));
+    const newWidths = calculateAdaptiveWidths(newCols);
+    setColumnWidths(newWidths);
   }, []);
 
   const handleSaveColumns = (cols: Set<string>) => {
     const finalCols = new Set(cols);
     REQUIRED_COLUMNS.forEach(key => finalCols.add(key));
     setVisibleColumns(finalCols);
-    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
-    setColumnWidths({});
+    const newCols = ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key);
+    setResponseData(prev => ({ ...prev, columns: newCols }));
+    const newWidths = calculateAdaptiveWidths(newCols);
+    setColumnWidths(newWidths);
   };
 
   const handleCreateClick = async () => {

@@ -1,4 +1,4 @@
-// StationsCrudPage.tsx — ПОЛНЫЙ ФАЙЛ (русские типы напрямую, загрузка с бекенда)
+// StationsCrudPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -110,6 +110,32 @@ const ACCOUNTING_TYPES = ['ТМЦ', 'СГД', 'ОК'] as const;
 const ACCOUNTING_COLUMN_KEYS = ['isTmc', 'isSgd', 'isOk'] as const;
 const USER_ID = 1;
 
+const TABLE_WIDTH = 1720;
+const CHECKBOX_LEFT = 17;
+const CHECKBOX_BLOCK_WIDTH = 24;
+const CHECKBOX_TO_ICON_GAP = 17;
+const ROW_ICON_BLOCK_WIDTH = 20;
+const ICON_TO_FIRST_TEXT = 17;
+const LAST_COLUMN_RIGHT_PADDING = 30;
+const RESIZER_WIDTH = 60;
+
+const EFFECTIVE_FIRST_COL_LEFT = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
+
+const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> => {
+  if (columnKeys.length === 0) return {};
+  
+  const totalResizerWidth = RESIZER_WIDTH * (columnKeys.length - 1);
+  const availableWidth = TABLE_WIDTH - EFFECTIVE_FIRST_COL_LEFT - LAST_COLUMN_RIGHT_PADDING - totalResizerWidth;
+  const columnWidth = availableWidth / columnKeys.length;
+  
+  const widths: Record<string, number> = {};
+  columnKeys.forEach(key => {
+    widths[key] = columnWidth;
+  });
+  
+  return widths;
+};
+
 const EMPTY_PLACEMENT: PlacementSelections = { holdingName: new Set(), enterpriseName: new Set(), workshopName: new Set(), sectionName: new Set() };
 
 const STATUS_ORDER: Record<string, number> = {
@@ -119,7 +145,7 @@ const STATUS_ORDER: Record<string, number> = {
   'CRITICAL_STOCK': 3,
 };
 
-type ExpandedType = 'search' | 'sort' | 'filter' | null;
+type ExpandedType = 'search' | 'sort' | 'filter' | 'barcodeSearch' | null;
 
 const StationsCrudPage = () => {
   const { openTab } = useTabs();
@@ -129,7 +155,7 @@ const StationsCrudPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(REQUIRED_COLUMNS));
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
   const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
@@ -147,6 +173,7 @@ const StationsCrudPage = () => {
   const [modelList, setModelList] = useState<{ uid: string; name: string; article: string }[]>([]);
   const [configList, setConfigList] = useState<string[]>([]);
   const [typeList, setTypeList] = useState<{ uid: string; name: string }[]>([]);
+  const [isFirstInit, setIsFirstInit] = useState(false);
 
   const filterOptions = useMemo(() => ({
     status: FILTER_FIELDS.find(f => f.key === 'status')?.options || [],
@@ -163,20 +190,67 @@ const StationsCrudPage = () => {
     try { 
       const r = await AxiosService.get(ConstantInfo.restApiStationsCrud(USER_ID)); 
       const response = r.data as StationListResponse;
-      setResponseData(response); 
-      setVisibleColumns(new Set(response.columns));
-      if (response.columnWidths) {
-        setColumnWidths(response.columnWidths);
-      }
+      
+      let effectiveColumns = response.columns;
+      let effectiveRequiredColumns = new Set(REQUIRED_COLUMNS);
+      
       if (response.requiredColumns && response.requiredColumns.length > 0) {
-        setRequiredColumns(new Set(response.requiredColumns));
+        effectiveRequiredColumns = new Set(response.requiredColumns);
       }
+      
+      let effectiveColumnWidths = response.columnWidths || {};
+      
+      if (!effectiveColumns || effectiveColumns.length === 0) {
+        setIsFirstInit(true);
+        effectiveColumns = ALL_COLUMNS.filter(c => effectiveRequiredColumns.has(c.key)).map(c => c.key);
+        effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
+      } else {
+        effectiveRequiredColumns.forEach(key => {
+          if (!effectiveColumns.includes(key)) {
+            effectiveColumns = [...effectiveColumns, key];
+          }
+        });
+        if (Object.keys(effectiveColumnWidths).length === 0) {
+          effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
+        }
+      }
+      
+      setRequiredColumns(effectiveRequiredColumns);
+      setVisibleColumns(new Set(effectiveColumns));
+      setColumnWidths(effectiveColumnWidths);
+      
+      setResponseData({
+        ...response,
+        columns: effectiveColumns,
+        columnWidths: effectiveColumnWidths,
+        requiredColumns: Array.from(effectiveRequiredColumns),
+      });
     } catch (e) { 
       console.error(e); 
     } finally { 
       setIsLoading(false); 
     } 
   };
+
+  useEffect(() => {
+    if (isFirstInit && !isLoading) {
+      const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+      ALL_COLUMNS.forEach(col => {
+        columnsJsonObj[col.key] = {
+          visible: visibleColumns.has(col.key),
+          width: columnWidths[col.key] || 0,
+          required: requiredColumns.has(col.key),
+        };
+      });
+      const columnsJson = JSON.stringify(columnsJsonObj);
+      AxiosService.patch(ConstantInfo.restApiStationColumnsSettingsSave(USER_ID), { columnsJson })
+        .then(() => setIsFirstInit(false))
+        .catch(e => {
+          console.error('Ошибка сохранения настроек колонок:', e);
+          setIsFirstInit(false);
+        });
+    }
+  }, [isFirstInit, isLoading, visibleColumns, columnWidths, requiredColumns]);
 
   const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
     setColumnWidths(widths);
@@ -197,8 +271,21 @@ const StationsCrudPage = () => {
   const handleResetToBase = useCallback(() => {
     const baseCols = new Set(requiredColumns);
     setVisibleColumns(baseCols);
-    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
-    setColumnWidths({});
+    const newCols = ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key);
+    setResponseData(prev => ({ ...prev, columns: newCols }));
+    const newWidths = calculateAdaptiveWidths(newCols);
+    setColumnWidths(newWidths);
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key),
+        width: newWidths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiStationColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   }, [requiredColumns]);
 
   const fetchSettings = async () => { 
@@ -591,8 +678,21 @@ const StationsCrudPage = () => {
     requiredColumns.forEach(key => finalCols.add(key));
     
     setVisibleColumns(finalCols); 
-    setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
-    setColumnWidths({});
+    const newCols = ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key);
+    setResponseData(prev => ({ ...prev, columns: newCols }));
+    const newWidths = calculateAdaptiveWidths(newCols);
+    setColumnWidths(newWidths);
+    
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: requiredColumns.has(col.key) ? true : finalCols.has(col.key),
+        width: newWidths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiStationColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   };
   
   const handleHistoryClick = () => { 

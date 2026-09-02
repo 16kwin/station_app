@@ -1,3 +1,4 @@
+// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (без обёртки, как было раньше)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -15,12 +16,12 @@ import SupplierAssortmentTab from './SupplierAssortmentTab';
 import SupplierRatingTab from './SupplierRatingTab';
 import SupplierIntegrationTab from './SupplierIntegrationTab';
 import SupplierEventLogTab from './SupplierEventLogTab';
-import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
-import IconOne from '../../../assets/References/NomenclatureCreatePage/IconOne.svg';
-import IconOne1 from '../../../assets/References/NomenclatureCreatePage/IconOne1.svg';
-import IconTwo from '../../../assets/References/NomenclatureCreatePage/IconTwo.svg';
+import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
+import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
+import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
+import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
 
 export interface ImageItem { uid: string; url: string; originalName: string; }
 export interface DocumentItem { uid: string; supplierUid: string; documentName: string; filePath: string; originalName: string; url: string; createdAt: string; }
@@ -220,7 +221,6 @@ const SupplierCreatePage = () => {
   const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
 
   const [showClosePopup, setShowClosePopup] = useState(false);
-  const [showDevPopup, setShowDevPopup] = useState(false);
   const [images, setImages] = useState<ImageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [averageRating, setAverageRating] = useState(0);
@@ -497,8 +497,7 @@ const SupplierCreatePage = () => {
 
   const buttonStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : isDisabled ? '#BCC8FF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden', opacity: isDisabled ? 0.5 : 1 });
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
-  const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const rightButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
+  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
   const cef = ['inn', 'ogrn', 'kpp', 'contactPerson', 'director', 'bankName', 'bik', 'correspondentAccount', 'settlementAccount'];
   const hasRequisitesErrors = cef.some(f => validationErrors.has(f));
@@ -511,13 +510,13 @@ const SupplierCreatePage = () => {
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
       <h1 style={{ position: 'absolute', top: 35, left: 60, fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? name || 'Поставщик' : 'Справочник: Поставщики (Создание)'}</h1>
-      <button onClick={() => setShowClosePopup(true)} style={{ position: 'absolute', top: 40, right: 40, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon7} alt="Закрыть" style={{ width: 18, height: 18 }} /></button>
+      
       <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
-          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0)}>
+          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0 && !isEventLogActive)}>
             <span>Основное</span>
             <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3, ease: 'easeInOut' }} />
+              <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
             </button>
           </button>
           <AnimatePresence>
@@ -526,30 +525,55 @@ const SupplierCreatePage = () => {
               const isBlocked = !isDataSaved && tabIndex > 1;
               const isRequisitesTab = tabIndex === 1;
               return (
-                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={{ ...buttonStyle(activeTab === tabIndex, isBlocked), outline: isRequisitesTab && hasRequisitesErrors && validationErrors.size > 0 ? '2px solid #FF3052' : 'none', outlineOffset: -2 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
+                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={{ ...buttonStyle(activeTab === tabIndex && !isEventLogActive, isBlocked), outline: isRequisitesTab && hasRequisitesErrors && validationErrors.size > 0 ? '2px solid #FF3052' : 'none', outlineOffset: -2 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
                   <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
                 </motion.button>
               );
             })}
           </AnimatePresence>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <button onClick={handleEventLogClick} style={{ ...rightButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
-            <img src={isEventLogActive ? IconOne1 : IconOne} alt="" style={{ width: 20, height: 20 }} />
-          </button>
-          <button onClick={() => setShowDevPopup(true)} style={{ ...rightButtonStyle, backgroundColor: showDevPopup ? '#666EFE' : '#FFFFFF' }}>
-            <img src={IconTwo} alt="" style={{ width: 20, height: 20 }} />
+        <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
+          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          <button onClick={handleEventLogClick} style={{ ...smallButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
+            <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: isEventLogActive ? 'brightness(0) invert(1)' : 'none' }} />
           </button>
         </div>
       </div>
 
-      {isEventLogActive ? <SupplierEventLogTab {...commonProps} /> : (
+      {isEventLogActive ? (
+        <SupplierEventLogTab {...commonProps} />
+      ) : (
         <>
           {(() => { switch (activeTab) { case 0: return <SupplierMainTab {...commonProps} />; case 1: return <SupplierRequisitesTab {...commonProps} />; case 2: return <SupplierDocumentsTab {...commonProps} />; case 3: return <SupplierBrandsTab {...commonProps} />; case 4: return <SupplierDeliveriesTab {...commonProps} />; case 5: return <SupplierAssortmentTab {...commonProps} />; case 6: return <SupplierRatingTab {...commonProps} />; case 7: return <SupplierIntegrationTab {...commonProps} />; default: return null; } })()}
-          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-            <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
-            <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
-            <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
+          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15 }}>
+            <button 
+              onClick={canSave ? handleSave : undefined} 
+              disabled={!canSave || isSaving} 
+              style={{ 
+                width: 154, 
+                height: 51, 
+                borderRadius: 10, 
+                border: '1px solid rgba(102, 110, 254, 0.15)', 
+                backgroundColor: '#FFFFFF', 
+                cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', 
+                display: 'flex', 
+                alignItems: 'center', 
+                paddingLeft: 20,
+                paddingRight: 20,
+                fontFamily: 'Inter, sans-serif', 
+                fontSize: 15, 
+                fontWeight: 600, 
+                color: '#2D4059', 
+                opacity: canSave ? 1 : 0.5,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21, flexShrink: 0 }} />
+              <span style={{ marginLeft: 17, flexShrink: 0 }}>Записать</span>
+            </button>
+            <button onClick={() => setShowClosePopup(true)} style={{ width: 116, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Закрыть</button>
           </div>
         </>
       )}
@@ -573,16 +597,6 @@ const SupplierCreatePage = () => {
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
-          </div>
-        </div>
-      )}
-
-      {showDevPopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDevPopup(false)}>
-          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>В разработке</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Этот функционал находится в разработке</p>
-            <button onClick={() => setShowDevPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
           </div>
         </div>
       )}

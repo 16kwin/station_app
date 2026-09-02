@@ -1,5 +1,5 @@
-// StationModelMainTab.tsx — ПОЛНЫЙ ФАЙЛ (локальное удаление серверного изображения)
-import React, { useRef } from 'react';
+// StationModelMainTab.tsx — ИСПРАВЛЕННЫЙ (селекты открывают попап через onOpenFullList)
+import React, { useState, useEffect, useRef } from 'react';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import FormField from '../../elements/FormField';
 import AxiosService from '../../../services/AxiosService';
@@ -69,6 +69,27 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [stationTypeOptions, setStationTypeOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [stationManufacturerOptions, setStationManufacturerOptions] = useState<{ uid: string; name: string }[]>([]);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const r = await AxiosService.get(ConstantInfo.restApiStationTypes);
+        const respData = r.data as any;
+        const items = Array.isArray(respData) ? respData : (respData.data || []);
+        setStationTypeOptions(items.map((item: any) => ({ uid: item.uid, name: item.name })));
+      } catch (e) { console.error(e); }
+      try {
+        const r = await AxiosService.get(ConstantInfo.restApiStationManufacturers);
+        const respData = r.data as any;
+        const items = Array.isArray(respData) ? respData : (respData.data || []);
+        setStationManufacturerOptions(items.map((item: any) => ({ uid: item.uid, name: item.name })));
+      } catch (e) { console.error(e); }
+    };
+    fetchOptions();
+  }, []);
+
   const labelStyle: React.CSSProperties = {
     fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059',
     display: 'block', marginBottom: 11, lineHeight: '17px',
@@ -111,9 +132,33 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   const hasImage = !!displayImageUrl;
 
   const col1Fields = [
-    { top: getTop(0), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Код:" value={String(code).padStart(4, '0')} type="input" locked icon={CodeIcon20LightBlue} iconWidth={20} iconHeight={14} /> },
+    { top: getTop(0), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Код:" value={String(code).padStart(4, '0')} type="input" disabled icon={CodeIcon20LightBlue} iconWidth={20} iconHeight={14} /> },
     { top: getTop(1), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Артикул:" value={article} placeholder="Артикул" type="input" onChange={e => setArticle(e.target.value)} onClear={() => setArticle('')} icon={ArticleIcon18Gray} iconActive={ArticleIcon18Blue} iconWidth={18} iconHeight={10} /> },
-    { top: getTop(2), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Производитель:" value={manufacturerName} placeholder="Выберите производителя" type="select" onClick={() => openPopup('stationManufacturer')} icon={ManufacturerIcon18Gray} iconActive={ManufacturerIcon18Blue} selectIconWidth={18} selectIconHeight={16} /> },
+    { top: getTop(2), component: (
+      <FormField 
+        width={FIELD_WIDTH} 
+        height={FIELD_HEIGHT} 
+        label="Производитель:" 
+        value={manufacturerName} 
+        placeholder="Выберите производителя" 
+        type="select" 
+        icon={ManufacturerIcon18Gray} 
+        iconActive={ManufacturerIcon18Blue} 
+        selectIconWidth={18} 
+        selectIconHeight={16} 
+        searchOptions={stationManufacturerOptions}
+        onSelectOption={(selectedUid, selectedName) => {
+          // Находим элемент и вызываем openPopup для выбора
+          const item = stationManufacturerOptions.find(o => o.uid === selectedUid);
+          if (item) {
+            openPopup('stationManufacturer', item.name);
+          }
+        }}
+        onOpenFullList={() => openPopup('stationManufacturer')}
+        searchTitle="Найденный производитель"
+        searchNotFoundText="Производители не найдены"
+      />
+    )},
     { top: getTop(3), component: (
       <div>
         <span style={labelStyle}>Описание модели:</span>
@@ -134,7 +179,30 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
 
   const col2Fields = [
     { top: getTop(0), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Наименование модели станции:" value={name} placeholder="Введите название" type="input" onChange={e => setName(e.target.value)} onClear={() => setName('')} icon={NameIcon18Gray} iconActive={NameIcon18Blue} iconWidth={18} iconHeight={18} /> },
-    { top: getTop(1), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Тип станции:" value={typeName} placeholder="Выберите тип" type="select" onClick={() => openPopup('stationType')} icon={TypeIcon16Gray} iconActive={TypeIcon16Blue} selectIconWidth={16} selectIconHeight={16} /> },
+    { top: getTop(1), component: (
+      <FormField 
+        width={FIELD_WIDTH} 
+        height={FIELD_HEIGHT} 
+        label="Тип станции:" 
+        value={typeName} 
+        placeholder="Выберите тип" 
+        type="select" 
+        icon={TypeIcon16Gray} 
+        iconActive={TypeIcon16Blue} 
+        selectIconWidth={16} 
+        selectIconHeight={16} 
+        searchOptions={stationTypeOptions}
+        onSelectOption={(selectedUid, selectedName) => {
+          const item = stationTypeOptions.find(o => o.uid === selectedUid);
+          if (item) {
+            openPopup('stationType', item.name);
+          }
+        }}
+        onOpenFullList={() => openPopup('stationType')}
+        searchTitle="Найденный тип"
+        searchNotFoundText="Типы не найдены"
+      />
+    )},
     { top: getTop(2), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Ревизия:" value={revision} placeholder="Ревизия" type="input" onChange={e => setRevision(e.target.value)} onClear={() => setRevision('')} icon={RevisionIcon18Gray} iconActive={RevisionIcon18Blue} iconWidth={18} iconHeight={18} /> },
   ];
 

@@ -1,4 +1,4 @@
-// StationModelCreatePage.tsx — ИСПРАВЛЕННЫЙ (replaceTab вместо navigate при сохранении)
+// StationModelCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (кнопка Записать 154px, без текста "Сохранение...")
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -473,10 +473,32 @@ const StationModelCreatePage = () => {
         </div>
       )}
 
-      <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-        <button onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving} style={{ width: 154, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059', opacity: canSave ? 1 : 0.5 }}>
+      <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15 }}>
+        <button 
+          onClick={canSave ? handleSave : undefined} 
+          disabled={!canSave || isSaving} 
+          style={{ 
+            width: 154, 
+            height: 51, 
+            borderRadius: 10, 
+            border: '1px solid rgba(102, 110, 254, 0.15)', 
+            backgroundColor: '#FFFFFF', 
+            cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', 
+            display: 'flex', 
+            alignItems: 'center', 
+            paddingLeft: 20,
+            paddingRight: 20,
+            fontFamily: 'Inter, sans-serif', 
+            fontSize: 15, 
+            fontWeight: 600, 
+            color: '#2D4059', 
+            opacity: canSave ? 1 : 0.5,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          }}
+        >
           <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21, flexShrink: 0 }} />
-          <span style={{ marginLeft: 17 }}>{isSaving ? 'Сохранение...' : 'Записать'}</span>
+          <span style={{ marginLeft: 17, flexShrink: 0 }}>Записать</span>
         </button>
         <button onClick={() => setShowClosePopup(true)} style={{ width: 116, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Закрыть</button>
       </div>
