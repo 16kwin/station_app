@@ -1,4 +1,4 @@
-// StationsCrudPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
+// StationsCrudPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе + печать и PDF)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -936,6 +936,134 @@ const StationsCrudPage = () => {
     return result;
   }, [responseData.data, responseData.columns, searchValue, filterValues, placementSelections, sortColumn, sortDirection, accountingIndex]);
 
+  // ===== ВСТАВЛЕННЫЙ БЛОК ПЕЧАТИ И PDF (из варианта 4) =====
+  const getColumnLabel = (key: string) => {
+    const col = ALL_COLUMNS.find(c => c.key === key);
+    return col ? col.label : key;
+  };
+
+  const columnKeys = ALL_COLUMNS
+      .filter(c => responseData.columns.includes(c.key))
+      .map(c => c.key);
+
+  const columnLabels = columnKeys.map(getColumnLabel);
+
+  const visibleLabels = responseData.columns.map(getColumnLabel);
+  const hiddenLabels = ALL_COLUMNS
+      .filter(c => !responseData.columns.includes(c.key))
+      .map(c => c.label);
+
+  const sortLabel = sortColumn
+      ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
+      : 'Без сортировки';
+
+  let filtersText = 'Нет фильтров';
+  if (activeFilters.size > 0) {
+    const filterLabels = Array.from(activeFilters).map(key => {
+      const field = FILTER_FIELDS.find(f => f.key === key);
+      const fieldLabel = field ? field.label : getColumnLabel(key);
+      const values = filterValues[key];
+      if (!values || values.size === 0) return fieldLabel;
+      const optionLabels = Array.from(values).map(uid => {
+        const opt = (field?.options || []).find(o => o.uid === uid);
+        return opt ? opt.name : uid;
+      });
+      return `${fieldLabel}: ${optionLabels.join(', ')}`;
+    });
+    filtersText = filterLabels.join('; ');
+  }
+
+  const handlePrint = async () => {
+    const preparedData = filteredData.map(item => {
+      const row: Record<string, string> = {};
+      columnKeys.forEach(key => {
+        row[key] = renderCell(key, item);
+      });
+      return row;
+    });
+
+    const payload = {
+      title: 'Станции',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines: [
+        `Сортировка: ${sortLabel}`,
+        `Фильтры: ${filtersText}`,
+        `Видимые поля: ${visibleLabels.join(', ')}`,
+        `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
+      ],
+    };
+
+    try {
+      const res = await AxiosService.post(
+          `${ConstantInfo.apiBaseUrl}/api/stations/crud/print`,
+          payload,
+          { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '800px';
+      iframe.style.height = '600px';
+      iframe.style.visibility = 'visible';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 500);
+      };
+    } catch (e) { console.error('Ошибка печати', e); }
+  };
+
+  const handlePrintPdf = async () => {
+    const preparedData = filteredData.map(item => {
+      const row: Record<string, string> = {};
+      columnKeys.forEach(key => {
+        row[key] = renderCell(key, item);
+      });
+      return row;
+    });
+
+    const payload = {
+      title: 'Станции',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines: [
+        `Сортировка: ${sortLabel}`,
+        `Фильтры: ${filtersText}`,
+        `Видимые поля: ${visibleLabels.join(', ')}`,
+        `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
+      ],
+    };
+
+    try {
+      const res = await AxiosService.post(
+          `${ConstantInfo.apiBaseUrl}/api/stations/crud/export-pdf`,
+          payload,
+          { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = 'export.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(pdfUrl);
+    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
+  };
+  // ===== КОНЕЦ ВСТАВКИ =====
+
   if (isLoading) 
     return (
       <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1020,8 +1148,8 @@ const StationsCrudPage = () => {
             } 
           }}
           onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
-          onPrint={() => {}}
-          onPrintPdf={() => {}}
+          onPrint={handlePrint}
+          onPrintPdf={handlePrintPdf}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}
