@@ -1,4 +1,4 @@
-// StationsCrudPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе + печать и PDF)
+// StationsCrudPage.tsx — ИСПРАВЛЕННЫЙ (печать + скачивание PDF/Excel/Word)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -936,7 +936,6 @@ const StationsCrudPage = () => {
     return result;
   }, [responseData.data, responseData.columns, searchValue, filterValues, placementSelections, sortColumn, sortDirection, accountingIndex]);
 
-  // ===== ВСТАВЛЕННЫЙ БЛОК ПЕЧАТИ И PDF (из варианта 4) =====
   const getColumnLabel = (key: string) => {
     const col = ALL_COLUMNS.find(c => c.key === key);
     return col ? col.label : key;
@@ -973,7 +972,7 @@ const StationsCrudPage = () => {
     filtersText = filterLabels.join('; ');
   }
 
-  const handlePrint = async () => {
+  const preparePayload = () => {
     const preparedData = filteredData.map(item => {
       const row: Record<string, string> = {};
       columnKeys.forEach(key => {
@@ -982,7 +981,7 @@ const StationsCrudPage = () => {
       return row;
     });
 
-    const payload = {
+    return {
       title: 'Станции',
       columns: columnKeys,
       columnLabels: columnLabels,
@@ -995,11 +994,13 @@ const StationsCrudPage = () => {
         `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
       ],
     };
+  };
 
+  const handlePrint = async () => {
     try {
       const res = await AxiosService.post(
           `${ConstantInfo.apiBaseUrl}/api/stations/crud/print`,
-          payload,
+          preparePayload(),
           { responseType: 'blob' }
       );
       const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
@@ -1022,47 +1023,62 @@ const StationsCrudPage = () => {
     } catch (e) { console.error('Ошибка печати', e); }
   };
 
-  const handlePrintPdf = async () => {
-    const preparedData = filteredData.map(item => {
-      const row: Record<string, string> = {};
-      columnKeys.forEach(key => {
-        row[key] = renderCell(key, item);
-      });
-      return row;
-    });
-
-    const payload = {
-      title: 'Станции',
-      columns: columnKeys,
-      columnLabels: columnLabels,
-      data: preparedData,
-      landscape: true,
-      footerLines: [
-        `Сортировка: ${sortLabel}`,
-        `Фильтры: ${filtersText}`,
-        `Видимые поля: ${visibleLabels.join(', ')}`,
-        `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
-      ],
-    };
-
+  const handleDownloadPdf = async () => {
     try {
       const res = await AxiosService.post(
           `${ConstantInfo.apiBaseUrl}/api/stations/crud/export-pdf`,
-          payload,
+          preparePayload(),
           { responseType: 'blob' }
       );
       const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
       const pdfUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = pdfUrl;
-      link.download = 'export.pdf';
+      link.download = 'stations.pdf';
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(pdfUrl);
     } catch (e) { console.error('Ошибка выгрузки PDF', e); }
   };
-  // ===== КОНЕЦ ВСТАВКИ =====
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+          `${ConstantInfo.apiBaseUrl}/api/stations/crud/export-excel`,
+          preparePayload(),
+          { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'stations.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+          `${ConstantInfo.apiBaseUrl}/api/stations/crud/export-word`,
+          preparePayload(),
+          { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'stations.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
 
   if (isLoading) 
     return (
@@ -1149,7 +1165,9 @@ const StationsCrudPage = () => {
           }}
           onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
           onPrint={handlePrint}
-          onPrintPdf={handlePrintPdf}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadWord={handleDownloadWord}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}

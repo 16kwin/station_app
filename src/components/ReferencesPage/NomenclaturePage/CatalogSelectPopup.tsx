@@ -1,6 +1,6 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (исправлены двойные userId)
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (с поиском)
 import React, { useRef, useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
@@ -22,6 +22,8 @@ import Popup8 from '../../../assets/References/popup8.svg';
 import Popup9 from '../../../assets/References/popup9.svg';
 import Popup10 from '../../../assets/References/popup10.svg';
 import Popup11 from '../../../assets/References/popup11.svg';
+import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
+import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
 
 export interface Column {
   key: string;
@@ -233,11 +235,25 @@ const VISIBLE_ROWS = 7;
 const TABLE_WIDTH = 992;
 const TABLE_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS + HEADER_HEIGHT;
 
+const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, highlight }) => {
+  if (!highlight) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(highlight.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span style={{ backgroundColor: 'rgba(102, 110, 254, 0.2)', color: '#2D4059' }}>{text.slice(idx, idx + highlight.length)}</span>
+      {text.slice(idx + highlight.length)}
+    </>
+  );
+};
+
 const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   isOpen, onClose, onSelect, popupType, filterParam, excludeUids = [],
 }) => {
   const { openTab, activeTabId } = useTabs();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [hasScroll, setHasScroll] = useState(false);
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
   const [data, setData] = useState<TreeItem[]>([]);
@@ -259,10 +275,15 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const [allBrands, setAllBrands] = useState<any[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<any[]>([]);
   const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Поиск
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
 
   useEffect(() => { if (isOpen) setInternalOpen(true); }, [isOpen]);
+  useEffect(() => { if (searchExpanded && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [searchExpanded]);
 
-  const handleClose = () => { setInternalOpen(false); onClose(); };
+  const handleClose = () => { setInternalOpen(false); setSearchExpanded(false); setSearchValue(''); onClose(); };
 
   const config = getPopupConfig(popupType);
   const isCatalog = popupType === 'catalog';
@@ -391,7 +412,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   };
 
   const checkScroll = () => { const c = scrollContainerRef.current; if (!c) return; setHasScroll(c.scrollHeight > c.clientHeight); };
-  useEffect(() => { const t = setTimeout(checkScroll, 100); return () => clearTimeout(t); }, [openFolders, data]);
+  useEffect(() => { const t = setTimeout(checkScroll, 100); return () => clearTimeout(t); }, [openFolders, data, searchValue]);
   useEffect(() => {
     const c = scrollContainerRef.current; if (!c) return;
     checkScroll(); c.addEventListener('scroll', checkScroll);
@@ -493,6 +514,41 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     return count;
   };
 
+  // Фильтрация данных по поиску
+  const filterTreeBySearch = (items: TreeItem[]): TreeItem[] => {
+    if (!searchValue.trim()) return items;
+    const q = searchValue.toLowerCase();
+    const result: TreeItem[] = [];
+    
+    items.forEach(item => {
+      const nameMatch = item.name.toLowerCase().includes(q);
+      const childrenMatch = item.children ? filterTreeBySearch(item.children) : [];
+      
+      if (nameMatch) {
+        result.push({ ...item, children: item.children });
+      } else if (childrenMatch.length > 0) {
+        result.push({ ...item, children: childrenMatch });
+      } else if (!item.isMaterial && item.children && item.children.length > 0) {
+        // Пропускаем папки без совпадений
+      } else if (item.isMaterial) {
+        // Пропускаем материалы без совпадений
+      }
+    });
+    
+    return result;
+  };
+
+  const getFilteredData = (): TreeItem[] => {
+    if (!searchValue.trim()) return data;
+    if (config.isFlat) {
+      const q = searchValue.toLowerCase();
+      return data.filter(item => item.name.toLowerCase().includes(q));
+    }
+    return filterTreeBySearch(data);
+  };
+
+  const filteredData = getFilteredData();
+
   const renderTree = (items: TreeItem[], depth: number = 0): React.ReactNode[] => {
     const result: React.ReactNode[] = [];
     items.forEach((item) => {
@@ -500,20 +556,30 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       const isOpen = openFolders.has(item.id);
       const shift = depth * 20;
       const isMaterial = item.isMaterial === true;
+      
+      // При поиске автоматически раскрываем все папки
+      const effectiveOpen = searchValue.trim() ? true : isOpen;
+      const effectiveHasChildren = searchValue.trim() ? hasChildren : hasChildren;
+      const effectiveShift = searchValue.trim() ? 0 : shift;
+      
       result.push(
         <div key={item.id}
-          onClick={() => { if (isMaterial) handleItemClick(item.id, item.name); else if (hasChildren) toggleFolder(item.id); }}
+          onClick={() => { if (isMaterial) handleItemClick(item.id, item.name); else if (hasChildren && !searchValue.trim()) toggleFolder(item.id); }}
           onDoubleClick={() => handleItemClick(item.id, item.name)}
-          style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 20 + shift, paddingRight: 40 }}
+          style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 20 + effectiveShift, paddingRight: 40 }}
         >
-          {isMaterial ? <img src={Icon13} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} /> : <img src={hasChildren ? (isOpen ? Icon12 : Icon11) : Icon11} alt="" style={{ width: hasChildren && isOpen ? 19 : 18, height: 16, flexShrink: 0 }} />}
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: isMaterial ? 400 : 700, color: '#2D4059', marginLeft: 10, maxWidth: isMaterial ? 600 : (400 - shift), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+          {isMaterial ? <img src={Icon13} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} /> : <img src={hasChildren ? (effectiveOpen ? Icon12 : Icon11) : Icon11} alt="" style={{ width: hasChildren && effectiveOpen ? 19 : 18, height: 16, flexShrink: 0 }} />}
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: isMaterial ? 400 : 700, color: '#2D4059', marginLeft: 10, maxWidth: isMaterial ? 600 : (400 - effectiveShift), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {searchValue.trim() ? <HighlightedText text={item.name} highlight={searchValue.trim()} /> : item.name}
+          </span>
           {!isAnalogSelect && config.columns.map(col => (
-            <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: col.left }}>{item[col.key] || ''}</span>
+            <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: col.left }}>
+              {searchValue.trim() ? <HighlightedText text={String(item[col.key] || '')} highlight={searchValue.trim()} /> : (item[col.key] || '')}
+            </span>
           ))}
         </div>
       );
-      if (isOpen && hasChildren) result.push(...renderTree(item.children!, depth + 1));
+      if (effectiveOpen && hasChildren) result.push(...renderTree(item.children!, depth + 1));
     });
     return result;
   };
@@ -524,15 +590,19 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 22, paddingRight: 40 }}
       >
         {flatIcon && <img src={flatIcon} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />}
-        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: flatIcon ? 10 : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: (config.columns[0]?.left || 500) - 50 }}>{item.name}</span>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: flatIcon ? 10 : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: (config.columns[0]?.left || 500) - 50 }}>
+          {searchValue.trim() ? <HighlightedText text={item.name} highlight={searchValue.trim()} /> : item.name}
+        </span>
         {config.columns.map(col => (
-          <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: col.left, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{item[col.key] || ''}</span>
+          <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: col.left, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+            {searchValue.trim() ? <HighlightedText text={String(item[col.key] || '')} highlight={searchValue.trim()} /> : (item[col.key] || '')}
+          </span>
         ))}
       </div>
     ));
   };
 
-  const totalRows = countRows(data);
+  const totalRows = countRows(filteredData);
   const emptyRows = Math.max(0, VISIBLE_ROWS - totalRows);
 
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
@@ -559,6 +629,11 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
 
   if (!internalOpen) return null;
 
+  const BTN_COLLAPSED = 40;
+  const BTN_SEARCH_EXPANDED = 280;
+  const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
+  const tween = { type: 'tween' as const, duration: 0.2 };
+
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
@@ -573,18 +648,44 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="1.5" y1="1.5" x2="12.5" y2="12.5" stroke="#2D4059" strokeWidth="3" strokeLinecap="round" /><line x1="12.5" y1="1.5" x2="1.5" y2="12.5" stroke="#2D4059" strokeWidth="3" strokeLinecap="round" /></svg>
           </button>
           <h2 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 24, fontWeight: 500, color: '#2D4059', margin: '30px 0 0', textAlign: 'center' }}>{config.title}</h2>
-          {config.hasCreateButton && (
-            <div style={{ display: 'flex', alignItems: 'center', marginTop: 30, paddingLeft: 45, paddingRight: 45 }}>
-              <button style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: 30, paddingLeft: 45, paddingRight: 45 }}>
+            {/* Поиск */}
+            <motion.div 
+              style={{ position: 'relative', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: searchExpanded ? '#666EFE' : '#FFFFFF', border: searchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
+              animate={{ width: searchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED }} 
+              transition={tween}
+            >
+              <div onClick={() => { 
+                if (searchExpanded) { setSearchExpanded(false); setSearchValue(''); } 
+                else setSearchExpanded(true); 
+              }} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+                <img src={searchExpanded ? SearchIcon18White : SearchIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+              </div>
+              <AnimatePresence>
+                {searchExpanded && (
+                  <motion.div 
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: BTN_SEARCH_EXPANDED - 40 - 16 }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}
+                  >
+                    <input ref={searchInputRef} type="text" value={searchValue} onChange={e => setSearchValue(e.target.value)} placeholder="Поиск" style={{ width: '100%', height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {config.hasCreateButton && (
               <div style={{ marginLeft: 'auto' }}>
                 <button onClick={handleCreateClick} style={{ height: 40, paddingLeft: 15, paddingRight: 15, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
                   <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 10, marginRight: 12 }}>{config.createButtonLabel || 'Создать'}</span>
                 </button>
               </div>
-            </div>
-          )}
-          <div style={{ display: 'flex', marginTop: config.hasCreateButton ? 15 : 60, alignSelf: 'center', position: 'relative', width: TABLE_WIDTH, height: TABLE_HEIGHT }}>
+            )}
+          </div>
+          <div style={{ display: 'flex', marginTop: 15, alignSelf: 'center', position: 'relative', width: TABLE_WIDTH, height: TABLE_HEIGHT }}>
             <div style={{ width: '100%', height: '100%', backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
               <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, boxSizing: 'border-box', position: 'relative' }}>
                 <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
@@ -592,7 +693,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
               </div>
               <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {isLoading ? <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#9CA3AF' }}>Загрузка...</span></div> :
-                  <>{config.isFlat ? renderFlatList(data) : renderTree(data)}
+                  <>{config.isFlat ? renderFlatList(filteredData) : renderTree(filteredData)}
                     {Array.from({ length: emptyRows }).map((_, i) => <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} />)}
                   </>}
               </div>

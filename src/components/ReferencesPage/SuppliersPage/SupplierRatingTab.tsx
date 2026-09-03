@@ -1,4 +1,4 @@
-// SupplierRatingTab.tsx — ПОЛНЫЙ ФАЙЛ (со звёздочками через renderCellNode)
+// SupplierRatingTab.tsx — ПОЛНЫЙ ФАЙЛ (логирование без бесконечного цикла)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -16,7 +16,7 @@ import CreateIcon14Black from '../../../assets/Icons/СreateIcons/СreateIcon14B
 import DeleteIcon18Black from '../../../assets/Icons/DeleteIcons/DeleteIcon18Black.svg';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
-import type { CommonSupplierProps } from './SupplierCreatePage';
+import type { CommonSupplierProps, RatingChange, LocalRating } from './SupplierCreatePage';
 
 interface RatingItem {
   uid: string;
@@ -58,29 +58,29 @@ const INDICATOR_HEIGHT = 22;
 const ICON_RIGHT_PAD = 4;
 
 const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
-  const { uid, isEdit } = props;
+  const { 
+    uid, isEdit, localRatings = [], setLocalRatings = () => {},
+    ratingChanges = [], setRatingChanges = () => {},
+  } = props;
 
   const [ratings, setRatings] = useState<RatingItem[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; rating: number; comment: string; author: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; rating: number; comment: string; author: string; isLocal: boolean } | null>(null);
 
   const [showAddPopup, setShowAddPopup] = useState(false);
-  const [newAuthor, setNewAuthor] = useState('');
   const [newComment, setNewComment] = useState('');
   const [newRating, setNewRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [isAdding, setIsAdding] = useState(false);
 
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editRatingUid, setEditRatingUid] = useState('');
-  const [editAuthor, setEditAuthor] = useState('');
   const [editComment, setEditComment] = useState('');
   const [editRating, setEditRating] = useState(0);
   const [editHoverRating, setEditHoverRating] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
+  const [editIsLocal, setEditIsLocal] = useState(false);
 
   const [showViewPopup, setShowViewPopup] = useState(false);
   const [viewComment, setViewComment] = useState('');
@@ -147,12 +147,44 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
         AxiosService.get(ConstantInfo.restApiSupplierRatings(uid)),
         AxiosService.get(ConstantInfo.restApiSupplierRatingsAverage(uid)),
       ]);
-      setRatings(ratingsRes.data || []);
+      
+      // ЛОГИРОВАНИЕ: что приходит с бекенда
+      console.log('=== ЛОГИРОВАНИЕ РЕЙТИНГОВ ===');
+      console.log('URL ratings:', ConstantInfo.restApiSupplierRatings(uid));
+      console.log('Ответ ratings.data (JSON):', JSON.stringify(ratingsRes.data, null, 2));
+      console.log('Ответ average.data:', avgRes.data);
+      
+      if (Array.isArray(ratingsRes.data)) {
+        ratingsRes.data.forEach((r: any, idx: number) => {
+          console.log(`Рейтинг [${idx}]:`, {
+            uid: r.uid,
+            author: r.author,
+            createdAt: r.createdAt,
+            тип_author: typeof r.author,
+            тип_createdAt: typeof r.createdAt,
+          });
+        });
+      } else {
+        console.log('ВНИМАНИЕ: ratingsRes.data НЕ массив! Тип:', typeof ratingsRes.data);
+      }
+      console.log('=== КОНЕЦ ЛОГИРОВАНИЯ ===');
+      
+      const deletedUids = ratingChanges.filter(c => c.action === 'delete').map(c => c.uid);
+      setRatings((ratingsRes.data || []).filter((r: RatingItem) => !deletedUids.includes(r.uid)));
       setAverageRating(Math.round((avgRes.data || 0) * 10) / 10);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    } catch (e) { 
+      console.error('ОШИБКА при загрузке рейтингов:', e); 
+    } finally { setIsLoading(false); }
   };
 
   useEffect(() => { if (uid && isEdit) fetchRatings(); }, [uid, isEdit]);
+  
+  useEffect(() => { 
+    const handler = () => { if (uid && isEdit) fetchRatings(); };
+    window.addEventListener('refreshSupplierRatings', handler);
+    return () => window.removeEventListener('refreshSupplierRatings', handler);
+  }, [uid, isEdit, ratingChanges]);
+  
   useEffect(() => { if (!contextMenu) return; const h = () => setContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [contextMenu]);
   useEffect(() => { if (expanded === 'search' && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [expanded]);
   useEffect(() => { if (expanded === 'sort') { const idx = SORT_FIELDS.findIndex(f => f.key === sortColumn); if (idx >= 0) setSortIndicatorY(getIndicatorTarget(idx)); } }, [expanded]);
@@ -170,8 +202,23 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
     return 'Поставщик высокого качества';
   };
 
+  const allRatings: RatingItem[] = [
+    ...ratings.map(r => {
+      const editChange = ratingChanges.find(c => c.action === 'edit' && c.uid === r.uid);
+      return editChange ? { ...r, rating: editChange.rating || r.rating, comment: editChange.comment || r.comment } : r;
+    }),
+    ...localRatings.map(r => ({
+      uid: r.localId,
+      supplierUid: uid || '',
+      rating: r.rating,
+      comment: r.comment,
+      author: 'Вы',
+      createdAt: new Date().toISOString(),
+    })),
+  ];
+
   const filteredRatings = React.useMemo(() => {
-    let result = [...ratings];
+    let result = [...allRatings];
     if (searchValue.trim()) {
       const q = searchValue.toLowerCase();
       result = result.filter(r => {
@@ -186,7 +233,7 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
       });
     }
     return result;
-  }, [ratings, searchValue, sortColumn, sortDirection]);
+  }, [allRatings, searchValue, sortColumn, sortDirection]);
 
   const handleCheckboxClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
   const handleSelectAll = (e: React.MouseEvent) => { e.stopPropagation(); const all = filteredRatings.length > 0 && filteredRatings.every(d => selectedIds.has(d.uid)); all ? setSelectedIds(new Set()) : setSelectedIds(new Set(filteredRatings.map(d => d.uid))); };
@@ -195,14 +242,15 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
   const handleContextMenu = (e: React.MouseEvent, uid: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const rating = ratings.find(d => d.uid === uid);
+    const rating = allRatings.find(d => d.uid === uid);
+    const isLocal = localRatings.some(d => d.localId === uid);
     if (rating) {
-      setContextMenu({ x: e.clientX, y: e.clientY, uid, rating: rating.rating, comment: rating.comment, author: rating.author });
+      setContextMenu({ x: e.clientX, y: e.clientY, uid, rating: rating.rating, comment: rating.comment, author: rating.author, isLocal });
     }
   };
   
   const handleDoubleClick = (uid: string) => {
-    const rating = ratings.find(x => x.uid === uid);
+    const rating = allRatings.find(x => x.uid === uid);
     if (!rating) return;
     setViewComment(rating.comment || '');
     setViewAuthor(rating.author || '');
@@ -211,55 +259,65 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
 
   const handleDeleteSelected = () => { if (selectedIds.size === 0) return; setShowDeleteConfirm(true); };
 
-  const confirmDelete = async () => {
-    try {
-      for (const ratingUid of selectedIds) {
-        await AxiosService.delete(ConstantInfo.restApiSupplierDeleteRating(ratingUid));
+  const confirmDelete = () => {
+    for (const uid of selectedIds) {
+      const isLocal = localRatings.some(d => d.localId === uid);
+      if (isLocal) {
+        setLocalRatings((prev: LocalRating[]) => prev.filter((d: LocalRating) => d.localId !== uid));
+      } else {
+        setRatingChanges((prev: RatingChange[]) => {
+          const existing = prev.find(c => c.uid === uid && c.action === 'delete');
+          if (existing) return prev;
+          return [...prev, { uid, action: 'delete' }];
+        });
+        setRatings(prev => prev.filter(r => r.uid !== uid));
       }
-      setSelectedIds(new Set());
-      setShowDeleteConfirm(false);
-      await fetchRatings();
-      window.dispatchEvent(new CustomEvent('refreshSupplierRatings'));
-    } catch (e) { console.error(e); }
+    }
+    setSelectedIds(new Set());
+    setShowDeleteConfirm(false);
   };
 
-  const handleAddClick = () => { setNewAuthor(''); setNewComment(''); setNewRating(0); setHoverRating(0); setShowAddPopup(true); };
+  const handleAddClick = () => { setNewComment(''); setNewRating(0); setHoverRating(0); setShowAddPopup(true); };
 
-  const handleAddSubmit = async () => {
+  const handleAddSubmit = () => {
     if (!uid || newRating === 0) return;
-    setIsAdding(true);
-    try {
-      await AxiosService.post(ConstantInfo.restApiSupplierRatings(uid), { rating: newRating, comment: newComment.trim(), author: newAuthor.trim() });
-      await fetchRatings();
-      setShowAddPopup(false);
-      window.dispatchEvent(new CustomEvent('refreshSupplierRatings'));
-    } catch (e) { console.error(e); } finally { setIsAdding(false); }
+    
+    const localId = `local_rating_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setLocalRatings((prev: LocalRating[]) => [...prev, { localId, rating: newRating, comment: newComment.trim() }]);
+    
+    setShowAddPopup(false);
   };
 
   const handleEditClick = () => {
     if (!contextMenu) return;
-    const rating = ratings.find(r => r.uid === contextMenu.uid);
+    const rating = allRatings.find(r => r.uid === contextMenu.uid);
     if (rating) {
       setEditRatingUid(rating.uid);
-      setEditAuthor(rating.author || '');
       setEditComment(rating.comment || '');
       setEditRating(rating.rating);
       setEditHoverRating(0);
+      setEditIsLocal(contextMenu.isLocal);
       setContextMenu(null);
       setShowEditPopup(true);
     }
   };
 
-  const handleEditSubmit = async () => {
-    if (!uid || !editRatingUid || editRating === 0) return;
-    setIsEditing(true);
-    try {
-      await AxiosService.delete(ConstantInfo.restApiSupplierDeleteRating(editRatingUid));
-      await AxiosService.post(ConstantInfo.restApiSupplierRatings(uid), { rating: editRating, comment: editComment.trim(), author: editAuthor.trim() });
-      await fetchRatings();
-      setShowEditPopup(false);
-      window.dispatchEvent(new CustomEvent('refreshSupplierRatings'));
-    } catch (e) { console.error(e); } finally { setIsEditing(false); }
+  const handleEditSubmit = () => {
+    if (!editRatingUid || editRating === 0) return;
+    
+    if (editIsLocal) {
+      setLocalRatings((prev: LocalRating[]) => prev.map((d: LocalRating) => d.localId === editRatingUid ? { ...d, rating: editRating, comment: editComment.trim() } : d));
+    } else {
+      setRatingChanges((prev: RatingChange[]) => {
+        const existing = prev.find(c => c.uid === editRatingUid && c.action === 'edit');
+        if (existing) {
+          return prev.map(c => c.uid === editRatingUid ? { ...c, rating: editRating, comment: editComment.trim() } : c);
+        }
+        return [...prev, { uid: editRatingUid, action: 'edit', rating: editRating, comment: editComment.trim() }];
+      });
+      setRatings(prev => prev.map(r => r.uid === editRatingUid ? { ...r, rating: editRating, comment: editComment.trim() } : r));
+    }
+    setShowEditPopup(false);
   };
 
   const handleSortFieldClick = (field: SortField) => {
@@ -282,6 +340,12 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
 
   const renderCell = (key: string, item: any): string => {
     const v = item[key];
+    
+    // Логируем только createdAt и author
+    if (key === 'createdAt' || key === 'author') {
+      console.log(`renderCell [${key}]:`, { значение: v, тип: typeof v, item_uid: item.uid, item });
+    }
+    
     if (v === null || v === undefined) return '-';
     if (key === 'createdAt') return formatDate(v);
     if (key === 'comment') return 'Отзыв';
@@ -308,7 +372,6 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
 
   const isGrayColumn = (key: string): boolean => key !== 'comment';
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
 
   const sortListHeight = TOP_PAD + SORT_FIELDS.length * TEXT_HEIGHT + (SORT_FIELDS.length - 1) * ITEM_GAP + BOTTOM_PAD;
   const searchWidth = expanded === 'search' ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
@@ -451,12 +514,11 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление отзыва</h3>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Автор</label><input type="text" value={newAuthor} onChange={e => setNewAuthor(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setShowAddPopup(false); }} placeholder="Введите имя автора" autoFocus style={inputStyle} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Текст отзыва</label><textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Введите текст отзыва" rows={3} style={{ width: '100%', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', padding: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', resize: 'none' }} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Рейтинг</label><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ display: 'flex', gap: 8 }}>{[1, 2, 3, 4, 5].map(i => { const fillPercent = Math.min(100, Math.max(0, ((hoverRating || newRating) - i + 1) * 100)); const isHovered = hoverRating >= i; return (<div key={i} onClick={() => setNewRating(i)} onMouseEnter={() => setHoverRating(i)} onMouseLeave={() => setHoverRating(0)} style={{ width: 32, height: 32, position: 'relative', cursor: 'pointer', flexShrink: 0 }}><svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0 }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill={isHovered ? '#666EFE' : '#E5E7EB'} stroke={isHovered ? '#666EFE' : '#D1D5DB'} strokeWidth="1"/></svg>{!isHovered && fillPercent > 0 && (<svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0, clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#666EFE" stroke="#666EFE" strokeWidth="1"/></svg>)}</div>); })}</div><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#2D4059' }}>{hoverRating || newRating || 0}</span></div></div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleAddSubmit} disabled={isAdding || newRating === 0} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newRating > 0 && !isAdding ? '#666EFE' : '#BCC8FF', cursor: newRating > 0 && !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>
+              <button onClick={handleAddSubmit} disabled={newRating === 0} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newRating > 0 ? '#666EFE' : '#BCC8FF', cursor: newRating > 0 ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Добавить</button>
             </div>
           </div>
         </div>
@@ -466,12 +528,11 @@ const SupplierRatingTab: React.FC<CommonSupplierProps> = (props) => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование отзыва</h3>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Автор</label><input type="text" value={editAuthor} onChange={e => setEditAuthor(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите имя автора" autoFocus style={inputStyle} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Текст отзыва</label><textarea value={editComment} onChange={e => setEditComment(e.target.value)} placeholder="Введите текст отзыва" rows={3} style={{ width: '100%', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', padding: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', resize: 'none' }} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Рейтинг</label><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ display: 'flex', gap: 8 }}>{[1, 2, 3, 4, 5].map(i => { const fillPercent = Math.min(100, Math.max(0, ((editHoverRating || editRating) - i + 1) * 100)); const isHovered = editHoverRating >= i; return (<div key={i} onClick={() => setEditRating(i)} onMouseEnter={() => setEditHoverRating(i)} onMouseLeave={() => setEditHoverRating(0)} style={{ width: 32, height: 32, position: 'relative', cursor: 'pointer', flexShrink: 0 }}><svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0 }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill={isHovered ? '#666EFE' : '#E5E7EB'} stroke={isHovered ? '#666EFE' : '#D1D5DB'} strokeWidth="1"/></svg>{!isHovered && fillPercent > 0 && (<svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0, clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#666EFE" stroke="#666EFE" strokeWidth="1"/></svg>)}</div>); })}</div><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#2D4059' }}>{editHoverRating || editRating || 0}</span></div></div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleEditSubmit} disabled={isEditing || editRating === 0} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editRating > 0 && !isEditing ? '#666EFE' : '#BCC8FF', cursor: editRating > 0 && !isEditing ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isEditing ? 'Сохранение...' : 'Сохранить'}</button>
+              <button onClick={handleEditSubmit} disabled={editRating === 0} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editRating > 0 ? '#666EFE' : '#BCC8FF', cursor: editRating > 0 ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
             </div>
           </div>
         </div>

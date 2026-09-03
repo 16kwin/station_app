@@ -1,3 +1,4 @@
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (исправлен renderCellNode)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -564,19 +565,29 @@ const DataTable: React.FC<DataTableProps> = ({
               {columnLayout.layout.map(col => {
                 const cellText = renderCell(col.key, item);
                 const noWrap = noWrapColumns.includes(col.key);
+                
+                // ИСПРАВЛЕНИЕ: проверяем результат renderCellNode
+                let cellContent: React.ReactNode = null;
+                if (renderCellNode) {
+                  cellContent = renderCellNode(col.key, item);
+                }
+                
+                // Если renderCellNode вернул null/undefined — используем renderCell
+                if (cellContent === null || cellContent === undefined) {
+                  cellContent = (
+                    <span 
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
+                      onMouseEnter={(e) => handleMouseEnter(e, cellText)} 
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      {highlightText ? <HighlightedText text={cellText} highlight={highlightText} /> : cellText}
+                    </span>
+                  );
+                }
+                
                 return (
                   <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
-                    {renderCellNode ? (
-                      renderCellNode(col.key, item)
-                    ) : (
-                      <span 
-                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
-                        onMouseEnter={(e) => handleMouseEnter(e, cellText)} 
-                        onMouseLeave={handleMouseLeave}
-                      >
-                        {highlightText ? <HighlightedText text={cellText} highlight={highlightText} /> : cellText}
-                      </span>
-                    )}
+                    {cellContent}
                   </span>
                 );
               })}

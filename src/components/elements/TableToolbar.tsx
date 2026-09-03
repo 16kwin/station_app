@@ -1,4 +1,4 @@
-// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (forwardRef + focusBarcodeSearch)
+// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (скачивание как фильтр — единый прямоугольник)
 import React, { useState, useRef, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,7 +13,7 @@ import FilterIcon18White from '../../assets/Icons/FilterIcons/FilterIcon18White.
 import CreateIcon14Black from '../../assets/Icons/СreateIcons/СreateIcon14Black.svg';
 import DeleteIcon18Black from '../../assets/Icons/DeleteIcons/DeleteIcon18Black.svg';
 import PrintIcon18Black from '../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
-import PrintPDFIcon14Black from '../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
+import DownloadIcon18Black from '../../assets/Icons/DownloadIcons/DownloadIcon18Black.svg';
 import HistoryIcon18Black from '../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
 import HistoryIcon18White from '../../assets/Icons/HistoryIcons/HistoryIcon18White.svg';
 import ConfigurationIcon18Black from '../../assets/Icons/ConfigurationIcons/ConfigurationIcon18Black.svg';
@@ -85,7 +85,9 @@ interface TableToolbarProps {
   onCreate: () => void;
   onDelete: () => void;
   onPrint?: () => void;
-  onPrintPdf?: () => void;
+  onDownloadPdf?: () => void;
+  onDownloadExcel?: () => void;
+  onDownloadWord?: () => void;
   showHistory?: boolean;
   onHistory?: () => void;
   onConfiguration?: () => void;
@@ -127,6 +129,8 @@ const FILTER_RIGHT_PAD = 20;
 const FILTER_ARROW_WIDTH = 18;
 const FILTER_TEXT_TO_ARROW_GAP = 8;
 const SORT_RIGHT_PAD = 20;
+const DOWNLOAD_MENU_WIDTH = 200;
+const DOWNLOAD_MENU_HEIGHT = TOP_PAD + 3 * TEXT_HEIGHT + 2 * ITEM_GAP + BOTTOM_PAD;
 
 const getTextWidth = (text: string, fontSize: number, fontWeight: number): number => {
   const canvas = document.createElement('canvas');
@@ -178,7 +182,9 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
   onCreate,
   onDelete,
   onPrint,
-  onPrintPdf,
+  onDownloadPdf,
+  onDownloadExcel,
+  onDownloadWord,
   showHistory = false,
   onHistory,
   onConfiguration,
@@ -196,6 +202,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
+  const [downloadOpen, setDownloadOpen] = useState(false);
 
   useImperativeHandle(ref, () => ({
     focusBarcodeSearch: () => {
@@ -712,14 +719,42 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
       
       {/* Правые кнопки */}
       <div style={{ position: 'absolute', right: 0, top: 0, display: 'flex', gap: 15 }}>
+        {/* Кнопка скачивания */}
+        <motion.div 
+          style={{ position: 'relative', borderRadius: 10, backgroundColor: '#FFFFFF', border: downloadOpen ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', boxShadow: downloadOpen ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'hidden', zIndex: downloadOpen ? 20 : 1 }}
+          animate={{ width: downloadOpen ? DOWNLOAD_MENU_WIDTH : BTN_COLLAPSED, height: downloadOpen ? BTN_HEADER + DOWNLOAD_MENU_HEIGHT : BTN_COLLAPSED }}
+          transition={{ width: tween, height: tween }}
+        >
+          <div onClick={() => setDownloadOpen(prev => !prev)} style={{ width: BTN_COLLAPSED, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: downloadOpen ? '10px 0 0 0' : 10, userSelect: 'none', position: 'absolute', right: 0, top: 0, backgroundColor: '#FFFFFF' }}>
+            <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+          </div>
+          
+          <AnimatePresence>
+            {downloadOpen && (
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
+                exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
+                style={{ position: 'absolute', top: BTN_HEADER, left: 0, right: 0, height: DOWNLOAD_MENU_HEIGHT, userSelect: 'none', overflow: 'hidden' }}
+              >
+                <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadPdf?.(); setDownloadOpen(false); }} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать PDF</span>
+                  </div>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadExcel?.(); setDownloadOpen(false); }} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать Excel</span>
+                  </div>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadWord?.(); setDownloadOpen(false); }} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать Word</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
         {onPrint && (
           <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
             <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
-          </button>
-        )}
-        {onPrintPdf && (
-          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrintPdf}>
-            <img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} />
           </button>
         )}
         {onHistory && (
