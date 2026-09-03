@@ -1,4 +1,4 @@
-// SupplierBrandsTab.tsx — ПОЛНЫЙ ФАЙЛ (одна колонка, без кнопок добавления)
+// SupplierBrandsTab.tsx — ПОЛНЫЙ ФАЙЛ (с иконкой бренда)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -12,6 +12,7 @@ import SortingIcon19BlueDown from '../../../assets/Icons/SortingIcons/SortingIco
 import SortingIcon19BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon19BlueUp.svg';
 import SortingIcon20BlueDown from '../../../assets/Icons/SortingIcons/SortingIcon20BlueDown.svg';
 import SortingIcon20BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon20BlueUp.svg';
+import BrandIcon16Black from '../../../assets/Icons/BrandIcons/BrandIcon16Black.svg';
 import type { CommonSupplierProps } from './SupplierCreatePage';
 
 interface SupplierBrandItem {
@@ -246,6 +247,8 @@ const SupplierBrandsTab: React.FC<CommonSupplierProps> = (props) => {
           firstColLeft={60}
           noWrapColumns={['name']}
           highlightText={searchValue.trim() || undefined}
+          rowIcon={BrandIcon16Black}
+          rowIconSize={16}
         />
       </div>
     </div>

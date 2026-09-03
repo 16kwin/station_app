@@ -1,4 +1,4 @@
-// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (без обёртки, как было раньше)
+// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлен initialState)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -22,11 +22,17 @@ import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.
 import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
 import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
 import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
+import StatusIcon93Red from '../../../assets/Icons/StatusIcons/StatusIcon93Red.svg';
+import StatusIcon104Blue from '../../../assets/Icons/StatusIcons/StatusIcon104Blue.svg';
+import StatusIcon107Orange from '../../../assets/Icons/StatusIcons/StatusIcon107Orange.svg';
 
 export interface ImageItem { uid: string; url: string; originalName: string; }
 export interface DocumentItem { uid: string; supplierUid: string; documentName: string; filePath: string; originalName: string; url: string; createdAt: string; }
 export interface LocalDocument { localId: string; documentName: string; file: File; }
 export interface LocalImageItem { file: File; url: string; }
+export interface DocumentChange { uid: string; action: 'rename' | 'delete'; newName?: string; }
+export interface LocalRating { localId: string; rating: number; comment: string; }
+export interface RatingChange { uid: string; action: 'edit' | 'delete'; rating?: number; comment?: string; }
 
 export interface CommonSupplierProps {
   uid?: string; name: string; isEdit: boolean; isSaving: boolean;
@@ -43,6 +49,9 @@ export interface CommonSupplierProps {
   fileInputRef: React.RefObject<HTMLInputElement>; documentInputRef: React.RefObject<HTMLInputElement>;
   localDocuments: LocalDocument[]; setLocalDocuments: React.Dispatch<React.SetStateAction<LocalDocument[]>>;
   localImages: LocalImageItem[]; setLocalImages: React.Dispatch<React.SetStateAction<LocalImageItem[]>>;
+  documentChanges: DocumentChange[]; setDocumentChanges: React.Dispatch<React.SetStateAction<DocumentChange[]>>;
+  localRatings: LocalRating[]; setLocalRatings: React.Dispatch<React.SetStateAction<LocalRating[]>>;
+  ratingChanges: RatingChange[]; setRatingChanges: React.Dispatch<React.SetStateAction<RatingChange[]>>;
   setName: (v: string) => void; setNameFocused: (v: boolean) => void;
   setSelectedCountry: (v: string) => void; setSelectedCountryId: (v: string) => void;
   setAddress: (v: string) => void; setSelectedShortDescription: (v: string) => void; setSelectedShortDescriptionId: (v: string) => void;
@@ -155,6 +164,9 @@ interface DraftData {
   settlementAccount: string;
   localImagesMeta: { key: string; fileName: string }[];
   localDocumentsMeta: { key: string; localId: string; documentName: string; fileName: string }[];
+  documentChanges: DocumentChange[];
+  localRatings: LocalRating[];
+  ratingChanges: RatingChange[];
   isEdit: boolean;
   timestamp: number;
 }
@@ -187,6 +199,33 @@ const clearDraftStorage = async (uid: string) => {
   await clearAllFilesForDraft(uid);
 };
 
+// ==================== Интерфейс исходного состояния ====================
+
+interface InitialSupplierState {
+  name: string;
+  selectedCountry: string;
+  selectedCountryId: string;
+  address: string;
+  selectedShortDescription: string;
+  selectedShortDescriptionId: string;
+  description: string;
+  email: string;
+  website: string;
+  phone: string;
+  inn: string;
+  ogrn: string;
+  kpp: string;
+  contactPerson: string;
+  contactPosition: string;
+  contactPhone: string;
+  director: string;
+  directorPosition: string;
+  bankName: string;
+  bik: string;
+  correspondentAccount: string;
+  settlementAccount: string;
+}
+
 const SupplierCreatePage = () => {
   const { uid, code: codeParam } = useParams<{ uid: string; code: string }>();
   const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
@@ -216,6 +255,9 @@ const SupplierCreatePage = () => {
 
   const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
   const [localImages, setLocalImages] = useState<LocalImageItem[]>([]);
+  const [documentChanges, setDocumentChanges] = useState<DocumentChange[]>([]);
+  const [localRatings, setLocalRatings] = useState<LocalRating[]>([]);
+  const [ratingChanges, setRatingChanges] = useState<RatingChange[]>([]);
 
   const [popupOpen, setPopupOpen] = useState(false); const [popupType, setPopupType] = useState<string>('country');
   const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
@@ -228,6 +270,9 @@ const SupplierCreatePage = () => {
   const [isDataSaved, setIsDataSaved] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
   const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
+
+  const [initialState, setInitialState] = useState<InitialSupplierState | null>(null);
+  const [initialImagesCount, setInitialImagesCount] = useState(0);
 
   const tabs_list = ['Основное', 'Реквизиты', 'Документы', 'Бренды', 'Поставки', 'Ассортимент', 'Рейтинг', 'Интеграции'];
   const EVENT_LOG_TAB = tabs_list.length;
@@ -273,6 +318,9 @@ const SupplierCreatePage = () => {
       settlementAccount,
       localImagesMeta: localImages.map(img => ({ key: `${uid}_img_${img.url}`, fileName: img.file.name })),
       localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
+      documentChanges,
+      localRatings,
+      ratingChanges,
       isEdit,
       timestamp: Date.now(),
     };
@@ -286,7 +334,7 @@ const SupplierCreatePage = () => {
     contactPerson, contactPosition, contactPhone,
     director, directorPosition,
     bankName, bik, correspondentAccount, settlementAccount,
-    localImages, localDocuments,
+    localImages, localDocuments, documentChanges, localRatings, ratingChanges,
   ]);
 
   useEffect(() => {
@@ -321,9 +369,64 @@ const SupplierCreatePage = () => {
       }
     }
     setLocalDocuments(restoredDocuments);
+    
+    if (draft.documentChanges) {
+      setDocumentChanges(draft.documentChanges);
+    }
+    if (draft.localRatings) {
+      setLocalRatings(draft.localRatings);
+    }
+    if (draft.ratingChanges) {
+      setRatingChanges(draft.ratingChanges);
+    }
   }, [uid]);
 
   useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
+
+  const loadSupplierData = async (suid: string): Promise<InitialSupplierState> => { 
+    setIsLoading(true); 
+    try { 
+      const d = (await AxiosService.get(ConstantInfo.restApiSupplierGet(suid))).data; 
+      
+      const loadedState: InitialSupplierState = {
+        name: d.name || '',
+        selectedCountry: d.countryName || '',
+        selectedCountryId: d.countryUid || '',
+        address: d.address || '',
+        selectedShortDescription: d.shortDescriptionName || '',
+        selectedShortDescriptionId: d.shortDescriptionUid || '',
+        description: d.description || '',
+        email: d.email || '',
+        website: d.website || '',
+        phone: d.phone || '',
+        inn: d.inn || '',
+        ogrn: d.ogrn || '',
+        kpp: d.kpp || '',
+        contactPerson: d.contactPerson || '',
+        contactPosition: d.contactPosition || '',
+        contactPhone: d.contactPhone || '',
+        director: d.director || '',
+        directorPosition: d.directorPosition || '',
+        bankName: d.bankName || '',
+        bik: d.bik || '',
+        correspondentAccount: d.correspondentAccount || '',
+        settlementAccount: d.settlementAccount || '',
+      };
+      
+      // Устанавливаем все state из loadedState
+      setName(loadedState.name); setCode(d.code); 
+      setSelectedCountryId(loadedState.selectedCountryId); setSelectedCountry(loadedState.selectedCountry);
+      setAddress(loadedState.address); 
+      setSelectedShortDescriptionId(loadedState.selectedShortDescriptionId); setSelectedShortDescription(loadedState.selectedShortDescription);
+      setDescription(loadedState.description); setEmail(loadedState.email); setWebsite(loadedState.website); setPhone(loadedState.phone); 
+      setInn(loadedState.inn); setOgrn(loadedState.ogrn); setKpp(loadedState.kpp); 
+      setContactPerson(loadedState.contactPerson); setContactPosition(loadedState.contactPosition); setContactPhone(loadedState.contactPhone); 
+      setDirector(loadedState.director); setDirectorPosition(loadedState.directorPosition); 
+      setBankName(loadedState.bankName); setBik(loadedState.bik); setCorrespondentAccount(loadedState.correspondentAccount); setSettlementAccount(loadedState.settlementAccount);
+      
+      return loadedState;
+    } catch (e) { console.error(e); throw e; } finally { setIsLoading(false); } 
+  };
 
   useEffect(() => {
     if (!uid) return;
@@ -333,37 +436,11 @@ const SupplierCreatePage = () => {
     
     if (isEditMode) {
       setIsDataSaved(true);
-      loadSupplierData(uid).then(async () => {
-        const draft = loadDraftFromStorage(uid);
-        if (draft && draft.uid === uid && draft.isEdit) {
-          setName(draft.name);
-          setCode(draft.code);
-          setSelectedCountry(draft.selectedCountry);
-          setSelectedCountryId(draft.selectedCountryId);
-          setAddress(draft.address);
-          setSelectedShortDescription(draft.selectedShortDescription);
-          setSelectedShortDescriptionId(draft.selectedShortDescriptionId);
-          setDescription(draft.description);
-          setEmail(draft.email);
-          setWebsite(draft.website);
-          setPhone(draft.phone);
-          setInn(draft.inn);
-          setOgrn(draft.ogrn);
-          setKpp(draft.kpp);
-          setContactPerson(draft.contactPerson);
-          setContactPosition(draft.contactPosition);
-          setContactPhone(draft.contactPhone);
-          setDirector(draft.director);
-          setDirectorPosition(draft.directorPosition);
-          setBankName(draft.bankName);
-          setBik(draft.bik);
-          setCorrespondentAccount(draft.correspondentAccount);
-          setSettlementAccount(draft.settlementAccount);
-          await restoreLocalFiles(draft);
-        }
-        setIsDataLoaded(true);
+      loadSupplierData(uid).then((loadedState) => {
+        setInitialState(loadedState);
       });
       fetchImages(); fetchDocuments(); fetchAverageRating();
+      setIsDataLoaded(true);
     } else {
       const draft = loadDraftFromStorage(uid);
       if (draft && draft.uid === uid) {
@@ -401,29 +478,70 @@ const SupplierCreatePage = () => {
     }
   }, [uid]);
 
+  const isDirty = React.useMemo(() => {
+    if (!isEdit) return true;
+    if (!initialState) return false;
+    
+    return (
+      name !== initialState.name ||
+      selectedCountry !== initialState.selectedCountry ||
+      selectedCountryId !== initialState.selectedCountryId ||
+      address !== initialState.address ||
+      selectedShortDescription !== initialState.selectedShortDescription ||
+      selectedShortDescriptionId !== initialState.selectedShortDescriptionId ||
+      description !== initialState.description ||
+      email !== initialState.email ||
+      website !== initialState.website ||
+      phone !== initialState.phone ||
+      inn !== initialState.inn ||
+      ogrn !== initialState.ogrn ||
+      kpp !== initialState.kpp ||
+      contactPerson !== initialState.contactPerson ||
+      contactPosition !== initialState.contactPosition ||
+      contactPhone !== initialState.contactPhone ||
+      director !== initialState.director ||
+      directorPosition !== initialState.directorPosition ||
+      bankName !== initialState.bankName ||
+      bik !== initialState.bik ||
+      correspondentAccount !== initialState.correspondentAccount ||
+      settlementAccount !== initialState.settlementAccount ||
+      localImages.length > 0 ||
+      localDocuments.length > 0 ||
+      documentChanges.length > 0 ||
+      localRatings.length > 0 ||
+      ratingChanges.length > 0 ||
+      images.length !== initialImagesCount
+    );
+  }, [
+    isEdit, initialState, name, selectedCountry, selectedCountryId, address,
+    selectedShortDescription, selectedShortDescriptionId, description, email,
+    website, phone, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone,
+    director, directorPosition, bankName, bik, correspondentAccount, settlementAccount,
+    localImages, localDocuments, documentChanges, localRatings, ratingChanges, images.length, initialImagesCount
+  ]);
+
+  const canSave = !!name.trim() && isDirty;
+
+  // Определение статус-иконки
+  const getStatusIcon = (): string => {
+    if (!isDataSaved) return StatusIcon93Red;
+    if (isDirty) return StatusIcon107Orange;
+    return StatusIcon104Blue;
+  };
+
+  const getStatusIconWidth = (): number => {
+    if (!isDataSaved) return 93;
+    if (isDirty) return 107;
+    return 104;
+  };
+
   const fetchAverageRating = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierRatingsAverage(uid)); setAverageRating(Math.round((res.data || 0) * 10) / 10); } catch (e) { console.error(e); } };
-  const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierImages(uid)); setImages((res.data || []).map((img: any) => ({ uid: img.uid, url: img.fileUrl ? ConstantInfo.fileDir + img.fileUrl.replace(/^\//, '') : '', originalName: img.originalName || '' }))); } catch (e) { console.error(e); } };
+  const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierImages(uid)); const imgs = (res.data || []).map((img: any) => ({ uid: img.uid, url: img.fileUrl ? ConstantInfo.fileDir + img.fileUrl.replace(/^\//, '') : '', originalName: img.originalName || '' })); setImages(imgs); setInitialImagesCount(imgs.length); } catch (e) { console.error(e); } };
   const fetchDocuments = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid)); setDocuments((res.data || []).map((doc: any) => ({ ...doc, url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiSupplierDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
   const handleDocumentUpload = (documentName: string, file: File) => { setLocalDocuments(prev => [...prev, { localId: generateLocalId(), documentName, file }]); };
-  const handleDeleteDocument = (uid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== uid)); if (uid && !uid.startsWith('local_')) { AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(uid)).then(() => fetchDocuments()).catch(e => console.error(e)); } };
-
-  const loadSupplierData = async (suid: string): Promise<void> => { 
-    setIsLoading(true); 
-    try { 
-      const d = (await AxiosService.get(ConstantInfo.restApiSupplierGet(suid))).data; 
-      setName(d.name || ''); setCode(d.code); 
-      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } else { setSelectedCountryId(''); setSelectedCountry(''); }
-      setAddress(d.address || ''); 
-      if (d.shortDescriptionUid) { setSelectedShortDescriptionId(d.shortDescriptionUid); setSelectedShortDescription(d.shortDescriptionName || ''); } else { setSelectedShortDescriptionId(''); setSelectedShortDescription(''); }
-      setDescription(d.description || ''); setEmail(d.email || ''); setWebsite(d.website || ''); setPhone(d.phone || ''); 
-      setInn(d.inn || ''); setOgrn(d.ogrn || ''); setKpp(d.kpp || ''); 
-      setContactPerson(d.contactPerson || ''); setContactPosition(d.contactPosition || ''); setContactPhone(d.contactPhone || ''); 
-      setDirector(d.director || ''); setDirectorPosition(d.directorPosition || ''); 
-      setBankName(d.bankName || ''); setBik(d.bik || ''); setCorrespondentAccount(d.correspondentAccount || ''); setSettlementAccount(d.settlementAccount || ''); 
-    } catch (e) { console.error(e); } finally { setIsLoading(false); } 
-  };
+  const handleDeleteDocument = (uid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== uid)); if (uid && !uid.startsWith('local_')) { setDocumentChanges(prev => [...prev.filter(c => c.uid !== uid), { uid, action: 'delete' }]); } };
 
   const getMissingFields = (): Set<string> => {
     const m = new Set<string>();
@@ -453,11 +571,50 @@ const SupplierCreatePage = () => {
     if (!uid) return; setIsSaving(true);
     try {
       await AxiosService.post(ConstantInfo.restApiSupplierDraft, { uid, code, name, countryUid: selectedCountryId || null, address: address || null, shortDescriptionUid: selectedShortDescriptionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null, inn: inn || null, ogrn: ogrn || null, kpp: kpp || null, contactPerson: contactPerson || null, contactPosition: contactPosition || null, contactPhone: contactPhone || null, director: director || null, directorPosition: directorPosition || null, bankName: bankName || null, bik: bik || null, correspondentAccount: correspondentAccount || null, settlementAccount: settlementAccount || null, author: 'Оператор' });
+      
       for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); }
+      setLocalImages([]);
+      
       for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); }
-      setLocalImages([]); setLocalDocuments([]); await fetchImages(); await fetchDocuments();
+      setLocalDocuments([]);
+      
+      for (const change of documentChanges.filter(c => c.action === 'rename')) {
+        await AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/suppliers/documents/${change.uid}/rename?documentName=${encodeURIComponent(change.newName || '')}`);
+      }
+      for (const change of documentChanges.filter(c => c.action === 'delete')) {
+        await AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(change.uid));
+      }
+      setDocumentChanges([]);
+      
+      // Рейтинги
+      for (const r of localRatings) {
+        await AxiosService.post(ConstantInfo.restApiSupplierRatings(uid), { rating: r.rating, comment: r.comment });
+      }
+      setLocalRatings([]);
+      
+      for (const change of ratingChanges.filter(c => c.action === 'edit')) {
+        await AxiosService.delete(ConstantInfo.restApiSupplierDeleteRating(change.uid));
+        await AxiosService.post(ConstantInfo.restApiSupplierRatings(uid), { rating: change.rating, comment: change.comment });
+      }
+      for (const change of ratingChanges.filter(c => c.action === 'delete')) {
+        await AxiosService.delete(ConstantInfo.restApiSupplierDeleteRating(change.uid));
+      }
+      setRatingChanges([]);
+      
+      await fetchImages(); await fetchDocuments(); await fetchAverageRating();
+      window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
+      window.dispatchEvent(new CustomEvent('refreshSupplierRatings'));
+      
       await clearDraftStorage(uid);
       setIsDataSaved(true); setValidationErrors(new Set()); window.dispatchEvent(new CustomEvent('refreshSupplierEvents'));
+      
+      setInitialState({
+        name, selectedCountry, selectedCountryId, address,
+        selectedShortDescription, selectedShortDescriptionId, description, email,
+        website, phone, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone,
+        director, directorPosition, bankName, bik, correspondentAccount, settlementAccount,
+      });
+      setInitialImagesCount(images.length);
       
       const wasCreate = !isEdit;
       if (wasCreate && activeTabId) {
@@ -485,7 +642,6 @@ const SupplierCreatePage = () => {
   };
 
   const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
-  const canSave = !!name.trim();
 
   const openPopup = (type: string) => { setPopupType(type); setPopupFilterParam(undefined); setPopupOpen(true); };
   const handlePopupSelect = (id: string, nm: string) => { 
@@ -503,13 +659,16 @@ const SupplierCreatePage = () => {
   const hasRequisitesErrors = cef.some(f => validationErrors.has(f));
   const isEventLogActive = activeTab === EVENT_LOG_TAB;
 
-  const commonProps: CommonSupplierProps = { uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setImages, setDocuments, handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors, fetchAverageRating, averageRating };
+  const commonProps: CommonSupplierProps = { uid, name, isEdit, isSaving, images, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedShortDescription, selectedShortDescriptionId, description, email, website, phone, inn, ogrn, kpp, contactPerson, contactPosition, contactPhone, director, directorPosition, bankName, bik, correspondentAccount, settlementAccount, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, localImages, setLocalImages, documentChanges, setDocumentChanges, localRatings, setLocalRatings, ratingChanges, setRatingChanges, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedShortDescription, setSelectedShortDescriptionId, setDescription, setEmail, setWebsite, setPhone, setInn, setOgrn, setKpp, setContactPerson, setContactPosition, setContactPhone, setDirector, setDirectorPosition, setBankName, setBik, setCorrespondentAccount, setSettlementAccount, setImages, setDocuments, handleImageUpload, handleDeleteImage, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors, fetchAverageRating, averageRating };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
-      <h1 style={{ position: 'absolute', top: 35, left: 60, fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? name || 'Поставщик' : 'Справочник: Поставщики (Создание)'}</h1>
+      <div style={{ position: 'absolute', top: 35, left: 60, display: 'flex', alignItems: 'center', gap: 25 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? `Справочник: Поставщики (${name || 'Поставщик'})` : 'Справочник: Поставщики (Создание)'}</h1>
+        <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
+      </div>
       
       <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
@@ -595,8 +754,8 @@ const SupplierCreatePage = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClosePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Нет изменений для сохранения.'}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
           </div>
         </div>
       )}

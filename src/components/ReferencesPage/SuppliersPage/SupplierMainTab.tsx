@@ -1,4 +1,4 @@
-// SupplierMainTab.tsx — ПОЛНЫЙ ФАЙЛ (с LogoUploader)
+// SupplierMainTab.tsx — ПОЛНЫЙ ФАЙЛ (заблокирован переход к рейтингу до записи)
 import React, { useState, useEffect } from 'react';
 import type { CommonSupplierProps, LocalImageItem } from './SupplierCreatePage';
 import FormField from '../../elements/FormField';
@@ -73,6 +73,7 @@ const SupplierMainTab: React.FC<CommonSupplierProps> = (props) => {
     setSelectedShortDescriptionId = () => {},
     handleDeleteImage = () => {},
     openPopup = () => {},
+    isDataSaved = false,
   } = props;
 
   const [localSelectedIndex, setLocalSelectedIndex] = useState(0);
@@ -106,6 +107,12 @@ const SupplierMainTab: React.FC<CommonSupplierProps> = (props) => {
     return 'Высокий рейтинг';
   };
 
+  // Переход к рейтингу только если данные записаны
+  const handleNavigateToRating = () => {
+    if (!isDataSaved) return;
+    window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 6 } }));
+  };
+
   // Объединяем бэкендовские и локальные изображения
   const displayImages = [
     ...images.map(img => ({ uid: img.uid, url: img.url, originalName: img.originalName, isLocal: false })),
@@ -116,9 +123,9 @@ const SupplierMainTab: React.FC<CommonSupplierProps> = (props) => {
   const ROW1 = 30;
   const ROW2 = ROW1 + 17 + 11 + 44 + 30;
   const ROW3 = ROW2 + 17 + 11 + 44 + 30;
-  const RATING_ROW = ROW3 + 17 + 11 + 44 + 143; // 143 ниже поля телефона
-  const RATING_STARS_TOP = RATING_ROW + 19 + 12; // строка + 12 отступ
-  const RATING_STATUS_TOP = RATING_STARS_TOP + 18 + 19; // звёзды + 19
+  const RATING_ROW = ROW3 + 17 + 11 + 44 + 143;
+  const RATING_STARS_TOP = RATING_ROW + 19 + 12;
+  const RATING_STATUS_TOP = RATING_STARS_TOP + 18 + 19;
 
   return (
     <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96, display: 'flex', gap: 30, overflow: 'auto' }}>
@@ -183,7 +190,7 @@ const SupplierMainTab: React.FC<CommonSupplierProps> = (props) => {
         <div style={{ position: 'absolute', top: RATING_ROW, left: 0, right: 30 }}>
           <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 30 }}>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>Рейтинг поставщика:</span>
-            <button onClick={() => window.dispatchEvent(new CustomEvent('navigateToTab', { detail: { tab: 6 } }))} style={{ marginLeft: 9, width: 16, height: 16, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+            <button onClick={handleNavigateToRating} style={{ marginLeft: 9, width: 16, height: 16, border: 'none', background: 'transparent', cursor: isDataSaved ? 'pointer' : 'default', padding: 0 }}>
               <img src={RatingIcon16Black} alt="Рейтинг" style={{ width: 16, height: 16 }} />
             </button>
           </div>

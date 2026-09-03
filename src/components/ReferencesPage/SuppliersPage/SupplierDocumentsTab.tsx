@@ -1,4 +1,4 @@
-// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (как StationModelFilesTab)
+// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (кнопка скачать после удаления, DownloadIcon18Black)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -14,10 +14,11 @@ import SortingIcon20BlueDown from '../../../assets/Icons/SortingIcons/SortingIco
 import SortingIcon20BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon20BlueUp.svg';
 import CreateIcon14Black from '../../../assets/Icons/СreateIcons/СreateIcon14Black.svg';
 import DeleteIcon18Black from '../../../assets/Icons/DeleteIcons/DeleteIcon18Black.svg';
+import DownloadIcon18Black from '../../../assets/Icons/DownloadIcons/DownloadIcon18Black.svg';
 import FilesIcon14Black from '../../../assets/Icons/FilesIcons/FilesIcon14Black.svg';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
-import type { CommonSupplierProps } from './SupplierCreatePage';
+import type { CommonSupplierProps, DocumentChange, LocalDocument } from './SupplierCreatePage';
 
 interface DocumentItem {
   uid: string;
@@ -25,12 +26,6 @@ interface DocumentItem {
   originalName: string;
   url: string;
   createdAt: string;
-}
-
-interface LocalDocumentItem {
-  localId: string;
-  documentName: string;
-  file: File;
 }
 
 const FILE_COLUMNS = [
@@ -57,12 +52,16 @@ const INDICATOR_HEIGHT = 22;
 const ICON_RIGHT_PAD = 4;
 
 const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
-  const { uid, isEdit, localDocuments = [], setLocalDocuments = () => {} } = props;
+  const { 
+    uid, isEdit, localDocuments = [], setLocalDocuments = () => {},
+    documentChanges = [], setDocumentChanges = () => {},
+  } = props;
 
   const [serverDocuments, setServerDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const fileLocalRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string; isLocal: boolean } | null>(null);
 
@@ -110,23 +109,34 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     setIsLoading(true);
     try {
       const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid!));
+      const deletedUids = documentChanges.filter(c => c.action === 'delete').map(c => c.uid);
       setServerDocuments((res.data || []).map((doc: any) => ({
         uid: doc.uid,
         documentName: doc.documentName,
         originalName: doc.originalName,
         url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '',
         createdAt: doc.createdAt,
-      })));
+      })).filter((doc: DocumentItem) => !deletedUids.includes(doc.uid)));
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
   useEffect(() => { if (uid && isEdit) fetchDocuments(); }, [uid, isEdit]);
+
+  useEffect(() => {
+    const handler = () => { if (uid && isEdit) fetchDocuments(); };
+    window.addEventListener('refreshSupplierDocuments', handler);
+    return () => window.removeEventListener('refreshSupplierDocuments', handler);
+  }, [uid, isEdit, documentChanges]);
+
   useEffect(() => { if (!contextMenu) return; const h = () => setContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [contextMenu]);
   useEffect(() => { if (expanded === 'search' && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [expanded]);
   useEffect(() => { if (expanded === 'sort') { const idx = SORT_FIELDS.findIndex(f => f.key === sortColumn); if (idx >= 0) setSortIndicatorY(getIndicatorTarget(idx)); } }, [expanded]);
 
   const allDocuments: DocumentItem[] = [
-    ...serverDocuments,
+    ...serverDocuments.map(d => {
+      const renameChange = documentChanges.find(c => c.action === 'rename' && c.uid === d.uid);
+      return renameChange ? { ...d, documentName: renameChange.newName || d.documentName } : d;
+    }),
     ...localDocuments.map(d => ({
       uid: d.localId,
       documentName: d.documentName,
@@ -160,6 +170,70 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     return ConstantInfo.fileDir + url.replace(/^\//, '');
   };
 
+  // Открытие файла (двойной клик)
+  const openFile = (doc: DocumentItem) => {
+    if (doc.url) {
+      const fullUrl = getFullUrl(doc.url);
+      window.open(fullUrl, '_blank');
+    } else {
+      const localDoc = localDocuments.find(d => d.localId === doc.uid);
+      if (localDoc) {
+        const blobUrl = URL.createObjectURL(localDoc.file);
+        window.open(blobUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      }
+    }
+  };
+
+  // Скачивание одного файла
+  const downloadSingleFile = async (doc: DocumentItem) => {
+    if (doc.url) {
+      try {
+        const fullUrl = getFullUrl(doc.url);
+        const response = await fetch(fullUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = doc.originalName || doc.documentName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } catch (e) {
+        const fullUrl = getFullUrl(doc.url);
+        window.open(fullUrl, '_blank');
+      }
+    } else {
+      const localDoc = localDocuments.find(d => d.localId === doc.uid);
+      if (localDoc) {
+        const blobUrl = URL.createObjectURL(localDoc.file);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = localDoc.file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      }
+    }
+  };
+
+  // Скачивание выделенных документов
+  const handleDownloadSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDownloading(true);
+    try {
+      const selectedDocs = allDocuments.filter(d => selectedIds.has(d.uid));
+      for (const doc of selectedDocs) {
+        await downloadSingleFile(doc);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    } catch (e) { console.error(e); } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleCheckboxClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
   const handleSelectAll = (e: React.MouseEvent) => { e.stopPropagation(); const all = filteredDocuments.length > 0 && filteredDocuments.every(d => selectedIds.has(d.uid)); all ? setSelectedIds(new Set()) : setSelectedIds(new Set(filteredDocuments.map(d => d.uid))); };
   const handleRowClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
@@ -175,38 +249,27 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
   const handleDoubleClick = (uid: string) => {
     const doc = allDocuments.find(x => x.uid === uid);
     if (!doc) return;
-    
-    if (doc.url) {
-      const fullUrl = getFullUrl(doc.url);
-      window.open(fullUrl, '_blank');
-      return;
-    }
-    
-    const localDoc = localDocuments.find(d => d.localId === uid);
-    if (localDoc) {
-      const blobUrl = URL.createObjectURL(localDoc.file);
-      window.open(blobUrl, '_blank');
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-    }
+    openFile(doc);
   };
 
   const handleDeleteSelected = () => { if (selectedIds.size === 0) return; setShowDeleteConfirm(true); };
 
-  const confirmDelete = async () => {
-    try {
-      for (const uid of selectedIds) {
-        const isLocal = localDocuments.some(d => d.localId === uid);
-        if (isLocal) {
-          setLocalDocuments((prev: any[]) => prev.filter((d: any) => d.localId !== uid));
-        } else {
-          await AxiosService.delete(ConstantInfo.restApiSupplierDeleteDocument(uid));
-        }
+  const confirmDelete = () => {
+    for (const uid of selectedIds) {
+      const isLocal = localDocuments.some(d => d.localId === uid);
+      if (isLocal) {
+        setLocalDocuments((prev: LocalDocument[]) => prev.filter((d: LocalDocument) => d.localId !== uid));
+      } else {
+        setDocumentChanges((prev: DocumentChange[]) => {
+          const existing = prev.find(c => c.uid === uid && c.action === 'delete');
+          if (existing) return prev;
+          return [...prev, { uid, action: 'delete' }];
+        });
+        setServerDocuments(prev => prev.filter(d => d.uid !== uid));
       }
-      setSelectedIds(new Set());
-      setShowDeleteConfirm(false);
-      await fetchDocuments();
-      window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
-    } catch (e) { console.error(e); }
+    }
+    setSelectedIds(new Set());
+    setShowDeleteConfirm(false);
   };
 
   const handleAddClick = () => {
@@ -224,22 +287,12 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     if (fileLocalRef.current) fileLocalRef.current.value = '';
   };
 
-  const handleAddSubmit = async () => {
-    if (!selectedFile || !formDocName.trim() || !uid) return;
+  const handleAddSubmit = () => {
+    if (!selectedFile || !formDocName.trim()) return;
     
-    if (isEdit) {
-      try {
-        const fd = new FormData();
-        fd.append('file', selectedFile);
-        fd.append('documentName', formDocName.trim());
-        await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd);
-        await fetchDocuments();
-        window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
-      } catch (e) { console.error(e); }
-    } else {
-      const localId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      setLocalDocuments((prev: any[]) => [...prev, { localId, documentName: formDocName.trim(), file: selectedFile }]);
-    }
+    const localId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setLocalDocuments((prev: LocalDocument[]) => [...prev, { localId, documentName: formDocName.trim(), file: selectedFile }]);
+    
     setShowAddPopup(false);
     setSelectedFile(null);
     setFormDocName('');
@@ -258,14 +311,27 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     if (!editDocName.trim()) return;
     
     if (editIsLocal) {
-      setLocalDocuments((prev: any[]) => prev.map((d: any) => d.localId === editDocUid ? { ...d, documentName: editDocName.trim() } : d));
+      setLocalDocuments((prev: LocalDocument[]) => prev.map((d: LocalDocument) => d.localId === editDocUid ? { ...d, documentName: editDocName.trim() } : d));
     } else {
-      // Для серверных документов — пока просто обновляем локально
-      // В будущем можно добавить PATCH на бекенд
+      setDocumentChanges((prev: DocumentChange[]) => {
+        const existing = prev.find(c => c.uid === editDocUid && c.action === 'rename');
+        if (existing) {
+          return prev.map(c => c.uid === editDocUid ? { ...c, newName: editDocName.trim() } : c);
+        }
+        return [...prev, { uid: editDocUid, action: 'rename', newName: editDocName.trim() }];
+      });
       setServerDocuments(prev => prev.map(d => d.uid === editDocUid ? { ...d, documentName: editDocName.trim() } : d));
-      window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
     }
     setShowEditPopup(false);
+  };
+
+  const handleDownloadClick = () => {
+    if (!contextMenu) return;
+    const doc = allDocuments.find(d => d.uid === contextMenu.uid);
+    if (doc) {
+      downloadSingleFile(doc);
+    }
+    setContextMenu(null);
   };
 
   const handleSortFieldClick = (field: { key: string; label: string; iconType?: '19' | '20' | null }) => {
@@ -299,6 +365,8 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
   const createGroupX = searchWidth + sortWidth + BTN_GAP * 2;
   const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
   const tween = { type: 'tween' as const, duration: 0.2 };
+
+  const canDownloadSelected = selectedIds.size > 0 && !isDownloading;
 
   return (
     <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96 }}>
@@ -379,7 +447,14 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
 
         <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
           <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>
-          <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5 }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button 
+            style={{ ...smallButtonStyle, opacity: canDownloadSelected ? 1 : 0.5, cursor: canDownloadSelected ? 'pointer' : 'not-allowed' }} 
+            onClick={canDownloadSelected ? handleDownloadSelected : undefined}
+            title="Скачать выбранные"
+          >
+            <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+          </button>
         </motion.div>
       </div>
       <div style={{ position: 'absolute', top: 52, left: 0 }}>
@@ -409,6 +484,10 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
       
       {contextMenu && (
         <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button onClick={handleDownloadClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+            <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+            Скачать
+          </button>
           <button onClick={handleEditClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
             <img src={ContextMenuOpenIcon16} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
             Редактировать
