@@ -973,28 +973,35 @@ const StationsCrudPage = () => {
   }
 
   const preparePayload = () => {
-    const preparedData = filteredData.map(item => {
-      const row: Record<string, string> = {};
-      columnKeys.forEach(key => {
-        row[key] = renderCell(key, item);
-      });
-      return row;
+  const preparedData = filteredData.map(item => {
+    const row: Record<string, string> = {};
+    columnKeys.forEach(key => {
+      row[key] = renderCell(key, item);
     });
+    return row;
+  });
 
-    return {
-      title: 'Станции',
-      columns: columnKeys,
-      columnLabels: columnLabels,
-      data: preparedData,
-      landscape: true,
-      footerLines: [
-        `Сортировка: ${sortLabel}`,
-        `Фильтры: ${filtersText}`,
-        `Видимые поля: ${visibleLabels.join(', ')}`,
-        `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
-      ],
-    };
+  // Формируем footerLines только из сортировки и фильтров (если есть)
+  const footerLines: string[] = [];
+
+  if (sortColumn) {
+    const sortText = `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`;
+    footerLines.push(`Сортировка: ${sortText}`);
+  }
+
+  if (filtersText !== 'Нет фильтров') {
+    footerLines.push(`Фильтры: ${filtersText}`);
+  }
+
+  return {
+    title: 'Станции',
+    columns: columnKeys,
+    columnLabels: columnLabels,
+    data: preparedData,
+    landscape: true,
+    footerLines: footerLines, // теперь только значимые строки
   };
+};
 
   const handlePrint = async () => {
     try {
