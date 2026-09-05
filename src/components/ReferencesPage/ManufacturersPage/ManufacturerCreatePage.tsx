@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+// ManufacturerCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (с documentChanges)
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,17 +14,21 @@ import ManufacturerAssortmentTab from './ManufacturerAssortmentTab';
 import ManufacturerSuppliersTab from './ManufacturerSuppliersTab';
 import ManufacturerIntegrationTab from './ManufacturerIntegrationTab';
 import ManufacturerEventLogTab from './ManufacturerEventLogTab';
-import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
-import IconOne from '../../../assets/References/NomenclatureCreatePage/IconOne.svg';
-import IconOne1 from '../../../assets/References/NomenclatureCreatePage/IconOne1.svg';
-import IconTwo from '../../../assets/References/NomenclatureCreatePage/IconTwo.svg';
+import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
+import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
+import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
+import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
+import StatusIcon93Red from '../../../assets/Icons/StatusIcons/StatusIcon93Red.svg';
+import StatusIcon104Blue from '../../../assets/Icons/StatusIcons/StatusIcon104Blue.svg';
+import StatusIcon107Orange from '../../../assets/Icons/StatusIcons/StatusIcon107Orange.svg';
 
 export interface ManufacturerDocumentItem { uid: string; manufacturerUid: string; documentName: string; filePath: string; originalName: string; url: string; createdAt: string; }
 export interface LocalManufacturerDocument { localId: string; documentName: string; file: File; }
 export interface ManufacturerImageItem { uid: string; url: string; originalName: string; }
 export interface LocalManufacturerImage { file: File; url: string; }
+export interface ManufacturerDocumentChange { uid: string; action: 'rename' | 'delete'; newName?: string; }
 
 export interface CommonManufacturerProps {
   uid?: string; name: string; isEdit: boolean; isSaving: boolean;
@@ -35,6 +40,7 @@ export interface CommonManufacturerProps {
   description: string; email: string; website: string; phone: string;
   documentInputRef: React.RefObject<HTMLInputElement>;
   localDocuments: LocalManufacturerDocument[]; setLocalDocuments: React.Dispatch<React.SetStateAction<LocalManufacturerDocument[]>>;
+  documentChanges: ManufacturerDocumentChange[]; setDocumentChanges: React.Dispatch<React.SetStateAction<ManufacturerDocumentChange[]>>;
   images: ManufacturerImageItem[]; setImages: React.Dispatch<React.SetStateAction<ManufacturerImageItem[]>>;
   localImages: LocalManufacturerImage[]; setLocalImages: React.Dispatch<React.SetStateAction<LocalManufacturerImage[]>>;
   setName: (v: string) => void; setNameFocused: (v: boolean) => void;
@@ -64,6 +70,7 @@ interface DraftData {
   email: string;
   website: string;
   phone: string;
+  documentChanges: ManufacturerDocumentChange[];
   isEdit: boolean;
   timestamp: number;
 }
@@ -85,6 +92,19 @@ const loadDraftFromStorage = (uid: string): DraftData | null => {
 
 const clearDraftStorage = (uid: string) => { localStorage.removeItem(getDraftKey(uid)); };
 
+interface InitialManufacturerState {
+  name: string;
+  selectedCountry: string;
+  selectedCountryId: string;
+  address: string;
+  selectedDirection: string;
+  selectedDirectionId: string;
+  description: string;
+  email: string;
+  website: string;
+  phone: string;
+}
+
 const ManufacturerCreatePage = () => {
   const { uid, code: codeParam } = useParams<{ uid: string; code: string }>();
   const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
@@ -105,18 +125,20 @@ const ManufacturerCreatePage = () => {
   const [website, setWebsite] = useState(''); const [phone, setPhone] = useState('');
 
   const [localDocuments, setLocalDocuments] = useState<LocalManufacturerDocument[]>([]);
+  const [documentChanges, setDocumentChanges] = useState<ManufacturerDocumentChange[]>([]);
   const [images, setImages] = useState<ManufacturerImageItem[]>([]);
   const [localImages, setLocalImages] = useState<LocalManufacturerImage[]>([]);
 
   const [popupOpen, setPopupOpen] = useState(false); const [popupType, setPopupType] = useState<string>('country');
 
   const [showClosePopup, setShowClosePopup] = useState(false);
-  const [showDevPopup, setShowDevPopup] = useState(false);
   const [documents, setDocuments] = useState<ManufacturerDocumentItem[]>([]);
 
   const [isDataSaved, setIsDataSaved] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
   const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
+
+  const [initialState, setInitialState] = useState<InitialManufacturerState | null>(null);
 
   const tabs_list = ['Основное', 'Документы', 'Бренды', 'Ассортимент', 'Поставщики', 'Интеграции'];
   const EVENT_LOG_TAB = tabs_list.length;
@@ -125,13 +147,50 @@ const ManufacturerCreatePage = () => {
 
   const saveDraftToLocalStorage = useCallback(() => {
     if (!uid || !isDataLoaded) return;
-    const draft: DraftData = { uid, code, name, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, isEdit, timestamp: Date.now() };
+    const draft: DraftData = { uid, code, name, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, documentChanges, isEdit, timestamp: Date.now() };
     saveDraftToStorage(uid, draft);
-  }, [uid, code, name, isEdit, isDataLoaded, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone]);
+  }, [uid, code, name, isEdit, isDataLoaded, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, documentChanges]);
 
   useEffect(() => { if (!uid || !isDataLoaded) return; const t = setTimeout(() => saveDraftToLocalStorage(), 500); return () => clearTimeout(t); }, [saveDraftToLocalStorage, uid, isDataLoaded]);
 
   useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
+
+  const loadManufacturerData = async (muid: string): Promise<InitialManufacturerState> => { 
+    setIsLoading(true); 
+    try { 
+      const d = (await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${muid}`)).data; 
+      
+      const loadedState: InitialManufacturerState = {
+        name: d.name || '',
+        selectedCountry: d.countryName || '',
+        selectedCountryId: d.countryUid || '',
+        address: d.address || '',
+        selectedDirection: d.directionName || '',
+        selectedDirectionId: d.directionUid || '',
+        description: d.description || '',
+        email: d.email || '',
+        website: d.website || '',
+        phone: d.phone || '',
+      };
+      
+      setName(loadedState.name); setCode(d.code);
+      setSelectedCountry(loadedState.selectedCountry); setSelectedCountryId(loadedState.selectedCountryId);
+      setAddress(loadedState.address);
+      setSelectedDirection(loadedState.selectedDirection); setSelectedDirectionId(loadedState.selectedDirectionId);
+      setDescription(loadedState.description); setEmail(loadedState.email); setWebsite(loadedState.website); setPhone(loadedState.phone);
+      
+      return loadedState;
+    } catch (e) { console.error(e); throw e; } finally { setIsLoading(false); } 
+  };
+
+  const applyDraftData = useCallback((draft: DraftData) => {
+    setName(draft.name || ''); setCode(draft.code);
+    setSelectedCountry(draft.selectedCountry || ''); setSelectedCountryId(draft.selectedCountryId || '');
+    setAddress(draft.address || '');
+    setSelectedDirection(draft.selectedDirection || ''); setSelectedDirectionId(draft.selectedDirectionId || '');
+    setDescription(draft.description || ''); setEmail(draft.email || ''); setWebsite(draft.website || ''); setPhone(draft.phone || '');
+    if (draft.documentChanges) setDocumentChanges(draft.documentChanges);
+  }, []);
 
   useEffect(() => {
     if (!uid) return;
@@ -140,48 +199,72 @@ const ManufacturerCreatePage = () => {
     setIsEdit(isEditMode);
     if (isEditMode) {
       setIsDataSaved(true);
-      loadManufacturerData(uid).then(() => { 
-        const draft = loadDraftFromStorage(uid); 
-        if (draft && draft.uid === uid && draft.isEdit) { 
-          setName(draft.name || ''); setCode(draft.code); 
-          setSelectedCountry(draft.selectedCountry || ''); setSelectedCountryId(draft.selectedCountryId || ''); 
-          setAddress(draft.address || ''); setSelectedDirection(draft.selectedDirection || ''); 
-          setSelectedDirectionId(draft.selectedDirectionId || ''); setDescription(draft.description || ''); 
-          setEmail(draft.email || ''); setWebsite(draft.website || ''); setPhone(draft.phone || ''); 
+      loadManufacturerData(uid).then((loadedState) => {
+        const draft = loadDraftFromStorage(uid);
+        if (draft && draft.uid === uid && draft.isEdit) {
+          applyDraftData(draft);
+          setInitialState({
+            name: draft.name, selectedCountry: draft.selectedCountry, selectedCountryId: draft.selectedCountryId,
+            address: draft.address, selectedDirection: draft.selectedDirection, selectedDirectionId: draft.selectedDirectionId,
+            description: draft.description, email: draft.email, website: draft.website, phone: draft.phone,
+          });
+        } else {
+          setInitialState(loadedState);
         }
-        setIsDataLoaded(true); 
+        setIsDataLoaded(true);
       });
       fetchDocuments(); fetchImages();
     } else {
       const draft = loadDraftFromStorage(uid);
-      if (draft && draft.uid === uid) { 
-        setName(draft.name || ''); setCode(draft.code); 
-        setSelectedCountry(draft.selectedCountry || ''); setSelectedCountryId(draft.selectedCountryId || ''); 
-        setAddress(draft.address || ''); setSelectedDirection(draft.selectedDirection || ''); 
-        setSelectedDirectionId(draft.selectedDirectionId || ''); setDescription(draft.description || ''); 
-        setEmail(draft.email || ''); setWebsite(draft.website || ''); setPhone(draft.phone || ''); 
-        setIsDataLoaded(true); 
+      if (draft && draft.uid === uid) {
+        applyDraftData(draft);
+        setIsDataLoaded(true);
+      } else {
+        setIsDataSaved(false);
+        setIsDataLoaded(true);
+        if (codeParam) setCode(parseInt(codeParam));
       }
-      else { setIsDataSaved(false); setIsDataLoaded(true); if (codeParam) setCode(parseInt(codeParam)); }
     }
   }, [uid]);
 
-  const fetchDocuments = async () => { if (!uid) return; try { const res = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/documents`); setDocuments((res.data || []).map((doc: any) => ({ ...doc, url: doc.url ? ConstantInfo.fileDir + doc.url.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
+  const isDirty = useMemo(() => {
+    if (!isEdit) return true;
+    if (!initialState) return false;
+    return (
+      name !== initialState.name ||
+      selectedCountry !== initialState.selectedCountry ||
+      selectedCountryId !== initialState.selectedCountryId ||
+      address !== initialState.address ||
+      selectedDirection !== initialState.selectedDirection ||
+      selectedDirectionId !== initialState.selectedDirectionId ||
+      description !== initialState.description ||
+      email !== initialState.email ||
+      website !== initialState.website ||
+      phone !== initialState.phone ||
+      localImages.length > 0 ||
+      localDocuments.length > 0 ||
+      documentChanges.length > 0
+    );
+  }, [isEdit, initialState, name, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, localImages, localDocuments, documentChanges]);
+
+  const canSave = !!name.trim() && isDirty;
+
+  const getStatusIcon = (): string => {
+    if (!isDataSaved) return StatusIcon93Red;
+    if (isDirty) return StatusIcon107Orange;
+    return StatusIcon104Blue;
+  };
+
+  const getStatusIconWidth = (): number => {
+    if (!isDataSaved) return 93;
+    if (isDirty) return 107;
+    return 104;
+  };
+
+  const fetchDocuments = async () => { if (!uid) return; try { const res = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/documents`); setDocuments((res.data || []).map((doc: any) => ({ ...doc, url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
   const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/images`); setImages((res.data || []).map((img: any) => ({ uid: img.uid, url: img.fileUrl ? ConstantInfo.fileDir + img.fileUrl.replace(/^\//, '') : '', originalName: img.originalName || '' }))); } catch (e) { console.error(e); } };
   const handleDocumentUpload = (documentName: string, file: File) => { setLocalDocuments(prev => [...prev, { localId: generateLocalId(), documentName, file }]); };
-  const handleDeleteDocument = (docUid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== docUid)); if (docUid && !docUid.startsWith('local_')) { AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/documents/${docUid}`).then(() => fetchDocuments()).catch(e => console.error(e)); } };
-
-  const loadManufacturerData = async (muid: string): Promise<void> => { 
-    setIsLoading(true); 
-    try { 
-      const d = (await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${muid}`)).data; 
-      setName(d.name || ''); setCode(d.code); 
-      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } else { setSelectedCountryId(''); setSelectedCountry(''); }
-      setAddress(d.address || ''); 
-      if (d.directionUid) { setSelectedDirectionId(d.directionUid); setSelectedDirection(d.directionName || ''); } else { setSelectedDirectionId(''); setSelectedDirection(''); }
-      setDescription(d.description || ''); setEmail(d.email || ''); setWebsite(d.website || ''); setPhone(d.phone || ''); 
-    } catch (e) { console.error(e); } finally { setIsLoading(false); } 
-  };
+  const handleDeleteDocument = (docUid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== docUid)); if (docUid && !docUid.startsWith('local_')) { setDocumentChanges(prev => [...prev.filter(c => c.uid !== docUid), { uid: docUid, action: 'delete' }]); } };
 
   const getMissingFields = (): Set<string> => {
     const m = new Set<string>();
@@ -203,11 +286,25 @@ const ManufacturerCreatePage = () => {
     if (!uid) return; setIsSaving(true);
     try {
       await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud`, { uid, name, countryUid: selectedCountryId || null, address: address || null, directionUid: selectedDirectionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null });
+      
       for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/documents`, fd); }
+      setLocalDocuments([]);
+      
+      for (const change of documentChanges.filter(c => c.action === 'delete')) {
+        await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/documents/${change.uid}`);
+      }
+      setDocumentChanges([]);
+      
       for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/images`, fd); }
-      setLocalDocuments([]); setLocalImages([]); await fetchDocuments(); await fetchImages();
+      setLocalImages([]);
+      
+      await fetchDocuments(); await fetchImages();
+      window.dispatchEvent(new CustomEvent('refreshManufacturerDocuments'));
+      
       clearDraftStorage(uid);
       setIsDataSaved(true); setValidationErrors(new Set()); window.dispatchEvent(new CustomEvent('refreshManufacturerEvents'));
+      
+      setInitialState({ name, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone });
       
       const wasCreate = !isEdit;
       if (wasCreate && activeTabId) {
@@ -235,7 +332,6 @@ const ManufacturerCreatePage = () => {
   };
 
   const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
-  const canSave = !!name.trim();
 
   const openPopup = (type: string) => { setPopupType(type); setPopupOpen(true); };
   const handlePopupSelect = (id: string, nm: string) => { 
@@ -247,25 +343,29 @@ const ManufacturerCreatePage = () => {
 
   const buttonStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : isDisabled ? '#BCC8FF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden', opacity: isDisabled ? 0.5 : 1 });
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
-  const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const rightButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
+  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
   const isEventLogActive = activeTab === EVENT_LOG_TAB;
 
-  const commonProps: CommonManufacturerProps = { uid, name, isEdit, isSaving, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, images, setImages, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedDirection, setSelectedDirectionId, setDescription, setEmail, setWebsite, setPhone, setDocuments, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors };
+  const commonProps: CommonManufacturerProps = { uid, name, isEdit, isSaving, documents, nameFocused, code, isLoading, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localDocuments, setLocalDocuments, documentChanges, setDocumentChanges, images, setImages, localImages, setLocalImages, setName, setNameFocused, setSelectedCountry, setSelectedCountryId, setAddress, setSelectedDirection, setSelectedDirectionId, setDescription, setEmail, setWebsite, setPhone, setDocuments, handleDocumentUpload, handleDeleteDocument, openPopup, isDataSaved, validationErrors, setValidationErrors };
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
-      <h1 style={{ position: 'absolute', top: 35, left: 60, fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? name || 'Производитель' : 'Справочник: Производители (Создание)'}</h1>
-      <button onClick={() => setShowClosePopup(true)} style={{ position: 'absolute', top: 40, right: 40, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon7} alt="Закрыть" style={{ width: 18, height: 18 }} /></button>
+      <div style={{ position: 'absolute', top: 35, left: 60, display: 'flex', alignItems: 'center', gap: 25 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {isEdit ? `Справочник: Производители (${name || 'Производитель'})` : 'Справочник: Производители (Создание)'}
+        </h1>
+        <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
+      </div>
+      
       <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
-          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0)}>
+          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0 && !isEventLogActive)}>
             <span>Основное</span>
             <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3, ease: 'easeInOut' }} />
+              <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
             </button>
           </button>
           <AnimatePresence>
@@ -273,19 +373,18 @@ const ManufacturerCreatePage = () => {
               const tabIndex = i + 1;
               const isBlocked = !isDataSaved && tabIndex > 1;
               return (
-                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={buttonStyle(activeTab === tabIndex, isBlocked)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
+                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={buttonStyle(activeTab === tabIndex && !isEventLogActive, isBlocked)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
                   <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
                 </motion.button>
               );
             })}
           </AnimatePresence>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <button onClick={handleEventLogClick} style={{ ...rightButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
-            <img src={isEventLogActive ? IconOne1 : IconOne} alt="" style={{ width: 20, height: 20 }} />
-          </button>
-          <button onClick={() => setShowDevPopup(true)} style={{ ...rightButtonStyle, backgroundColor: showDevPopup ? '#666EFE' : '#FFFFFF' }}>
-            <img src={IconTwo} alt="" style={{ width: 20, height: 20 }} />
+        <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
+          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          <button onClick={handleEventLogClick} style={{ ...smallButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
+            <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: isEventLogActive ? 'brightness(0) invert(1)' : 'none' }} />
           </button>
         </div>
       </div>
@@ -293,10 +392,34 @@ const ManufacturerCreatePage = () => {
       {isEventLogActive ? <ManufacturerEventLogTab {...commonProps} /> : (
         <>
           {(() => { switch (activeTab) { case 0: return <ManufacturerMainTab {...commonProps} />; case 1: return <ManufacturerDocumentsTab {...commonProps} />; case 2: return <ManufacturerBrandsTab {...commonProps} />; case 3: return <ManufacturerAssortmentTab {...commonProps} />; case 4: return <ManufacturerSuppliersTab {...commonProps} />; case 5: return <ManufacturerIntegrationTab {...commonProps} />; default: return null; } })()}
-          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-            <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
-            <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
-            <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
+          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15 }}>
+            <button 
+              onClick={canSave ? handleSave : undefined} 
+              disabled={!canSave || isSaving} 
+              style={{ 
+                width: 154, 
+                height: 51, 
+                borderRadius: 10, 
+                border: '1px solid rgba(102, 110, 254, 0.15)', 
+                backgroundColor: '#FFFFFF', 
+                cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', 
+                display: 'flex', 
+                alignItems: 'center', 
+                paddingLeft: 20,
+                paddingRight: 20,
+                fontFamily: 'Inter, sans-serif', 
+                fontSize: 15, 
+                fontWeight: 600, 
+                color: '#2D4059', 
+                opacity: canSave ? 1 : 0.5,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21, flexShrink: 0 }} />
+              <span style={{ marginLeft: 17, flexShrink: 0 }}>Записать</span>
+            </button>
+            <button onClick={() => setShowClosePopup(true)} style={{ width: 116, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Закрыть</button>
           </div>
         </>
       )}
@@ -318,18 +441,8 @@ const ManufacturerCreatePage = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClosePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
-          </div>
-        </div>
-      )}
-
-      {showDevPopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDevPopup(false)}>
-          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>В разработке</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Этот функционал находится в разработке</p>
-            <button onClick={() => setShowDevPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Нет изменений для сохранения.'}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
           </div>
         </div>
       )}

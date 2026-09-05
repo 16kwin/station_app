@@ -1,4 +1,4 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (исправлен renderCellNode)
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (с пропом hideCheckbox)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,6 +40,8 @@ interface DataTableProps {
   rowContextMenuItems?: (uid: string, name: string) => ContextMenuItem[];
   requiredColumns?: Set<string>;
   onResetToBase?: () => void;
+  fitToWidth?: boolean;
+  hideCheckbox?: boolean;
 }
 
 const MAX_COLUMN_WIDTH = 1000;
@@ -86,6 +88,8 @@ const DataTable: React.FC<DataTableProps> = ({
   rowContextMenuItems,
   requiredColumns = new Set(),
   onResetToBase,
+  fitToWidth = false,
+  hideCheckbox = false,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
@@ -109,7 +113,10 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const tableHeight = rowHeight * visibleRows + headerHeight;
   
-  const effectiveFirstColLeft = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
+  // При hideCheckbox — первая колонка начинается сразу от иконки (или от левого края)
+  const effectiveFirstColLeft = hideCheckbox 
+    ? CHECKBOX_LEFT + (rowIcon ? ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT : 0)
+    : CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
   
   const baseAvailableWidth = tableWidth - effectiveFirstColLeft - LAST_COLUMN_RIGHT_PADDING;
 
@@ -238,10 +245,10 @@ const DataTable: React.FC<DataTableProps> = ({
     });
     
     const realContentWidth = currentLeft - RESIZER_WIDTH + LAST_COLUMN_RIGHT_PADDING;
-    const contentWidth = Math.max(tableWidth, realContentWidth);
+    const contentWidth = fitToWidth ? tableWidth : Math.max(tableWidth, realContentWidth);
     
     return { layout, contentWidth, widths, minWidths };
-  }, [columns, visibleKeys, tableWidth, effectiveFirstColLeft, customWidths, baseAvailableWidth, getMinWidth]);
+  }, [columns, visibleKeys, tableWidth, effectiveFirstColLeft, customWidths, baseAvailableWidth, getMinWidth, fitToWidth]);
 
   useEffect(() => {
     const visibleColumns = columns.filter(c => visibleKeys.includes(c.key));
@@ -319,7 +326,7 @@ const DataTable: React.FC<DataTableProps> = ({
       setCustomWidths(newWidths);
       if (onWidthsChange) onWidthsChange(newWidths);
     }
-  }, [columns, visibleKeys, baseAvailableWidth, getMinWidth, initialWidths, customWidths, onWidthsChange]);
+  }, [columns, visibleKeys, baseAvailableWidth, getMinWidth, initialWidths, customWidths, onWidthsChange, fitToWidth]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, columnKey: string) => {
     e.preventDefault();
@@ -472,18 +479,22 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.uid));
   const emptyRows = Math.max(0, visibleRows - data.length);
-  const rowIconLeft = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP;
+  const rowIconLeft = hideCheckbox 
+    ? CHECKBOX_LEFT 
+    : CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP;
 
   return (
     <div style={{ width: tableWidth, height: tableHeight, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', borderRadius: 10 }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: fitToWidth ? 'hidden' : 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', borderRadius: 10 }}>
         <div style={{ height: headerHeight, backgroundColor: headerColor, display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 2, minWidth: columnLayout.contentWidth, borderRadius: '10px 10px 0 0' }}>
-          <div style={{ position: 'absolute', left: CHECKBOX_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, width: CHECKBOX_BLOCK_WIDTH, height: '100%' }}>
-            <motion.div onClick={onSelectAll} style={{ width: 18, height: 18, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
-              whileTap={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
-              <img src={isAllSelected ? CheckboxIcon18OnWhite : CheckboxIcon18OffWhite} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 18, height: 18 }} />
-            </motion.div>
-          </div>
+          {!hideCheckbox && (
+            <div style={{ position: 'absolute', left: CHECKBOX_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, width: CHECKBOX_BLOCK_WIDTH, height: '100%' }}>
+              <motion.div onClick={onSelectAll} style={{ width: 18, height: 18, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                whileTap={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
+                <img src={isAllSelected ? CheckboxIcon18OnWhite : CheckboxIcon18OffWhite} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 18, height: 18 }} />
+              </motion.div>
+            </div>
+          )}
           
           {columnLayout.layout.map(col => (
             <div key={col.key} 
@@ -549,12 +560,14 @@ const DataTable: React.FC<DataTableProps> = ({
           return (
             <div key={item.uid} style={{ height: rowHeight, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? selectedColor : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: isFirst ? 'none' : `1px solid ${borderColor}`, minWidth: columnLayout.contentWidth, boxSizing: 'border-box', userSelect: 'none' }}
               onContextMenu={(e) => handleRowContextMenu(e, item.uid, item.name)} onDoubleClick={() => onDoubleClick(item.uid, item.name)} onClick={(e) => onRowClick(item.uid, e)}>
-              <div style={{ position: 'absolute', left: CHECKBOX_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', width: CHECKBOX_BLOCK_WIDTH, height: '100%' }}>
-                <motion.div onClick={(e) => onCheckboxClick(item.uid, e)} style={{ width: 18, height: 18, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
-                  whileTap={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
-                  <img src={isSelected ? CheckboxIcon18OnBlue : CheckboxIcon18OffBlack} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 18, height: 18 }} />
-                </motion.div>
-              </div>
+              {!hideCheckbox && (
+                <div style={{ position: 'absolute', left: CHECKBOX_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', width: CHECKBOX_BLOCK_WIDTH, height: '100%' }}>
+                  <motion.div onClick={(e) => onCheckboxClick(item.uid, e)} style={{ width: 18, height: 18, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                    whileTap={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
+                    <img src={isSelected ? CheckboxIcon18OnBlue : CheckboxIcon18OffBlack} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 18, height: 18 }} />
+                  </motion.div>
+                </div>
+              )}
               
               {rowIcon && (
                 <div style={{ position: 'absolute', left: rowIconLeft, display: 'flex', alignItems: 'center', justifyContent: 'center', width: ROW_ICON_BLOCK_WIDTH, height: '100%' }}>
@@ -566,13 +579,11 @@ const DataTable: React.FC<DataTableProps> = ({
                 const cellText = renderCell(col.key, item);
                 const noWrap = noWrapColumns.includes(col.key);
                 
-                // ИСПРАВЛЕНИЕ: проверяем результат renderCellNode
                 let cellContent: React.ReactNode = null;
                 if (renderCellNode) {
                   cellContent = renderCellNode(col.key, item);
                 }
                 
-                // Если renderCellNode вернул null/undefined — используем renderCell
                 if (cellContent === null || cellContent === undefined) {
                   cellContent = (
                     <span 
@@ -598,17 +609,19 @@ const DataTable: React.FC<DataTableProps> = ({
         {Array.from({ length: emptyRows }).map((_, i) => {
           const isFirstEmpty = data.length === 0 && i === 0;
           return (
-            <div key={`empty-${i}`} style={{ height: rowHeight, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: CHECKBOX_LEFT, borderTop: isFirstEmpty ? 'none' : `1px solid ${borderColor}`, minWidth: columnLayout.contentWidth }}>
-              <div style={{ width: CHECKBOX_BLOCK_WIDTH, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: 18, height: 18, position: 'relative', flexShrink: 0 }}><img src={CheckboxIcon18OffGray} alt="" style={{ width: 18, height: 18 }} /></div>
-              </div>
+            <div key={`empty-${i}`} style={{ height: rowHeight, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: hideCheckbox ? (rowIcon ? rowIconLeft + ROW_ICON_BLOCK_WIDTH : CHECKBOX_LEFT) : CHECKBOX_LEFT, borderTop: isFirstEmpty ? 'none' : `1px solid ${borderColor}`, minWidth: columnLayout.contentWidth }}>
+              {!hideCheckbox && (
+                <div style={{ width: CHECKBOX_BLOCK_WIDTH, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 18, height: 18, position: 'relative', flexShrink: 0 }}><img src={CheckboxIcon18OffGray} alt="" style={{ width: 18, height: 18 }} /></div>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
       {hasVerticalScroll && <div style={{ position: 'absolute', left: tableWidth + scrollOffset, top: headerHeight, height: tableHeight - headerHeight, width: 10, zIndex: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={tableHeight - headerHeight} /></div>}
-      {hasHorizontalScroll && <div style={{ position: 'absolute', top: tableHeight + scrollOffset, left: scrollOffset, width: tableWidth - scrollOffset * 2, height: 10, zIndex: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={tableWidth - scrollOffset * 2} /></div>}
+      {hasHorizontalScroll && !fitToWidth && <div style={{ position: 'absolute', top: tableHeight + scrollOffset, left: scrollOffset, width: tableWidth - scrollOffset * 2, height: 10, zIndex: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={tableWidth - scrollOffset * 2} /></div>}
 
       {createPortal(
         <AnimatePresence>

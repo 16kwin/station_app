@@ -1,3 +1,4 @@
+// RatingTab.tsx — ПОЛНЫЙ ФАЙЛ (FeedbackIcon, попап просмотра 666×463, автор из check_auth, space-between, fitToWidth)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -15,6 +16,10 @@ import CreateIcon14Black from '../../../assets/Icons/СreateIcons/СreateIcon14B
 import DeleteIcon18Black from '../../../assets/Icons/DeleteIcons/DeleteIcon18Black.svg';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
+import FeedbackIcon18Black from '../../../assets/Icons/FeedbackIcons/FeedbackIcon18Black.svg';
+import FeedbackIcon18Blue from '../../../assets/Icons/FeedbackIcons/FeedbackIcon18Blue.svg';
+import FeedbackIcon18Gray from '../../../assets/Icons/FeedbackIcons/FeedbackIcon18Gray.svg';
+import CloseIcon18Blue from '../../../assets/Icons/CloseIcons/CloseIcon18Blue.svg';
 import type { CommonProps } from './NomenclatureCreatePage';
 
 interface RatingItem {
@@ -64,9 +69,9 @@ const RatingTab: React.FC<CommonProps> = (props) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; rating: number; comment: string; author: string } | null>(null);
+  const [currentUserFullName, setCurrentUserFullName] = useState('');
 
   const [showAddPopup, setShowAddPopup] = useState(false);
-  const [newAuthor, setNewAuthor] = useState('');
   const [newComment, setNewComment] = useState('');
   const [newRating, setNewRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -74,7 +79,6 @@ const RatingTab: React.FC<CommonProps> = (props) => {
 
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editRatingUid, setEditRatingUid] = useState('');
-  const [editAuthor, setEditAuthor] = useState('');
   const [editComment, setEditComment] = useState('');
   const [editRating, setEditRating] = useState(0);
   const [editHoverRating, setEditHoverRating] = useState(0);
@@ -83,6 +87,8 @@ const RatingTab: React.FC<CommonProps> = (props) => {
   const [showViewPopup, setShowViewPopup] = useState(false);
   const [viewComment, setViewComment] = useState('');
   const [viewAuthor, setViewAuthor] = useState('');
+  const [viewDate, setViewDate] = useState('');
+  const [viewRating, setViewRating] = useState(0);
 
   const [expanded, setExpanded] = useState<'search' | 'sort' | null>(null);
   const [searchValue, setSearchValue] = useState('');
@@ -137,6 +143,63 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     return <div style={{ display: 'flex', gap: 8 }}>{stars}</div>;
   };
 
+  const StarRatingSmallView = ({ value, size = 18 }: { value: number; size?: number }) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      const fillPercent = Math.min(100, Math.max(0, (value - i + 1) * 100));
+      stars.push(
+        <div key={i} style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
+          <svg width={size} height={size} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0 }}>
+            <path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#DBDBDB" stroke="#DBDBDB" strokeWidth="1"/>
+          </svg>
+          {fillPercent > 0 && (
+            <svg width={size} height={size} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0, clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}>
+              <path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#666EFE" stroke="#666EFE" strokeWidth="1"/>
+            </svg>
+          )}
+        </div>
+      );
+    }
+    return <div style={{ display: 'flex', gap: 3 }}>{stars}</div>;
+  };
+
+  const StarRatingLarge = ({ value, hoverValue, onChange, onHover, onLeave }: { value: number; hoverValue: number; onChange: (v: number) => void; onHover: (v: number) => void; onLeave: () => void }) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      const active = (hoverValue || value) >= i;
+      const fillPercent = Math.min(100, Math.max(0, ((hoverValue || value) - i + 1) * 100));
+      stars.push(
+        <div key={i} 
+          onClick={() => onChange(i)} 
+          onMouseEnter={() => onHover(i)} 
+          onMouseLeave={onLeave}
+          style={{ width: 40, height: 40, position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+        >
+          <svg width={40} height={40} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0 }}>
+            <path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill={active ? '#666EFE' : '#E5E7EB'} stroke={active ? '#666EFE' : '#D1D5DB'} strokeWidth="1"/>
+          </svg>
+          {!active && fillPercent > 0 && (
+            <svg width={40} height={40} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0, clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}>
+              <path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#666EFE" stroke="#666EFE" strokeWidth="1"/>
+            </svg>
+          )}
+        </div>
+      );
+    }
+    return <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>{stars}</div>;
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await AxiosService.get(ConstantInfo.restApiCheckAuth);
+      const user = res.data;
+      if (user) {
+        const parts = [user.firstName, user.middleName].filter(Boolean);
+        setCurrentUserFullName(parts.join(' ') || user.username || '');
+      }
+    } catch (e) { console.error('Ошибка получения текущего пользователя:', e); }
+  };
+
   const fetchRatings = async () => {
     if (!uid) return;
     setIsLoading(true);
@@ -150,14 +213,25 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
-  useEffect(() => { if (uid && isEdit) fetchRatings(); }, [uid, isEdit]);
+  useEffect(() => { 
+    fetchCurrentUser();
+    if (uid && isEdit) fetchRatings(); 
+  }, [uid, isEdit]);
   useEffect(() => { if (!contextMenu) return; const h = () => setContextMenu(null); document.addEventListener('click', h); return () => document.removeEventListener('click', h); }, [contextMenu]);
   useEffect(() => { if (expanded === 'search' && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [expanded]);
   useEffect(() => { if (expanded === 'sort') { const idx = SORT_FIELDS.findIndex(f => f.key === sortColumn); if (idx >= 0) setSortIndicatorY(getIndicatorTarget(idx)); } }, [expanded]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
-    try { return new Date(dateStr).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+    try { 
+      const d = new Date(dateStr);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
+    }
     catch { return dateStr; }
   };
 
@@ -204,6 +278,16 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     if (!rating) return;
     setViewComment(rating.comment || '');
     setViewAuthor(rating.author || '');
+    setViewDate(formatDate(rating.createdAt));
+    setViewRating(rating.rating);
+    setShowViewPopup(true);
+  };
+
+  const handleOpenView = (item: any) => {
+    setViewComment(item.comment || '');
+    setViewAuthor(item.author || '');
+    setViewDate(formatDate(item.createdAt));
+    setViewRating(item.rating || 0);
     setShowViewPopup(true);
   };
 
@@ -220,13 +304,17 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     } catch (e) { console.error(e); }
   };
 
-  const handleAddClick = () => { setNewAuthor(''); setNewComment(''); setNewRating(0); setHoverRating(0); setShowAddPopup(true); };
+  const handleAddClick = () => { setNewComment(''); setNewRating(0); setHoverRating(0); setShowAddPopup(true); };
 
   const handleAddSubmit = async () => {
     if (!uid || newRating === 0) return;
     setIsAdding(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiNomenclatureRatings(uid), { rating: newRating, comment: newComment.trim(), author: newAuthor.trim() });
+      await AxiosService.post(ConstantInfo.restApiNomenclatureRatings(uid), { 
+        rating: newRating, 
+        comment: newComment.trim(), 
+        author: currentUserFullName || 'Система' 
+      });
       await fetchRatings();
       setShowAddPopup(false);
     } catch (e) { console.error(e); } finally { setIsAdding(false); }
@@ -237,7 +325,6 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     const rating = ratings.find(r => r.uid === contextMenu.uid);
     if (rating) {
       setEditRatingUid(rating.uid);
-      setEditAuthor(rating.author || '');
       setEditComment(rating.comment || '');
       setEditRating(rating.rating);
       setEditHoverRating(0);
@@ -251,7 +338,11 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     setIsEditing(true);
     try {
       await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteRating(editRatingUid));
-      await AxiosService.post(ConstantInfo.restApiNomenclatureRatings(uid), { rating: editRating, comment: editComment.trim(), author: editAuthor.trim() });
+      await AxiosService.post(ConstantInfo.restApiNomenclatureRatings(uid), { 
+        rating: editRating, 
+        comment: editComment.trim(), 
+        author: currentUserFullName || 'Система' 
+      });
       await fetchRatings();
       setShowEditPopup(false);
     } catch (e) { console.error(e); } finally { setIsEditing(false); }
@@ -291,10 +382,13 @@ const RatingTab: React.FC<CommonProps> = (props) => {
     if (key === 'comment') {
       return (
         <span 
-          style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#666EFE', textDecoration: 'underline', cursor: 'pointer' }}
-          onClick={(e) => { e.stopPropagation(); setViewComment(item.comment || ''); setViewAuthor(item.author || ''); setShowViewPopup(true); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+          onClick={(e) => { e.stopPropagation(); handleOpenView(item); }}
         >
-          Отзыв
+          <img src={FeedbackIcon18Black} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#666EFE', textDecoration: 'underline' }}>
+            Отзыв
+          </span>
         </span>
       );
     }
@@ -303,7 +397,6 @@ const RatingTab: React.FC<CommonProps> = (props) => {
 
   const isGrayColumn = (key: string): boolean => key !== 'comment';
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
 
   const sortListHeight = TOP_PAD + SORT_FIELDS.length * TEXT_HEIGHT + (SORT_FIELDS.length - 1) * ITEM_GAP + BOTTOM_PAD;
   const searchWidth = expanded === 'search' ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
@@ -425,6 +518,7 @@ const RatingTab: React.FC<CommonProps> = (props) => {
             firstColLeft={60}
             noWrapColumns={['createdAt', 'comment', 'rating', 'author']}
             highlightText={searchValue.trim() || undefined}
+            fitToWidth
           />
         </div>
       </div>
@@ -444,14 +538,38 @@ const RatingTab: React.FC<CommonProps> = (props) => {
 
       {showAddPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddPopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление отзыва</h3>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Автор</label><input type="text" value={newAuthor} onChange={e => setNewAuthor(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setShowAddPopup(false); }} placeholder="Введите имя автора" autoFocus style={inputStyle} /></div>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Текст отзыва</label><textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Введите текст отзыва" rows={3} style={{ width: '100%', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', padding: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', resize: 'none' }} /></div>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Рейтинг</label><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ display: 'flex', gap: 8 }}>{[1, 2, 3, 4, 5].map(i => { const fillPercent = Math.min(100, Math.max(0, ((hoverRating || newRating) - i + 1) * 100)); const isHovered = hoverRating >= i; return (<div key={i} onClick={() => setNewRating(i)} onMouseEnter={() => setHoverRating(i)} onMouseLeave={() => setHoverRating(0)} style={{ width: 32, height: 32, position: 'relative', cursor: 'pointer', flexShrink: 0 }}><svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0 }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill={isHovered ? '#666EFE' : '#E5E7EB'} stroke={isHovered ? '#666EFE' : '#D1D5DB'} strokeWidth="1"/></svg>{!isHovered && fillPercent > 0 && (<svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0, clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#666EFE" stroke="#666EFE" strokeWidth="1"/></svg>)}</div>); })}</div><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#2D4059' }}>{hoverRating || newRating || 0}</span></div></div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
-              <button onClick={handleAddSubmit} disabled={isAdding || newRating === 0} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newRating > 0 && !isAdding ? '#666EFE' : '#BCC8FF', cursor: newRating > 0 && !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>
+          <div style={{ width: 666, height: 463, backgroundColor: '#FFFFFF', borderRadius: 15, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 30 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: 21, fontWeight: 700, color: '#2D4059', margin: 0, textAlign: 'center', lineHeight: '25px' }}>Добавление отзыва</h3>
+            
+            <div style={{ width: 606, height: 150, borderRadius: 10, border: newComment ? '1px solid #666EFE' : '1px solid #A0A3BD', backgroundColor: '#FFFFFF', position: 'relative', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', top: 14, left: 13, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img src={newComment ? FeedbackIcon18Blue : FeedbackIcon18Gray} alt="" style={{ width: 18, height: 18 }} />
+              </div>
+              <textarea 
+                value={newComment} 
+                onChange={e => setNewComment(e.target.value)} 
+                placeholder="Введите текст отзыва" 
+                style={{ width: '100%', height: '100%', border: 'none', outline: 'none', padding: '14px 35px 14px 42px', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: newComment ? '#666EFE' : '#A0A3BD', backgroundColor: 'transparent', resize: 'none', borderRadius: 10, boxSizing: 'border-box' }} 
+              />
+              {newComment && (
+                <button onClick={() => setNewComment('')} style={{ position: 'absolute', top: 13, right: 13, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
+                  <img src={CloseIcon18Blue} alt="" style={{ width: 18, height: 18 }} />
+                </button>
+              )}
+            </div>
+            
+            <div>
+              <div style={{ height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', lineHeight: '18px' }}>Поставьте рейтинг</span>
+              </div>
+              <div style={{ marginTop: 20 }}>
+                <StarRatingLarge value={newRating} hoverValue={hoverRating} onChange={setNewRating} onHover={setHoverRating} onLeave={() => setHoverRating(0)} />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 30, paddingLeft: 172 }}>
+              <button onClick={handleAddSubmit} disabled={newRating === 0 || isAdding} style={{ width: 123, height: 44, borderRadius: 10, border: 'none', backgroundColor: newRating > 0 && !isAdding ? '#666EFE' : '#BCC8FF', cursor: newRating > 0 && !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>
+              <button onClick={() => setShowAddPopup(false)} style={{ width: 108, height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059' }}>Отмена</button>
             </div>
           </div>
         </div>
@@ -461,10 +579,9 @@ const RatingTab: React.FC<CommonProps> = (props) => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование отзыва</h3>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Автор</label><input type="text" value={editAuthor} onChange={e => setEditAuthor(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите имя автора" autoFocus style={inputStyle} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Текст отзыва</label><textarea value={editComment} onChange={e => setEditComment(e.target.value)} placeholder="Введите текст отзыва" rows={3} style={{ width: '100%', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', padding: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF', resize: 'none' }} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Рейтинг</label><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ display: 'flex', gap: 8 }}>{[1, 2, 3, 4, 5].map(i => { const fillPercent = Math.min(100, Math.max(0, ((editHoverRating || editRating) - i + 1) * 100)); const isHovered = editHoverRating >= i; return (<div key={i} onClick={() => setEditRating(i)} onMouseEnter={() => setEditHoverRating(i)} onMouseLeave={() => setEditHoverRating(0)} style={{ width: 32, height: 32, position: 'relative', cursor: 'pointer', flexShrink: 0 }}><svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0 }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill={isHovered ? '#666EFE' : '#E5E7EB'} stroke={isHovered ? '#666EFE' : '#D1D5DB'} strokeWidth="1"/></svg>{!isHovered && fillPercent > 0 && (<svg width={32} height={32} viewBox="0 0 20 20" fill="none" style={{ position: 'absolute', top: 0, left: 0, clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}><path d="M10 1L12.39 6.53L18.18 7.27L13.92 11.37L15.09 17.23L10 14.25L4.91 17.23L6.08 11.37L1.82 7.27L7.61 6.53L10 1Z" fill="#666EFE" stroke="#666EFE" strokeWidth="1"/></svg>)}</div>); })}</div><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#2D4059' }}>{editHoverRating || editRating || 0}</span></div></div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditSubmit} disabled={isEditing || editRating === 0} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editRating > 0 && !isEditing ? '#666EFE' : '#BCC8FF', cursor: editRating > 0 && !isEditing ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isEditing ? 'Сохранение...' : 'Сохранить'}</button>
             </div>
@@ -474,11 +591,42 @@ const RatingTab: React.FC<CommonProps> = (props) => {
 
       {showViewPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowViewPopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Отзыв</h3>
-            {viewAuthor && (<div><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>Автор: </span><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059' }}>{viewAuthor}</span></div>)}
-            <div><p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', margin: 0, lineHeight: '1.5' }}>{viewComment || 'Без текста'}</p></div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={() => setShowViewPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button></div>
+          <div style={{ width: 666, height: 463, backgroundColor: '#FFFFFF', borderRadius: 15, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: 21, fontWeight: 700, color: '#2D4059', margin: 0, textAlign: 'center', lineHeight: '25px', paddingTop: 30 }}>Просмотр отзыва</h3>
+            
+            <div style={{ paddingLeft: 35, paddingTop: 30 }}>
+              <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: '18px' }}>Дата создания:</span>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>{viewDate}</span>
+              </div>
+              
+              <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 8, marginTop: 20 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: '18px' }}>Автор:</span>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>{viewAuthor}</span>
+              </div>
+              
+              <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 8, marginTop: 20 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: '18px' }}>Рейтинг:</span>
+                <StarRatingSmallView value={viewRating} size={18} />
+              </div>
+              
+              <div style={{ height: 18, display: 'flex', alignItems: 'center', marginTop: 20 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: '18px' }}>Отзыв:</span>
+              </div>
+              
+              <div style={{ width: 601, height: 135, borderRadius: 10, border: '1px solid #666EFE', backgroundColor: '#FFFFFF', position: 'relative', marginTop: 11 }}>
+                <div style={{ position: 'absolute', top: 14, left: 13, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={FeedbackIcon18Blue} alt="" style={{ width: 18, height: 18 }} />
+                </div>
+                <div style={{ width: '100%', height: '100%', padding: '14px 35px 14px 42px', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE', overflowY: 'auto', boxSizing: 'border-box', wordBreak: 'break-word' }}>
+                  {viewComment || 'Без текста'}
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 30 }}>
+                <button onClick={() => setShowViewPopup(false)} style={{ width: 101, height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Ок</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -488,7 +636,7 @@ const RatingTab: React.FC<CommonProps> = (props) => {
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные отзывы?</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>

@@ -1,4 +1,4 @@
-// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлен initialState)
+// SupplierCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (с статус-иконками + восстановление черновика + правильный initialState)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -370,16 +370,37 @@ const SupplierCreatePage = () => {
     }
     setLocalDocuments(restoredDocuments);
     
-    if (draft.documentChanges) {
-      setDocumentChanges(draft.documentChanges);
-    }
-    if (draft.localRatings) {
-      setLocalRatings(draft.localRatings);
-    }
-    if (draft.ratingChanges) {
-      setRatingChanges(draft.ratingChanges);
-    }
+    if (draft.documentChanges) setDocumentChanges(draft.documentChanges);
+    if (draft.localRatings) setLocalRatings(draft.localRatings);
+    if (draft.ratingChanges) setRatingChanges(draft.ratingChanges);
   }, [uid]);
+
+  const applyDraftData = useCallback((draft: DraftData) => {
+    setName(draft.name);
+    setCode(draft.code);
+    setSelectedCountry(draft.selectedCountry);
+    setSelectedCountryId(draft.selectedCountryId);
+    setAddress(draft.address);
+    setSelectedShortDescription(draft.selectedShortDescription);
+    setSelectedShortDescriptionId(draft.selectedShortDescriptionId);
+    setDescription(draft.description);
+    setEmail(draft.email);
+    setWebsite(draft.website);
+    setPhone(draft.phone);
+    setInn(draft.inn);
+    setOgrn(draft.ogrn);
+    setKpp(draft.kpp);
+    setContactPerson(draft.contactPerson);
+    setContactPosition(draft.contactPosition);
+    setContactPhone(draft.contactPhone);
+    setDirector(draft.director);
+    setDirectorPosition(draft.directorPosition);
+    setBankName(draft.bankName);
+    setBik(draft.bik);
+    setCorrespondentAccount(draft.correspondentAccount);
+    setSettlementAccount(draft.settlementAccount);
+    restoreLocalFiles(draft);
+  }, [restoreLocalFiles]);
 
   useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
 
@@ -413,15 +434,14 @@ const SupplierCreatePage = () => {
         settlementAccount: d.settlementAccount || '',
       };
       
-      // Устанавливаем все state из loadedState
-      setName(loadedState.name); setCode(d.code); 
+      setName(loadedState.name); setCode(d.code);
       setSelectedCountryId(loadedState.selectedCountryId); setSelectedCountry(loadedState.selectedCountry);
-      setAddress(loadedState.address); 
+      setAddress(loadedState.address);
       setSelectedShortDescriptionId(loadedState.selectedShortDescriptionId); setSelectedShortDescription(loadedState.selectedShortDescription);
-      setDescription(loadedState.description); setEmail(loadedState.email); setWebsite(loadedState.website); setPhone(loadedState.phone); 
-      setInn(loadedState.inn); setOgrn(loadedState.ogrn); setKpp(loadedState.kpp); 
-      setContactPerson(loadedState.contactPerson); setContactPosition(loadedState.contactPosition); setContactPhone(loadedState.contactPhone); 
-      setDirector(loadedState.director); setDirectorPosition(loadedState.directorPosition); 
+      setDescription(loadedState.description); setEmail(loadedState.email); setWebsite(loadedState.website); setPhone(loadedState.phone);
+      setInn(loadedState.inn); setOgrn(loadedState.ogrn); setKpp(loadedState.kpp);
+      setContactPerson(loadedState.contactPerson); setContactPosition(loadedState.contactPosition); setContactPhone(loadedState.contactPhone);
+      setDirector(loadedState.director); setDirectorPosition(loadedState.directorPosition);
       setBankName(loadedState.bankName); setBik(loadedState.bik); setCorrespondentAccount(loadedState.correspondentAccount); setSettlementAccount(loadedState.settlementAccount);
       
       return loadedState;
@@ -437,37 +457,43 @@ const SupplierCreatePage = () => {
     if (isEditMode) {
       setIsDataSaved(true);
       loadSupplierData(uid).then((loadedState) => {
-        setInitialState(loadedState);
+        const draft = loadDraftFromStorage(uid);
+        if (draft && draft.uid === uid && draft.isEdit) {
+          applyDraftData(draft);
+          setInitialState({
+            name: draft.name,
+            selectedCountry: draft.selectedCountry,
+            selectedCountryId: draft.selectedCountryId,
+            address: draft.address,
+            selectedShortDescription: draft.selectedShortDescription,
+            selectedShortDescriptionId: draft.selectedShortDescriptionId,
+            description: draft.description,
+            email: draft.email,
+            website: draft.website,
+            phone: draft.phone,
+            inn: draft.inn,
+            ogrn: draft.ogrn,
+            kpp: draft.kpp,
+            contactPerson: draft.contactPerson,
+            contactPosition: draft.contactPosition,
+            contactPhone: draft.contactPhone,
+            director: draft.director,
+            directorPosition: draft.directorPosition,
+            bankName: draft.bankName,
+            bik: draft.bik,
+            correspondentAccount: draft.correspondentAccount,
+            settlementAccount: draft.settlementAccount,
+          });
+        } else {
+          setInitialState(loadedState);
+        }
+        setIsDataLoaded(true);
       });
       fetchImages(); fetchDocuments(); fetchAverageRating();
-      setIsDataLoaded(true);
     } else {
       const draft = loadDraftFromStorage(uid);
       if (draft && draft.uid === uid) {
-        setName(draft.name);
-        setCode(draft.code);
-        setSelectedCountry(draft.selectedCountry);
-        setSelectedCountryId(draft.selectedCountryId);
-        setAddress(draft.address);
-        setSelectedShortDescription(draft.selectedShortDescription);
-        setSelectedShortDescriptionId(draft.selectedShortDescriptionId);
-        setDescription(draft.description);
-        setEmail(draft.email);
-        setWebsite(draft.website);
-        setPhone(draft.phone);
-        setInn(draft.inn);
-        setOgrn(draft.ogrn);
-        setKpp(draft.kpp);
-        setContactPerson(draft.contactPerson);
-        setContactPosition(draft.contactPosition);
-        setContactPhone(draft.contactPhone);
-        setDirector(draft.director);
-        setDirectorPosition(draft.directorPosition);
-        setBankName(draft.bankName);
-        setBik(draft.bik);
-        setCorrespondentAccount(draft.correspondentAccount);
-        setSettlementAccount(draft.settlementAccount);
-        restoreLocalFiles(draft);
+        applyDraftData(draft);
         setIsDataSaved(false);
         setIsDataLoaded(true);
       } else {
@@ -522,7 +548,6 @@ const SupplierCreatePage = () => {
 
   const canSave = !!name.trim() && isDirty;
 
-  // Определение статус-иконки
   const getStatusIcon = (): string => {
     if (!isDataSaved) return StatusIcon93Red;
     if (isDirty) return StatusIcon107Orange;
@@ -586,7 +611,6 @@ const SupplierCreatePage = () => {
       }
       setDocumentChanges([]);
       
-      // Рейтинги
       for (const r of localRatings) {
         await AxiosService.post(ConstantInfo.restApiSupplierRatings(uid), { rating: r.rating, comment: r.comment });
       }
