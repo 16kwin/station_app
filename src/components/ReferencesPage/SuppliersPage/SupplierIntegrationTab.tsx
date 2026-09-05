@@ -360,26 +360,27 @@ const SupplierIntegrationTab: React.FC<CommonSupplierProps> = (props) => {
         </motion.div>
       </div>
       <div style={{ position: 'absolute', top: 52, left: 0 }}>
-        <DataTable
-          columns={INTEGRATION_COLUMNS}
-          visibleKeys={['createdAt', 'event', 'exchangeType', 'direction', 'protocol', 'targetSystem']}
-          data={filteredIntegrations}
-          selectedIds={selectedIds}
-          onCheckboxClick={handleCheckboxClick}
-          onSelectAll={handleSelectAll}
-          onRowClick={handleRowClick}
-          onContextMenu={handleContextMenu}
-          onDoubleClick={handleDoubleClick}
-          renderCell={renderCell}
-          isGrayColumn={isGrayColumn}
-          tableWidth={1740}
-          visibleRows={8}
-          rowHeight={58}
-          headerHeight={58}
-          firstColLeft={60}
-          noWrapColumns={['createdAt', 'event', 'exchangeType', 'direction', 'protocol', 'targetSystem']}
-          highlightText={searchValue.trim() || undefined}
-        />
+<DataTable
+  columns={INTEGRATION_COLUMNS}
+  visibleKeys={['createdAt', 'event', 'exchangeType', 'direction', 'protocol', 'targetSystem']}
+  data={filteredIntegrations}
+  selectedIds={selectedIds}
+  onCheckboxClick={handleCheckboxClick}
+  onSelectAll={handleSelectAll}
+  onRowClick={handleRowClick}
+  onContextMenu={handleContextMenu}
+  onDoubleClick={handleDoubleClick}
+  renderCell={renderCell}
+  isGrayColumn={isGrayColumn}
+  tableWidth={1740}
+  visibleRows={8}
+  rowHeight={58}
+  headerHeight={58}
+  firstColLeft={60}
+  noWrapColumns={['createdAt', 'event', 'exchangeType', 'direction', 'protocol', 'targetSystem']}
+  highlightText={searchValue.trim() || undefined}
+  fitToWidth
+/>
       </div>
       
       {contextMenu && (

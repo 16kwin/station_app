@@ -1,4 +1,4 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (попап не слетает через sessionStorage)
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (isDirty учитывает характеристики)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -17,12 +17,15 @@ import AnalogsTab from './AnalogsTab';
 import RatingTab from './RatingTab';
 import IntegrationTab from './IntegrationTab';
 import EventLogTab from './EventLogTab';
-import Icon7 from '../../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
-import IconOne from '../../../assets/References/NomenclatureCreatePage/IconOne.svg';
-import IconOne1 from '../../../assets/References/NomenclatureCreatePage/IconOne1.svg';
-import IconTwo from '../../../assets/References/NomenclatureCreatePage/IconTwo.svg';
+import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
+import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIcon14Black.svg';
+import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
+import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
+import StatusIcon93Red from '../../../assets/Icons/StatusIcons/StatusIcon93Red.svg';
+import StatusIcon104Blue from '../../../assets/Icons/StatusIcons/StatusIcon104Blue.svg';
+import StatusIcon107Orange from '../../../assets/Icons/StatusIcons/StatusIcon107Orange.svg';
 
 export interface Folder { id: number; name: string; isOpen: boolean; items: FolderItem[]; }
 export interface FolderItem { id: number; characteristic?: string; designation?: string; unit?: string; value?: string; name?: string; status?: string; date?: string; }
@@ -126,17 +129,6 @@ const getFileFromIndexedDB = async (key: string): Promise<File | null> => {
     const request = store.get(key);
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
-  });
-};
-
-const deleteFileFromIndexedDB = async (key: string): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.delete(key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
   });
 };
 
@@ -259,6 +251,7 @@ const NomenclatureCreatePage = () => {
   const [selectedModel, setSelectedModel] = useState(''); const [selectedModelId, setSelectedModelId] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(''); const [selectedCountryId, setSelectedCountryId] = useState('');
   const [localCharacteristics, setLocalCharacteristics] = useState<LocalCharacteristic[]>([]);
+  const [initialCharacteristics, setInitialCharacteristics] = useState<LocalCharacteristic[]>([]);
   const [typeAttributesMap, setTypeAttributesMap] = useState<Map<string, string>>(new Map());
   const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
   const [localSupplies, setLocalSupplies] = useState<LocalSupply[]>([]);
@@ -277,7 +270,6 @@ const NomenclatureCreatePage = () => {
   const [popupType, setPopupType] = useState<PopupType>('catalog'); 
   const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
   const [showClosePopup, setShowClosePopup] = useState(false);
-  const [showDevPopup, setShowDevPopup] = useState(false);
   const [images, setImages] = useState<ImageItem[]>([]); const [selectedImageIndex, setSelectedImageIndex] = useState(0); const [isUploading, setIsUploading] = useState(false); const [fullscreenImage, setFullscreenImage] = useState(false);
   const [blueprints, setBlueprints] = useState<ImageItem[]>([]); const [selectedBlueprintIndex, setSelectedBlueprintIndex] = useState(0); const [isUploadingBlueprint, setIsUploadingBlueprint] = useState(false); const [fullscreenBlueprint, setFullscreenBlueprint] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -288,6 +280,21 @@ const NomenclatureCreatePage = () => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
   const [showBlockedTabWarning, setShowBlockedTabWarning] = useState(false);
+  
+  const [initialState, setInitialState] = useState<{
+    name: string; article: string; description: string;
+    selectedCatalog: string; selectedCatalogId: string;
+    selectedAccountingGroup: string; selectedAccountingGroupId: string;
+    selectedNomenclatureGroup: string; selectedNomenclatureGroupId: string;
+    selectedNomenclatureType: string; selectedNomenclatureTypeId: string;
+    selectedUnit: string; selectedUnitId: string;
+    selectedManufacturer: string; selectedManufacturerId: string;
+    selectedBrand: string; selectedBrandId: string;
+    selectedModel: string; selectedModelId: string;
+    selectedCountry: string; selectedCountryId: string;
+    usage: boolean; wasteMaterial: boolean; recycleMaterial: boolean;
+  } | null>(null);
+  const [initialImagesCount, setInitialImagesCount] = useState(0);
   
   const hasInitializedChars = useRef(false);
 
@@ -313,24 +320,6 @@ const NomenclatureCreatePage = () => {
     for (const bp of localBlueprints) {
       const key = `${uid}_bp_${bp.url}`;
       await saveFileToIndexedDB(key, bp.file);
-    }
-    for (const bc of localBarcodes) {
-      if (bc.file) {
-        const key = `${uid}_barcode_${bc.codeValue}`;
-        await saveFileToIndexedDB(key, bc.file);
-      }
-    }
-    for (const sku of localSkus) {
-      if (sku.file) {
-        const key = `${uid}_sku_${sku.codeValue}`;
-        await saveFileToIndexedDB(key, sku.file);
-      }
-    }
-    for (const qr of localQrCodes) {
-      if (qr.file) {
-        const key = `${uid}_qr_${qr.codeValue}`;
-        await saveFileToIndexedDB(key, qr.file);
-      }
     }
     for (const doc of localDocuments) {
       const key = `${uid}_doc_${doc.localId}`;
@@ -374,19 +363,19 @@ const NomenclatureCreatePage = () => {
       localImagesMeta: localImages.map(img => ({ key: `${uid}_img_${img.url}`, fileName: img.file.name })),
       localBlueprintsMeta: localBlueprints.map(bp => ({ key: `${uid}_bp_${bp.url}`, fileName: bp.file.name })),
       localBarcodesMeta: localBarcodes.map(bc => ({ 
-        key: bc.file ? `${uid}_barcode_${bc.codeValue}` : '', 
+        key: '', 
         codeType: bc.codeType, codeValue: bc.codeValue, codeKind: bc.codeKind, 
-        fileName: bc.file?.name || null 
+        fileName: null 
       })),
       localSkusMeta: localSkus.map(sku => ({ 
-        key: sku.file ? `${uid}_sku_${sku.codeValue}` : '', 
+        key: '', 
         codeType: sku.codeType, codeValue: sku.codeValue, codeKind: sku.codeKind, 
-        fileName: sku.file?.name || null 
+        fileName: null 
       })),
       localQrCodesMeta: localQrCodes.map(qr => ({ 
-        key: qr.file ? `${uid}_qr_${qr.codeValue}` : '', 
+        key: '', 
         codeType: qr.codeType, codeValue: qr.codeValue, codeKind: qr.codeKind, 
-        fileName: qr.file?.name || null 
+        fileName: null 
       })),
       localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
       localSuppliesMeta: localSupplies.map(sup => ({ 
@@ -445,52 +434,31 @@ const NomenclatureCreatePage = () => {
     }
     setLocalBlueprints(restoredBlueprints);
     
-    const restoredBarcodes: LocalCode[] = [];
-    for (const bcMeta of (draft.localBarcodesMeta || [])) {
-      let file: File | null = null;
-      if (bcMeta.key) {
-        file = await getFileFromIndexedDB(bcMeta.key);
-      }
-      restoredBarcodes.push({
-        codeType: bcMeta.codeType,
-        codeValue: bcMeta.codeValue,
-        codeKind: bcMeta.codeKind,
-        file,
-        preview: file ? URL.createObjectURL(file) : null,
-      });
-    }
+    const restoredBarcodes: LocalCode[] = (draft.localBarcodesMeta || []).map(bcMeta => ({
+      codeType: bcMeta.codeType,
+      codeValue: bcMeta.codeValue,
+      codeKind: bcMeta.codeKind,
+      file: null,
+      preview: null,
+    }));
     setLocalBarcodes(restoredBarcodes);
     
-    const restoredSkus: LocalCode[] = [];
-    for (const skuMeta of (draft.localSkusMeta || [])) {
-      let file: File | null = null;
-      if (skuMeta.key) {
-        file = await getFileFromIndexedDB(skuMeta.key);
-      }
-      restoredSkus.push({
-        codeType: skuMeta.codeType,
-        codeValue: skuMeta.codeValue,
-        codeKind: skuMeta.codeKind,
-        file,
-        preview: file ? URL.createObjectURL(file) : null,
-      });
-    }
+    const restoredSkus: LocalCode[] = (draft.localSkusMeta || []).map(skuMeta => ({
+      codeType: skuMeta.codeType,
+      codeValue: skuMeta.codeValue,
+      codeKind: skuMeta.codeKind,
+      file: null,
+      preview: null,
+    }));
     setLocalSkus(restoredSkus);
     
-    const restoredQrCodes: LocalCode[] = [];
-    for (const qrMeta of (draft.localQrCodesMeta || [])) {
-      let file: File | null = null;
-      if (qrMeta.key) {
-        file = await getFileFromIndexedDB(qrMeta.key);
-      }
-      restoredQrCodes.push({
-        codeType: qrMeta.codeType,
-        codeValue: qrMeta.codeValue,
-        codeKind: qrMeta.codeKind,
-        file,
-        preview: file ? URL.createObjectURL(file) : null,
-      });
-    }
+    const restoredQrCodes: LocalCode[] = (draft.localQrCodesMeta || []).map(qrMeta => ({
+      codeType: qrMeta.codeType,
+      codeValue: qrMeta.codeValue,
+      codeKind: qrMeta.codeKind,
+      file: null,
+      preview: null,
+    }));
     setLocalQrCodes(restoredQrCodes);
     
     const restoredDocuments: LocalDocument[] = [];
@@ -541,11 +509,13 @@ const NomenclatureCreatePage = () => {
     try { 
       const res = await AxiosService.get(ConstantInfo.restApiNomenclatureCharacteristics(uid));
       const serverChars = res.data || [];
-      setLocalCharacteristics(serverChars.map((c: any) => ({
+      const mapped = serverChars.map((c: any) => ({
         localId: generateLocalId(), uid: c.uid, attributeTypeUid: c.attributeTypeUid, attributeName: c.attributeName,
         customName: c.customName, value: c.value || '', measureUid: c.measureUid, measureName: c.measureName,
         isCustom: c.isCustom, isRequired: c.attributeName && REQUIRED_ATTRIBUTES.includes(c.attributeName),
-      })));
+      }));
+      setLocalCharacteristics(mapped);
+      setInitialCharacteristics(JSON.parse(JSON.stringify(mapped)));
     } catch (e) { console.error(e); } 
   };
 
@@ -599,6 +569,33 @@ const NomenclatureCreatePage = () => {
           setRecycleMaterial(draft.recycleMaterial);
           setLocalCharacteristics(draft.localCharacteristics || []);
           await restoreLocalFiles(draft);
+          setInitialState({
+            name: draft.name, article: draft.article, description: draft.description,
+            selectedCatalog: draft.selectedCatalog, selectedCatalogId: draft.selectedCatalogId,
+            selectedAccountingGroup: draft.selectedAccountingGroup, selectedAccountingGroupId: draft.selectedAccountingGroupId,
+            selectedNomenclatureGroup: draft.selectedNomenclatureGroup, selectedNomenclatureGroupId: draft.selectedNomenclatureGroupId,
+            selectedNomenclatureType: draft.selectedNomenclatureType, selectedNomenclatureTypeId: draft.selectedNomenclatureTypeId,
+            selectedUnit: draft.selectedUnit, selectedUnitId: draft.selectedUnitId,
+            selectedManufacturer: draft.selectedManufacturer, selectedManufacturerId: draft.selectedManufacturerId,
+            selectedBrand: draft.selectedBrand, selectedBrandId: draft.selectedBrandId,
+            selectedModel: draft.selectedModel, selectedModelId: draft.selectedModelId,
+            selectedCountry: draft.selectedCountry, selectedCountryId: draft.selectedCountryId,
+            usage: draft.usage, wasteMaterial: draft.wasteMaterial, recycleMaterial: draft.recycleMaterial,
+          });
+        } else {
+          setInitialState({
+            name, article, description,
+            selectedCatalog, selectedCatalogId,
+            selectedAccountingGroup, selectedAccountingGroupId,
+            selectedNomenclatureGroup, selectedNomenclatureGroupId,
+            selectedNomenclatureType, selectedNomenclatureTypeId,
+            selectedUnit, selectedUnitId,
+            selectedManufacturer, selectedManufacturerId,
+            selectedBrand, selectedBrandId,
+            selectedModel, selectedModelId,
+            selectedCountry, selectedCountryId,
+            usage, wasteMaterial, recycleMaterial,
+          });
         }
         setIsDataLoaded(true);
       } else { 
@@ -661,7 +658,7 @@ const NomenclatureCreatePage = () => {
       hasInitializedChars.current = true;
       const initChars = async () => { 
         const attrMap = await fetchTypeAttributes(); 
-        setLocalCharacteristics(REQUIRED_ATTRIBUTES.map(name => ({ 
+        const defaultChars = REQUIRED_ATTRIBUTES.map(name => ({ 
           localId: generateLocalId(), 
           uid: null, 
           attributeTypeUid: attrMap.get(name) || null, 
@@ -672,7 +669,8 @@ const NomenclatureCreatePage = () => {
           measureName: null, 
           isCustom: false, 
           isRequired: true 
-        }))); 
+        }));
+        setLocalCharacteristics(defaultChars); 
       }; 
       initChars(); 
     } 
@@ -681,7 +679,7 @@ const NomenclatureCreatePage = () => {
   useEffect(() => { if (isFinishedProduct && activeTab >= tabs_list.length) { setActiveTab(0); } }, [isFinishedProduct]);
 
   const fetchSuppliers = async () => { try { setSuppliers((await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliers)).data || []); } catch (e) { console.error(e); } };
-  const fetchImages = async () => { if (!uid) return; try { setImages(((await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid))).data || []).map((img: any) => ({ uid: img.uid, url: img.url ? ConstantInfo.fileDir + img.url.replace(/^\//, '') : '', originalName: img.originalName || '' }))); } catch (e) { console.error(e); } };
+  const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid)); const imgs = (res.data || []).map((img: any) => ({ uid: img.uid, url: img.url ? ConstantInfo.fileDir + img.url.replace(/^\//, '') : '', originalName: img.originalName || '' })); setImages(imgs); setInitialImagesCount(imgs.length); } catch (e) { console.error(e); } };
   const fetchBlueprints = async () => { if (!uid) return; try { setBlueprints(((await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid))).data || []).map((bp: any) => ({ uid: bp.uid, url: bp.url ? ConstantInfo.fileDir + bp.url.replace(/^\//, '') : '', originalName: bp.originalName || '' }))); } catch (e) { console.error(e); } };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
@@ -751,6 +749,75 @@ const NomenclatureCreatePage = () => {
   const getMissingFields = (): Set<string> => { const m = new Set<string>(); if (!name.trim()) m.add('name'); if (!article.trim()) m.add('article'); if (!selectedCatalogId) m.add('catalog'); if (!selectedAccountingGroupId) m.add('accountingGroup'); if (!selectedNomenclatureGroupId) m.add('nomenclatureGroup'); if (!selectedNomenclatureTypeId) m.add('nomenclatureType'); if (!selectedUnitId) m.add('unit'); if (!selectedManufacturerId) m.add('manufacturer'); if (!selectedBrandId) m.add('brand'); if (!selectedModelId) m.add('model'); if (!selectedCountryId) m.add('country'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') m.add(`char_${n}`); }); return m; };
   const getMissingFieldLabels = (): string[] => { const l: string[] = []; if (!name.trim()) l.push('Наименование'); if (!article.trim()) l.push('Артикул'); if (!selectedCatalogId) l.push('Каталог'); if (!selectedAccountingGroupId) l.push('Группа учета'); if (!selectedNomenclatureGroupId) l.push('Группа номенклатуры'); if (!selectedNomenclatureTypeId) l.push('Вид номенклатуры'); if (!selectedUnitId) l.push('Единица измерения'); if (!selectedManufacturerId) l.push('Производитель'); if (!selectedBrandId) l.push('Бренд'); if (!selectedModelId) l.push('Модель'); if (!selectedCountryId) l.push('Страна происхождения'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') l.push(n); }); return l; };
 
+  const isDirty = React.useMemo(() => {
+    if (!isEdit) return true;
+    if (!initialState) return false;
+    
+    return (
+      name !== initialState.name ||
+      article !== initialState.article ||
+      description !== initialState.description ||
+      selectedCatalog !== initialState.selectedCatalog ||
+      selectedCatalogId !== initialState.selectedCatalogId ||
+      selectedAccountingGroup !== initialState.selectedAccountingGroup ||
+      selectedAccountingGroupId !== initialState.selectedAccountingGroupId ||
+      selectedNomenclatureGroup !== initialState.selectedNomenclatureGroup ||
+      selectedNomenclatureGroupId !== initialState.selectedNomenclatureGroupId ||
+      selectedNomenclatureType !== initialState.selectedNomenclatureType ||
+      selectedNomenclatureTypeId !== initialState.selectedNomenclatureTypeId ||
+      selectedUnit !== initialState.selectedUnit ||
+      selectedUnitId !== initialState.selectedUnitId ||
+      selectedManufacturer !== initialState.selectedManufacturer ||
+      selectedManufacturerId !== initialState.selectedManufacturerId ||
+      selectedBrand !== initialState.selectedBrand ||
+      selectedBrandId !== initialState.selectedBrandId ||
+      selectedModel !== initialState.selectedModel ||
+      selectedModelId !== initialState.selectedModelId ||
+      selectedCountry !== initialState.selectedCountry ||
+      selectedCountryId !== initialState.selectedCountryId ||
+      usage !== initialState.usage ||
+      wasteMaterial !== initialState.wasteMaterial ||
+      recycleMaterial !== initialState.recycleMaterial ||
+      JSON.stringify(localCharacteristics) !== JSON.stringify(initialCharacteristics) ||
+      localImages.length > 0 ||
+      localBlueprints.length > 0 ||
+      localDocuments.length > 0 ||
+      localSupplies.length > 0 ||
+      localBarcodes.length > 0 ||
+      localSkus.length > 0 ||
+      localQrCodes.length > 0 ||
+      images.length !== initialImagesCount
+    );
+  }, [
+    isEdit, initialState, name, article, description,
+    selectedCatalog, selectedCatalogId,
+    selectedAccountingGroup, selectedAccountingGroupId,
+    selectedNomenclatureGroup, selectedNomenclatureGroupId,
+    selectedNomenclatureType, selectedNomenclatureTypeId,
+    selectedUnit, selectedUnitId,
+    selectedManufacturer, selectedManufacturerId,
+    selectedBrand, selectedBrandId,
+    selectedModel, selectedModelId,
+    selectedCountry, selectedCountryId,
+    usage, wasteMaterial, recycleMaterial,
+    localCharacteristics, initialCharacteristics,
+    localImages, localBlueprints, localDocuments, localSupplies,
+    localBarcodes, localSkus, localQrCodes,
+    images.length, initialImagesCount
+  ]);
+
+  const getStatusIcon = (): string => {
+    if (!isDataSaved) return StatusIcon93Red;
+    if (isDirty) return StatusIcon107Orange;
+    return StatusIcon104Blue;
+  };
+
+  const getStatusIconWidth = (): number => {
+    if (!isDataSaved) return 93;
+    if (isDirty) return 107;
+    return 104;
+  };
+
   const handleSave = async () => { 
     if (!uid || !code) return; 
     setIsSaving(true); 
@@ -772,9 +839,30 @@ const NomenclatureCreatePage = () => {
       await saveCharacteristics(); 
       for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); } 
       for (const bp of localBlueprints) { const fd = new FormData(); fd.append('file', bp.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); } 
-      for (const bc of localBarcodes) { const fd = new FormData(); fd.append('codeType', bc.codeType); fd.append('codeValue', bc.codeValue); fd.append('codeKind', 'BARCODE'); fd.append('author', 'Оператор'); if (bc.file) fd.append('file', bc.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } 
-      for (const qr of localQrCodes) { const fd = new FormData(); fd.append('codeType', qr.codeType); fd.append('codeValue', qr.codeValue); fd.append('codeKind', 'QR'); fd.append('author', 'Оператор'); if (qr.file) fd.append('file', qr.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } 
-      for (const sku of localSkus) { const fd = new FormData(); fd.append('codeType', sku.codeType); fd.append('codeValue', sku.codeValue); fd.append('codeKind', 'SKU'); fd.append('author', 'Оператор'); if (sku.file) fd.append('file', sku.file); await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); } 
+      for (const bc of localBarcodes) { 
+        const fd = new FormData(); 
+        fd.append('codeType', bc.codeType); 
+        fd.append('codeValue', bc.codeValue); 
+        fd.append('codeKind', 'BARCODE'); 
+        fd.append('author', 'Оператор'); 
+        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); 
+      } 
+      for (const qr of localQrCodes) { 
+        const fd = new FormData(); 
+        fd.append('codeType', qr.codeType); 
+        fd.append('codeValue', qr.codeValue); 
+        fd.append('codeKind', 'QR'); 
+        fd.append('author', 'Оператор'); 
+        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); 
+      } 
+      for (const sku of localSkus) { 
+        const fd = new FormData(); 
+        fd.append('codeType', sku.codeType); 
+        fd.append('codeValue', sku.codeValue); 
+        fd.append('codeKind', 'SKU'); 
+        fd.append('author', 'Оператор'); 
+        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); 
+      } 
       for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); } 
       for (const supply of localSupplies) { const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supply.supplyDate) fd.append('supplyDate', supply.supplyDate + ':00'); if (supply.documentName.trim()) fd.append('documentName', supply.documentName.trim()); if (supply.file) fd.append('file', supply.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd); } 
       setLocalImages([]); 
@@ -796,6 +884,21 @@ const NomenclatureCreatePage = () => {
       setIsDataSaved(true); 
       setValidationErrors(new Set()); 
       window.dispatchEvent(new CustomEvent('refreshEvents')); 
+      
+      setInitialState({
+        name, article, description,
+        selectedCatalog, selectedCatalogId,
+        selectedAccountingGroup, selectedAccountingGroupId,
+        selectedNomenclatureGroup, selectedNomenclatureGroupId,
+        selectedNomenclatureType, selectedNomenclatureTypeId,
+        selectedUnit, selectedUnitId,
+        selectedManufacturer, selectedManufacturerId,
+        selectedBrand, selectedBrandId,
+        selectedModel, selectedModelId,
+        selectedCountry, selectedCountryId,
+        usage, wasteMaterial, recycleMaterial,
+      });
+      setInitialImagesCount(images.length);
       
       if (!isEdit) {
         setIsEdit(true);
@@ -855,7 +958,7 @@ const NomenclatureCreatePage = () => {
     if (uid) sessionStorage.removeItem(getPopupOpenKey());
   };
 
-  const canSave = getProgressStep() >= 2;
+  const canSave = getProgressStep() >= 2 && isDirty;
   const cef = ['unit', 'manufacturer', 'brand', 'model', 'country', 'char_Длина', 'char_Ширина', 'char_Высота', 'char_Масса'];
   const hasCharacteristicsErrors = cef.some(f => validationErrors.has(f));
 
@@ -872,11 +975,14 @@ const NomenclatureCreatePage = () => {
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
-      <h1 style={{ position: 'absolute', top: 35, left: 60, fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? name || 'Номенклатура' : 'Справочник: Номенклатура (Создание)'}</h1>
-      <button onClick={() => setShowClosePopup(true)} style={{ position: 'absolute', top: 40, right: 40, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}><img src={Icon7} alt="Закрыть" style={{ width: 18, height: 18 }} /></button>
+      <div style={{ position: 'absolute', top: 35, left: 60, display: 'flex', alignItems: 'center', gap: 25 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? `Справочник: Номенклатура (${name || 'Номенклатура'})` : 'Справочник: Номенклатура (Создание)'}</h1>
+        <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
+      </div>
+      
       <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
-          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0)}>
+          <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0 && !isEventLogActive)}>
             <span>Основное</span>
             <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3, ease: 'easeInOut' }} />
@@ -888,31 +994,18 @@ const NomenclatureCreatePage = () => {
               const isBlocked = !isDataSaved && tabIndex > 1;
               const isCharacteristicsTab = tabIndex === 1;
               return (
-                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={{ ...buttonStyle(activeTab === tabIndex, isBlocked), outline: isCharacteristicsTab && hasCharacteristicsErrors && validationErrors.size > 0 ? '2px solid #FF3052' : 'none', outlineOffset: -2 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
+                <motion.button key={tab} onClick={() => handleTabChange(tabIndex)} style={{ ...buttonStyle(activeTab === tabIndex && !isEventLogActive, isBlocked), outline: isCharacteristicsTab && hasCharacteristicsErrors && validationErrors.size > 0 ? '2px solid #FF3052' : 'none', outlineOffset: -2 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3, ease: 'easeInOut' }}>
                   <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
                 </motion.button>
               );
             })}
           </AnimatePresence>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <button 
-            onClick={handleEventLogClick} 
-            style={{ 
-              ...rightButtonStyle, 
-              backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF',
-            }}
-          >
-            <img src={isEventLogActive ? IconOne1 : IconOne} alt="" style={{ width: 20, height: 20 }} />
-          </button>
-          <button 
-            onClick={() => setShowDevPopup(true)} 
-            style={{ 
-              ...rightButtonStyle, 
-              backgroundColor: showDevPopup ? '#666EFE' : '#FFFFFF',
-            }}
-          >
-            <img src={IconTwo} alt="" style={{ width: 20, height: 20 }} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
+          <button style={rightButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={rightButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          <button onClick={handleEventLogClick} style={{ ...rightButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
+            <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: isEventLogActive ? 'brightness(0) invert(1)' : 'none' }} />
           </button>
         </div>
       </div>
@@ -924,10 +1017,34 @@ const NomenclatureCreatePage = () => {
             switch (activeTab) { case 0: return <MainTab {...commonProps} />; case 1: return <CharacteristicsTab {...commonProps} />; case 2: return <DocumentsTab {...commonProps} />; case 3: return <div style={{ position: 'absolute', top: 164, left: 30, right: 30, bottom: 111, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Остатки</span></div>; case 4: return <SuppliersTab {...commonProps} />; case 5: return <PriceHistoryTab {...commonProps} />; case 6: return <AnalogsTab {...commonProps} />; case 7: return <RatingTab {...commonProps} />; case 8: return <IntegrationTab {...commonProps} />; default: return null; }
           })()}
           <div style={{ position: 'absolute', bottom: 25, left: 45, display: 'flex', alignItems: 'flex-end' }}><ProgressBar currentStep={getProgressStep()} /></div>
-          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-            <button style={{ ...bottomButtonStyle, width: 234, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }}>Синхронизировать</button>
-            <button style={{ ...bottomButtonStyle, width: 121, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#FFFFFF', backgroundColor: canSave ? '#666EFE' : '#BCC8FF', border: 'none', opacity: isSaving ? 0.6 : 1, cursor: canSave && !isSaving ? 'pointer' : 'not-allowed' }} onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving}>{isSaving ? 'Сохранение...' : 'Записать'}</button>
-            <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
+          <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15 }}>
+            <button 
+              onClick={canSave ? handleSave : undefined} 
+              disabled={!canSave || isSaving} 
+              style={{ 
+                width: 154, 
+                height: 51, 
+                borderRadius: 10, 
+                border: '1px solid rgba(102, 110, 254, 0.15)', 
+                backgroundColor: '#FFFFFF', 
+                cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', 
+                display: 'flex', 
+                alignItems: 'center', 
+                paddingLeft: 20,
+                paddingRight: 20,
+                fontFamily: 'Inter, sans-serif', 
+                fontSize: 15, 
+                fontWeight: 600, 
+                color: '#2D4059', 
+                opacity: canSave ? 1 : 0.5,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21, flexShrink: 0 }} />
+              <span style={{ marginLeft: 17, flexShrink: 0 }}>Записать</span>
+            </button>
+            <button style={{ ...bottomButtonStyle, width: 116, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059' }} onClick={() => setShowClosePopup(true)}>Закрыть</button>
           </div>
         </>
       )}
@@ -955,18 +1072,8 @@ const NomenclatureCreatePage = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClosePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены. Сохранение недоступно.'}</p>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Нет изменений для сохранения.'}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}<button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button><button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>
-          </div>
-        </div>
-      )}
-
-      {showDevPopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDevPopup(false)}>
-          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>В разработке</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Этот функционал находится в разработке</p>
-            <button onClick={() => setShowDevPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть</button>
           </div>
         </div>
       )}

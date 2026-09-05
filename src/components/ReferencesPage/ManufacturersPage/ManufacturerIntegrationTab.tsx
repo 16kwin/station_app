@@ -1,3 +1,4 @@
+// ManufacturerIntegrationTab.tsx — ПОЛНЫЙ ФАЙЛ (fitToWidth + space-between + формат даты)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -139,7 +140,15 @@ const ManufacturerIntegrationTab: React.FC<CommonManufacturerProps> = (props) =>
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
-    try { return new Date(dateStr).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+    try { 
+      const d = new Date(dateStr);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
+    }
     catch { return dateStr; }
   };
 
@@ -363,6 +372,7 @@ const ManufacturerIntegrationTab: React.FC<CommonManufacturerProps> = (props) =>
           firstColLeft={60}
           noWrapColumns={['createdAt', 'event', 'exchangeType', 'direction', 'protocol', 'targetSystem']}
           highlightText={searchValue.trim() || undefined}
+          fitToWidth
         />
       </div>
       
@@ -387,7 +397,7 @@ const ManufacturerIntegrationTab: React.FC<CommonManufacturerProps> = (props) =>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Направление</label><select value={newDirection} onChange={e => setNewDirection(e.target.value)} style={selectStyle}>{DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Протокол</label><select value={newProtocol} onChange={e => setNewProtocol(e.target.value)} style={selectStyle}>{PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обмен с системой</label><select value={newTargetSystem} onChange={e => setNewTargetSystem(e.target.value)} style={selectStyle}>{TARGET_SYSTEMS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleAddSubmit} disabled={isAdding} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: !isAdding ? '#666EFE' : '#BCC8FF', cursor: !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>
             </div>
@@ -403,7 +413,7 @@ const ManufacturerIntegrationTab: React.FC<CommonManufacturerProps> = (props) =>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Направление</label><select value={editDirection} onChange={e => setEditDirection(e.target.value)} style={selectStyle}>{DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Протокол</label><select value={editProtocol} onChange={e => setEditProtocol(e.target.value)} style={selectStyle}>{PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обмен с системой</label><select value={editTargetSystem} onChange={e => setEditTargetSystem(e.target.value)} style={selectStyle}>{TARGET_SYSTEMS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditSubmit} disabled={isEditing} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: !isEditing ? '#666EFE' : '#BCC8FF', cursor: !isEditing ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isEditing ? 'Сохранение...' : 'Сохранить'}</button>
             </div>
@@ -416,7 +426,7 @@ const ManufacturerIntegrationTab: React.FC<CommonManufacturerProps> = (props) =>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные интеграции?</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>

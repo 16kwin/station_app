@@ -1,4 +1,4 @@
-// SupplierBrandsTab.tsx — ПОЛНЫЙ ФАЙЛ (с иконкой бренда)
+// SupplierBrandsTab.tsx — ПОЛНЫЙ ФАЙЛ (с hideCheckbox)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -249,6 +249,8 @@ const SupplierBrandsTab: React.FC<CommonSupplierProps> = (props) => {
           highlightText={searchValue.trim() || undefined}
           rowIcon={BrandIcon16Black}
           rowIconSize={16}
+          fitToWidth
+          hideCheckbox
         />
       </div>
     </div>

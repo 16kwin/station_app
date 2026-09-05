@@ -1,3 +1,4 @@
+// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (гиперссылка, скачивание, space-between, fitToWidth)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -13,6 +14,7 @@ import SortingIcon20BlueDown from '../../../assets/Icons/SortingIcons/SortingIco
 import SortingIcon20BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon20BlueUp.svg';
 import CreateIcon14Black from '../../../assets/Icons/СreateIcons/СreateIcon14Black.svg';
 import DeleteIcon18Black from '../../../assets/Icons/DeleteIcons/DeleteIcon18Black.svg';
+import DownloadIcon18Black from '../../../assets/Icons/DownloadIcons/DownloadIcon18Black.svg';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 import type { CommonProps, LocalDocument } from './NomenclatureCreatePage';
@@ -61,6 +63,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const fileLocalRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string; isLocal: boolean } | null>(null);
 
@@ -159,6 +162,67 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     return ConstantInfo.fileDir + url.replace(/^\//, '');
   };
 
+  const openFile = (doc: DocumentItem) => {
+    if (doc.url) {
+      const fullUrl = getFullUrl(doc.url);
+      window.open(fullUrl, '_blank');
+    } else {
+      const localDoc = localDocuments.find(d => d.localId === doc.uid);
+      if (localDoc) {
+        const blobUrl = URL.createObjectURL(localDoc.file);
+        window.open(blobUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      }
+    }
+  };
+
+  const downloadSingleFile = async (doc: DocumentItem) => {
+    if (doc.url) {
+      try {
+        const fullUrl = getFullUrl(doc.url);
+        const response = await fetch(fullUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = doc.originalName || doc.documentName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } catch (e) {
+        const fullUrl = getFullUrl(doc.url);
+        window.open(fullUrl, '_blank');
+      }
+    } else {
+      const localDoc = localDocuments.find(d => d.localId === doc.uid);
+      if (localDoc) {
+        const blobUrl = URL.createObjectURL(localDoc.file);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = localDoc.file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      }
+    }
+  };
+
+  const handleDownloadSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDownloading(true);
+    try {
+      const selectedDocs = allDocuments.filter(d => selectedIds.has(d.uid));
+      for (const doc of selectedDocs) {
+        await downloadSingleFile(doc);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    } catch (e) { console.error(e); } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleCheckboxClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
   const handleSelectAll = (e: React.MouseEvent) => { e.stopPropagation(); const all = filteredDocuments.length > 0 && filteredDocuments.every(d => selectedIds.has(d.uid)); all ? setSelectedIds(new Set()) : setSelectedIds(new Set(filteredDocuments.map(d => d.uid))); };
   const handleRowClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
@@ -174,31 +238,19 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const handleDoubleClick = (uid: string) => {
     const doc = allDocuments.find(x => x.uid === uid);
     if (!doc) return;
-    
-    if (doc.url) {
-      const fullUrl = getFullUrl(doc.url);
-      window.open(fullUrl, '_blank');
-      return;
-    }
-    
-    const localDoc = localDocuments.find(d => d.localId === uid);
-    if (localDoc) {
-      const blobUrl = URL.createObjectURL(localDoc.file);
-      window.open(blobUrl, '_blank');
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-    }
+    openFile(doc);
   };
 
   const handleDeleteSelected = () => { if (selectedIds.size === 0) return; setShowDeleteConfirm(true); };
 
   const confirmDelete = async () => {
     try {
-      for (const uid of selectedIds) {
-        const isLocal = localDocuments.some(d => d.localId === uid);
+      for (const docUid of selectedIds) {
+        const isLocal = localDocuments.some(d => d.localId === docUid);
         if (isLocal) {
-          setLocalDocuments((prev: LocalDocument[]) => prev.filter((d: LocalDocument) => d.localId !== uid));
+          setLocalDocuments((prev: LocalDocument[]) => prev.filter((d: LocalDocument) => d.localId !== docUid));
         } else {
-          await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(uid));
+          await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteDocument(docUid));
         }
       }
       setSelectedIds(new Set());
@@ -265,6 +317,15 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
     setShowEditPopup(false);
   };
 
+  const handleDownloadClick = () => {
+    if (!contextMenu) return;
+    const doc = allDocuments.find(d => d.uid === contextMenu.uid);
+    if (doc) {
+      downloadSingleFile(doc);
+    }
+    setContextMenu(null);
+  };
+
   const handleSortFieldClick = (field: SortField) => {
     if (sortColumn === field.key) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -285,6 +346,21 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
 
   const formatDate = (d: string) => { if (!d) return ''; try { return new Date(d).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return d; } };
   const renderCell = (key: string, item: any): string => { const v = item[key]; if (v === null || v === undefined) return '-'; if (key === 'createdAt') return formatDate(v); return String(v); };
+  
+  const renderCellNode = (key: string, item: any): React.ReactNode => {
+    if (key === 'originalName') {
+      return (
+        <span 
+          style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#666EFE', textDecoration: 'underline', cursor: 'pointer' }}
+          onClick={(e) => { e.stopPropagation(); openFile(item); }}
+        >
+          {item.originalName || '—'}
+        </span>
+      );
+    }
+    return null;
+  };
+  
   const isGrayColumn = (key: string): boolean => key !== 'documentName';
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
@@ -296,6 +372,8 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const createGroupX = searchWidth + sortWidth + BTN_GAP * 2;
   const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
   const tween = { type: 'tween' as const, duration: 0.2 };
+
+  const canDownloadSelected = selectedIds.size > 0 && !isDownloading;
 
   return (
     <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96 }}>
@@ -377,6 +455,13 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
         <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
           <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>
           <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5 }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button 
+            style={{ ...smallButtonStyle, opacity: canDownloadSelected ? 1 : 0.5, cursor: canDownloadSelected ? 'pointer' : 'not-allowed' }} 
+            onClick={canDownloadSelected ? handleDownloadSelected : undefined}
+            title="Скачать выбранные"
+          >
+            <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+          </button>
         </motion.div>
       </div>
       <div style={{ position: 'absolute', top: 52, left: 0 }}>
@@ -391,6 +476,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
           onContextMenu={handleContextMenu}
           onDoubleClick={handleDoubleClick}
           renderCell={renderCell}
+          renderCellNode={renderCellNode}
           isGrayColumn={isGrayColumn}
           tableWidth={1740}
           visibleRows={8}
@@ -399,11 +485,16 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
           firstColLeft={60}
           noWrapColumns={['documentName', 'originalName', 'createdAt']}
           highlightText={searchValue.trim() || undefined}
+          fitToWidth
         />
       </div>
       
       {contextMenu && (
         <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
+          <button onClick={handleDownloadClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+            <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+            Скачать
+          </button>
           <button onClick={handleEditClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
             <img src={ContextMenuOpenIcon16} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
             Редактировать
@@ -435,7 +526,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label>
               <input type="text" value={formDocName} onChange={e => setFormDocName(e.target.value)} placeholder="Введите название" style={inputStyle} />
             </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleAddSubmit} disabled={!selectedFile || !formDocName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: selectedFile && formDocName.trim() ? '#666EFE' : '#BCC8FF', cursor: selectedFile && formDocName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Добавить</button>
             </div>
@@ -451,7 +542,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label>
               <input type="text" value={editDocName} onChange={e => setEditDocName(e.target.value)} placeholder="Введите название" style={inputStyle} />
             </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditSubmit} disabled={!editDocName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editDocName.trim() ? '#666EFE' : '#BCC8FF', cursor: editDocName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
             </div>
@@ -464,7 +555,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные документы?</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>

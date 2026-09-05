@@ -1,3 +1,4 @@
+// ManufacturerSuppliersTab.tsx — ПОЛНЫЙ ФАЙЛ (fitToWidth)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -266,6 +267,7 @@ const ManufacturerSuppliersTab: React.FC<CommonManufacturerProps> = (props) => {
           firstColLeft={60}
           noWrapColumns={['name', 'email', 'phone']}
           highlightText={searchValue.trim() || undefined}
+          fitToWidth
         />
       </div>
     </div>

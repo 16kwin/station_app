@@ -1,3 +1,4 @@
+// ManufacturerBrandsTab.tsx — ПОЛНЫЙ ФАЙЛ (hideCheckbox + fitToWidth + BrandIcon)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -11,6 +12,7 @@ import SortingIcon19BlueDown from '../../../assets/Icons/SortingIcons/SortingIco
 import SortingIcon19BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon19BlueUp.svg';
 import SortingIcon20BlueDown from '../../../assets/Icons/SortingIcons/SortingIcon20BlueDown.svg';
 import SortingIcon20BlueUp from '../../../assets/Icons/SortingIcons/SortingIcon20BlueUp.svg';
+import BrandIcon16Black from '../../../assets/Icons/BrandIcons/BrandIcon16Black.svg';
 import type { CommonManufacturerProps } from './ManufacturerCreatePage';
 
 interface ManufacturerBrandItem {
@@ -247,6 +249,10 @@ const ManufacturerBrandsTab: React.FC<CommonManufacturerProps> = (props) => {
           firstColLeft={60}
           noWrapColumns={['name', 'description']}
           highlightText={searchValue.trim() || undefined}
+          rowIcon={BrandIcon16Black}
+          rowIconSize={16}
+          fitToWidth
+          hideCheckbox
         />
       </div>
     </div>

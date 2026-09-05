@@ -1,4 +1,4 @@
-// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (кнопка скачать после удаления, DownloadIcon18Black)
+// SupplierDocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (гиперссылка на файл + кнопки в попапе)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -170,7 +170,6 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     return ConstantInfo.fileDir + url.replace(/^\//, '');
   };
 
-  // Открытие файла (двойной клик)
   const openFile = (doc: DocumentItem) => {
     if (doc.url) {
       const fullUrl = getFullUrl(doc.url);
@@ -185,7 +184,6 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     }
   };
 
-  // Скачивание одного файла
   const downloadSingleFile = async (doc: DocumentItem) => {
     if (doc.url) {
       try {
@@ -219,7 +217,6 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
     }
   };
 
-  // Скачивание выделенных документов
   const handleDownloadSelected = async () => {
     if (selectedIds.size === 0) return;
     setIsDownloading(true);
@@ -354,6 +351,21 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
 
   const formatDate = (d: string) => { if (!d) return ''; try { return new Date(d).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return d; } };
   const renderCell = (key: string, item: any): string => { const v = item[key]; if (v === null || v === undefined) return '-'; if (key === 'createdAt') return formatDate(v); return String(v); };
+  
+  const renderCellNode = (key: string, item: any): React.ReactNode => {
+    if (key === 'originalName') {
+      return (
+        <span 
+          style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#666EFE', textDecoration: 'underline', cursor: 'pointer' }}
+          onClick={(e) => { e.stopPropagation(); openFile(item); }}
+        >
+          {item.originalName || '—'}
+        </span>
+      );
+    }
+    return null;
+  };
+  
   const isGrayColumn = (key: string): boolean => key !== 'documentName';
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
@@ -469,6 +481,7 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
           onContextMenu={handleContextMenu}
           onDoubleClick={handleDoubleClick}
           renderCell={renderCell}
+          renderCellNode={renderCellNode}
           isGrayColumn={isGrayColumn}
           tableWidth={1740}
           visibleRows={8}
@@ -479,6 +492,7 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
           rowIconSize={20}
           noWrapColumns={['documentName', 'originalName', 'createdAt']}
           highlightText={searchValue.trim() || undefined}
+          fitToWidth
         />
       </div>
       
@@ -519,7 +533,7 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label>
               <input type="text" value={formDocName} onChange={e => setFormDocName(e.target.value)} placeholder="Введите название" style={inputStyle} />
             </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleAddSubmit} disabled={!selectedFile || !formDocName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: selectedFile && formDocName.trim() ? '#666EFE' : '#BCC8FF', cursor: selectedFile && formDocName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Добавить</button>
             </div>
@@ -535,7 +549,7 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label>
               <input type="text" value={editDocName} onChange={e => setEditDocName(e.target.value)} placeholder="Введите название" style={inputStyle} />
             </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleEditSubmit} disabled={!editDocName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: editDocName.trim() ? '#666EFE' : '#BCC8FF', cursor: editDocName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
             </div>
@@ -548,7 +562,7 @@ const SupplierDocumentsTab: React.FC<CommonSupplierProps> = (props) => {
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные файлы?</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
             </div>

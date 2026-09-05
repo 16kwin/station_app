@@ -286,26 +286,27 @@ const SupplierAssortmentTab: React.FC<CommonSupplierProps> = (props) => {
         </motion.div>
       </div>
       <div style={{ position: 'absolute', top: 52, left: 0 }}>
-        <DataTable
-          columns={ASSORTMENT_COLUMNS}
-          visibleKeys={['code', 'name', 'article', 'typeMainName']}
-          data={filteredItems}
-          selectedIds={selectedIds}
-          onCheckboxClick={handleCheckboxClick}
-          onSelectAll={handleSelectAll}
-          onRowClick={handleRowClick}
-          onContextMenu={handleContextMenu}
-          onDoubleClick={handleDoubleClick}
-          renderCell={renderCell}
-          isGrayColumn={isGrayColumn}
-          tableWidth={1740}
-          visibleRows={8}
-          rowHeight={58}
-          headerHeight={58}
-          firstColLeft={60}
-          noWrapColumns={['code', 'name', 'article', 'typeMainName']}
-          highlightText={searchValue.trim() || undefined}
-        />
+ <DataTable
+  columns={ASSORTMENT_COLUMNS}
+  visibleKeys={['code', 'name', 'article', 'typeMainName']}
+  data={filteredItems}
+  selectedIds={selectedIds}
+  onCheckboxClick={handleCheckboxClick}
+  onSelectAll={handleSelectAll}
+  onRowClick={handleRowClick}
+  onContextMenu={handleContextMenu}
+  onDoubleClick={handleDoubleClick}
+  renderCell={renderCell}
+  isGrayColumn={isGrayColumn}
+  tableWidth={1740}
+  visibleRows={8}
+  rowHeight={58}
+  headerHeight={58}
+  firstColLeft={60}
+  noWrapColumns={['code', 'name', 'article', 'typeMainName']}
+  highlightText={searchValue.trim() || undefined}
+  fitToWidth
+/>
       </div>
       
       {contextMenu && (
