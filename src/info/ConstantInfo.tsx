@@ -505,6 +505,8 @@ const ConstantInfo = {
   restApiManufacturerGet: (uid: string) => `/api/manufacturers-crud/${uid}`,
   restApiManufacturerImages: (uid: string) => `/api/manufacturers-crud/${uid}/images`,
 restApiManufacturerDeleteImage: (imageUid: string) => `/api/manufacturers-crud/images/${imageUid}`,
+restApiNomenclatureGetCodeDefault: (userId: number, codeKind: string) => `/api/nomenclature/code-default?userId=${userId}&codeKind=${codeKind}`,
+restApiNomenclatureSaveCodeDefault: '/api/nomenclature/code-default',
 };
 
 export default ConstantInfo;

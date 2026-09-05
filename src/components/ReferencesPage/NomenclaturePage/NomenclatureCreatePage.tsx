@@ -1,6 +1,6 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (isDirty учитывает характеристики)
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлены ключи localStorage/IndexedDB для раздельных вкладок)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
@@ -132,7 +132,7 @@ const getFileFromIndexedDB = async (key: string): Promise<File | null> => {
   });
 };
 
-const clearAllFilesForDraft = async (uid: string): Promise<void> => {
+const clearAllFilesForDraft = async (uid: string, tabInstanceId: string): Promise<void> => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -141,7 +141,7 @@ const clearAllFilesForDraft = async (uid: string): Promise<void> => {
     request.onsuccess = () => {
       const cursor = request.result;
       if (cursor) {
-        if ((cursor.key as string).startsWith(`${uid}_`)) {
+        if ((cursor.key as string).startsWith(`${uid}_${tabInstanceId}_`)) {
           cursor.delete();
         }
         cursor.continue();
@@ -154,7 +154,7 @@ const clearAllFilesForDraft = async (uid: string): Promise<void> => {
 
 // ==================== localStorage для метаданных ====================
 
-const getDraftKey = (uid: string) => `nomenclature_draft_${uid}`;
+const getDraftKey = (uid: string, tabInstanceId: string) => `nomenclature_draft_${uid}_${tabInstanceId}`;
 
 interface DraftData {
   uid: string;
@@ -195,39 +195,48 @@ interface DraftData {
   timestamp: number;
 }
 
-const saveDraftToStorage = (uid: string, data: DraftData) => {
+const saveDraftToStorage = (uid: string, tabInstanceId: string, data: DraftData) => {
   try {
-    localStorage.setItem(getDraftKey(uid), JSON.stringify(data));
+    localStorage.setItem(getDraftKey(uid, tabInstanceId), JSON.stringify(data));
   } catch (e) {
     console.error('Ошибка сохранения черновика:', e);
   }
 };
 
-const loadDraftFromStorage = (uid: string): DraftData | null => {
+const loadDraftFromStorage = (uid: string, tabInstanceId: string): DraftData | null => {
   try {
-    const raw = localStorage.getItem(getDraftKey(uid));
+    const raw = localStorage.getItem(getDraftKey(uid, tabInstanceId));
     if (!raw) return null;
     const data = JSON.parse(raw) as DraftData;
     if (Date.now() - data.timestamp > 24 * 60 * 60 * 1000) {
-      clearDraftStorage(uid);
+      clearDraftStorage(uid, tabInstanceId);
       return null;
     }
     return data;
   } catch (e) {
-    clearDraftStorage(uid);
+    clearDraftStorage(uid, tabInstanceId);
     return null;
   }
 };
 
-const clearDraftStorage = async (uid: string) => {
-  localStorage.removeItem(getDraftKey(uid));
-  await clearAllFilesForDraft(uid);
+const clearDraftStorage = async (uid: string, tabInstanceId: string) => {
+  localStorage.removeItem(getDraftKey(uid, tabInstanceId));
+  await clearAllFilesForDraft(uid, tabInstanceId);
 };
 
 const NomenclatureCreatePage = () => {
   const { uid, code } = useParams<{ uid: string; code: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { tabs, activeTabId, closeTab } = useTabs();
+
+  // ==================== УНИКАЛЬНЫЙ ID ВКЛАДКИ ====================
+  // Получаем уникальный ID вкладки из TabContext
+  const fullPath = location.pathname + location.search;
+  const currentTab = tabs.find(tab => tab.path === fullPath);
+  const tabInstanceId = useRef(
+    currentTab?.id || `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  ).current;
 
   const [activeTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
@@ -263,7 +272,7 @@ const NomenclatureCreatePage = () => {
   const [serverBarcodes, setServerBarcodes] = useState<ServerCode[]>([]);
   const [serverSkus, setServerSkus] = useState<ServerCode[]>([]);
   
-  const getPopupOpenKey = () => `nomenclature_popup_open_${uid}`;
+  const getPopupOpenKey = () => `nomenclature_popup_open_${uid}_${tabInstanceId}`;
   const [popupOpen, setPopupOpen] = useState(() => {
     return sessionStorage.getItem(getPopupOpenKey()) === 'true';
   });
@@ -314,20 +323,20 @@ const NomenclatureCreatePage = () => {
     if (!uid || !isDataLoaded) return;
     
     for (const img of localImages) {
-      const key = `${uid}_img_${img.url}`;
+      const key = `${uid}_${tabInstanceId}_img_${img.url}`;
       await saveFileToIndexedDB(key, img.file);
     }
     for (const bp of localBlueprints) {
-      const key = `${uid}_bp_${bp.url}`;
+      const key = `${uid}_${tabInstanceId}_bp_${bp.url}`;
       await saveFileToIndexedDB(key, bp.file);
     }
     for (const doc of localDocuments) {
-      const key = `${uid}_doc_${doc.localId}`;
+      const key = `${uid}_${tabInstanceId}_doc_${doc.localId}`;
       await saveFileToIndexedDB(key, doc.file);
     }
     for (const sup of localSupplies) {
       if (sup.file) {
-        const key = `${uid}_sup_${sup.localId}`;
+        const key = `${uid}_${tabInstanceId}_sup_${sup.localId}`;
         await saveFileToIndexedDB(key, sup.file);
       }
     }
@@ -360,8 +369,8 @@ const NomenclatureCreatePage = () => {
       wasteMaterial,
       recycleMaterial,
       localCharacteristics,
-      localImagesMeta: localImages.map(img => ({ key: `${uid}_img_${img.url}`, fileName: img.file.name })),
-      localBlueprintsMeta: localBlueprints.map(bp => ({ key: `${uid}_bp_${bp.url}`, fileName: bp.file.name })),
+      localImagesMeta: localImages.map(img => ({ key: `${uid}_${tabInstanceId}_img_${img.url}`, fileName: img.file.name })),
+      localBlueprintsMeta: localBlueprints.map(bp => ({ key: `${uid}_${tabInstanceId}_bp_${bp.url}`, fileName: bp.file.name })),
       localBarcodesMeta: localBarcodes.map(bc => ({ 
         key: '', 
         codeType: bc.codeType, codeValue: bc.codeValue, codeKind: bc.codeKind, 
@@ -377,16 +386,16 @@ const NomenclatureCreatePage = () => {
         codeType: qr.codeType, codeValue: qr.codeValue, codeKind: qr.codeKind, 
         fileName: null 
       })),
-      localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
+      localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_${tabInstanceId}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
       localSuppliesMeta: localSupplies.map(sup => ({ 
-        key: sup.file ? `${uid}_sup_${sup.localId}` : '', 
+        key: sup.file ? `${uid}_${tabInstanceId}_sup_${sup.localId}` : '', 
         localId: sup.localId, supplierUid: sup.supplierUid, supplierName: sup.supplierName, 
         supplyDate: sup.supplyDate, documentName: sup.documentName, fileName: sup.file?.name || null 
       })),
       isEdit,
       timestamp: Date.now(),
     };
-    saveDraftToStorage(uid, draft);
+    saveDraftToStorage(uid, tabInstanceId, draft);
   }, [
     uid, code, name, article, description, isEdit, isDataLoaded,
     selectedCatalog, selectedCatalogId,
@@ -403,6 +412,7 @@ const NomenclatureCreatePage = () => {
     localImages, localBlueprints,
     localBarcodes, localSkus, localQrCodes,
     localDocuments, localSupplies,
+    tabInstanceId,
   ]);
 
   useEffect(() => {
@@ -490,7 +500,7 @@ const NomenclatureCreatePage = () => {
       });
     }
     setLocalSupplies(restoredSupplies);
-  }, [uid]);
+  }, [uid, tabInstanceId]);
 
   const fetchTypeAttributes = async () => { try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes); const data = res.data || []; const map = new Map<string, string>(); data.forEach((item: any) => map.set(item.name, item.uid)); setTypeAttributesMap(map); return map; } catch (e) { console.error(e); return new Map(); } };
 
@@ -541,7 +551,7 @@ const NomenclatureCreatePage = () => {
         await fetchSuppliers(); 
         await fetchCodes();
         
-        const draft = loadDraftFromStorage(uid);
+        const draft = loadDraftFromStorage(uid, tabInstanceId);
         if (draft && draft.uid === uid && draft.isEdit) {
           setName(draft.name);
           setArticle(draft.article);
@@ -601,7 +611,7 @@ const NomenclatureCreatePage = () => {
       } else { 
         await fetchTypeAttributes();
         
-        const draft = loadDraftFromStorage(uid);
+        const draft = loadDraftFromStorage(uid, tabInstanceId);
         if (draft && draft.uid === uid) {
           hasInitializedChars.current = true;
           setName(draft.name);
@@ -651,7 +661,7 @@ const NomenclatureCreatePage = () => {
     };
     
     init();
-  }, [uid]);
+  }, [uid, tabInstanceId]);
 
   useEffect(() => { 
     if (uid && !isEdit && localCharacteristics.length === 0 && !hasInitializedChars.current) { 
@@ -878,7 +888,7 @@ const NomenclatureCreatePage = () => {
       await fetchCharacteristics(); 
       await fetchCodes(); 
       
-      await clearDraftStorage(uid);
+      await clearDraftStorage(uid, tabInstanceId);
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
       
       setIsDataSaved(true); 
@@ -917,7 +927,7 @@ const NomenclatureCreatePage = () => {
   const handleSaveAndClose = async () => { if (await handleSave()) handleClose(); };
   const handleCloseWithoutSaving = async () => { 
     if (uid) {
-      await clearDraftStorage(uid); 
+      await clearDraftStorage(uid, tabInstanceId); 
       sessionStorage.removeItem(getPopupOpenKey());
     }
     handleClose(); 
