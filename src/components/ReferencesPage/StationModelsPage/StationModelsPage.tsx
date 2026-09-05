@@ -1,4 +1,4 @@
-// StationModelsPage.tsx — ПОЛНЫЙ ФАЙЛ (дефолтная инициализация + автосохранение при первом запуске + печать и PDF)
+// StationModelsPage.tsx — ИСПРАВЛЕННЫЙ (добавлены Excel и Word)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,9 +16,9 @@ import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIco
 import ModelIcon16Black from '../../../assets/Icons/ModelIcons/ModelIcon16Black.svg';
 
 interface StationModelRowData { [key: string]: any; }
-interface StationModelListResponse { 
-  columns: string[]; 
-  data: StationModelRowData[]; 
+interface StationModelListResponse {
+  columns: string[];
+  data: StationModelRowData[];
   columnWidths?: Record<string, number>;
   requiredColumns?: string[];
 }
@@ -65,16 +65,11 @@ const EFFECTIVE_FIRST_COL_LEFT = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX
 
 const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> => {
   if (columnKeys.length === 0) return {};
-  
   const totalResizerWidth = RESIZER_WIDTH * (columnKeys.length - 1);
   const availableWidth = TABLE_WIDTH - EFFECTIVE_FIRST_COL_LEFT - LAST_COLUMN_RIGHT_PADDING - totalResizerWidth;
   const columnWidth = availableWidth / columnKeys.length;
-  
   const widths: Record<string, number> = {};
-  columnKeys.forEach(key => {
-    widths[key] = columnWidth;
-  });
-  
+  columnKeys.forEach(key => { widths[key] = columnWidth; });
   return widths;
 };
 
@@ -109,67 +104,49 @@ const StationModelsPage = () => {
     manufacturerName: manufacturerList.map(m => ({ uid: m.uid, name: m.name })),
   }), [typeList, manufacturerList]);
 
-  const fetchData = async () => { 
-    try { 
-      const r = await AxiosService.get(`${ConstantInfo.restApiStationModels}?userId=${USER_ID}`); 
+  const fetchData = async () => {
+    try {
+      const r = await AxiosService.get(`${ConstantInfo.restApiStationModels}?userId=${USER_ID}`);
       const response = r.data as StationModelListResponse;
-      
+
       let effectiveColumns = response.columns;
       let effectiveRequiredColumns = new Set(REQUIRED_COLUMNS);
-      
       if (response.requiredColumns && response.requiredColumns.length > 0) {
         effectiveRequiredColumns = new Set(response.requiredColumns);
       }
-      
       let effectiveColumnWidths = response.columnWidths || {};
-      
-      // Если columns пустой — первый запуск, заполняем обязательными колонками
+
       if (!effectiveColumns || effectiveColumns.length === 0) {
         setIsFirstInit(true);
-        
-        effectiveColumns = ALL_COLUMNS
-          .filter(c => effectiveRequiredColumns.has(c.key))
-          .map(c => c.key);
-        
-        // Адаптивная ширина
+        effectiveColumns = ALL_COLUMNS.filter(c => effectiveRequiredColumns.has(c.key)).map(c => c.key);
         if (effectiveColumns.length > 0) {
           effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
         }
       } else {
-        // Добавляем обязательные колонки, если их нет
         effectiveRequiredColumns.forEach(key => {
-          if (!effectiveColumns.includes(key)) {
-            effectiveColumns = [...effectiveColumns, key];
-          }
+          if (!effectiveColumns.includes(key)) effectiveColumns = [...effectiveColumns, key];
         });
-        
-        // Если ширины пустые — заполняем адаптивно
         if (Object.keys(effectiveColumnWidths).length === 0) {
           effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
         }
       }
-      
+
       setRequiredColumns(effectiveRequiredColumns);
-      
-      const visible = new Set(effectiveColumns);
-      setVisibleColumns(visible);
-      
+      setVisibleColumns(new Set(effectiveColumns));
       setColumnWidths(effectiveColumnWidths);
-      
       setResponseData({
         ...response,
         columns: effectiveColumns,
         columnWidths: effectiveColumnWidths,
         requiredColumns: Array.from(effectiveRequiredColumns),
       });
-    } catch (e) { 
-      console.error(e); 
-    } finally { 
-      setIsLoading(false); 
-    } 
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Сохраняем настройки при первом запуске
   useEffect(() => {
     if (isFirstInit && !isLoading) {
       const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
@@ -180,7 +157,6 @@ const StationModelsPage = () => {
           required: requiredColumns.has(col.key),
         };
       });
-      
       const columnsJson = JSON.stringify(columnsJsonObj);
       AxiosService.patch(ConstantInfo.restApiStationModelColumnsSettingsSave(USER_ID), { columnsJson })
         .then(() => setIsFirstInit(false))
@@ -193,7 +169,6 @@ const StationModelsPage = () => {
 
   const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
     setColumnWidths(widths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -202,7 +177,6 @@ const StationModelsPage = () => {
         required: requiredColumns.has(col.key),
       };
     });
-    
     const columnsJson = JSON.stringify(columnsJsonObj);
     AxiosService.patch(ConstantInfo.restApiStationModelColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   }, [visibleColumns, requiredColumns]);
@@ -211,10 +185,8 @@ const StationModelsPage = () => {
     const baseCols = new Set(requiredColumns);
     setVisibleColumns(baseCols);
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key) }));
-    
     const newWidths = calculateAdaptiveWidths(ALL_COLUMNS.filter(c => baseCols.has(c.key)).map(c => c.key));
     setColumnWidths(newWidths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -227,27 +199,23 @@ const StationModelsPage = () => {
     AxiosService.patch(ConstantInfo.restApiStationModelColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   }, [requiredColumns]);
 
-  const fetchSettings = async () => { 
-    try { 
-      const r = await AxiosService.get(ConstantInfo.restApiStationModelAllSettings(USER_ID)); 
+  const fetchSettings = async () => {
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiStationModelAllSettings(USER_ID));
       const settings = r.data as { filtersJson: string; sortJson: string };
-      
       if (settings.filtersJson && settings.filtersJson !== '{}') {
         const filters = JSON.parse(settings.filtersJson) as Record<string, any>;
         const newFilterValues: Record<string, Set<string>> = {};
         const newActiveFilters = new Set<string>();
-        
         Object.entries(filters).forEach(([key, values]) => {
           if (Array.isArray(values) && values.length > 0) {
             newFilterValues[key] = new Set(values as string[]);
             newActiveFilters.add(key);
           }
         });
-        
         setFilterValues(newFilterValues);
         setActiveFilters(newActiveFilters);
       }
-      
       if (settings.sortJson && settings.sortJson !== '{}') {
         const sort = JSON.parse(settings.sortJson) as { column?: string; direction?: 'asc' | 'desc' };
         if (sort.column) {
@@ -255,69 +223,63 @@ const StationModelsPage = () => {
           setSortDirection(sort.direction || 'asc');
         }
       }
-    } catch (e) { 
-      console.error(e); 
-    } 
+    } catch (e) {
+      console.error(e);
+    }
   };
-  
+
   const saveFilters = useCallback((filters: Record<string, Set<string>>) => {
     const filtersJsonObj: Record<string, any> = {};
     Object.entries(filters).forEach(([key, values]) => {
-      if (values.size > 0) {
-        filtersJsonObj[key] = Array.from(values);
-      }
+      if (values.size > 0) filtersJsonObj[key] = Array.from(values);
     });
     const filtersJson = JSON.stringify(filtersJsonObj);
     AxiosService.patch(ConstantInfo.restApiStationModelFiltersSettingsSave(USER_ID), { filtersJson }).catch(e => console.error(e));
   }, []);
-  
+
   const saveSort = useCallback((column: string | null, direction: 'asc' | 'desc') => {
     const sortJson = column ? JSON.stringify({ column, direction }) : '{}';
     AxiosService.patch(ConstantInfo.restApiStationModelSortSettingsSave(USER_ID), { sortJson }).catch(e => console.error(e));
   }, []);
-  
-  const fetchHistory = async () => { 
-    setHistoryLoading(true); 
-    try { 
-      const r = await AxiosService.get(ConstantInfo.restApiStationModelEvents); 
-      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription }))); 
-    } catch (e) { 
-      console.error(e); 
-    } finally { 
-      setHistoryLoading(false); 
-    } 
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiStationModelEvents);
+      setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription })));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
-  
-  const fetchTypes = async () => { 
-    try { 
-      const r = await AxiosService.get(`${ConstantInfo.restApiStationTypes}?userId=${USER_ID}`); 
+
+  const fetchTypes = async () => {
+    try {
+      const r = await AxiosService.get(`${ConstantInfo.restApiStationTypes}?userId=${USER_ID}`);
       const respData = r.data as any;
       const items = Array.isArray(respData) ? respData : (respData.data || []);
-      setTypeList(items.map((item: any) => ({ uid: item.uid, name: item.name }))); 
-    } catch (e) { console.error(e); } 
+      setTypeList(items.map((item: any) => ({ uid: item.uid, name: item.name })));
+    } catch (e) { console.error(e); }
   };
-  
-  const fetchManufacturers = async () => { 
-    try { 
-      const r = await AxiosService.get(`${ConstantInfo.restApiStationManufacturers}?userId=${USER_ID}`); 
+
+  const fetchManufacturers = async () => {
+    try {
+      const r = await AxiosService.get(`${ConstantInfo.restApiStationManufacturers}?userId=${USER_ID}`);
       const respData = r.data as any;
       const items = Array.isArray(respData) ? respData : (respData.data || []);
-      setManufacturerList(items.map((item: any) => ({ uid: item.uid, name: item.name }))); 
-    } catch (e) { console.error(e); } 
+      setManufacturerList(items.map((item: any) => ({ uid: item.uid, name: item.name })));
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => { fetchData(); fetchTypes(); fetchManufacturers(); fetchSettings(); }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      saveFilters(filterValues);
-    }
+    if (!isLoading) saveFilters(filterValues);
   }, [filterValues, isLoading, saveFilters]);
 
   useEffect(() => {
-    if (!isLoading) {
-      saveSort(sortColumn, sortDirection);
-    }
+    if (!isLoading) saveSort(sortColumn, sortDirection);
   }, [sortColumn, sortDirection, isLoading, saveSort]);
 
   useEffect(() => {
@@ -334,44 +296,24 @@ const StationModelsPage = () => {
       return next;
     });
   };
-
-  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleSelectItem(uid);
-  };
-
-  const handleRowClick = (uid: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleSelectItem(uid);
-  };
-
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); toggleSelectItem(uid); };
+  const handleRowClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); toggleSelectItem(uid); };
   const handleSelectAll = (e: React.MouseEvent) => {
     e.stopPropagation();
     const isAllSelected = responseData.data.length > 0 && responseData.data.every(item => selectedIds.has(item.uid));
-    if (isAllSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(responseData.data.map(item => item.uid)));
+    if (isAllSelected) setSelectedIds(new Set()); else setSelectedIds(new Set(responseData.data.map(item => item.uid)));
   };
-
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, uid, name });
-  };
-
+  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, uid, name }); };
   const handleDoubleClick = (uid: string, name: string) => {
     openTab(`/references/station-models/edit/${uid}`, `Модель: ${name}`, null);
   };
-
-  const handleSaveColumns = (cols: Set<string>) => { 
+  const handleSaveColumns = (cols: Set<string>) => {
     const finalCols = new Set(cols);
     requiredColumns.forEach(key => finalCols.add(key));
-    
-    setVisibleColumns(finalCols); 
+    setVisibleColumns(finalCols);
     setResponseData(prev => ({ ...prev, columns: ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key) }));
-    
     const newWidths = calculateAdaptiveWidths(ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key));
     setColumnWidths(newWidths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -383,7 +325,6 @@ const StationModelsPage = () => {
     const columnsJson = JSON.stringify(columnsJsonObj);
     AxiosService.patch(ConstantInfo.restApiStationModelColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   };
-
   const handleHistoryClick = () => {
     setShowHistory(prev => {
       const next = !prev;
@@ -393,40 +334,22 @@ const StationModelsPage = () => {
   };
 
   const contextMenuItems: ContextMenuItem[] = [
-    {
-      id: 'open',
-      label: 'Открыть',
-      icon: ContextMenuOpenIcon16,
-      onClick: () => {
-        if (!contextMenu) return;
-        const item = responseData.data.find(d => d.uid === contextMenu.uid);
-        if (item) {
-          setContextMenu(null);
-          openTab(`/references/station-models/edit/${item.uid}`, `Модель: ${item.name}`, null);
-        }
-      },
-    },
-    {
-      id: 'copy',
-      label: 'Копировать',
-      icon: ContextMenuCopyIcon16,
-      onClick: () => {
-        if (!contextMenu) return;
-        navigator.clipboard.writeText(contextMenu.uid).catch(() => {});
-        setContextMenu(null);
-      },
-    },
-    {
-      id: 'delete',
-      label: 'Удалить',
-      icon: ContextMenuDeleteIcon16,
-      onClick: () => {
-        if (!contextMenu) return;
-        setDeleteTargetUid(contextMenu.uid);
-        setContextMenu(null);
-        setTimeout(() => setShowDeleteConfirm(true), 50);
-      },
-    },
+    { id: 'open', label: 'Открыть', icon: ContextMenuOpenIcon16, onClick: () => {
+      if (!contextMenu) return;
+      const item = responseData.data.find(d => d.uid === contextMenu.uid);
+      if (item) { setContextMenu(null); openTab(`/references/station-models/edit/${item.uid}`, `Модель: ${item.name}`, null); }
+    } },
+    { id: 'copy', label: 'Копировать', icon: ContextMenuCopyIcon16, onClick: () => {
+      if (!contextMenu) return;
+      navigator.clipboard.writeText(contextMenu.uid).catch(() => {});
+      setContextMenu(null);
+    } },
+    { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => {
+      if (!contextMenu) return;
+      setDeleteTargetUid(contextMenu.uid);
+      setContextMenu(null);
+      setTimeout(() => setShowDeleteConfirm(true), 50);
+    } },
   ];
 
   const formatCode = (code: number) => String(code).padStart(4, '0');
@@ -439,7 +362,6 @@ const StationModelsPage = () => {
       default: return String(val);
     }
   };
-
   const isGrayColumn = (key: string): boolean => {
     const mainColumns = ['name', 'code'];
     return !mainColumns.includes(key);
@@ -465,9 +387,7 @@ const StationModelsPage = () => {
     let result = [...responseData.data];
     if (searchValue.trim()) {
       const q = searchValue.toLowerCase();
-      result = result.filter(row => {
-        return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
-      });
+      result = result.filter(row => Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q)));
     }
     if (filterValues['typeName'] && filterValues['typeName'].size > 0) {
       result = result.filter(row => filterValues['typeName'].has(String(row['typeId'])));
@@ -491,28 +411,20 @@ const StationModelsPage = () => {
     return result;
   }, [responseData.data, searchValue, filterValues, sortColumn, sortDirection]);
 
-  // ===== ВСТАВЛЕННЫЙ БЛОК ПЕЧАТИ И PDF (из варианта 5) =====
+  // ===== БЛОК ЭКСПОРТА =====
   const getColumnLabel = (key: string) => {
     const col = ALL_COLUMNS.find(c => c.key === key);
     return col ? col.label : key;
   };
 
-  const columnKeys = ALL_COLUMNS
-      .filter(c => responseData.columns.includes(c.key))
-      .map(c => c.key);
-
+  const columnKeys = ALL_COLUMNS.filter(c => responseData.columns.includes(c.key)).map(c => c.key);
   const columnLabels = columnKeys.map(getColumnLabel);
 
-  const visibleLabels = responseData.columns.map(getColumnLabel);
-  const hiddenLabels = ALL_COLUMNS
-      .filter(c => !responseData.columns.includes(c.key))
-      .map(c => c.label);
-
   const sortLabel = sortColumn
-      ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
-      : 'Без сортировки';
+    ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
+    : '';
 
-  let filtersText = 'Нет фильтров';
+  let filtersText = '';
   if (activeFilters.size > 0) {
     const filterLabels = Array.from(activeFilters).map(key => {
       const field = FILTER_FIELDS.find(f => f.key === key);
@@ -528,34 +440,31 @@ const StationModelsPage = () => {
     filtersText = filterLabels.join('; ');
   }
 
-  const handlePrint = async () => {
+  const preparePayload = useCallback(() => {
     const preparedData = filteredData.map(item => {
       const row: Record<string, string> = {};
-      columnKeys.forEach(key => {
-        row[key] = renderCell(key, item);
-      });
+      columnKeys.forEach(key => { row[key] = renderCell(key, item); });
       return row;
     });
-
-    const payload = {
+    const footerLines: string[] = [];
+    if (sortLabel) footerLines.push(`Сортировка: ${sortLabel}`);
+    if (filtersText) footerLines.push(`Фильтры: ${filtersText}`);
+    return {
       title: 'Модели станций',
       columns: columnKeys,
       columnLabels: columnLabels,
       data: preparedData,
       landscape: true,
-      footerLines: [
-        `Сортировка: ${sortLabel}`,
-        `Фильтры: ${filtersText}`,
-        `Видимые поля: ${visibleLabels.join(', ')}`,
-        `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
-      ],
+      footerLines,
     };
+  }, [filteredData, columnKeys, columnLabels, sortLabel, filtersText]);
 
+  const handlePrint = async () => {
     try {
       const res = await AxiosService.post(
-          `${ConstantInfo.apiBaseUrl}/api/station-models/print`,
-          payload,
-          { responseType: 'blob' }
+        `${ConstantInfo.apiBaseUrl}/api/station-models/print`,
+        preparePayload(),
+        { responseType: 'blob' }
       );
       const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
       const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -577,47 +486,63 @@ const StationModelsPage = () => {
     } catch (e) { console.error('Ошибка печати', e); }
   };
 
-  const handlePrintPdf = async () => {
-    const preparedData = filteredData.map(item => {
-      const row: Record<string, string> = {};
-      columnKeys.forEach(key => {
-        row[key] = renderCell(key, item);
-      });
-      return row;
-    });
-
-    const payload = {
-      title: 'Модели станций',
-      columns: columnKeys,
-      columnLabels: columnLabels,
-      data: preparedData,
-      landscape: true,
-      footerLines: [
-        `Сортировка: ${sortLabel}`,
-        `Фильтры: ${filtersText}`,
-        `Видимые поля: ${visibleLabels.join(', ')}`,
-        `Невидимые поля: ${hiddenLabels.length > 0 ? hiddenLabels.join(', ') : '—'}`,
-      ],
-    };
-
+  const handleDownloadPdf = async () => {
     try {
       const res = await AxiosService.post(
-          `${ConstantInfo.apiBaseUrl}/api/station-models/export-pdf`,
-          payload,
-          { responseType: 'blob' }
+        `${ConstantInfo.apiBaseUrl}/api/station-models/export-pdf`,
+        preparePayload(),
+        { responseType: 'blob' }
       );
       const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
-      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
-      link.href = pdfUrl;
-      link.download = 'export.pdf';
+      link.href = url;
+      link.download = 'models.pdf';
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(pdfUrl);
+      URL.revokeObjectURL(url);
     } catch (e) { console.error('Ошибка выгрузки PDF', e); }
   };
-  // ===== КОНЕЦ ВСТАВКИ =====
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/station-models/export-excel`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'models.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/station-models/export-word`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'models.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
+  // ===== КОНЕЦ БЛОКА =====
 
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
@@ -630,7 +555,7 @@ const StationModelsPage = () => {
       </div>
 
       <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
-        <TableToolbar 
+        <TableToolbar
           sortFields={SORT_FIELDS}
           filterFields={FILTER_FIELDS}
           placementLevels={PLACEMENT_LEVELS}
@@ -659,8 +584,7 @@ const StationModelsPage = () => {
           onClearSort={() => { setSortColumn(null); setAccountingIndex(-1); }}
           activeFilters={activeFilters}
           filterValues={filterValues}
-          placementSelections={{}}
-          hasPlacementSelections={false}
+          placementSelections={{}}          hasPlacementSelections={false}
           onFilterToggle={(key) => {
             if (key === 'typeName') fetchTypes();
             if (key === 'manufacturerName') fetchManufacturers();
@@ -709,7 +633,9 @@ const StationModelsPage = () => {
           }}
           onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
           onPrint={handlePrint}
-          onPrintPdf={handlePrintPdf}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadWord={handleDownloadWord}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}
@@ -751,23 +677,9 @@ const StationModelsPage = () => {
       </div>
 
       {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenuItems}
-        />
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} />
       )}
-
-      <ConfigurationPopup
-        isOpen={showConfigurationPopup}
-        onClose={() => setShowConfigurationPopup(false)}
-        title="Справочник: Модели станций (Настройки списка)"
-        columns={ALL_COLUMNS}
-        visibleColumns={visibleColumns}
-        requiredColumns={requiredColumns}
-        onSave={handleSaveColumns}
-      />
-
+      <ConfigurationPopup isOpen={showConfigurationPopup} onClose={() => setShowConfigurationPopup(false)} title="Справочник: Модели станций (Настройки списка)" columns={ALL_COLUMNS} visibleColumns={visibleColumns} requiredColumns={requiredColumns} onSave={handleSaveColumns} />
       {showDeleteConfirm && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
