@@ -323,7 +323,13 @@ const ConstantInfo = {
   restApiStationConfigurationFiltersSettingsSave: (userId: number) => `/api/station-configurations/filters-settings?userId=${userId}`,
   restApiStationConfigurationSortSettings: (userId: number) => `/api/station-configurations/sort-settings?userId=${userId}`,
   restApiStationConfigurationSortSettingsSave: (userId: number) => `/api/station-configurations/sort-settings?userId=${userId}`,
-  
+  // Экспорт в Excel и Word для конфигураций
+  restApiStationConfigurationExportExcel: '/api/station-configurations/export-excel',
+  restApiStationConfigurationExportWord: '/api/station-configurations/export-word',
+
+  // Экспорт в Excel и Word для моделей
+  restApiStationModelExportExcel: '/api/station-models/export-excel',
+  restApiStationModelExportWord: '/api/station-models/export-word',
   // Расположения — все настройки
   restApiLocationAllSettings: (userId: number) => `/api/locations-crud/settings?userId=${userId}`,
   restApiLocationSortSettings: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
