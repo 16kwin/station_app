@@ -1,4 +1,4 @@
-// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (скачивание как фильтр — единый прямоугольник)
+// TableToolbar.tsx — ПОЛНЫЙ ФАЙЛ (убран outline и userSelect при Shift)
 import React, { useState, useRef, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -138,6 +138,13 @@ const getTextWidth = (text: string, fontSize: number, fontWeight: number): numbe
   if (!ctx) return text.length * (fontSize * 0.6);
   ctx.font = `${fontWeight} ${fontSize}px Inter, sans-serif`;
   return ctx.measureText(text).width;
+};
+
+// Общий стиль для кнопок без outline и user-select
+const btnBaseStyle: React.CSSProperties = {
+  outline: 'none',
+  userSelect: 'none',
+  WebkitTapHighlightColor: 'transparent',
 };
 
 const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
@@ -459,12 +466,12 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
         animate={{ width: searchWidth }} 
         transition={tween}
       >
-        <div onClick={expanded === 'search' ? handleSearchClose : () => setExpanded('search')} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+        <div onClick={expanded === 'search' ? handleSearchClose : () => setExpanded('search')} style={{ ...btnBaseStyle, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
           <img src={expanded === 'search' ? SearchIcon18White : SearchIcon18Black} alt="" style={{ width: 18, height: 18 }} />
         </div>
         {expanded === 'search' && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}>
-            <input ref={searchInputRef} type="text" value={searchValue} onChange={e => onSearchChange(e.target.value)} placeholder="Поиск" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
+            <input ref={searchInputRef} type="text" value={searchValue} onChange={e => onSearchChange(e.target.value)} placeholder="Поиск" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent', userSelect: 'none' }} />
           </div>
         )}
       </motion.div>
@@ -475,7 +482,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
         animate={{ x: sortX, width: sortWidth, height: expanded === 'sort' ? BTN_HEADER + sortListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
         transition={{ x: spring, width: tween, height: tween }}
       >
-        <div onClick={() => toggleExpand('sort')} style={{ height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'sort' || hasActiveSort ? '#666EFE' : 'transparent', borderRadius: expanded === 'sort' ? '10px 10px 0 0' : 10, userSelect: 'none' }}>
+        <div onClick={() => toggleExpand('sort')} style={{ ...btnBaseStyle, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'sort' || hasActiveSort ? '#666EFE' : 'transparent', borderRadius: expanded === 'sort' ? '10px 10px 0 0' : 10 }}>
           {expanded === 'sort' ? <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>Сортировка</span> : <img src={hasActiveSort ? SortingIcon20White : SortingIcon20Black} alt="" style={{ width: 20, height: 14 }} />}
         </div>
         
@@ -485,7 +492,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
               exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
-              style={{ position: 'relative', height: sortListHeight, userSelect: 'none', overflow: 'hidden' }}
+              style={{ position: 'relative', height: sortListHeight, overflow: 'hidden' }}
             >
               {sortColumn && <motion.div style={{ position: 'absolute', left: INDICATOR_LEFT, top: 0, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} animate={{ y: sortIndicatorY }} transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
               
@@ -497,7 +504,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                   const iconWidth = field.iconType === '19' ? 19 : field.iconType === '20' ? 20 : 0; 
                   
                   return (
-                    <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSortFieldClick(field)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: sortFields.indexOf(field) < sortFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, paddingRight: SORT_RIGHT_PAD, position: 'relative', userSelect: 'none' }}>
+                    <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSortFieldClick(field)} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: sortFields.indexOf(field) < sortFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, paddingRight: SORT_RIGHT_PAD, position: 'relative' }}>
                       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isSelected ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                         {label}
                       </span>
@@ -516,10 +523,9 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
               exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
-              style={{ userSelect: 'none' }}
             >
               <div style={{ height: 3, backgroundColor: 'transparent', borderTop: '1px solid rgba(45, 64, 89, 0.1)' }} />
-              <button onMouseDown={(e) => e.preventDefault()} onClick={onClearSort} style={{ width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 13, lineHeight: '18px', userSelect: 'none' }}>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={onClearSort} style={{ ...btnBaseStyle, width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 13, lineHeight: '18px' }}>
                 Очистить сортировку
               </button>
             </motion.div>
@@ -534,7 +540,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           animate={{ x: filterX, width: filterWidth, height: expanded === 'filter' ? BTN_HEADER + filterListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
           transition={{ x: spring, width: tween, height: tween }}
         >
-          <div onClick={() => toggleExpand('filter')} style={{ height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'filter' || hasActiveFilter ? '#666EFE' : 'transparent', borderRadius: expanded === 'filter' ? '10px 10px 0 0' : 10, userSelect: 'none' }}>
+          <div onClick={() => toggleExpand('filter')} style={{ ...btnBaseStyle, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'filter' || hasActiveFilter ? '#666EFE' : 'transparent', borderRadius: expanded === 'filter' ? '10px 10px 0 0' : 10 }}>
             {expanded === 'filter' ? <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>Фильтр</span> : <img src={hasActiveFilter ? FilterIcon18White : FilterIcon18Black} alt="" style={{ width: 18, height: 18 }} />}
           </div>
           
@@ -544,7 +550,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
                 exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
-                style={{ position: 'relative', height: filterListHeight, userSelect: 'none', overflow: 'visible' }}
+                style={{ position: 'relative', height: filterListHeight, overflow: 'visible' }}
               >
                 {Array.from(activeFilters).map(filterKey => { 
                   const idx = getFilterIndicatorIdx(filterKey); 
@@ -558,7 +564,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                   {filterFields.map((field, fieldIdx) => { 
                     const isActive = field.key === 'sectionName' && hasPlacement ? hasPlacementSelections : activeFilters.has(field.key); 
                     return (
-                      <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleFilterToggle(field.key)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: fieldIdx < filterFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                      <div key={field.key} onMouseDown={(e) => e.preventDefault()} onClick={() => handleFilterToggle(field.key)} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: fieldIdx < filterFields.length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                         <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: isActive ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.2s ease', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                           {field.label}
                         </span>
@@ -579,7 +585,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                           const checked = isFilterOptionChecked(submenuOpen, option.uid); 
                           const textMaxWidth = getSubmenuWidth(submenuOpen) - SUBMENU_LEFT_PAD - SUBMENU_TEXT_TO_CHECKBOX_GAP - SUBMENU_CHECKBOX_WIDTH - SUBMENU_RIGHT_PAD;
                           return (
-                            <div key={option.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => onCheckFilterOption(submenuOpen, option.uid)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: getSubmenuOptions(submenuOpen).indexOf(option) < getSubmenuOptions(submenuOpen).length - 1 ? ITEM_GAP : 0, paddingLeft: SUBMENU_LEFT_PAD, position: 'relative', userSelect: 'none' }}>
+                            <div key={option.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => onCheckFilterOption(submenuOpen, option.uid)} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: getSubmenuOptions(submenuOpen).indexOf(option) < getSubmenuOptions(submenuOpen).length - 1 ? ITEM_GAP : 0, paddingLeft: SUBMENU_LEFT_PAD, position: 'relative' }}>
                               {checked && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
                               <span 
                                 style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: checked ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: textMaxWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -608,7 +614,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                           {placementLevels.map((level, i) => {
                             const hasSelection = placementSelections[level.key] && placementSelections[level.key]!.size > 0;
                             return (
-                              <div key={level.key} onMouseDown={(e) => e.preventDefault()} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'absolute', top: TOP_PAD + i * ROW_STEP, left: LEFT_OFFSET, right: 20, userSelect: 'none' }}>
+                              <div key={level.key} onMouseDown={(e) => e.preventDefault()} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'absolute', top: TOP_PAD + i * ROW_STEP, left: LEFT_OFFSET, right: 20 }}>
                                 <div onClick={() => handlePlacementLevelClick(level.key)} style={{ display: 'flex', alignItems: 'center', flex: 1, position: 'relative' }}>
                                   {hasSelection && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: -LEFT_OFFSET + INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
                                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: hasSelection ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: SUBMENU_WIDTH - LEFT_OFFSET - 40, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -636,7 +642,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                                   ) : getPlacementOptions(placementOpen).map((option, j) => {
                                     const checked = isPlacementChecked(placementOpen, option.uid);
                                     return (
-                                      <div key={option.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => handlePlacementCheck(placementOpen, option.uid)} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: j < getPlacementOptions(placementOpen).length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                                      <div key={option.uid} onMouseDown={(e) => e.preventDefault()} onClick={() => handlePlacementCheck(placementOpen, option.uid)} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: j < getPlacementOptions(placementOpen).length - 1 ? ITEM_GAP : 0, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                                         {checked && <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0 }} transition={{ duration: 0.15 }} style={{ position: 'absolute', left: INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2, width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT, backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none' }} />}
                                         <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: checked ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`, maxWidth: SUBMENU_WIDTH - LEFT_OFFSET - 40, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                           {option.name}
@@ -666,10 +672,9 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
                 exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
-                style={{ userSelect: 'none' }}
               >
                 <div style={{ height: 3, backgroundColor: 'transparent', borderTop: '1px solid rgba(45, 64, 89, 0.1)' }} />
-                <button onMouseDown={(e) => e.preventDefault()} onClick={handleClearFilters} style={{ width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 13, lineHeight: '18px', userSelect: 'none' }}>
+                <button onMouseDown={(e) => e.preventDefault()} onClick={handleClearFilters} style={{ ...btnBaseStyle, width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 13, lineHeight: '18px' }}>
                   Очистить фильтр
                 </button>
               </motion.div>
@@ -685,7 +690,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           animate={{ x: barcodeSearchX, width: barcodeSearchWidth }} 
           transition={{ x: spring, width: tween }}
         >
-          <div onClick={expanded === 'barcodeSearch' ? handleBarcodeSearchClose : () => setExpanded('barcodeSearch')} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+          <div onClick={expanded === 'barcodeSearch' ? handleBarcodeSearchClose : () => setExpanded('barcodeSearch')} style={{ ...btnBaseStyle, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
             <img 
               src={expanded === 'barcodeSearch' ? BarcodeIcon26White : BarcodeIcon28Black} 
               alt="" 
@@ -697,7 +702,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           </div>
           {expanded === 'barcodeSearch' && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 8 }}>
-              <input ref={barcodeSearchInputRef} type="text" value={barcodeSearchValue} onChange={e => onBarcodeSearchChange?.(e.target.value)} placeholder="Штрихкод / SKU" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }} />
+              <input ref={barcodeSearchInputRef} type="text" value={barcodeSearchValue} onChange={e => onBarcodeSearchChange?.(e.target.value)} placeholder="Штрихкод / SKU" style={{ width: '100%', maxWidth: 211, height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent', userSelect: 'none' }} />
             </div>
           )}
         </motion.div>
@@ -705,13 +710,13 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
 
       {/* Кнопка Создать */}
       <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
-        <button style={{ height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, width: 130 }} 
+        <button style={{ ...btnBaseStyle, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, width: 130 }} 
           onClick={onCreate}>
           <img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14, marginLeft: 12 }} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15, userSelect: 'none' }}>Создать</span>
         </button>
         {extraButtons}
-        <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+        <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
           onClick={onDelete}>
           <img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} />
         </button>
@@ -725,7 +730,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           animate={{ width: downloadOpen ? DOWNLOAD_MENU_WIDTH : BTN_COLLAPSED, height: downloadOpen ? BTN_HEADER + DOWNLOAD_MENU_HEIGHT : BTN_COLLAPSED }}
           transition={{ width: tween, height: tween }}
         >
-          <div onClick={() => setDownloadOpen(prev => !prev)} style={{ width: BTN_COLLAPSED, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: downloadOpen ? '10px 0 0 0' : 10, userSelect: 'none', position: 'absolute', right: 0, top: 0, backgroundColor: '#FFFFFF' }}>
+          <div onClick={() => setDownloadOpen(prev => !prev)} style={{ ...btnBaseStyle, width: BTN_COLLAPSED, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: downloadOpen ? '10px 0 0 0' : 10, position: 'absolute', right: 0, top: 0, backgroundColor: '#FFFFFF' }}>
             <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18 }} />
           </div>
           
@@ -735,16 +740,16 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }} 
                 exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }} 
-                style={{ position: 'absolute', top: BTN_HEADER, left: 0, right: 0, height: DOWNLOAD_MENU_HEIGHT, userSelect: 'none', overflow: 'hidden' }}
+                style={{ position: 'absolute', top: BTN_HEADER, left: 0, right: 0, height: DOWNLOAD_MENU_HEIGHT, overflow: 'hidden' }}
               >
                 <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
-                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadPdf?.(); setDownloadOpen(false); }} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadPdf?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать PDF</span>
                   </div>
-                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadExcel?.(); setDownloadOpen(false); }} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadExcel?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать Excel</span>
                   </div>
-                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadWord?.(); setDownloadOpen(false); }} style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', paddingLeft: LEFT_OFFSET, position: 'relative', userSelect: 'none' }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadWord?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать Word</span>
                   </div>
                 </div>
@@ -753,18 +758,18 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           </AnimatePresence>
         </motion.div>
         {onPrint && (
-          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
+          <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
             <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
           </button>
         )}
         {onHistory && (
-          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF', border: showHistory ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+          <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF', border: showHistory ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
             onClick={onHistory}>
             <img src={showHistory ? HistoryIcon18White : HistoryIcon18Black} alt="" style={{ width: 18, height: 16 }} />
           </button>
         )}
         {onConfiguration && (
-          <button style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+          <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
             onClick={onConfiguration}>
             <img src={ConfigurationIcon18Black} alt="" style={{ width: 18, height: 18 }} />
           </button>

@@ -1,4 +1,4 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (симметричный ресайз для fitToWidth)
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (меню закрывается при клике на пункт)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -97,7 +97,7 @@ const DataTable: React.FC<DataTableProps> = ({
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  const [customWidths, setCustomWidths] = useState<Record<string, number>>(initialWidths || {});
+  const [customWidths, setCustomWidths] = useState<Record<string, number>>({});
   const prevColumnCountRef = useRef(0);
   const isInitializedRef = useRef(false);
   const [resizing, setResizing] = useState<{ 
@@ -113,7 +113,6 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const tableHeight = rowHeight * visibleRows + headerHeight;
   
-  // При hideCheckbox — первая колонка начинается сразу от иконки (или от левого края)
   const effectiveFirstColLeft = hideCheckbox 
     ? CHECKBOX_LEFT + (rowIcon ? ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT : 0)
     : CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
@@ -204,18 +203,29 @@ const DataTable: React.FC<DataTableProps> = ({
     }
   }, [rowContextMenuItems, onContextMenu]);
 
+  // Закрываем при клике и скролле
   useEffect(() => {
     if (!headerContextMenu) return;
     const h = () => setHeaderContextMenu(null);
+    const w = () => setHeaderContextMenu(null);
     document.addEventListener('click', h);
-    return () => document.removeEventListener('click', h);
+    document.addEventListener('wheel', w, true);
+    return () => {
+      document.removeEventListener('click', h);
+      document.removeEventListener('wheel', w, true);
+    };
   }, [headerContextMenu]);
 
   useEffect(() => {
     if (!rowContextMenu) return;
     const h = () => setRowContextMenu(null);
+    const w = () => setRowContextMenu(null);
     document.addEventListener('click', h);
-    return () => document.removeEventListener('click', h);
+    document.addEventListener('wheel', w, true);
+    return () => {
+      document.removeEventListener('click', h);
+      document.removeEventListener('wheel', w, true);
+    };
   }, [rowContextMenu]);
 
   const columnLayout = useMemo(() => {
@@ -231,7 +241,7 @@ const DataTable: React.FC<DataTableProps> = ({
     
     visibleColumns.forEach(col => {
       if (customWidths[col.key]) {
-        widths[col.key] = customWidths[col.key];
+        widths[col.key] = Math.max(customWidths[col.key], minWidths[col.key]);
       } else {
         widths[col.key] = minWidths[col.key];
       }
@@ -260,33 +270,45 @@ const DataTable: React.FC<DataTableProps> = ({
       isInitializedRef.current = true;
       prevColumnCountRef.current = currentCount;
       
-      if (!initialWidths || Object.keys(initialWidths).length === 0) {
-        const minWidths: Record<string, number> = {};
+      const minWidths: Record<string, number> = {};
+      visibleColumns.forEach(col => {
+        minWidths[col.key] = getMinWidth(col);
+      });
+      
+      const totalResizerWidth = RESIZER_WIDTH * (visibleColumns.length - 1);
+      const totalMinWidth = visibleColumns.reduce((sum, col) => sum + minWidths[col.key], 0);
+      const availableForColumns = baseAvailableWidth - totalResizerWidth;
+      
+      if (initialWidths && Object.keys(initialWidths).length > 0) {
+        const newWidths: Record<string, number> = {};
         visibleColumns.forEach(col => {
-          minWidths[col.key] = getMinWidth(col);
-        });
-        
-        const totalResizerWidth = RESIZER_WIDTH * (visibleColumns.length - 1);
-        const totalMinWidth = visibleColumns.reduce((sum, col) => sum + minWidths[col.key], 0);
-        const availableForColumns = baseAvailableWidth - totalResizerWidth;
-        
-        if (totalMinWidth <= availableForColumns) {
-          const remaining = availableForColumns - totalMinWidth;
-          const extraPerColumn = remaining / visibleColumns.length;
-          const newWidths: Record<string, number> = {};
-          visibleColumns.forEach(col => {
-            newWidths[col.key] = minWidths[col.key] + extraPerColumn;
-          });
-          setCustomWidths(newWidths);
-          if (onWidthsChange) onWidthsChange(newWidths);
-        } else {
-          const newWidths: Record<string, number> = {};
-          visibleColumns.forEach(col => {
+          const initialW = initialWidths[col.key];
+          if (initialW !== undefined) {
+            newWidths[col.key] = Math.max(initialW, minWidths[col.key]);
+          } else {
             newWidths[col.key] = minWidths[col.key];
-          });
-          setCustomWidths(newWidths);
-          if (onWidthsChange) onWidthsChange(newWidths);
-        }
+          }
+        });
+        setCustomWidths(newWidths);
+        return;
+      }
+      
+      if (totalMinWidth <= availableForColumns) {
+        const remaining = availableForColumns - totalMinWidth;
+        const extraPerColumn = remaining / visibleColumns.length;
+        const newWidths: Record<string, number> = {};
+        visibleColumns.forEach(col => {
+          newWidths[col.key] = minWidths[col.key] + extraPerColumn;
+        });
+        setCustomWidths(newWidths);
+        if (onWidthsChange) onWidthsChange(newWidths);
+      } else {
+        const newWidths: Record<string, number> = {};
+        visibleColumns.forEach(col => {
+          newWidths[col.key] = minWidths[col.key];
+        });
+        setCustomWidths(newWidths);
+        if (onWidthsChange) onWidthsChange(newWidths);
       }
       return;
     }
@@ -316,7 +338,7 @@ const DataTable: React.FC<DataTableProps> = ({
       } else {
         visibleColumns.forEach(col => {
           if (customWidths[col.key] && customWidths[col.key] > 0) {
-            newWidths[col.key] = customWidths[col.key];
+            newWidths[col.key] = Math.max(customWidths[col.key], minWidths[col.key]);
           } else {
             newWidths[col.key] = minWidths[col.key];
           }
@@ -370,9 +392,7 @@ const DataTable: React.FC<DataTableProps> = ({
       const minWidth = getMinWidth(visibleColumns[colIndex]);
       
       if (fitToWidth) {
-        // Симметричный ресайз для fitToWidth
         if (delta > 0) {
-          // Расширение вправо: текущая колонка растёт, соседние справа сжимаются
           const maxGrow = MAX_COLUMN_WIDTH - startWidth;
           if (maxGrow <= 0) return;
           
@@ -388,13 +408,11 @@ const DataTable: React.FC<DataTableProps> = ({
             remainingToShrink -= shrink;
           }
           
-          // Если справа не хватило места, ограничиваем рост
           actualGrow -= remainingToShrink;
           
           newWidths[columnKey] = startWidth + actualGrow;
           
         } else if (delta < 0) {
-          // Сжатие влево: текущая колонка сжимается, соседняя справа расширяется
           const absDelta = Math.abs(delta);
           
           let remainingDelta = absDelta;
@@ -416,7 +434,6 @@ const DataTable: React.FC<DataTableProps> = ({
           newWidths[columnKey] = leftNewWidth;
         }
       } else {
-        // Обычный режим
         if (delta > 0) {
           const maxGrow = MAX_COLUMN_WIDTH - startWidth;
           if (maxGrow <= 0) return;
@@ -433,7 +450,7 @@ const DataTable: React.FC<DataTableProps> = ({
             remainingToShrink -= shrink;
           }
           
-          newWidths[columnKey] = startWidth + (actualGrow - remainingToShrink);
+          newWidths[columnKey] = startWidth + actualGrow;
           
         } else if (delta < 0) {
           const absDelta = Math.abs(delta);
@@ -684,23 +701,35 @@ const DataTable: React.FC<DataTableProps> = ({
         document.body
       )}
 
-      {headerContextMenu && (
-        <ContextMenu 
-          x={headerContextMenu.x} 
-          y={headerContextMenu.y} 
-          items={headerContextMenuItems}
-          width={280}
-          itemHeight={22}
-          gapBetween={18}
-        />
+      {createPortal(
+        headerContextMenu && (
+          <ContextMenu 
+            x={headerContextMenu.x} 
+            y={headerContextMenu.y} 
+            items={headerContextMenuItems}
+            width={280}
+            itemHeight={22}
+            gapBetween={18}
+          />
+        ),
+        document.body
       )}
 
-      {rowContextMenu && (
-        <ContextMenu 
-          x={rowContextMenu.x} 
-          y={rowContextMenu.y} 
-          items={rowContextMenu.items}
-        />
+      {createPortal(
+        rowContextMenu && (
+          <ContextMenu 
+            x={rowContextMenu.x} 
+            y={rowContextMenu.y} 
+            items={rowContextMenu.items.map(item => ({
+              ...item,
+              onClick: () => {
+                setRowContextMenu(null);
+                item.onClick();
+              }
+            }))}
+          />
+        ),
+        document.body
       )}
     </div>
   );

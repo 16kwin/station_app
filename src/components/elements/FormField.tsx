@@ -1,4 +1,4 @@
-// FormField.tsx — ИСПРАВЛЕННЫЙ (без заголовка в дропдауне, просто список и кнопка "Весь список")
+// FormField.tsx — ПОЛНЫЙ ФАЙЛ (calendar теперь с input для ручного ввода)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -35,6 +35,7 @@ export interface FormFieldProps {
   searchTitle?: string;
   searchNotFoundText?: string;
   disabled?: boolean;
+  hasError?: boolean;
   labelMarginBottom?: number;
 }
 
@@ -86,6 +87,7 @@ const FormField: React.FC<FormFieldProps> = ({
   searchTitle = 'Найденная',
   searchNotFoundText = 'не найдены',
   disabled = false,
+  hasError = false,
   labelMarginBottom = 4,
 }) => {
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -192,8 +194,6 @@ const FormField: React.FC<FormFieldProps> = ({
       setIsSearchMode(true);
       setSearchValue('');
       setShowDropdown(false);
-    } else if (type === 'calendar') {
-      onCalendarClick?.();
     }
   };
 
@@ -237,6 +237,10 @@ const FormField: React.FC<FormFieldProps> = ({
     setTooltip(null);
   };
 
+  const disabledBorderColor = value ? 'rgba(102, 110, 254, 0.6)' : '#A0A3BD';
+  const disabledTextColor = value ? 'rgba(102, 110, 254, 0.6)' : '#A0A3BD';
+  const disabledIconOpacity = value ? 0.6 : 0.4;
+
   const fieldStyle: React.CSSProperties = {
     width,
     height,
@@ -252,16 +256,18 @@ const FormField: React.FC<FormFieldProps> = ({
     backgroundColor: '#FFFFFF',
     position: 'relative',
     boxSizing: 'border-box',
-    border: disabled
-      ? '1px solid rgba(102, 110, 254, 0.6)'
+    border: hasError
+      ? '1px solid #EF4444'
+      : disabled
+      ? `1px solid ${disabledBorderColor}`
       : isActive
       ? '1px solid #666EFE'
       : '1px solid #A0A3BD',
-    cursor: disabled ? 'not-allowed' : type === 'select' || type === 'calendar' ? 'pointer' : 'default',
+    cursor: disabled ? 'not-allowed' : type === 'select' ? 'pointer' : type === 'calendar' ? 'text' : 'default',
   };
 
   const textColor = disabled
-    ? 'rgba(102, 110, 254, 0.6)'
+    ? disabledTextColor
     : isActive
     ? '#666EFE'
     : '#A0A3BD';
@@ -310,9 +316,9 @@ const FormField: React.FC<FormFieldProps> = ({
       <>
         <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
           {iconSrc ? (
-            <img src={iconSrc} alt="" style={{ width: selectIconWidth, height: selectIconHeight, opacity: disabled ? 0.6 : 1 }} />
+            <img src={iconSrc} alt="" style={{ width: selectIconWidth, height: selectIconHeight, opacity: disabled ? disabledIconOpacity : 1 }} />
           ) : (
-            <div style={{ width: selectIconWidth, height: selectIconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? 0.6 : 1 }} />
+            <div style={{ width: selectIconWidth, height: selectIconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? disabledIconOpacity : 1 }} />
           )}
         </div>
         <span
@@ -333,7 +339,7 @@ const FormField: React.FC<FormFieldProps> = ({
           style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8, cursor: disabled ? 'not-allowed' : 'pointer' }}
           onClick={handleRightIconClick}
         >
-          <img src={isActive ? PopupIcon16Blue : PopupIcon16Gray} alt="" style={{ width: 16, height: 4, opacity: disabled ? 0.6 : 1 }} />
+          <img src={isActive && !disabled ? PopupIcon16Blue : PopupIcon16Gray} alt="" style={{ width: 16, height: 4, opacity: disabled ? disabledIconOpacity : 1 }} />
         </div>
       </>
     );
@@ -353,9 +359,9 @@ const FormField: React.FC<FormFieldProps> = ({
           <>
             <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
               {iconSrc ? (
-                <img src={iconSrc} alt="" style={{ width: iconWidth, height: iconHeight, opacity: disabled ? 0.6 : 1 }} />
+                <img src={iconSrc} alt="" style={{ width: iconWidth, height: iconHeight, opacity: disabled ? disabledIconOpacity : 1 }} />
               ) : (
-                <div style={{ width: iconWidth, height: iconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? 0.6 : 1 }} />
+                <div style={{ width: iconWidth, height: iconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? disabledIconOpacity : 1 }} />
               )}
             </div>
             <input
@@ -393,23 +399,32 @@ const FormField: React.FC<FormFieldProps> = ({
           <>
             <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
               {iconSrc ? (
-                <img src={iconSrc} alt="" style={{ width: 16, height: 18, opacity: disabled ? 0.6 : 1 }} />
+                <img src={iconSrc} alt="" style={{ width: 16, height: 18, opacity: disabled ? disabledIconOpacity : 1 }} />
               ) : (
-                <div style={{ width: 16, height: 18, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? 0.6 : 1 }} />
+                <div style={{ width: 16, height: 18, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? disabledIconOpacity : 1 }} />
               )}
             </div>
-            <span
+            <input
+              type="text"
               style={{
-                color: textColor,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
                 flex: 1,
+                height: '100%',
+                border: 'none',
+                outline: 'none',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 14,
+                fontWeight: 500,
+                color: textColor,
+                backgroundColor: 'transparent',
                 minWidth: 0,
+                cursor: disabled ? 'not-allowed' : 'text',
               }}
-            >
-              {value || placeholder || 'Выберите дату'}
-            </span>
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder || '__.__.____'}
+              disabled={disabled}
+              maxLength={10}
+            />
             <div
               style={{
                 width: 18,
@@ -420,7 +435,7 @@ const FormField: React.FC<FormFieldProps> = ({
                 flexShrink: 0,
                 marginLeft: 8,
                 cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.6 : 1,
+                opacity: disabled ? disabledIconOpacity : 1,
               }}
               onClick={(e) => {
                 if (!disabled) {
@@ -429,7 +444,7 @@ const FormField: React.FC<FormFieldProps> = ({
                 }
               }}
             >
-              <img src={isActive ? CalendarIcon14Blue : CalendarIcon14Gray} alt="" style={{ width: 14, height: 16 }} />
+              <img src={isActive && !disabled ? CalendarIcon14Blue : CalendarIcon14Gray} alt="" style={{ width: 14, height: 16 }} />
             </div>
           </>
         );
