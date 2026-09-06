@@ -1,4 +1,4 @@
-// StationModelMainTab.tsx — ИСПРАВЛЕННЫЙ (селекты открывают попап через onOpenFullList)
+// StationModelMainTab.tsx — ИСПРАВЛЕННЫЙ (использует handleTypeSelect для типа станции)
 import React, { useState, useEffect, useRef } from 'react';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import FormField from '../../elements/FormField';
@@ -48,6 +48,11 @@ interface StationModelMainTabProps {
   setModelImageUrl?: (v: string) => void;
   deletedImageUid?: string | null;
   setDeletedImageUid?: (v: string | null) => void;
+  setTypeId?: (v: string) => void;
+  setTypeName?: (v: string) => void;
+  setManufacturerId?: (v: string) => void;
+  setManufacturerName?: (v: string) => void;
+  handleTypeSelect?: (id: string, name: string) => void;
   openPopup: (type: PopupType, filter?: string) => void;
   isEdit: boolean;
 }
@@ -65,6 +70,8 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   modelImageUrl, localImage, setLocalImage, setModelImageUrl,
   deletedImageUid, setDeletedImageUid,
   setName, setArticle, setRevision, setDescription,
+  setTypeId, setTypeName, setManufacturerId, setManufacturerName,
+  handleTypeSelect,
   openPopup, uid,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,11 +155,8 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
         selectIconHeight={16} 
         searchOptions={stationManufacturerOptions}
         onSelectOption={(selectedUid, selectedName) => {
-          // Находим элемент и вызываем openPopup для выбора
-          const item = stationManufacturerOptions.find(o => o.uid === selectedUid);
-          if (item) {
-            openPopup('stationManufacturer', item.name);
-          }
+          setManufacturerId?.(selectedUid);
+          setManufacturerName?.(selectedName);
         }}
         onOpenFullList={() => openPopup('stationManufacturer')}
         searchTitle="Найденный производитель"
@@ -193,9 +197,11 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
         selectIconHeight={16} 
         searchOptions={stationTypeOptions}
         onSelectOption={(selectedUid, selectedName) => {
-          const item = stationTypeOptions.find(o => o.uid === selectedUid);
-          if (item) {
-            openPopup('stationType', item.name);
+          if (handleTypeSelect) {
+            handleTypeSelect(selectedUid, selectedName);
+          } else {
+            setTypeId?.(selectedUid);
+            setTypeName?.(selectedName);
           }
         }}
         onOpenFullList={() => openPopup('stationType')}

@@ -1,4 +1,4 @@
-// FormField.tsx — ИСПРАВЛЕННЫЙ (max 5 позиций, кнопка "Весь список" стилизована)
+// FormField.tsx — ИСПРАВЛЕННЫЙ (без заголовка в дропдауне, просто список и кнопка "Весь список")
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -109,14 +109,15 @@ const FormField: React.FC<FormFieldProps> = ({
   const visibleOptions = filteredOptions.slice(0, MAX_VISIBLE_ITEMS);
 
   const getDropdownHeight = useCallback((): number => {
-    let h = DROPDOWN_PADDING_TOP + DROPDOWN_ITEM_HEIGHT;
+    let h = DROPDOWN_PADDING_TOP;
     
     if (filteredOptions.length === 0) {
-      h += DROPDOWN_ITEM_GAP + DROPDOWN_ITEM_HEIGHT;
+      h += DROPDOWN_ITEM_HEIGHT;
     } else {
       visibleOptions.forEach(() => {
-        h += DROPDOWN_ITEM_GAP + DROPDOWN_ITEM_HEIGHT;
+        h += DROPDOWN_ITEM_HEIGHT + DROPDOWN_ITEM_GAP;
       });
+      h -= DROPDOWN_ITEM_GAP;
     }
     
     h += DROPDOWN_BTN_GAP + DROPDOWN_BTN_HEIGHT;
@@ -476,23 +477,23 @@ const FormField: React.FC<FormFieldProps> = ({
               }}
             >
               <div style={{ paddingTop: DROPDOWN_PADDING_TOP, paddingLeft: 40, paddingRight: 40, paddingBottom: DROPDOWN_PADDING_TOP }}>
-                <div style={{ height: DROPDOWN_ITEM_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#2D4059' }}>
-                    {searchTitle}
-                  </span>
-                </div>
-
                 {filteredOptions.length === 0 ? (
-                  <div style={{ marginTop: DROPDOWN_ITEM_GAP, height: DROPDOWN_ITEM_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ height: DROPDOWN_ITEM_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {searchNotFoundText}
                     </span>
                   </div>
                 ) : (
-                  visibleOptions.map((opt) => (
+                  visibleOptions.map((opt, idx) => (
                     <div 
                       key={opt.uid} 
-                      style={{ marginTop: DROPDOWN_ITEM_GAP, height: DROPDOWN_ITEM_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      style={{ 
+                        height: DROPDOWN_ITEM_HEIGHT, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        cursor: 'pointer',
+                        marginBottom: idx < visibleOptions.length - 1 ? DROPDOWN_ITEM_GAP : 0,
+                      }}
                       onClick={() => handleOptionClick(opt.uid, opt.name)}
                     >
                       <span 

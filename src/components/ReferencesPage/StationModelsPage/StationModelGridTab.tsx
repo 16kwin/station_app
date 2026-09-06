@@ -1,4 +1,4 @@
-// StationModelGridTab.tsx — ПОЛНЫЙ ФАЙЛ
+// StationModelGridTab.tsx — ПОЛНЫЙ ФАЙЛ (убран скроллбар при изменении количества ячеек)
 import React, { useState, useCallback } from 'react';
 import StructureIcon18Black from '../../../assets/Icons/StructureIcons/StructureIcon18Black.svg';
 import UnificationIcon12White from '../../../assets/Icons/UnificationIcons/UnificationIcon12White.svg';
@@ -386,7 +386,7 @@ const StationModelGridTab: React.FC<StationModelGridTabProps> = ({
 
       <div style={{ ...dividerStyle, left: LEFT_PANEL_WIDTH }} />
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '42px 30px 40px 30px' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '42px 30px 40px 30px' }}>
         {totalActiveCells > 0 ? renderCells() : (
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Задайте параметры сетки</span>
         )}

@@ -1,4 +1,4 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (с пропом hideCheckbox)
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (симметричный ресайз для fitToWidth)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -248,7 +248,7 @@ const DataTable: React.FC<DataTableProps> = ({
     const contentWidth = fitToWidth ? tableWidth : Math.max(tableWidth, realContentWidth);
     
     return { layout, contentWidth, widths, minWidths };
-  }, [columns, visibleKeys, tableWidth, effectiveFirstColLeft, customWidths, baseAvailableWidth, getMinWidth, fitToWidth]);
+  }, [columns, visibleKeys, tableWidth, effectiveFirstColLeft, customWidths, getMinWidth, fitToWidth]);
 
   useEffect(() => {
     const visibleColumns = columns.filter(c => visibleKeys.includes(c.key));
@@ -369,53 +369,102 @@ const DataTable: React.FC<DataTableProps> = ({
       
       const minWidth = getMinWidth(visibleColumns[colIndex]);
       
-      if (delta > 0) {
-        const maxGrow = MAX_COLUMN_WIDTH - startWidth;
-        if (maxGrow <= 0) return;
-        
-        const actualGrow = Math.min(delta, maxGrow);
-        
-        let remainingToShrink = actualGrow;
-        for (let i = colIndex + 1; i < visibleColumns.length && remainingToShrink > 0; i++) {
-          const key = visibleColumns[i].key;
-          const rightMin = getMinWidth(visibleColumns[i]);
-          const shrinkable = newWidths[key] - rightMin;
-          const shrink = Math.min(shrinkable, remainingToShrink);
-          newWidths[key] -= shrink;
-          remainingToShrink -= shrink;
+      if (fitToWidth) {
+        // Симметричный ресайз для fitToWidth
+        if (delta > 0) {
+          // Расширение вправо: текущая колонка растёт, соседние справа сжимаются
+          const maxGrow = MAX_COLUMN_WIDTH - startWidth;
+          if (maxGrow <= 0) return;
+          
+          let actualGrow = Math.min(delta, maxGrow);
+          
+          let remainingToShrink = actualGrow;
+          for (let i = colIndex + 1; i < visibleColumns.length && remainingToShrink > 0; i++) {
+            const key = visibleColumns[i].key;
+            const rightMin = getMinWidth(visibleColumns[i]);
+            const shrinkable = newWidths[key] - rightMin;
+            const shrink = Math.min(shrinkable, remainingToShrink);
+            newWidths[key] -= shrink;
+            remainingToShrink -= shrink;
+          }
+          
+          // Если справа не хватило места, ограничиваем рост
+          actualGrow -= remainingToShrink;
+          
+          newWidths[columnKey] = startWidth + actualGrow;
+          
+        } else if (delta < 0) {
+          // Сжатие влево: текущая колонка сжимается, соседняя справа расширяется
+          const absDelta = Math.abs(delta);
+          
+          let remainingDelta = absDelta;
+          let leftNewWidth = startWidth;
+          
+          const maxShrink = startWidth - minWidth;
+          const actualShrink = Math.min(remainingDelta, maxShrink);
+          leftNewWidth = startWidth - actualShrink;
+          remainingDelta -= actualShrink;
+          
+          const totalShrink = absDelta - remainingDelta;
+          const rightKey = visibleColumns[colIndex + 1]?.key;
+          if (rightKey && totalShrink > 0) {
+            const maxGrowRight = MAX_COLUMN_WIDTH - newWidths[rightKey];
+            const growRight = Math.min(totalShrink, maxGrowRight);
+            newWidths[rightKey] += growRight;
+          }
+          
+          newWidths[columnKey] = leftNewWidth;
         }
-        
-        newWidths[columnKey] = startWidth + actualGrow;
-        
-      } else if (delta < 0) {
-        const absDelta = Math.abs(delta);
-        
-        let remainingDelta = absDelta;
-        let leftNewWidth = startWidth;
-        
-        const maxShrink = startWidth - minWidth;
-        const actualShrink = Math.min(remainingDelta, maxShrink);
-        leftNewWidth = startWidth - actualShrink;
-        remainingDelta -= actualShrink;
-        
-        for (let i = colIndex - 1; i >= 0 && remainingDelta > 0; i--) {
-          const key = visibleColumns[i].key;
-          const leftMin = getMinWidth(visibleColumns[i]);
-          const shrinkable = newWidths[key] - leftMin;
-          const shrink = Math.min(shrinkable, remainingDelta);
-          newWidths[key] -= shrink;
-          remainingDelta -= shrink;
+      } else {
+        // Обычный режим
+        if (delta > 0) {
+          const maxGrow = MAX_COLUMN_WIDTH - startWidth;
+          if (maxGrow <= 0) return;
+          
+          const actualGrow = Math.min(delta, maxGrow);
+          
+          let remainingToShrink = actualGrow;
+          for (let i = colIndex + 1; i < visibleColumns.length && remainingToShrink > 0; i++) {
+            const key = visibleColumns[i].key;
+            const rightMin = getMinWidth(visibleColumns[i]);
+            const shrinkable = newWidths[key] - rightMin;
+            const shrink = Math.min(shrinkable, remainingToShrink);
+            newWidths[key] -= shrink;
+            remainingToShrink -= shrink;
+          }
+          
+          newWidths[columnKey] = startWidth + (actualGrow - remainingToShrink);
+          
+        } else if (delta < 0) {
+          const absDelta = Math.abs(delta);
+          
+          let remainingDelta = absDelta;
+          let leftNewWidth = startWidth;
+          
+          const maxShrink = startWidth - minWidth;
+          const actualShrink = Math.min(remainingDelta, maxShrink);
+          leftNewWidth = startWidth - actualShrink;
+          remainingDelta -= actualShrink;
+          
+          for (let i = colIndex - 1; i >= 0 && remainingDelta > 0; i--) {
+            const key = visibleColumns[i].key;
+            const leftMin = getMinWidth(visibleColumns[i]);
+            const shrinkable = newWidths[key] - leftMin;
+            const shrink = Math.min(shrinkable, remainingDelta);
+            newWidths[key] -= shrink;
+            remainingDelta -= shrink;
+          }
+          
+          const totalShrink = absDelta - remainingDelta;
+          const rightKey = visibleColumns[colIndex + 1]?.key;
+          if (rightKey && totalShrink > 0) {
+            const maxGrowRight = MAX_COLUMN_WIDTH - newWidths[rightKey];
+            const growRight = Math.min(totalShrink, maxGrowRight);
+            newWidths[rightKey] += growRight;
+          }
+          
+          newWidths[columnKey] = leftNewWidth;
         }
-        
-        const totalShrink = absDelta - remainingDelta;
-        const rightKey = visibleColumns[colIndex + 1]?.key;
-        if (rightKey && totalShrink > 0) {
-          const maxGrowRight = MAX_COLUMN_WIDTH - newWidths[rightKey];
-          const growRight = Math.min(totalShrink, maxGrowRight);
-          newWidths[rightKey] += growRight;
-        }
-        
-        newWidths[columnKey] = leftNewWidth;
       }
       
       setCustomWidths(newWidths);
@@ -437,7 +486,7 @@ const DataTable: React.FC<DataTableProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizing, getMinWidth, onWidthsChange]);
+  }, [resizing, getMinWidth, onWidthsChange, fitToWidth]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
