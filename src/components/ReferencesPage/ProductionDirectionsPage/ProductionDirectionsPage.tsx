@@ -1,4 +1,4 @@
-// ProductionDirectionsPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
+// ProductionDirectionsPage.tsx — ИСПРАВЛЕННЫЙ (добавлены печать, PDF, Excel, Word)
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -405,6 +405,125 @@ const ProductionDirectionsPage = () => {
     return result;
   }, [responseData.data, searchValue, sortColumn, sortDirection]);
 
+  // ===== БЛОК ЭКСПОРТА =====
+  const getColumnLabel = (key: string) => {
+    const col = ALL_COLUMNS.find(c => c.key === key);
+    return col ? col.label : key;
+  };
+
+  const columnKeys = ALL_COLUMNS.filter(c => responseData.columns.includes(c.key)).map(c => c.key);
+  const columnLabels = columnKeys.map(getColumnLabel);
+
+  const sortLabel = sortColumn
+    ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
+    : '';
+
+  let filtersText = '';
+  // Фильтров нет
+
+  const preparePayload = useCallback(() => {
+    const preparedData = filteredData.map(item => {
+      const row: Record<string, string> = {};
+      columnKeys.forEach(key => { row[key] = renderCell(key, item); });
+      return row;
+    });
+    const footerLines: string[] = [];
+    if (sortLabel) footerLines.push(`Сортировка: ${sortLabel}`);
+    return {
+      title: 'Направления производства',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines,
+    };
+  }, [filteredData, columnKeys, columnLabels, sortLabel]);
+
+  const handlePrint = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/production-directions/print`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '800px';
+      iframe.style.height = '600px';
+      iframe.style.visibility = 'visible';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 500);
+      };
+    } catch (e) { console.error('Ошибка печати', e); }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/production-directions/export-pdf`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'production-directions.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/production-directions/export-excel`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'production-directions.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/production-directions/export-word`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'production-directions.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
+  // ===== КОНЕЦ БЛОКА =====
+
   if (isLoading) {
     return (
       <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -470,8 +589,10 @@ const ProductionDirectionsPage = () => {
           selectedCount={selectedIds.size}
           onCreate={handleCreateClick}
           onDelete={handleDeleteClick}
-          onPrint={() => {}}
-          onPrintPdf={() => {}}
+          onPrint={handlePrint}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadWord={handleDownloadWord}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}

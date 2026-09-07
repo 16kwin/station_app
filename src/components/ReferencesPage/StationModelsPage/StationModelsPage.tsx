@@ -425,20 +425,23 @@ const StationModelsPage = () => {
     : '';
 
   let filtersText = '';
-  if (activeFilters.size > 0) {
-    const filterLabels = Array.from(activeFilters).map(key => {
-      const field = FILTER_FIELDS.find(f => f.key === key);
-      const fieldLabel = field ? field.label : getColumnLabel(key);
-      const values = filterValues[key];
-      if (!values || values.size === 0) return fieldLabel;
-      const optionLabels = Array.from(values).map(uid => {
-        const opt = (field?.options || []).find(o => o.uid === uid);
-        return opt ? opt.name : uid;
-      });
-      return `${fieldLabel}: ${optionLabels.join(', ')}`;
+if (activeFilters.size > 0) {
+  const filterLabels = Array.from(activeFilters).map(key => {
+    const field = FILTER_FIELDS.find(f => f.key === key);
+    const fieldLabel = field ? field.label : getColumnLabel(key);
+    const values = filterValues[key];
+    if (!values || values.size === 0) return fieldLabel;
+
+    // Пытаемся получить список опций из filterOptions или из field.options
+    let options = filterOptions[key] || field?.options || [];
+    const optionLabels = Array.from(values).map(uid => {
+      const opt = options.find(o => o.uid === uid);
+      return opt ? opt.name : uid;
     });
-    filtersText = filterLabels.join('; ');
-  }
+    return `${fieldLabel}: ${optionLabels.join(', ')}`;
+  });
+  filtersText = filterLabels.join('; ');
+}
 
   const preparePayload = useCallback(() => {
     const preparedData = filteredData.map(item => {

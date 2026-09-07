@@ -1,4 +1,4 @@
-// SupplierDirectionsPage.tsx — ИСПРАВЛЕННЫЙ (добавлены печать, PDF, Excel, Word)
+// MeasuresPage.tsx — страница для справочника «Единицы измерения характеристик»
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,10 +14,10 @@ import ContextMenuCopyIcon16 from '../../../assets/Icons/CopyIcons/CopyIcon16Bla
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 import Popup2 from '../../../assets/References/popup2.svg';
 
-interface SupplierDirectionRowData { [key: string]: any; }
-interface SupplierDirectionListResponse {
+interface MeasureRowData { [key: string]: any; }
+interface MeasureListResponse {
   columns: string[];
-  data: SupplierDirectionRowData[];
+  data: MeasureRowData[];
   columnWidths?: Record<string, number>;
   requiredColumns?: string[];
 }
@@ -26,9 +26,10 @@ interface ColumnItem { key: string; label: string; }
 
 const ALL_COLUMNS: ColumnItem[] = [
   { key: 'name', label: 'Наименование' },
+  { key: 'description', label: 'Описание' },
 ];
 
-const REQUIRED_COLUMNS = new Set(['name']);
+const REQUIRED_COLUMNS = new Set(['name', 'description']);
 
 const SORT_FIELDS = [
   { key: 'name', label: 'Наименование', iconType: '19' as const },
@@ -64,16 +65,17 @@ const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> =
   return widths;
 };
 
-const SupplierDirectionsPage = () => {
+const MeasuresPage = () => {
   const { openTab } = useTabs();
-  const [responseData, setResponseData] = useState<SupplierDirectionListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
+  const [responseData, setResponseData] = useState<MeasureListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showEditPopup, setShowEditPopup] = useState(false);
-  const [editItem, setEditItem] = useState<SupplierDirectionRowData | null>(null);
+  const [editItem, setEditItem] = useState<MeasureRowData | null>(null);
   const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -94,8 +96,8 @@ const SupplierDirectionsPage = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/supplier-directions?userId=${USER_ID}`);
-      const response = r.data as SupplierDirectionListResponse;
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/measures-crud?userId=${USER_ID}`);
+      const response = r.data as MeasureListResponse;
       
       let effectiveColumns = response.columns;
       let effectiveRequiredColumns = new Set(REQUIRED_COLUMNS);
@@ -149,7 +151,7 @@ const SupplierDirectionsPage = () => {
         };
       });
       const columnsJson = JSON.stringify(columnsJsonObj);
-      AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/columns-settings?userId=${USER_ID}`, { columnsJson })
+      AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/measures-crud/columns-settings?userId=${USER_ID}`, { columnsJson })
         .then(() => setIsFirstInit(false))
         .catch(e => {
           console.error('Ошибка сохранения настроек колонок:', e);
@@ -160,7 +162,7 @@ const SupplierDirectionsPage = () => {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/settings?userId=${USER_ID}`);
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/measures-crud/settings?userId=${USER_ID}`);
       const settings = r.data as { sortJson: string };
       if (settings.sortJson && settings.sortJson !== '{}') {
         const sort = JSON.parse(settings.sortJson) as { column?: string; direction?: 'asc' | 'desc' };
@@ -177,7 +179,7 @@ const SupplierDirectionsPage = () => {
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/events`);
+      const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/measures-crud/events`);
       setHistoryEvents((r.data || []).map((e: any) => ({ uid: e.uid, createdAt: e.createdAt, author: e.author, eventDescription: e.eventDescription })));
     } catch (e) {
       console.error(e);
@@ -193,7 +195,7 @@ const SupplierDirectionsPage = () => {
 
   const saveSort = useCallback((column: string | null, direction: 'asc' | 'desc') => {
     const sortJson = column ? JSON.stringify({ column, direction }) : '{}';
-    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/sort-settings?userId=${USER_ID}`, { sortJson }).catch(e => console.error(e));
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/measures-crud/sort-settings?userId=${USER_ID}`, { sortJson }).catch(e => console.error(e));
   }, []);
 
   useEffect(() => {
@@ -211,7 +213,7 @@ const SupplierDirectionsPage = () => {
       };
     });
     const columnsJson = JSON.stringify(columnsJsonObj);
-    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/measures-crud/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
   }, [visibleColumns, requiredColumns]);
 
   const handleResetToBase = useCallback(() => {
@@ -231,7 +233,7 @@ const SupplierDirectionsPage = () => {
       };
     });
     const columnsJson = JSON.stringify(columnsJsonObj);
-    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/measures-crud/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
   }, [requiredColumns]);
 
   const handleSaveColumns = (cols: Set<string>) => {
@@ -252,11 +254,12 @@ const SupplierDirectionsPage = () => {
       };
     });
     const columnsJson = JSON.stringify(columnsJsonObj);
-    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
+    AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/measures-crud/columns-settings?userId=${USER_ID}`, { columnsJson }).catch(e => console.error(e));
   };
 
   const handleCreateClick = () => {
     setFormName('');
+    setFormDescription('');
     setEditItem(null);
     setShowCreatePopup(true);
   };
@@ -265,7 +268,7 @@ const SupplierDirectionsPage = () => {
     if (!formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/supplier-directions`, { name: formName.trim() });
+      await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/measures-crud`, { name: formName.trim(), description: formDescription.trim() });
       await fetchData();
       setShowCreatePopup(false);
     } catch (e) {
@@ -279,7 +282,7 @@ const SupplierDirectionsPage = () => {
     if (!editItem || !formName.trim()) return;
     setIsSaving(true);
     try {
-      await AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/${editItem.uid}`, { name: formName.trim() });
+      await AxiosService.patch(`${ConstantInfo.apiBaseUrl}/api/measures-crud/${editItem.uid}`, { name: formName.trim(), description: formDescription.trim() });
       await fetchData();
       setShowEditPopup(false);
       setEditItem(null);
@@ -299,10 +302,10 @@ const SupplierDirectionsPage = () => {
   const confirmDelete = async () => {
     try {
       if (deleteTargetUid) {
-        await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/${deleteTargetUid}`);
+        await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/measures-crud/${deleteTargetUid}`);
       } else {
         for (const uid of selectedIds) {
-          await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/supplier-directions/${uid}`);
+          await AxiosService.delete(`${ConstantInfo.apiBaseUrl}/api/measures-crud/${uid}`);
         }
       }
       await fetchData();
@@ -353,6 +356,7 @@ const SupplierDirectionsPage = () => {
     if (item) {
       setEditItem(item);
       setFormName(item.name || '');
+      setFormDescription(item.description || '');
       setShowEditPopup(true);
     }
   };
@@ -364,6 +368,7 @@ const SupplierDirectionsPage = () => {
         if (item) {
           setEditItem(item);
           setFormName(item.name || '');
+          setFormDescription(item.description || '');
           setShowEditPopup(true);
         }
       } },
@@ -377,14 +382,14 @@ const SupplierDirectionsPage = () => {
     ];
   }, [responseData.data]);
 
-  const renderCell = (key: string, item: SupplierDirectionRowData): string => {
+  const renderCell = (key: string, item: MeasureRowData): string => {
     const val = item[key];
     if (val === null || val === undefined) return '—';
     return String(val);
   };
 
   const isGrayColumn = (key: string): boolean => {
-    return !['name'].includes(key);
+    return !['name', 'description'].includes(key);
   };
 
   const filteredData = useMemo(() => {
@@ -419,7 +424,7 @@ const SupplierDirectionsPage = () => {
     : '';
 
   let filtersText = '';
-  // Фильтров нет, оставляем пустым
+  // Фильтров нет
 
   const preparePayload = useCallback(() => {
     const preparedData = filteredData.map(item => {
@@ -429,9 +434,8 @@ const SupplierDirectionsPage = () => {
     });
     const footerLines: string[] = [];
     if (sortLabel) footerLines.push(`Сортировка: ${sortLabel}`);
-    // Фильтры не добавляем
     return {
-      title: 'Направления поставщиков',
+      title: 'Единицы измерения характеристик',
       columns: columnKeys,
       columnLabels: columnLabels,
       data: preparedData,
@@ -443,7 +447,7 @@ const SupplierDirectionsPage = () => {
   const handlePrint = async () => {
     try {
       const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/supplier-directions/print`,
+        `${ConstantInfo.apiBaseUrl}/api/measures-crud/print`,
         preparePayload(),
         { responseType: 'blob' }
       );
@@ -470,7 +474,7 @@ const SupplierDirectionsPage = () => {
   const handleDownloadPdf = async () => {
     try {
       const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/supplier-directions/export-pdf`,
+        `${ConstantInfo.apiBaseUrl}/api/measures-crud/export-pdf`,
         preparePayload(),
         { responseType: 'blob' }
       );
@@ -478,7 +482,7 @@ const SupplierDirectionsPage = () => {
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'supplier-directions.pdf';
+      link.download = 'measures.pdf';
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -489,7 +493,7 @@ const SupplierDirectionsPage = () => {
   const handleDownloadExcel = async () => {
     try {
       const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/supplier-directions/export-excel`,
+        `${ConstantInfo.apiBaseUrl}/api/measures-crud/export-excel`,
         preparePayload(),
         { responseType: 'blob' }
       );
@@ -497,7 +501,7 @@ const SupplierDirectionsPage = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'supplier-directions.xlsx';
+      link.download = 'measures.xlsx';
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -508,7 +512,7 @@ const SupplierDirectionsPage = () => {
   const handleDownloadWord = async () => {
     try {
       const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/supplier-directions/export-word`,
+        `${ConstantInfo.apiBaseUrl}/api/measures-crud/export-word`,
         preparePayload(),
         { responseType: 'blob' }
       );
@@ -516,7 +520,7 @@ const SupplierDirectionsPage = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'supplier-directions.docx';
+      link.download = 'measures.docx';
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -545,7 +549,7 @@ const SupplierDirectionsPage = () => {
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
         <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
-          {showHistory ? 'Справочник: Направления поставщиков (История изменений)' : 'Справочник: Направления поставщиков'}
+          {showHistory ? 'Справочник: Единицы измерения характеристик (История изменений)' : 'Справочник: Единицы измерения характеристик'}
         </h1>
       </div>
 
@@ -651,7 +655,7 @@ const SupplierDirectionsPage = () => {
       <ConfigurationPopup
         isOpen={showConfigurationPopup}
         onClose={() => setShowConfigurationPopup(false)}
-        title="Справочник: Направления поставщиков (Настройки списка)"
+        title="Справочник: Единицы измерения характеристик (Настройки списка)"
         columns={ALL_COLUMNS}
         visibleColumns={visibleColumns}
         requiredColumns={requiredColumns}
@@ -661,10 +665,14 @@ const SupplierDirectionsPage = () => {
       {showCreatePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание направления поставщика</h3>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание единицы измерения характеристик</h3>
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Наименование</label>
               <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите наименование" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label>
+              <input type="text" value={formDescription} onChange={e => setFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите описание" style={inputStyle} />
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
@@ -677,10 +685,14 @@ const SupplierDirectionsPage = () => {
       {showEditPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование направления поставщика</h3>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование единицы измерения характеристик</h3>
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Наименование</label>
               <input type="text" value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите наименование" autoFocus style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label>
+              <input type="text" value={formDescription} onChange={e => setFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleEditSubmit(); else if (e.key === 'Escape') setShowEditPopup(false); }} placeholder="Введите описание" style={inputStyle} />
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowEditPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
@@ -706,4 +718,4 @@ const SupplierDirectionsPage = () => {
   );
 };
 
-export default SupplierDirectionsPage;
+export default MeasuresPage;

@@ -1,4 +1,4 @@
-// BrandsPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
+// BrandsPage.tsx — ИСПРАВЛЕННЫЙ (добавлены печать, PDF, Excel, Word)
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,16 +56,11 @@ const EFFECTIVE_FIRST_COL_LEFT = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX
 
 const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> => {
   if (columnKeys.length === 0) return {};
-  
   const totalResizerWidth = RESIZER_WIDTH * (columnKeys.length - 1);
   const availableWidth = TABLE_WIDTH - EFFECTIVE_FIRST_COL_LEFT - LAST_COLUMN_RIGHT_PADDING - totalResizerWidth;
   const columnWidth = availableWidth / columnKeys.length;
-  
   const widths: Record<string, number> = {};
-  columnKeys.forEach(key => {
-    widths[key] = columnWidth;
-  });
-  
+  columnKeys.forEach(key => { widths[key] = columnWidth; });
   return widths;
 };
 
@@ -104,31 +99,27 @@ const BrandsPage = () => {
     try {
       const r = await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/brands-crud?userId=${USER_ID}`);
       const response = r.data as BrandListResponse;
-      
+
       let effectiveColumns = response.columns;
       let effectiveRequiredColumns = new Set(REQUIRED_COLUMNS);
-      
       if (response.requiredColumns && response.requiredColumns.length > 0) {
         effectiveRequiredColumns = new Set(response.requiredColumns);
       }
-      
       let effectiveColumnWidths = response.columnWidths || {};
-      
+
       if (!effectiveColumns || effectiveColumns.length === 0) {
         setIsFirstInit(true);
         effectiveColumns = ALL_COLUMNS.filter(c => effectiveRequiredColumns.has(c.key)).map(c => c.key);
         effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
       } else {
         effectiveRequiredColumns.forEach(key => {
-          if (!effectiveColumns.includes(key)) {
-            effectiveColumns = [...effectiveColumns, key];
-          }
+          if (!effectiveColumns.includes(key)) effectiveColumns = [...effectiveColumns, key];
         });
         if (Object.keys(effectiveColumnWidths).length === 0) {
           effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
         }
       }
-      
+
       setRequiredColumns(effectiveRequiredColumns);
       setVisibleColumns(new Set(effectiveColumns));
       setColumnWidths(effectiveColumnWidths);
@@ -267,7 +258,6 @@ const BrandsPage = () => {
     setResponseData(prev => ({ ...prev, columns: newCols }));
     const newWidths = calculateAdaptiveWidths(newCols);
     setColumnWidths(newWidths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -288,7 +278,6 @@ const BrandsPage = () => {
     setResponseData(prev => ({ ...prev, columns: newCols }));
     const newWidths = calculateAdaptiveWidths(newCols);
     setColumnWidths(newWidths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -475,6 +464,141 @@ const BrandsPage = () => {
     return filterOptions['manufacturerName'] || [];
   }, [filterOptions]);
 
+  // ===== БЛОК ЭКСПОРТА =====
+  const getColumnLabel = (key: string) => {
+    const col = ALL_COLUMNS.find(c => c.key === key);
+    return col ? col.label : key;
+  };
+
+  const columnKeys = ALL_COLUMNS.filter(c => responseData.columns.includes(c.key)).map(c => c.key);
+  const columnLabels = columnKeys.map(getColumnLabel);
+
+  const sortLabel = sortColumn
+    ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
+    : '';
+
+  let filtersText = '';
+  if (activeFilters.size > 0) {
+    const filterLabels = Array.from(activeFilters).map(key => {
+      const field = FILTER_FIELDS.find(f => f.key === key);
+      const fieldLabel = field ? field.label : getColumnLabel(key);
+      const values = filterValues[key];
+      if (!values || values.size === 0) return fieldLabel;
+
+      let options = filterOptions[key] || field?.options || [];
+      const optionLabels = Array.from(values).map(uid => {
+        const opt = options.find(o => o.uid === uid);
+        return opt ? opt.name : uid;
+      });
+      return `${fieldLabel}: ${optionLabels.join(', ')}`;
+    });
+    filtersText = filterLabels.join('; ');
+  }
+
+  const preparePayload = useCallback(() => {
+    const preparedData = filteredData.map(item => {
+      const row: Record<string, string> = {};
+      columnKeys.forEach(key => { row[key] = renderCell(key, item); });
+      return row;
+    });
+    const footerLines: string[] = [];
+    if (sortLabel) footerLines.push(`Сортировка: ${sortLabel}`);
+    if (filtersText) footerLines.push(`Фильтры: ${filtersText}`);
+    return {
+      title: 'Бренды',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines,
+    };
+  }, [filteredData, columnKeys, columnLabels, sortLabel, filtersText]);
+
+  const handlePrint = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/brands-crud/print`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '800px';
+      iframe.style.height = '600px';
+      iframe.style.visibility = 'visible';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 500);
+      };
+    } catch (e) { console.error('Ошибка печати', e); }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/brands-crud/export-pdf`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'brands.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/brands-crud/export-excel`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'brands.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/brands-crud/export-word`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'brands.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
+  // ===== КОНЕЦ БЛОКА =====
+
   if (isLoading) {
     return (
       <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -573,8 +697,10 @@ const BrandsPage = () => {
           selectedCount={selectedIds.size}
           onCreate={handleCreateClick}
           onDelete={handleDeleteClick}
-          onPrint={() => {}}
-          onPrintPdf={() => {}}
+          onPrint={handlePrint}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadWord={handleDownloadWord}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}
