@@ -507,6 +507,7 @@ warningTimeout: 10 * 1000,
 restApiManufacturerDeleteImage: (imageUid: string) => `/api/manufacturers-crud/images/${imageUid}`,
 restApiNomenclatureGetCodeDefault: (userId: number, codeKind: string) => `/api/nomenclature/code-default?userId=${userId}&codeKind=${codeKind}`,
 restApiNomenclatureSaveCodeDefault: '/api/nomenclature/code-default',
+restApiNomenclatureReleases: '/api/nomenclature/releases',
 
 restApiStationCopy: (uid: string) => `/api/stations/crud/${uid}/copy`,
 };

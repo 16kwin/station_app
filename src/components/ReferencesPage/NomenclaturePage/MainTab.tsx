@@ -1,4 +1,4 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (исправлены codeFlags для раздельных вкладок)
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (поле "Выпуск" только для готовых деталей, как группа учета)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JsBarcode from 'jsbarcode';
@@ -29,8 +29,6 @@ import IconCODE2 from '../../../assets/References/NomenclatureCreatePage/CODE3.s
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import type { CommonProps, LocalImageItem, LocalCode, ServerCode } from './NomenclatureCreatePage';
-
-// ==================== Генерация кода ====================
 
 const validateAndGenerate = async (format: string, text: string): Promise<{ image: string | null; error: string | null }> => {
   const trimmed = text.trim();
@@ -166,24 +164,6 @@ const CODE_TYPES = [
   { value: 'qr', label: 'QR_CODE', kind: '2D' },
 ];
 
-const getCodeHint = (type: string): string => {
-  switch (type) {
-    case 'code32': return 'Пример: 123456789';
-    case 'code39': return 'Пример: ABC123456';
-    case 'ean8': return 'Пример: 1234567';
-    case 'ean13': return 'Пример: 5901234123457';
-    case 'jan8': return 'Пример: 4901234';
-    case 'jan13': return 'Пример: 4901234123457';
-    case 'upca': return 'Пример: 042100005264';
-    case 'upce': return 'Пример: 123456';
-    case 'aztec': return 'Пример: AZTEC123';
-    case 'datamatrix': return 'Пример: DM123456';
-    case 'pdf417': return 'Пример: PDF417123';
-    case 'qr': return 'Пример: QR123456';
-    default: return 'Введите код';
-  }
-};
-
 const ToggleSwitch = React.memo(({ value, onChange }: { value: boolean; onChange: () => void }) => {
   const trackWidth = 26; const trackHeight = 13; const knobSize = 11; const padding = (trackHeight - knobSize) / 2;
   return (
@@ -208,7 +188,7 @@ const StarRatingSmall = ({ value, size = 18 }: { value: number; size?: number })
 };
 
 const MainTab: React.FC<CommonProps> = (props) => {
-  const { uid, code, name, article, description, isEdit, isUploading, images, selectedImageIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, fullscreenImage, typeMaterials, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, handleImageUpload, handleDeleteImage, openPopup, handleAccountingGroupSelect, localImages, setLocalImages, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, serverBarcodes, serverSkus, validationErrors, setValidationErrors, isFinishedProduct } = props;
+  const { uid, code, name, article, description, isEdit, isUploading, images, selectedImageIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedRelease, selectedReleaseId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, fullscreenImage, typeMaterials, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setSelectedRelease, setSelectedReleaseId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, handleImageUpload, handleDeleteImage, openPopup, handleAccountingGroupSelect, localImages, setLocalImages, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, serverBarcodes, serverSkus, validationErrors, setValidationErrors, isFinishedProduct } = props;
 
   const [averageRating, setAverageRating] = useState(0);
   const [localSelectedIndex, setLocalSelectedIndex] = useState(0);
@@ -218,19 +198,17 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [catalogOptions, setCatalogOptions] = useState<{ uid: string; name: string }[]>([]);
   const [nomenclatureGroupOptions, setNomenclatureGroupOptions] = useState<{ uid: string; name: string }[]>([]);
   const [nomenclatureTypeOptions, setNomenclatureTypeOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [releaseOptions, setReleaseOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [releaseOpen, setReleaseOpen] = useState(false);
 
-  // Новые состояния для userId и типов по умолчанию
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [defaultBarcodeType, setDefaultBarcodeType] = useState<string | null>(null);
   const [defaultSkuType, setDefaultSkuType] = useState<string | null>(null);
 
-  // Уникальный ID для этой вкладки (создаётся один раз при монтировании)
   const tabInstanceId = useRef(`tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`).current;
 
-  // Храним codeFlags в состоянии React, а не в localStorage
   const [codeFlags, setCodeFlags] = useState<{ [codeValue: string]: { isGenerated: boolean; codeKind: string } }>({});
 
-  // Миниатюры для штрихкода и SKU
   const [barcodeThumbnail, setBarcodeThumbnail] = useState<string | null>(null);
   const [skuThumbnail, setSkuThumbnail] = useState<string | null>(null);
 
@@ -265,7 +243,13 @@ const MainTab: React.FC<CommonProps> = (props) => {
     } catch (e) { console.error(e); }
   };
 
-  // Функция получения текущего пользователя
+  const fetchReleaseOptions = async () => {
+    try {
+      const res = await AxiosService.get(ConstantInfo.restApiNomenclatureReleases);
+      setReleaseOptions(res.data || []);
+    } catch (e) { console.error(e); }
+  };
+
   const fetchCurrentUser = async () => {
     try {
       const res = await AxiosService.get(ConstantInfo.restApiCheckAuth);
@@ -281,7 +265,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
     }
   };
 
-  // Функция загрузки типа по умолчанию
   const fetchDefaultCodeType = async (userId: number, codeKind: string) => {
     try {
       const res = await AxiosService.get(ConstantInfo.restApiNomenclatureGetCodeDefault(userId, codeKind));
@@ -298,11 +281,22 @@ const MainTab: React.FC<CommonProps> = (props) => {
     }
   };
 
-  useEffect(() => { fetchCatalogOptions(); fetchCurrentUser(); }, []);
+  useEffect(() => { fetchCatalogOptions(); fetchCurrentUser(); fetchReleaseOptions(); }, []);
   useEffect(() => { fetchNomenclatureGroupOptions(); }, [selectedAccountingGroupId]);
   useEffect(() => { fetchNomenclatureTypeOptions(); }, [selectedNomenclatureGroupId]);
 
-  // Используем состояние codeFlags вместо localStorage
+  useEffect(() => {
+    if (!releaseOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.release-dropdown')) {
+        setReleaseOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [releaseOpen]);
+
   const enrichedServerBarcodes: any[] = useMemo(() => {
     return serverBarcodes.map((bc: any) => ({
       ...bc,
@@ -320,7 +314,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const currentBarcode = (localBarcodes && localBarcodes[0]) || enrichedServerBarcodes[0] || null;
   const currentSku = (localSkus && localSkus[0]) || enrichedServerSkus[0] || null;
 
-  // Генерация миниатюры штрихкода при изменении currentBarcode
   useEffect(() => {
     if (currentBarcode && currentBarcode.codeValue) {
       const generateBarcodeThumbnail = async () => {
@@ -337,7 +330,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
     }
   }, [currentBarcode]);
 
-  // Генерация миниатюры SKU при изменении currentSku
   useEffect(() => {
     if (currentSku && currentSku.codeValue) {
       const generateSkuThumbnail = async () => {
@@ -394,14 +386,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
     return () => clearTimeout(t);
   }, [skuValue, skuType, showSkuPopup]);
 
-  const handleDeleteBarcode = () => {
-    setLocalBarcodes([]);
-  };
-
-  const handleDeleteSku = () => {
-    setLocalSkus([]);
-  };
-
   const handleBarcodeSave = async () => {
     if (!barcodeValue.trim() || !barcodePreview) return;
     const newCode: any = {
@@ -412,13 +396,11 @@ const MainTab: React.FC<CommonProps> = (props) => {
     };
     setLocalBarcodes([newCode]);
     
-    // Обновляем флаг в состоянии (уникально для этой вкладки)
     setCodeFlags(prev => ({
       ...prev,
       [barcodeValue.trim()]: { isGenerated: true, codeKind: 'BARCODE' }
     }));
     
-    // Сохраняем тип по умолчанию, если переключатель включён
     if (barcodeSetDefault && currentUserId) {
       try {
         await AxiosService.post(ConstantInfo.restApiNomenclatureSaveCodeDefault, {
@@ -445,13 +427,11 @@ const MainTab: React.FC<CommonProps> = (props) => {
     };
     setLocalSkus([newCode]);
     
-    // Обновляем флаг в состоянии (уникально для этой вкладки)
     setCodeFlags(prev => ({
       ...prev,
       [skuValue.trim()]: { isGenerated: true, codeKind: 'SKU' }
     }));
     
-    // Сохраняем тип по умолчанию, если переключатель включён
     if (skuSetDefault && currentUserId) {
       try {
         await AxiosService.post(ConstantInfo.restApiNomenclatureSaveCodeDefault, {
@@ -474,7 +454,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
       userId = await fetchCurrentUser();
     }
     
-    // Загружаем тип по умолчанию ДО установки значения
     let defaultType: string | null = null;
     if (userId) {
       defaultType = await fetchDefaultCodeType(userId, 'BARCODE');
@@ -489,7 +468,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
       setDefaultFlag = typeToSet === defaultType;
     } else {
       setBarcodeValue('');
-      // Используем дефолтный тип, если он есть, иначе 'qr'
       typeToSet = defaultType || 'qr';
       setDefaultFlag = typeToSet === defaultType;
     }
@@ -509,7 +487,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
       userId = await fetchCurrentUser();
     }
     
-    // Загружаем тип по умолчанию ДО установки значения
     let defaultType: string | null = null;
     if (userId) {
       defaultType = await fetchDefaultCodeType(userId, 'SKU');
@@ -524,7 +501,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
       setDefaultFlag = typeToSet === defaultType;
     } else {
       setSkuValue('');
-      // Используем дефолтный тип, если он есть, иначе 'qr'
       typeToSet = defaultType || 'qr';
       setDefaultFlag = typeToSet === defaultType;
     }
@@ -580,7 +556,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
     ...images.map(img => ({ uid: img.uid, url: img.url, originalName: img.originalName, isLocal: false })),
     ...(localImages || []).map(img => ({ uid: img.url, url: img.url, originalName: img.file.name, isLocal: true })),
   ];
-  const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
+  const cs: React.CSSProperties = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 };
 
   const getRatingStatus = (): string => {
     if (averageRating === 0) return 'Рейтинг отсутствует';
@@ -663,6 +639,14 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const FIELD_WIDTH = 340;
   const FIELD_HEIGHT = 44;
   const SELECT_WIDTH = 340;
+
+  const releaseTopPosition = isFinishedProduct
+    ? 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30
+    : 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30;
+
+  const switchesTopPosition = isFinishedProduct
+    ? releaseTopPosition + 17 + 11 + 44 + 30
+    : releaseTopPosition;
 
   return (
     <div style={{ ...cs, display: 'flex', gap: 30, overflow: 'auto' }}>
@@ -799,8 +783,33 @@ const MainTab: React.FC<CommonProps> = (props) => {
           />
         </div>
 
+        {/* ВЫПУСК - только для готовых деталей, как группа учета */}
+        {isFinishedProduct && (
+          <div style={{ position: 'absolute', top: 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30, left: 40, right: 40 }}>
+            <span style={{ ...labelStyle, display: 'block', lineHeight: '17px' }}>Выпуск:</span>
+            <div className="release-dropdown" style={{ position: 'relative', marginTop: 11 }}>
+              <div onClick={() => { clearFieldError('release'); setReleaseOpen(!releaseOpen); }} style={{ width: 340, height: 44, borderRadius: 10, border: selectedReleaseId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedRelease ? '#666EFE' : '#9CA3AF', cursor: 'pointer', position: 'relative', boxSizing: 'border-box' }}>
+                <img src={selectedRelease ? Icon62 : Icon61} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ marginLeft: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedRelease ? '#666EFE' : '#9CA3AF' }}>{selectedRelease || 'Выбрать вид выпуска'}</span>
+                <motion.img src={Icon9} alt="" style={{ ...arrowIconStyle, transform: releaseOpen ? 'rotateX(180deg)' : 'rotateX(0deg)' }} />
+              </div>
+              <AnimatePresence>
+                {releaseOpen && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: 48, left: 0, width: 340, backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden' }}>
+                    {releaseOptions.map(o => (
+                      <div key={o.uid} onClick={() => { setSelectedReleaseId(o.uid); setSelectedRelease(o.name); setReleaseOpen(false); clearFieldError('release'); }} style={{ height: 44, display: 'flex', alignItems: 'center', paddingLeft: 44, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', cursor: 'pointer', backgroundColor: selectedReleaseId === o.uid ? '#F0F1FF' : '#FFFFFF' }} onMouseEnter={(e) => { if (selectedReleaseId !== o.uid) (e.target as HTMLElement).style.backgroundColor = '#F5F6FA'; }} onMouseLeave={(e) => { if (selectedReleaseId !== o.uid) (e.target as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>
+                        {o.name}
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
         {!isFinishedProduct && (
-          <div style={{ position: 'absolute', top: 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30, left: 40, right: 40, display: 'flex', flexDirection: 'column', gap: 15 }}>
+          <div style={{ position: 'absolute', top: switchesTopPosition, left: 40, right: 40, display: 'flex', flexDirection: 'column', gap: 15 }}>
             <div onClick={toggleUsage} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', height: 18 }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Многократное использование</span>
               <ToggleSwitch value={usage} onChange={toggleUsage} />
@@ -817,7 +826,7 @@ const MainTab: React.FC<CommonProps> = (props) => {
         )}
 
         {!isFinishedProduct && (
-          <div style={{ position: 'absolute', top: 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 18 + 15 + 18 + 15 + 18 + 30, left: 40, right: 40 }}>
+          <div style={{ position: 'absolute', top: switchesTopPosition + 18 + 15 + 18 + 15 + 18 + 30, left: 40, right: 40 }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <img src={Icon8} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#2D4059', marginLeft: 9 }}>Рейтинг номенклатуры:</span>

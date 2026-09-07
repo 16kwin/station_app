@@ -1,4 +1,4 @@
-// PriceHistoryTab.tsx — ПОЛНЫЙ ФАЙЛ (график с зумом от минут до месяцев)
+// PriceHistoryTab.tsx — ПОЛНЫЙ ФАЙЛ (исправлены отступы)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import AxiosService from '../../../services/AxiosService';
@@ -12,7 +12,6 @@ import Button4 from '../../../assets/References/NomenclatureCreatePage/button4.s
 import Button5 from '../../../assets/References/NomenclatureCreatePage/button5.svg';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Компонент для кастомного тика с поддержкой переноса строк
 const CustomTick = (props: any) => {
   const { x, y, payload, zoomDomain, extendedRange } = props;
   
@@ -85,7 +84,6 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState(0);
 
-  // Функция для получения времени создания записи
   const getCreationTime = (price: any, index: number): number => {
     if (price.createdAt) return new Date(price.createdAt).getTime();
     if (price.created_at) return new Date(price.created_at).getTime();
@@ -93,7 +91,6 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
     return index;
   };
 
-  // Сортируем: сначала по дате (новые сверху), если даты равны - по времени создания (более ранние сверху)
   const sortedPrices = [...prices].sort((a, b) => {
     const dateA = new Date(a.priceDate).getTime();
     const dateB = new Date(b.priceDate).getTime();
@@ -107,7 +104,6 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
     return createdA - createdB;
   });
   
-  // Для графика сортируем по возрастанию даты, затем по времени создания
   const chartData = [...prices]
     .sort((a, b) => {
       const dateA = new Date(a.priceDate).getTime();
@@ -281,7 +277,7 @@ const PriceHistoryTab: React.FC<CommonProps> = (props) => {
 
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
+  const cs: React.CSSProperties = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 };
 
   const TABLE_WIDTH = 1054;
   const TABLE_HEIGHT = 464;

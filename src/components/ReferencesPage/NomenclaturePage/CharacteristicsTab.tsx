@@ -1,4 +1,4 @@
-// CharacteristicsTab.tsx — ПОЛНЫЙ ФАЙЛ (удаление только через правую кнопку мыши)
+// CharacteristicsTab.tsx — ПОЛНЫЙ ФАЙЛ (исправлены отступы)
 import React, { useState, useEffect, useRef } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import Icon10 from '../../../assets/References/NomenclatureCreatePage/Icon10.svg';
@@ -72,7 +72,7 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
   const clearFieldError = (fieldKey: string) => { setValidationErrors(prev => { const next = new Set(prev); next.delete(fieldKey); return next; }); };
   const getSelectBorder = (fieldKey: string, isFilled: boolean): string => { if (validationErrors.has(fieldKey)) return '2px solid #FF3052'; if (isFilled) return '1px solid #666EFE'; return '1px solid rgba(102, 110, 254, 0.15)'; };
   const selectFieldStyleSmall = (hv: boolean, fieldKey: string): React.CSSProperties => ({ width: 300, height: 44, borderRadius: 10, border: getSelectBorder(fieldKey, hv), backgroundColor: '#FFFFFF', marginTop: 11, display: 'flex', alignItems: 'center', paddingLeft: 13, paddingRight: 13, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: hv ? '#666EFE' : '#9CA3AF', cursor: 'pointer', position: 'relative' as const, boxSizing: 'border-box' });
-  const cs: React.CSSProperties = { position: 'absolute', top: 164, left: 30, right: 30, bottom: 111 };
+  const cs: React.CSSProperties = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 };
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const displayBlueprints = (localBlueprints && localBlueprints.length > 0) ? localBlueprints.map(bp => ({ uid: bp.url, url: bp.url, originalName: bp.file.name })) : (blueprints || []);
   const isLocalBlueprints = localBlueprints && localBlueprints.length > 0;
