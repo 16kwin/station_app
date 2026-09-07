@@ -1,4 +1,4 @@
-// StationModelCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (кнопка Записать 154px, без текста "Сохранение...")
+// StationModelCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (заголовок использует initialState.name)
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -20,6 +20,9 @@ import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18
 import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
+import StatusIcon93Red from '../../../assets/Icons/StatusIcons/StatusIcon93Red.svg';
+import StatusIcon104Blue from '../../../assets/Icons/StatusIcons/StatusIcon104Blue.svg';
+import StatusIcon107Orange from '../../../assets/Icons/StatusIcons/StatusIcon107Orange.svg';
 
 interface CellData {
   id: string;
@@ -65,6 +68,7 @@ const StationModelCreatePage = () => {
 
   const [activeTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
   const [name, setName] = useState('');
   const [article, setArticle] = useState('');
@@ -102,6 +106,7 @@ const StationModelCreatePage = () => {
   const historySearchInputRef = useRef<HTMLInputElement>(null);
 
   const [initialState, setInitialState] = useState<InitialState | null>(null);
+  const [isDataSaved, setIsDataSaved] = useState(false);
 
   const cellsLoadedRef = useRef(false);
 
@@ -122,6 +127,11 @@ const StationModelCreatePage = () => {
       for (let drum = 1; drum <= drums; drum++) for (let col = 1; col <= columnsPerDrum; col++) for (let row = 1; row <= rowsPerColumn; row++) newCells.push({ id: crypto.randomUUID(), drum, column: col, row, colSpan: 1, rowSpan: 1, deleted: false });
     }
     setCells(newCells);
+    cellsLoadedRef.current = true;
+  }, [gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn]);
+
+  useEffect(() => {
+    cellsLoadedRef.current = false;
   }, [gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn]);
 
   useEffect(() => { generateCells(); }, [generateCells]);
@@ -129,8 +139,12 @@ const StationModelCreatePage = () => {
   useEffect(() => {
     if (!uid) return;
     const cp = window.location.pathname;
-    setIsEdit(cp.includes('/edit/'));
-    if (cp.includes('/edit/')) loadModelData(uid);
+    const isEditMode = cp.includes('/edit/');
+    setIsEdit(isEditMode);
+    if (isEditMode) {
+      setIsDataSaved(true);
+      loadModelData(uid);
+    }
   }, [uid]);
 
   useEffect(() => { if (historySearchExpanded && historySearchInputRef.current) setTimeout(() => historySearchInputRef.current?.focus(), 100); }, [historySearchExpanded]);
@@ -206,10 +220,21 @@ const StationModelCreatePage = () => {
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
+  const normalizeCells = useCallback((list: CellData[]) => {
+    return list.map(c => ({
+      drum: c.drum,
+      column: c.column,
+      row: c.row,
+      colSpan: c.colSpan,
+      rowSpan: c.rowSpan,
+      deleted: c.deleted,
+    })).sort((a, b) => a.column - b.column || a.row - b.row || (a.drum || 0) - (b.drum || 0));
+  }, []);
+
   const isDirty = useMemo(() => {
     if (!isEdit || !initialState) return name.trim().length > 0 || localImage !== null || localDocuments.length > 0 || documentChanges.length > 0 || deletedImageUid !== null;
     
-    const cellsChanged = JSON.stringify(cells) !== JSON.stringify(initialState.cells);
+    const cellsChanged = JSON.stringify(normalizeCells(cells)) !== JSON.stringify(normalizeCells(initialState.cells));
     const imageChanged = localImage !== null || deletedImageUid !== null;
     const documentsChanged = localDocuments.length > 0 || documentChanges.length > 0;
     
@@ -230,9 +255,21 @@ const StationModelCreatePage = () => {
       imageChanged ||
       documentsChanged
     );
-  }, [isEdit, initialState, name, article, revision, description, typeId, manufacturerId, gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn, cells, localImage, localDocuments, documentChanges, deletedImageUid]);
+  }, [isEdit, initialState, name, article, revision, description, typeId, manufacturerId, gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn, cells, localImage, localDocuments, documentChanges, deletedImageUid, normalizeCells]);
 
   const canSave = isDirty && name.trim().length > 0;
+
+  const getStatusIcon = (): string => {
+    if (!isDataSaved) return StatusIcon93Red;
+    if (isDirty) return StatusIcon107Orange;
+    return StatusIcon104Blue;
+  };
+
+  const getStatusIconWidth = (): number => {
+    if (!isDataSaved) return 93;
+    if (isDirty) return 107;
+    return 104;
+  };
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
@@ -243,8 +280,25 @@ const StationModelCreatePage = () => {
   };
 
   const handleHistoryClick = () => {
-    if (!showHistory) fetchHistory();
+    if (!showHistory) {
+      fetchHistory();
+      setSlideDirection('left');
+    } else {
+      setSlideDirection('right');
+    }
     setShowHistory(!showHistory);
+  };
+
+  const handleTabClick = (index: number) => {
+    if (showHistory) {
+      setSlideDirection('right');
+      setShowHistory(false);
+      setActiveTab(index);
+      return;
+    }
+    if (index === activeTab) return;
+    setSlideDirection(index > activeTab ? 'left' : 'right');
+    setActiveTab(index);
   };
 
   const handleSave = async () => {
@@ -325,6 +379,7 @@ const StationModelCreatePage = () => {
       });
 
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
+      setIsDataSaved(true);
       if (wasCreate && activeTabId) {
         setIsEdit(true);
         const newPath = `/references/station-models/edit/${uid}`;
@@ -340,19 +395,24 @@ const StationModelCreatePage = () => {
   const handleToggleCollapse = () => { if (!tabsCollapsed) setActiveTab(0); setTabsCollapsed(prev => !prev); };
   const openPopup = (type: PopupType, filter?: string) => { setPopupType(type); setPopupFilterParam(filter || undefined); setPopupOpen(true); if (uid) sessionStorage.setItem(getPopupOpenKey(), 'true'); };
 
+  const handleTypeSelect = (id: string, nm: string) => {
+    cellsLoadedRef.current = false;
+    setTypeId(id);
+    setTypeName(nm);
+    if (nm === 'Постамат' || nm === 'Дополнительный модуль') {
+      setGridType('postamat');
+      setDrums(null); setColumnsPerDrum(null); setRowsPerColumn(null);
+    } else {
+      setGridType('drum');
+      setColumns(null); setCellsPerColumn(null);
+    }
+  };
+
   const handlePopupSelect = (id: string, nm: string) => {
     cellsLoadedRef.current = false;
     switch (popupType) {
-      case 'stationType': 
-        setTypeId(id); 
-        setTypeName(nm); 
-        if (nm === 'Постамат' || nm === 'Дополнительный модуль') {
-          setGridType('postamat'); 
-          setDrums(null); setColumnsPerDrum(null); setRowsPerColumn(null);
-        } else {
-          setGridType('drum'); 
-          setColumns(null); setCellsPerColumn(null);
-        }
+      case 'stationType':
+        handleTypeSelect(id, nm);
         break;
       case 'stationManufacturer': 
         setManufacturerId(id); 
@@ -372,41 +432,10 @@ const StationModelCreatePage = () => {
   const historySearchWidth = historySearchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
   const tween = { type: 'tween' as const, duration: 0.2 };
 
-  return (
-    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF' }}>
-      <div style={{ position: 'absolute', top: 35, left: 60 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
-          {isEdit ? `Модель станции: ${name}` : 'Справочник: Модель станции (Создание)'}
-        </h1>
-      </div>
-
-      <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
-          <button onClick={() => { setShowHistory(false); setActiveTab(0); }} style={mainButtonStyle(activeTab === 0 && !showHistory)}>
-            <span>Основное</span>
-            <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
-            </button>
-          </button>
-          <AnimatePresence>
-            {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => (
-              <motion.button key={tab} onClick={() => { setShowHistory(false); setActiveTab(i + 1); }} style={buttonStyle(activeTab === i + 1 && !showHistory)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
-                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
-              </motion.button>
-            ))}
-          </AnimatePresence>
-        </div>
-        <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button style={{ ...smallButtonStyle, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF' }} onClick={handleHistoryClick}>
-            <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: showHistory ? 'brightness(0) invert(1)' : 'none' }} />
-          </button>
-        </div>
-      </div>
-
-      {showHistory ? (
-        <div style={{ position: 'absolute', top: 155, left: 30, right: 30, bottom: 96 }}>
+  const renderContent = () => {
+    if (showHistory) {
+      return (
+        <div style={{ position: 'absolute', top: 10, left: 0, right: 0, bottom: 0 }}>
           <div style={{ position: 'absolute', top: 0, left: 15, zIndex: 10, height: 40 }}>
             <motion.div 
               style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
@@ -438,42 +467,126 @@ const StationModelCreatePage = () => {
             />
           </div>
         </div>
-      ) : activeTab === 2 ? (
-        <StationModelFilesTab 
-          modelUid={uid || ''} 
-          isEdit={isEdit} 
-          localDocuments={localDocuments} 
-          setLocalDocuments={setLocalDocuments}
-          documentChanges={documentChanges}
-          setDocumentChanges={setDocumentChanges}
-        />
-      ) : (
-        <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96, backgroundColor: '#FFFFFF', borderRadius: 15, border: '1px solid rgba(102, 110, 254, 0.15)', overflow: 'hidden' }}>
-          {activeTab === 0 && (
-            <StationModelMainTab
-              uid={uid} code={modelCode} name={name} article={article} revision={revision} description={description}
-              typeId={typeId} typeName={typeName} manufacturerId={manufacturerId} manufacturerName={manufacturerName}
-              modelImageUrl={modelImageUrl} localImage={localImage} setLocalImage={setLocalImage}
-              setModelImageUrl={setModelImageUrl}
-              deletedImageUid={deletedImageUid} setDeletedImageUid={setDeletedImageUid}
-              setName={setName} setArticle={setArticle} setRevision={setRevision} setDescription={setDescription}
-              openPopup={openPopup} isEdit={isEdit}
-            />
-          )}
-          {activeTab === 1 && (
-            <StationModelGridTab
-              gridType={gridType} setGridType={setGridType}
-              columns={columns} setColumns={setColumns} cellsPerColumn={cellsPerColumn} setCellsPerColumn={setCellsPerColumn}
-              drums={drums} setDrums={setDrums} columnsPerDrum={columnsPerDrum} setColumnsPerDrum={setColumnsPerDrum}
-              rowsPerColumn={rowsPerColumn} setRowsPerColumn={setRowsPerColumn}
-              selectedDrum={selectedDrum} setSelectedDrum={setSelectedDrum}
-              typeId={typeId} cells={cells} setCells={setCells}
-            />
-          )}
-        </div>
-      )}
+      );
+    }
 
-      <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15 }}>
+    if (activeTab === 2) {
+      return (
+        <div style={{ position: 'absolute', top: 10, left: 0, right: 0, bottom: 0 }}>
+          <StationModelFilesTab 
+            modelUid={uid || ''} 
+            isEdit={isEdit} 
+            localDocuments={localDocuments} 
+            setLocalDocuments={setLocalDocuments}
+            documentChanges={documentChanges}
+            setDocumentChanges={setDocumentChanges}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ position: 'absolute', top: 10, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF', borderRadius: 15, border: '1px solid rgba(102, 110, 254, 0.15)', overflow: 'hidden' }}>
+        {activeTab === 0 && (
+          <StationModelMainTab
+            uid={uid} code={modelCode} name={name} article={article} revision={revision} description={description}
+            typeId={typeId} typeName={typeName} manufacturerId={manufacturerId} manufacturerName={manufacturerName}
+            modelImageUrl={modelImageUrl} localImage={localImage} setLocalImage={setLocalImage}
+            setModelImageUrl={setModelImageUrl}
+            deletedImageUid={deletedImageUid} setDeletedImageUid={setDeletedImageUid}
+            setName={setName} setArticle={setArticle} setRevision={setRevision} setDescription={setDescription}
+            setTypeId={setTypeId} setTypeName={setTypeName} setManufacturerId={setManufacturerId} setManufacturerName={setManufacturerName}
+            handleTypeSelect={handleTypeSelect}
+            openPopup={openPopup} isEdit={isEdit}
+          />
+        )}
+        {activeTab === 1 && (
+          <StationModelGridTab
+            gridType={gridType} setGridType={setGridType}
+            columns={columns} setColumns={setColumns} cellsPerColumn={cellsPerColumn} setCellsPerColumn={setCellsPerColumn}
+            drums={drums} setDrums={setDrums} columnsPerDrum={columnsPerDrum} setColumnsPerDrum={setColumnsPerDrum}
+            rowsPerColumn={rowsPerColumn} setRowsPerColumn={setRowsPerColumn}
+            selectedDrum={selectedDrum} setSelectedDrum={setSelectedDrum}
+            typeId={typeId} cells={cells} setCells={setCells}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const slideVariants = {
+    enter: (direction: 'left' | 'right') => ({
+      x: direction === 'left' ? 200 : -200,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction: 'left' | 'right') => ({
+      x: direction === 'left' ? -200 : 200,
+      opacity: 0,
+    }),
+  };
+
+  const currentView = showHistory ? 'history' : `tab-${activeTab}`;
+
+  return (
+    <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 35, left: 60, zIndex: 10, display: 'flex', alignItems: 'center', gap: 25 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
+          {showHistory 
+            ? `Модель станции: ${initialState?.name || 'Модель'} (История изменений)` 
+            : isEdit 
+              ? `Справочник: Модель станции (${initialState?.name || 'Модель'})` 
+              : 'Справочник: Модель станции (Создание)'}
+        </h1>
+        <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
+      </div>
+
+      <div style={{ position: 'absolute', top: 99, left: 60, right: 60, display: 'flex', alignItems: 'center', zIndex: 10 }}>
+        <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
+          <button onClick={() => handleTabClick(0)} style={mainButtonStyle(activeTab === 0 && !showHistory)}>
+            <span>Основное</span>
+            <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
+            </button>
+          </button>
+          <AnimatePresence>
+            {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => (
+              <motion.button key={tab} onClick={() => handleTabClick(i + 1)} style={buttonStyle(activeTab === i + 1 && !showHistory)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
+                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
+              </motion.button>
+            ))}
+          </AnimatePresence>
+        </div>
+        <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
+          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          <button style={{ ...smallButtonStyle, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF' }} onClick={handleHistoryClick}>
+            <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: showHistory ? 'brightness(0) invert(1)' : 'none' }} />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ position: 'absolute', top: 155, left: 30, right: 30, bottom: 96, overflow: 'hidden' }}>
+        <AnimatePresence mode="wait" custom={slideDirection}>
+          <motion.div
+            key={currentView}
+            custom={slideDirection}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15, zIndex: 10 }}>
         <button 
           onClick={canSave ? handleSave : undefined} 
           disabled={!canSave || isSaving} 

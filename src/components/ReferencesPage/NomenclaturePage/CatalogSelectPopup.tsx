@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (с поиском)
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен тип 'release')
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../elements/CustomScrollbar';
@@ -45,6 +45,7 @@ export type PopupType =
   | 'accountingGroup'
   | 'nomenclatureGroup'
   | 'nomenclatureType'
+  | 'release'
   | 'attributeType'
   | 'unit'
   | 'manufacturer'
@@ -85,6 +86,8 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
       return { title: 'Справочник: Группы номенклатуры (Выбор)', columns: [{ key: 'typeMaterialName', title: 'ГРУППА УЧЕТА', left: 500 }], createButtonLabel: 'Создать группу номенклатуры', isFlat: true, hasCreateButton: true };
     case 'nomenclatureType':
       return { title: 'Справочник: Виды номенклатуры (Выбор)', columns: [{ key: 'typePurposeName', title: 'ГРУППА НОМЕНКЛАТУРЫ', left: 500 }], createButtonLabel: 'Создать вид номенклатуры', isFlat: true, hasCreateButton: true };
+    case 'release':
+      return { title: 'Справочник: Виды выпуска (Выбор)', columns: [], isFlat: true, hasCreateButton: false };
     case 'attributeType':
       return { title: 'Справочник: Виды характеристик (Выбор)', columns: [{ key: 'designation', title: 'ОБОЗНАЧЕНИЕ', left: 500 }], createButtonLabel: 'Создать вид характеристики', isFlat: true, hasCreateButton: true };
     case 'unit':
@@ -130,6 +133,7 @@ const getFlatPopupIcon = (type: PopupType): string | null => {
   switch (type) {
     case 'nomenclatureGroup': return Popup2;
     case 'nomenclatureType': return Popup3;
+    case 'release': return Popup9;
     case 'attributeType': return Popup4;
     case 'unit': return Popup5;
     case 'manufacturer': return Popup6;
@@ -276,7 +280,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const [filteredBrands, setFilteredBrands] = useState<any[]>([]);
   const [internalOpen, setInternalOpen] = useState(false);
   
-  // Поиск
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchValue, setSearchValue] = useState('');
 
@@ -335,6 +338,8 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'nomenclatureType') {
         const url = filterParam ? `${ConstantInfo.restApiNomenclatureTypeProducts}?typePurposeUid=${filterParam}` : ConstantInfo.restApiNomenclatureTypeProducts;
         setData(convertFlatReference(getDataArray((await AxiosService.get(url)).data)));
+      } else if (popupType === 'release') {
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureReleases)).data)));
       } else if (popupType === 'attributeType') {
         setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes)).data)));
       } else if (popupType === 'unit') {
@@ -514,7 +519,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     return count;
   };
 
-  // Фильтрация данных по поиску
   const filterTreeBySearch = (items: TreeItem[]): TreeItem[] => {
     if (!searchValue.trim()) return items;
     const q = searchValue.toLowerCase();
@@ -528,10 +532,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         result.push({ ...item, children: item.children });
       } else if (childrenMatch.length > 0) {
         result.push({ ...item, children: childrenMatch });
-      } else if (!item.isMaterial && item.children && item.children.length > 0) {
-        // Пропускаем папки без совпадений
-      } else if (item.isMaterial) {
-        // Пропускаем материалы без совпадений
       }
     });
     
@@ -557,7 +557,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       const shift = depth * 20;
       const isMaterial = item.isMaterial === true;
       
-      // При поиске автоматически раскрываем все папки
       const effectiveOpen = searchValue.trim() ? true : isOpen;
       const effectiveHasChildren = searchValue.trim() ? hasChildren : hasChildren;
       const effectiveShift = searchValue.trim() ? 0 : shift;
@@ -631,7 +630,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
 
   const BTN_COLLAPSED = 40;
   const BTN_SEARCH_EXPANDED = 280;
-  const spring = { type: 'spring' as const, stiffness: 300, damping: 25 };
   const tween = { type: 'tween' as const, duration: 0.2 };
 
   return (
@@ -649,7 +647,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
           </button>
           <h2 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 24, fontWeight: 500, color: '#2D4059', margin: '30px 0 0', textAlign: 'center' }}>{config.title}</h2>
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 30, paddingLeft: 45, paddingRight: 45 }}>
-            {/* Поиск */}
             <motion.div 
               style={{ position: 'relative', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: searchExpanded ? '#666EFE' : '#FFFFFF', border: searchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
               animate={{ width: searchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED }} 

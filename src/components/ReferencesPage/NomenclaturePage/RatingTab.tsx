@@ -1,4 +1,4 @@
-// RatingTab.tsx — ПОЛНЫЙ ФАЙЛ (FeedbackIcon, попап просмотра 666×463, автор из check_auth, space-between, fitToWidth)
+// RatingTab.tsx — ПОЛНЫЙ ФАЙЛ (исправлены отступы)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -407,7 +407,7 @@ const RatingTab: React.FC<CommonProps> = (props) => {
   const tween = { type: 'tween' as const, duration: 0.2 };
 
   return (
-    <div style={{ position: 'absolute', top: 164, left: 30, right: 30, bottom: 111, display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', width: 1740, height: 72, flexShrink: 0, display: 'flex', alignItems: 'center', position: 'relative' }}>
         <div style={{ position: 'absolute', left: 40, display: 'flex', alignItems: 'center', gap: 18 }}>
           <StarRatingSmall value={averageRating} size={18} />

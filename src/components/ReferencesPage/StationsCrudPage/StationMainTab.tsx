@@ -1,9 +1,12 @@
-// StationMainTab.tsx — ПОЛНЫЙ ФАЙЛ (иконки ArrowIcon18BlackBack, Manufacturer, Workshop, Section)
-import React, { useState } from 'react';
+// StationMainTab.tsx — ПОЛНЫЙ ФАЙЛ (с автокоррекцией при вводе)
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import FormField from '../../elements/FormField';
 import Checkbox from '../../elements/Checkbox';
+import CalendarPopup from '../../elements/CalendarPopup';
+import AxiosService from '../../../services/AxiosService';
+import ConstantInfo from '../../../info/ConstantInfo';
 import CodeIcon20LightBlue from '../../../assets/Icons/CodeIcons/CodeIcon20LightBlue.svg';
 import ArticleIcon18Blue from '../../../assets/Icons/ArticleIcons/ArticleIcon18Blue.svg';
 import NameIcon18Gray from '../../../assets/Icons/NameIcons/NameIcon18Gray.svg';
@@ -46,6 +49,7 @@ export interface StationMainTabProps {
   setEnterpriseId: (v: number | null) => void; setEnterpriseName: (v: string) => void;
   setWorkshopId: (v: number | null) => void; setWorkshopName: (v: string) => void;
   setSectionId: (v: number | null) => void; setSectionName: (v: string) => void;
+  setModelId?: (v: string) => void; setModelName?: (v: string) => void;
   hasError: boolean; setHasError: (v: boolean) => void;
   isTmc: boolean; setIsTmc: (v: boolean) => void;
   isSgd: boolean; setIsSgd: (v: boolean) => void;
@@ -81,11 +85,211 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const getRowTop = (row: number) => START_TOP + row * ROW_HEIGHT;
 
   const TOP_BLOCK_HEIGHT = 234;
-  const BOTTOM_BLOCK_TOP = TOP_BLOCK_HEIGHT + 30;
   const BOTTOM_BLOCK_HEIGHT = 300;
 
   const [centerMode, setCenterMode] = useState<'main' | 'placement' | 'accounting'>('main');
   const [showCalendar, setShowCalendar] = useState(false);
+  const calendarFieldRef = useRef<HTMLDivElement>(null);
+  const [dateInputValue, setDateInputValue] = useState('');
+
+  const [modelOptions, setModelOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [enterpriseOptions, setEnterpriseOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [workshopOptions, setWorkshopOptions] = useState<{ uid: string; name: string }[]>([]);
+  const [sectionOptions, setSectionOptions] = useState<{ uid: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetchModelOptions();
+    fetchEnterpriseOptions();
+  }, []);
+
+  useEffect(() => {
+    if (props.enterpriseId) {
+      fetchWorkshopOptions(props.enterpriseId);
+    } else {
+      setWorkshopOptions([]);
+    }
+  }, [props.enterpriseId]);
+
+  useEffect(() => {
+    if (props.workshopId) {
+      fetchSectionOptions(props.workshopId);
+    } else {
+      setSectionOptions([]);
+    }
+  }, [props.workshopId]);
+
+  useEffect(() => {
+    if (props.productionDate) {
+      const converted = convertISOToDotFormat(props.productionDate);
+      if (converted !== dateInputValue) {
+        setDateInputValue(converted);
+      }
+    }
+  }, [props.productionDate]);
+
+  useEffect(() => {
+    if (!showCalendar) return;
+    const handleClick = (e: MouseEvent) => {
+      if (calendarFieldRef.current && !calendarFieldRef.current.contains(e.target as Node)) {
+        setShowCalendar(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showCalendar]);
+
+  const getDaysInMonth = (month: number, year: number): number => {
+    const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month === 2) {
+      if ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) {
+        return 29;
+      }
+    }
+    return daysInMonth[month - 1] || 31;
+  };
+
+  const formatDateInput = (input: string): string => {
+    if (!input || input === '') return '';
+    
+    let digits = input.replace(/\D/g, '');
+    digits = digits.slice(0, 8);
+    
+    if (digits.length === 0) return '';
+    
+    let day = '';
+    let month = '';
+    let year = '';
+    
+    // Парсим день
+    if (digits.length >= 1) {
+      day = digits.slice(0, 2);
+    }
+    
+    // Парсим месяц
+    if (digits.length >= 3) {
+      month = digits.slice(2, 4);
+    }
+    
+    // Парсим год
+    if (digits.length >= 5) {
+      year = digits.slice(4, 8);
+    }
+    
+    // Автокоррекция
+    let dayNum = parseInt(day) || 0;
+    let monthNum = parseInt(month) || 0;
+    let yearNum = parseInt(year) || new Date().getFullYear();
+    
+    // Корректируем день
+    if (dayNum > 31) dayNum = 31;
+    if (dayNum < 1 && day.length === 2) dayNum = 1;
+    
+    // Корректируем месяц
+    if (monthNum > 12) monthNum = 12;
+    if (monthNum < 1 && month.length === 2) monthNum = 1;
+    
+    // Корректируем день относительно месяца
+    if (monthNum > 0 && dayNum > 0) {
+      const maxDays = getDaysInMonth(monthNum, yearNum);
+      if (dayNum > maxDays) dayNum = maxDays;
+    }
+    
+    // Собираем результат
+    let result = '';
+    
+    if (day.length === 1) {
+      result += String(dayNum);
+    } else if (day.length === 2) {
+      result += String(dayNum).padStart(2, '0');
+    }
+    
+    if (month.length === 1) {
+      result += '.' + String(monthNum);
+    } else if (month.length === 2) {
+      result += '.' + String(monthNum).padStart(2, '0');
+    }
+    
+    if (year.length > 0) {
+      result += '.' + year;
+    }
+    
+    return result;
+  };
+
+  const convertISOToDotFormat = (dateStr: string): string => {
+    if (!dateStr) return '';
+    if (dateStr.includes('.')) return dateStr;
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+    return dateStr;
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    
+    if (input === '' || input === null) {
+      setDateInputValue('');
+      props.setProductionDate('');
+      return;
+    }
+    
+    const formatted = formatDateInput(input);
+    setDateInputValue(formatted);
+    
+    const dateRegex = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+    const match = formatted.match(dateRegex);
+    
+    if (match) {
+      const day = parseInt(match[1]);
+      const month = parseInt(match[2]);
+      const year = parseInt(match[3]);
+      const maxDays = getDaysInMonth(month, year);
+      
+      if (day >= 1 && day <= maxDays && month >= 1 && month <= 12) {
+        props.setProductionDate(formatted);
+      }
+    } else {
+      props.setProductionDate(formatted);
+    }
+  };
+
+  const fetchModelOptions = async () => {
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiStationModels);
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setModelOptions(items.map((item: any) => ({ uid: item.uid, name: item.name })));
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchEnterpriseOptions = async () => {
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiEnterprises);
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setEnterpriseOptions(items.map((item: any) => ({ uid: String(item.id), name: item.name })));
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchWorkshopOptions = async (entId: number) => {
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiWorkshops);
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setWorkshopOptions(items.filter((w: any) => w.enterpriseId === entId).map((w: any) => ({ uid: String(w.id), name: w.name })));
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchSectionOptions = async (wsId: number) => {
+    try {
+      const r = await AxiosService.get(ConstantInfo.restApiSections);
+      const respData = r.data as any;
+      const items = Array.isArray(respData) ? respData : (respData.data || []);
+      setSectionOptions(items.filter((s: any) => s.workshopId === wsId).map((s: any) => ({ uid: String(s.id), name: s.name })));
+    } catch (e) { console.error(e); }
+  };
 
   const placementText = [props.holdingName, props.enterpriseName, props.workshopName, props.sectionName].filter(Boolean).join('; ') || 'Выберите размещение';
 
@@ -172,7 +376,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
             icon={CodeIcon20LightBlue}
             value={String(props.code).padStart(4, '0')}
             type="input"
-            locked
+            disabled
             iconWidth={20}
             iconHeight={14}
           />
@@ -184,7 +388,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
             icon={ArticleIcon18Blue}
             value={props.article || '—'}
             type="input"
-            locked
+            disabled
             iconWidth={18}
             iconHeight={18}
           />
@@ -206,30 +410,30 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
             iconHeight={18}
           />
         </div>
-        <div style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(1) }}>
+        <div ref={calendarFieldRef} style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(1) }}>
           <FormField
             width={FIELD_WIDTH} height={FIELD_HEIGHT}
             label="Дата производства:"
             icon={CalendarIcon16Gray}
             iconActive={CalendarIcon16Blue}
-            value={props.productionDate}
-            placeholder="Выберите дату"
+            value={dateInputValue}
+            placeholder="__.__.____"
             type="calendar"
+            onChange={handleDateChange}
             onCalendarClick={() => setShowCalendar(!showCalendar)}
             iconWidth={16}
             iconHeight={18}
           />
-          {showCalendar && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, marginTop: 4 }}>
-              <input
-                type="date"
-                value={props.productionDate}
-                onChange={e => { props.setProductionDate(e.target.value); setShowCalendar(false); }}
-                autoFocus
-                style={{ width: 340, height: 44, borderRadius: 10, border: '1px solid #666EFE', padding: '0 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none' }}
-              />
-            </div>
-          )}
+          <CalendarPopup
+            isOpen={showCalendar}
+            onClose={() => setShowCalendar(false)}
+            onConfirm={(dateStr) => {
+              props.setProductionDate(dateStr);
+              setDateInputValue(dateStr);
+            }}
+            selectedDate={dateInputValue}
+            anchorRef={calendarFieldRef}
+          />
         </div>
 
         {/* Колонка 3: Модель станции + Тип станции */}
@@ -242,9 +446,16 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
             value={props.modelName}
             placeholder="Выберите модель"
             type="select"
-            onClick={() => props.openPopup('stationModel')}
+            searchOptions={modelOptions}
+            onSelectOption={(uid, name) => {
+              props.setModelId?.(uid);
+              props.setModelName?.(name);
+            }}
+            onOpenFullList={() => props.openPopup('stationModel')}
             selectIconWidth={16}
             selectIconHeight={16}
+            searchTitle="Найденная модель"
+            searchNotFoundText="Модели не найдены"
           />
         </div>
         <div style={{ position: 'absolute', top: getRowTop(1), left: getColLeft(2) }}>
@@ -254,7 +465,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
             icon={TypeIcon16LightBlue}
             value={props.typeName || '—'}
             type="input"
-            locked
+            disabled
             iconWidth={16}
             iconHeight={16}
           />
@@ -283,7 +494,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
             icon={RevisionIcon18LightBlue}
             value={props.revision || '—'}
             type="input"
-            locked
+            disabled
             iconWidth={18}
             iconHeight={18}
           />
@@ -363,9 +574,21 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
                       value={props.enterpriseName}
                       placeholder="Выберите предприятие"
                       type="select"
-                      onClick={() => props.openPopup('enterprise')}
+                      searchOptions={enterpriseOptions}
+                      onSelectOption={(uid, name) => {
+                        const entId = Number(uid);
+                        props.setEnterpriseId(entId);
+                        props.setEnterpriseName(name);
+                        props.setWorkshopId(null);
+                        props.setWorkshopName('');
+                        props.setSectionId(null);
+                        props.setSectionName('');
+                      }}
+                      onOpenFullList={() => props.openPopup('enterprise')}
                       selectIconWidth={18}
                       selectIconHeight={18}
+                      searchTitle="Найденное предприятие"
+                      searchNotFoundText="Предприятия не найдены"
                     />
                   </div>
                 </div>
@@ -380,10 +603,19 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
                       value={props.workshopName}
                       placeholder={props.enterpriseId ? 'Выберите цех' : 'Сначала выберите предприятие'}
                       type="select"
-                      locked={!props.enterpriseId}
-                      onClick={() => props.enterpriseId && props.openPopup('workshop', String(props.enterpriseId))}
+                      disabled={!props.enterpriseId}
+                      searchOptions={workshopOptions}
+                      onSelectOption={(uid, name) => {
+                        props.setWorkshopId(Number(uid));
+                        props.setWorkshopName(name);
+                        props.setSectionId(null);
+                        props.setSectionName('');
+                      }}
+                      onOpenFullList={() => props.enterpriseId && props.openPopup('workshop', String(props.enterpriseId))}
                       selectIconWidth={17}
                       selectIconHeight={18}
+                      searchTitle="Найденный цех"
+                      searchNotFoundText="Цеха не найдены"
                     />
                   </div>
                 </div>
@@ -398,10 +630,17 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
                       value={props.sectionName}
                       placeholder={props.workshopId ? 'Выберите участок' : 'Сначала выберите цех'}
                       type="select"
-                      locked={!props.workshopId}
-                      onClick={() => props.workshopId && props.openPopup('section', String(props.workshopId))}
+                      disabled={!props.workshopId}
+                      searchOptions={sectionOptions}
+                      onSelectOption={(uid, name) => {
+                        props.setSectionId(Number(uid));
+                        props.setSectionName(name);
+                      }}
+                      onOpenFullList={() => props.workshopId && props.openPopup('section', String(props.workshopId))}
                       selectIconWidth={20}
                       selectIconHeight={16}
+                      searchTitle="Найденный участок"
+                      searchNotFoundText="Участки не найдены"
                     />
                   </div>
                 </div>
@@ -423,7 +662,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
                     <div key={item.label} style={{ position: 'absolute', top: rowTop, left: 70, height: 18, display: 'flex', alignItems: 'center', width: 536 - 70 - 83, boxSizing: 'border-box' }}>
                       <span style={checkboxTextStyle}>{item.label}</span>
                       <div style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Checkbox checked={item.value} onChange={item.setter} size={18} />
+                        <Checkbox checked={item.value} onChange={item.setter} />
                       </div>
                     </div>
                   );

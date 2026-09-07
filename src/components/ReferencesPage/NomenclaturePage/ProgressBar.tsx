@@ -1,4 +1,4 @@
-// ProgressBar.tsx — ПОЛНЫЙ ФАЙЛ
+// ProgressBar.tsx — ПОЛНЫЙ ФАЙЛ (исправлены позиции fill для 3 шагов)
 import React from 'react';
 import BarIcon11 from '../../../assets/References/ProgressBar/BarIcon11.svg';
 import BarIcon12 from '../../../assets/References/ProgressBar/BarIcon12.svg';
@@ -11,25 +11,37 @@ import BarIcon42 from '../../../assets/References/ProgressBar/BarIcon42.svg';
 
 interface ProgressBarProps {
   currentStep: number;
+  isFinishedProduct?: boolean;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep }) => {
+const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, isFinishedProduct = false }) => {
   const barWidth = 1121;
   const barHeight = 5;
   const pipWidth = 4;
   const pipHeight = 10;
   const pipRadius = 3;
-  const gradientEnd = 416;
+  const gradientEnd = 560;
 
-  const pipPositions = [120, 416, 668, 930];
-  const fillPositions = [0, 147, 440, 700, 1121];
+  const steps = isFinishedProduct
+    ? [
+        { label: 'Заполнение основных полей', iconInactive: BarIcon11, iconActive: BarIcon12, iconWidth: 18, iconHeight: 20 },
+        { label: 'Достаточно для работы системы', iconInactive: BarIcon21, iconActive: BarIcon22, iconWidth: 20, iconHeight: 20 },
+        { label: 'Достаточно для полной аналитики', iconInactive: BarIcon31, iconActive: BarIcon32, iconWidth: 31, iconHeight: 21 },
+      ]
+    : [
+        { label: 'Заполнение основных полей', iconInactive: BarIcon11, iconActive: BarIcon12, iconWidth: 18, iconHeight: 20 },
+        { label: 'Достаточно для работы системы', iconInactive: BarIcon21, iconActive: BarIcon22, iconWidth: 20, iconHeight: 20 },
+        { label: 'Достаточно для быстрых запросов на поставку', iconInactive: BarIcon31, iconActive: BarIcon32, iconWidth: 31, iconHeight: 21 },
+        { label: 'Достаточно для полной аналитики', iconInactive: BarIcon41, iconActive: BarIcon42, iconWidth: 18, iconHeight: 20 },
+      ];
 
-  const steps = [
-    { label: 'Заполнение основных полей', iconInactive: BarIcon11, iconActive: BarIcon12, iconWidth: 18, iconHeight: 20 },
-    { label: 'Достаточно для работы системы', iconInactive: BarIcon21, iconActive: BarIcon22, iconWidth: 20, iconHeight: 20 },
-    { label: 'Достаточно для быстрых запросов на поставку', iconInactive: BarIcon31, iconActive: BarIcon32, iconWidth: 31, iconHeight: 21 },
-    { label: 'Достаточно для полной аналитики', iconInactive: BarIcon41, iconActive: BarIcon42, iconWidth: 18, iconHeight: 20 },
-  ];
+  const pipPositions = isFinishedProduct
+    ? [187, 560, 934]
+    : [120, 416, 668, 930];
+
+  const fillPositions = isFinishedProduct
+    ? [0, 214, 587, 1121]
+    : [0, 147, 440, 700, 1121];
 
   const getPipColor = (index: number) => {
     if (index >= currentStep) return 'rgba(45, 64, 89, 0.25)';

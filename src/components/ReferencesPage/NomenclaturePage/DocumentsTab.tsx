@@ -1,4 +1,4 @@
-// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (гиперссылка, скачивание, space-between, fitToWidth)
+// DocumentsTab.tsx — ПОЛНЫЙ ФАЙЛ (исправлены отступы)
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
@@ -376,7 +376,7 @@ const DocumentsTab: React.FC<CommonProps> = (props) => {
   const canDownloadSelected = selectedIds.size > 0 && !isDownloading;
 
   return (
-    <div style={{ position: 'absolute', top: 165, left: 30, right: 30, bottom: 96 }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
       <div style={{ position: 'absolute', top: 0, left: 15, display: 'flex', gap: 15, zIndex: 10 }}>
         <motion.div 
           style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: expanded === 'search' ? '#666EFE' : '#FFFFFF', border: expanded === 'search' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 

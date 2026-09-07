@@ -1,4 +1,4 @@
-// StationsCrudPage.tsx — ИСПРАВЛЕННЫЙ (печать + скачивание PDF/Excel/Word)
+// StationsCrudPage.tsx — ПОЛНЫЙ ФАЙЛ (копирование открывает форму создания с данными)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -711,8 +711,18 @@ const StationsCrudPage = () => {
           openTab(`/references/stations/edit/${item.uid}`, `Станция: ${item.name}`, null); 
         } 
       } },
-      { id: 'copy', label: 'Копировать', icon: ContextMenuCopyIcon16, onClick: () => { 
-        navigator.clipboard.writeText(uid).catch(() => {}); 
+      { id: 'copy', label: 'Копировать', icon: ContextMenuCopyIcon16, onClick: async () => { 
+        try {
+          const res = await AxiosService.post(ConstantInfo.restApiStationCopy(uid));
+          const copyData = res.data;
+          if (copyData && copyData.uid) {
+            sessionStorage.setItem(`station_copy_${copyData.uid}`, JSON.stringify(copyData));
+            openTab(`/references/stations/create/${copyData.uid}`, `Станция: ${copyData.name}`, null);
+            await fetchData();
+          }
+        } catch (e) {
+          console.error('Ошибка копирования:', e);
+        }
       } },
       { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => { 
         setDeleteTargetUid(uid); 
@@ -981,7 +991,6 @@ const StationsCrudPage = () => {
     return row;
   });
 
-  // Формируем footerLines только из сортировки и фильтров (если есть)
   const footerLines: string[] = [];
 
   if (sortColumn) {
@@ -999,7 +1008,7 @@ const StationsCrudPage = () => {
     columnLabels: columnLabels,
     data: preparedData,
     landscape: true,
-    footerLines: footerLines, // теперь только значимые строки
+    footerLines: footerLines,
   };
 };
 

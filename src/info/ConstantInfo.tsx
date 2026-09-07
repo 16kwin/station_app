@@ -19,8 +19,8 @@ const ConstantInfo = {
   
   // Спящий режим
   restApiCheckPassword: '/api/auth/check_password',
-  inactivityTimeout: 5 * 60 * 1000,
-  warningTimeout: 30 * 1000,
+  inactivityTimeout: 30 * 1000,
+warningTimeout: 10 * 1000,
   
   // Станции
   restApiStationsStatic: '/api/stations/static',
@@ -505,6 +505,11 @@ const ConstantInfo = {
   restApiManufacturerGet: (uid: string) => `/api/manufacturers-crud/${uid}`,
   restApiManufacturerImages: (uid: string) => `/api/manufacturers-crud/${uid}/images`,
 restApiManufacturerDeleteImage: (imageUid: string) => `/api/manufacturers-crud/images/${imageUid}`,
+restApiNomenclatureGetCodeDefault: (userId: number, codeKind: string) => `/api/nomenclature/code-default?userId=${userId}&codeKind=${codeKind}`,
+restApiNomenclatureSaveCodeDefault: '/api/nomenclature/code-default',
+restApiNomenclatureReleases: '/api/nomenclature/releases',
+
+restApiStationCopy: (uid: string) => `/api/stations/crud/${uid}/copy`,
 };
 
 export default ConstantInfo;

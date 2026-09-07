@@ -1,6 +1,7 @@
 // components/InactivityWarning/InactivityWarning.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConstantInfo from '../../info/ConstantInfo';
 
 interface InactivityWarningProps {
   show: boolean;
@@ -8,26 +9,57 @@ interface InactivityWarningProps {
 }
 
 const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) => {
-  const [countdown, setCountdown] = useState(30);
+  const [countdown, setCountdown] = useState(() => Math.ceil(ConstantInfo.warningTimeout / 1000));
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    channelRef.current = new BroadcastChannel('app_inactivity_channel');
+    return () => {
+      channelRef.current?.close();
+      channelRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!show) {
-      setCountdown(30);
+      setCountdown(Math.ceil(ConstantInfo.warningTimeout / 1000));
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       return;
     }
 
-    const interval = setInterval(() => {
+    setCountdown(Math.ceil(ConstantInfo.warningTimeout / 1000));
+
+    // Таймер обратного отсчета
+    intervalRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(interval);
+          if (intervalRef.current) clearInterval(intervalRef.current);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(interval);
+    // Таймер автоблокировки
+    timeoutRef.current = setTimeout(() => {
+      // Отправляем событие блокировки
+      channelRef.current?.postMessage({ type: 'lock' });
+    }, ConstantInfo.warningTimeout);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [show]);
+
+  const handleContinue = () => {
+    // Отправляем событие отмены предупреждения
+    channelRef.current?.postMessage({ type: 'cancel_warning' });
+    onClose();
+  };
 
   if (!show) return null;
 
@@ -38,7 +70,7 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[90] flex items-center justify-center"
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
@@ -54,7 +86,7 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
               Блокировка через {countdown} секунд
             </p>
             <button
-              onClick={onClose}
+              onClick={handleContinue}
               className="w-full bg-[#666EFE] hover:bg-[#5555dd] text-white py-3 rounded-xl transition-colors font-medium"
             >
               Продолжить работу
