@@ -1,4 +1,4 @@
-// HoldingsPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
+// HoldingsPage.tsx — ИСПРАВЛЕННЫЙ (добавлены печать, PDF, Excel, Word)
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,16 +56,11 @@ const EFFECTIVE_FIRST_COL_LEFT = CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX
 
 const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> => {
   if (columnKeys.length === 0) return {};
-  
   const totalResizerWidth = RESIZER_WIDTH * (columnKeys.length - 1);
   const availableWidth = TABLE_WIDTH - EFFECTIVE_FIRST_COL_LEFT - LAST_COLUMN_RIGHT_PADDING - totalResizerWidth;
   const columnWidth = availableWidth / columnKeys.length;
-  
   const widths: Record<string, number> = {};
-  columnKeys.forEach(key => {
-    widths[key] = columnWidth;
-  });
-  
+  columnKeys.forEach(key => { widths[key] = columnWidth; });
   return widths;
 };
 
@@ -117,11 +112,9 @@ const HoldingsPage = () => {
       
       let effectiveColumns = response.columns;
       let effectiveRequiredColumns = new Set(REQUIRED_COLUMNS);
-      
       if (response.requiredColumns && response.requiredColumns.length > 0) {
         effectiveRequiredColumns = new Set(response.requiredColumns);
       }
-      
       let effectiveColumnWidths = response.columnWidths || {};
       
       if (!effectiveColumns || effectiveColumns.length === 0) {
@@ -130,9 +123,7 @@ const HoldingsPage = () => {
         effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
       } else {
         effectiveRequiredColumns.forEach(key => {
-          if (!effectiveColumns.includes(key)) {
-            effectiveColumns = [...effectiveColumns, key];
-          }
+          if (!effectiveColumns.includes(key)) effectiveColumns = [...effectiveColumns, key];
         });
         if (Object.keys(effectiveColumnWidths).length === 0) {
           effectiveColumnWidths = calculateAdaptiveWidths(effectiveColumns);
@@ -179,7 +170,6 @@ const HoldingsPage = () => {
 
   const handleColumnWidthsChange = useCallback((widths: Record<string, number>) => {
     setColumnWidths(widths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -188,7 +178,6 @@ const HoldingsPage = () => {
         required: requiredColumns.has(col.key),
       };
     });
-    
     const columnsJson = JSON.stringify(columnsJsonObj);
     AxiosService.patch(ConstantInfo.restApiHoldingColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
   }, [visibleColumns, requiredColumns]);
@@ -200,7 +189,6 @@ const HoldingsPage = () => {
     setResponseData(prev => ({ ...prev, columns: newCols }));
     const newWidths = calculateAdaptiveWidths(newCols);
     setColumnWidths(newWidths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -217,23 +205,19 @@ const HoldingsPage = () => {
     try { 
       const r = await AxiosService.get(ConstantInfo.restApiHoldingAllSettings(USER_ID)); 
       const settings = r.data as { filtersJson: string; sortJson: string };
-      
       if (settings.filtersJson && settings.filtersJson !== '{}') {
         const filters = JSON.parse(settings.filtersJson) as Record<string, any>;
         const newFilterValues: Record<string, Set<string>> = {};
         const newActiveFilters = new Set<string>();
-        
         Object.entries(filters).forEach(([key, values]) => {
           if (Array.isArray(values) && values.length > 0) {
             newFilterValues[key] = new Set(values as string[]);
             newActiveFilters.add(key);
           }
         });
-        
         setFilterValues(newFilterValues);
         setActiveFilters(newActiveFilters);
       }
-      
       if (settings.sortJson && settings.sortJson !== '{}') {
         const sort = JSON.parse(settings.sortJson) as { column?: string; direction?: 'asc' | 'desc' };
         if (sort.column) {
@@ -248,13 +232,9 @@ const HoldingsPage = () => {
   
   const saveFilters = useCallback((filters: Record<string, Set<string>>) => {
     const filtersJsonObj: Record<string, any> = {};
-    
     Object.entries(filters).forEach(([key, values]) => {
-      if (values.size > 0) {
-        filtersJsonObj[key] = Array.from(values);
-      }
+      if (values.size > 0) filtersJsonObj[key] = Array.from(values);
     });
-    
     const filtersJson = JSON.stringify(filtersJsonObj);
     AxiosService.patch(ConstantInfo.restApiHoldingFiltersSettingsSave(USER_ID), { filtersJson }).catch(e => console.error(e));
   }, []);
@@ -290,15 +270,11 @@ const HoldingsPage = () => {
   useEffect(() => { fetchData(); fetchLocations(); fetchSettings(); }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      saveFilters(filterValues);
-    }
+    if (!isLoading) saveFilters(filterValues);
   }, [filterValues, isLoading, saveFilters]);
 
   useEffect(() => {
-    if (!isLoading) {
-      saveSort(sortColumn, sortDirection);
-    }
+    if (!isLoading) saveSort(sortColumn, sortDirection);
   }, [sortColumn, sortDirection, isLoading, saveSort]);
 
   useEffect(() => {
@@ -311,7 +287,6 @@ const HoldingsPage = () => {
   const toggleSelectItem = (id: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   };
-
   const handleCheckboxClick = (id: string, e: React.MouseEvent) => { e.stopPropagation(); toggleSelectItem(id); };
   const handleRowClick = (id: string, e: React.MouseEvent) => { e.stopPropagation(); toggleSelectItem(id); };
   const handleSelectAll = (e: React.MouseEvent) => {
@@ -325,13 +300,11 @@ const HoldingsPage = () => {
   const handleSaveColumns = (cols: Set<string>) => { 
     const finalCols = new Set(cols);
     requiredColumns.forEach(key => finalCols.add(key));
-    
-    setVisibleColumns(finalCols); 
+    setVisibleColumns(finalCols);
     const newCols = ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key);
     setResponseData(prev => ({ ...prev, columns: newCols }));
     const newWidths = calculateAdaptiveWidths(newCols);
     setColumnWidths(newWidths);
-    
     const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
     ALL_COLUMNS.forEach(col => {
       columnsJsonObj[col.key] = {
@@ -410,9 +383,7 @@ const HoldingsPage = () => {
     let result = [...responseData.data];
     if (searchValue.trim()) {
       const q = searchValue.toLowerCase();
-      result = result.filter(row => {
-        return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
-      });
+      result = result.filter(row => Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q)));
     }
     if (filterValues['locationName'] && filterValues['locationName'].size > 0) {
       result = result.filter(row => filterValues['locationName'].has(String(row['locationUid'])));
@@ -430,6 +401,141 @@ const HoldingsPage = () => {
     return result;
   }, [responseData.data, searchValue, filterValues, sortColumn, sortDirection]);
 
+  // ===== БЛОК ЭКСПОРТА =====
+  const getColumnLabel = (key: string) => {
+    const col = ALL_COLUMNS.find(c => c.key === key);
+    return col ? col.label : key;
+  };
+
+  const columnKeys = ALL_COLUMNS.filter(c => responseData.columns.includes(c.key)).map(c => c.key);
+  const columnLabels = columnKeys.map(getColumnLabel);
+
+  const sortLabel = sortColumn
+    ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
+    : '';
+
+  let filtersText = '';
+  if (activeFilters.size > 0) {
+    const filterLabels = Array.from(activeFilters).map(key => {
+      const field = FILTER_FIELDS.find(f => f.key === key);
+      const fieldLabel = field ? field.label : getColumnLabel(key);
+      const values = filterValues[key];
+      if (!values || values.size === 0) return fieldLabel;
+
+      let options = filterOptions[key] || field?.options || [];
+      const optionLabels = Array.from(values).map(uid => {
+        const opt = options.find(o => o.uid === uid);
+        return opt ? opt.name : uid;
+      });
+      return `${fieldLabel}: ${optionLabels.join(', ')}`;
+    });
+    filtersText = filterLabels.join('; ');
+  }
+
+  const preparePayload = useCallback(() => {
+    const preparedData = filteredData.map(item => {
+      const row: Record<string, string> = {};
+      columnKeys.forEach(key => { row[key] = renderCell(key, item); });
+      return row;
+    });
+    const footerLines: string[] = [];
+    if (sortLabel) footerLines.push(`Сортировка: ${sortLabel}`);
+    if (filtersText) footerLines.push(`Фильтры: ${filtersText}`);
+    return {
+      title: 'Холдинги',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines,
+    };
+  }, [filteredData, columnKeys, columnLabels, sortLabel, filtersText]);
+
+  const handlePrint = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/holdings/print`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '800px';
+      iframe.style.height = '600px';
+      iframe.style.visibility = 'visible';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 500);
+      };
+    } catch (e) { console.error('Ошибка печати', e); }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/holdings/export-pdf`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'holdings.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/holdings/export-excel`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'holdings.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/holdings/export-word`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'holdings.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
+  // ===== КОНЕЦ БЛОКА =====
+
   if (isLoading) return (<div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9CA3AF' }}>Загрузка...</span></div>);
 
   const inputStyle: React.CSSProperties = { width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' };
@@ -445,7 +551,7 @@ const HoldingsPage = () => {
       </div>
 
       <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
-        <TableToolbar 
+        <TableToolbar
           sortFields={SORT_FIELDS}
           filterFields={FILTER_FIELDS}
           placementLevels={PLACEMENT_LEVELS}
@@ -511,8 +617,10 @@ const HoldingsPage = () => {
           selectedCount={selectedIds.size}
           onCreate={handleCreateClick}
           onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
-          onPrint={() => {}}
-          onPrintPdf={() => {}}
+          onPrint={handlePrint}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadWord={handleDownloadWord}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}
@@ -554,14 +662,14 @@ const HoldingsPage = () => {
 
       {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} />}
 
-      <ConfigurationPopup 
-        isOpen={showConfigurationPopup} 
-        onClose={() => setShowConfigurationPopup(false)} 
-        title="Справочник: Холдинги (Настройки списка)" 
-        columns={ALL_COLUMNS} 
-        visibleColumns={visibleColumns} 
+      <ConfigurationPopup
+        isOpen={showConfigurationPopup}
+        onClose={() => setShowConfigurationPopup(false)}
+        title="Справочник: Холдинги (Настройки списка)"
+        columns={ALL_COLUMNS}
+        visibleColumns={visibleColumns}
         requiredColumns={requiredColumns}
-        onSave={handleSaveColumns} 
+        onSave={handleSaveColumns}
       />
 
       {showCreatePopup && (

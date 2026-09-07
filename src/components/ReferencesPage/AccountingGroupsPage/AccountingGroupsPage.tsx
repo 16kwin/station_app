@@ -1,4 +1,4 @@
-// AccountingGroupsPage.tsx — ИСПРАВЛЕННЫЙ (дефолтная инициализация + barcodeSearch в типе)
+// AccountingGroupsPage.tsx — ИСПРАВЛЕННЫЙ (добавлены печать, PDF, Excel, Word)
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -124,6 +124,7 @@ const AccountingGroupsPage = () => {
       setRequiredColumns(effectiveRequiredColumns);
       setVisibleColumns(new Set(effectiveColumns));
       setColumnWidths(effectiveColumnWidths);
+      
       setResponseData({
         ...response,
         columns: effectiveColumns,
@@ -394,18 +395,134 @@ const AccountingGroupsPage = () => {
         return Object.values(row).some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
       });
     }
-    if (sortColumn) {
+    if (sortColumn === 'name') {
       result.sort((a, b) => {
-        const aVal = String(a[sortColumn] || '');
-        const bVal = String(b[sortColumn] || '');
-        if (sortColumn === 'name') {
-          return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-        }
-        return aVal.localeCompare(bVal);
+        const aVal = String(a['name'] || '');
+        const bVal = String(b['name'] || '');
+        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       });
     }
     return result;
   }, [responseData.data, searchValue, sortColumn, sortDirection]);
+
+  // ===== БЛОК ЭКСПОРТА =====
+  const getColumnLabel = (key: string) => {
+    const col = ALL_COLUMNS.find(c => c.key === key);
+    return col ? col.label : key;
+  };
+
+  const columnKeys = ALL_COLUMNS.filter(c => responseData.columns.includes(c.key)).map(c => c.key);
+  const columnLabels = columnKeys.map(getColumnLabel);
+
+  const sortLabel = sortColumn
+    ? `${getColumnLabel(sortColumn)} (${sortDirection === 'asc' ? 'возр.' : 'убыв.'})`
+    : '';
+
+  let filtersText = '';
+  // Фильтров нет
+
+  const preparePayload = useCallback(() => {
+    const preparedData = filteredData.map(item => {
+      const row: Record<string, string> = {};
+      columnKeys.forEach(key => { row[key] = renderCell(key, item); });
+      return row;
+    });
+    const footerLines: string[] = [];
+    if (sortLabel) footerLines.push(`Сортировка: ${sortLabel}`);
+    return {
+      title: 'Группы учета',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines,
+    };
+  }, [filteredData, columnKeys, columnLabels, sortLabel]);
+
+  const handlePrint = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/type-materials/print`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '800px';
+      iframe.style.height = '600px';
+      iframe.style.visibility = 'visible';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 500);
+      };
+    } catch (e) { console.error('Ошибка печати', e); }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/type-materials/export-pdf`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'type-materials.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/type-materials/export-excel`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'type-materials.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/type-materials/export-word`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'type-materials.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
+  // ===== КОНЕЦ БЛОКА =====
 
   if (isLoading) {
     return (
@@ -472,8 +589,10 @@ const AccountingGroupsPage = () => {
           selectedCount={selectedIds.size}
           onCreate={handleCreateClick}
           onDelete={handleDeleteClick}
-          onPrint={() => {}}
-          onPrintPdf={() => {}}
+          onPrint={handlePrint}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadWord={handleDownloadWord}
           showHistory={showHistory}
           onHistory={handleHistoryClick}
           onConfiguration={() => setShowConfigurationPopup(true)}

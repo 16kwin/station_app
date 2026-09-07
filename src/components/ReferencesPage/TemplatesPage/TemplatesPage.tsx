@@ -1,4 +1,4 @@
-// TemplatesPage.tsx — ПОЛНЫЙ ФАЙЛ
+// TemplatesPage.tsx — ФИНАЛЬНАЯ ВЕРСИЯ (выпадающее меню «Скачать», кнопка печати, настройки)
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -8,15 +8,15 @@ import ConstantInfo from '../../../info/ConstantInfo';
 import TemplateCreateGroupPopup from './TemplateCreateGroupPopup';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import { useTabs } from '../../../context/TabContext';
+import ConfigurationPopup from '../../elements/ConfigurationPopup'; // <-- добавили
+
 import Icon1 from '../../../assets/References/Icon1.svg';
 import Icon2 from '../../../assets/References/Icon2.svg';
 import Icon3 from '../../../assets/References/Icon3.svg';
 import Icon4 from '../../../assets/References/Icon4.svg';
 import Icon6 from '../../../assets/References/Icon6.svg';
 import Icon7 from '../../../assets/References/Icon7.svg';
-import Icon8 from '../../../assets/References/Icon8.svg';
-import Icon9 from '../../../assets/References/Icon9.svg';
-import Icon10 from '../../../assets/References/Icon10.svg';
+import Icon10 from '../../../assets/References/Icon10.svg'; // настройки
 import Icon17 from '../../../assets/References/Icon17.svg';
 import Icon18 from '../../../assets/References/Icon18.svg';
 import Icon19 from '../../../assets/References/Icon19.svg';
@@ -32,6 +32,8 @@ import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg
 import PopupIcon2 from '../../../assets/Station/PopupIcon2.svg';
 import PopupIcon4 from '../../../assets/Station/PopupIcon4.svg';
 import PopupIcon7 from '../../../assets/Station/PopupIcon7.svg';
+import PrintIcon from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
+import DownloadIcon from '../../../assets/Icons/DownloadIcons/DownloadIcon18Black.svg';
 
 interface TemplateItem {
   uid: string;
@@ -68,6 +70,7 @@ interface ContextMenuState {
   categoryId?: number;
 }
 
+// Компонент переключателя «Активные»
 const ToggleSwitch: React.FC<{ value: boolean; onChange: () => void }> = ({ value, onChange }) => {
   const trackWidth = 26; const trackHeight = 13; const knobSize = 11; const padding = (trackHeight - knobSize) / 2;
   return (
@@ -118,8 +121,25 @@ const TemplatesPage = () => {
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
   const [showActiveOnly, setShowActiveOnly] = useState(false);
-
   const [stationListData, setStationListData] = useState<{ isOpen: boolean; stationNames: string[]; templateName: string }>({ isOpen: false, stationNames: [], templateName: '' });
+
+  // Состояния для выпадающего меню скачивания и настроек
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+
+  // Настройки колонок (для ConfigurationPopup)
+  const ALL_COLUMNS = [
+    { key: 'name', label: 'Наименование' },
+    { key: 'number', label: 'Код' },
+    { key: 'configurationName', label: 'Конфигурация' },
+    { key: 'modelName', label: 'Модель' },
+    { key: 'stationNames', label: 'Станция' },
+    { key: 'active', label: 'Статус' },
+    { key: 'createdAt', label: 'Дата' },
+  ];
+  const REQUIRED_COLUMNS = new Set(['name', 'number', 'configurationName', 'modelName', 'stationNames', 'active', 'createdAt']); // все обязательные
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(ALL_COLUMNS.map(c => c.key)));
+  const [requiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
 
   const TABLE_WIDTH = 1720;
   const TABLE_HEIGHT = 638;
@@ -127,7 +147,6 @@ const TemplatesPage = () => {
   const HEADER_HEIGHT = 58;
   const VISIBLE_ROWS = 10;
 
-  // Колонки: НАИМЕНОВАНИЕ | КОД | КОНФИГУРАЦИЯ | МОДЕЛЬ | СТАНЦИЯ | СТАТУС | ДАТА
   const COL_NAME = 85;
   const COL_CODE = 380;
   const COL_CONFIG = 580;
@@ -135,6 +154,18 @@ const TemplatesPage = () => {
   const COL_STATION = 1020;
   const COL_STATUS = 1370;
   const COL_DATE = 1511;
+
+  // Закрытие меню при клике вне
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.download-menu-container')) {
+        setIsDownloadMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     tabIdRef.current = activeTabId;
@@ -205,7 +236,6 @@ const TemplatesPage = () => {
 
   const getFilteredCategories = (): CategoryItem[] => {
     if (!showActiveOnly) return categories;
-    
     return categories.map(cat => ({
       ...cat,
       templates: cat.templates.filter(t => t.active)
@@ -585,6 +615,129 @@ const TemplatesPage = () => {
     return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, []);
 
+  // ===== БЛОК ЭКСПОРТА =====
+  const preparePayload = () => {
+    let items: TemplateItem[] = [];
+    if (currentCategory) {
+      items = currentCategory.templates;
+    } else {
+      filteredCategories.forEach(cat => {
+        items = items.concat(cat.templates);
+      });
+    }
+
+    const columnKeys = ['name', 'number', 'configurationName', 'modelName', 'stationNames', 'active', 'createdAt'];
+    const columnLabels = ['Наименование', 'Код', 'Конфигурация', 'Модель', 'Станция', 'Статус', 'Дата'];
+
+    const preparedData = items.map(item => {
+      const row: Record<string, string> = {};
+      row['name'] = item.name;
+      row['number'] = item.number !== null ? String(item.number) : '—';
+      row['configurationName'] = item.configurationName || '—';
+      row['modelName'] = item.modelName || '—';
+      row['stationNames'] = item.stationNames?.length ? item.stationNames.join(', ') : '';
+      row['active'] = item.active ? 'Активен' : 'Неактивен';
+      row['createdAt'] = formatDate(item.createdAt);
+      return row;
+    });
+
+    const footerLines: string[] = [];
+
+    return {
+      title: 'Шаблоны пополнения',
+      columns: columnKeys,
+      columnLabels: columnLabels,
+      data: preparedData,
+      landscape: true,
+      footerLines,
+    };
+  };
+
+  const handlePrint = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/templates/print`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '0';
+      iframe.style.width = '800px';
+      iframe.style.height = '600px';
+      iframe.style.visibility = 'visible';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 500);
+      };
+    } catch (e) { console.error('Ошибка печати', e); }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/templates/export-pdf`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'templates.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/templates/export-excel`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'templates.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
+  };
+
+  const handleDownloadWord = async () => {
+    try {
+      const res = await AxiosService.post(
+        `${ConstantInfo.apiBaseUrl}/api/templates/export-word`,
+        preparePayload(),
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'templates.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error('Ошибка выгрузки Word', e); }
+  };
+  // ===== КОНЕЦ БЛОКА =====
+
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const mediumButtonStyle: React.CSSProperties = { height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
 
@@ -700,6 +853,7 @@ const TemplatesPage = () => {
       <div style={{ position: 'absolute', top: 79, left: 60, right: 40, height: 17 }} />
 
       <div style={{ position: 'absolute', top: 105, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
+        {/* Левая группа кнопок */}
         <div style={{ display: 'flex', gap: 15 }}>
           <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
           <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
@@ -709,17 +863,72 @@ const TemplatesPage = () => {
         <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', whiteSpace: 'nowrap' }}>Активные</span>
         <div style={{ width: 9, flexShrink: 0 }} />
         <ToggleSwitch value={showActiveOnly} onChange={() => setShowActiveOnly(!showActiveOnly)} />
+
+        {/* Основные кнопки управления */}
         <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateTemplateFromToolbar}><img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} /><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span></button>
-          <button style={{ ...mediumButtonStyle, width: 186 }} onClick={handleCreateGroupClick}><img src={Iconn2} alt="" style={{ width: 22, height: 20, marginLeft: 13 }} /><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать группу</span></button>
-          <button style={smallButtonStyle} onClick={handleMoveClick}><img src={Icon18} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle} onClick={handleCopyClick}><img src={Icon6} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle} onClick={handleDeleteClick}><img src={Icon7} alt="" style={{ width: 18, height: 18 }} /></button>
+          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateTemplateFromToolbar}>
+            <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
+          </button>
+          <button style={{ ...mediumButtonStyle, width: 186 }} onClick={handleCreateGroupClick}>
+            <img src={Iconn2} alt="" style={{ width: 22, height: 20, marginLeft: 13 }} />
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать группу</span>
+          </button>
+          <button style={smallButtonStyle} onClick={handleMoveClick}>
+            <img src={Icon18} alt="" style={{ width: 18, height: 18 }} />
+          </button>
+          <button style={smallButtonStyle} onClick={handleCopyClick}>
+            <img src={Icon6} alt="" style={{ width: 18, height: 18 }} />
+          </button>
+          <button style={smallButtonStyle} onClick={handleDeleteClick}>
+            <img src={Icon7} alt="" style={{ width: 18, height: 18 }} />
+          </button>
         </div>
+
+        {/* Правая группа – только кнопка настроек */}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
+          {/* КНОПКА ПЕЧАТИ */}
+          <button style={smallButtonStyle} onClick={handlePrint}>
+            <img src={PrintIcon} alt="Печать" style={{ width: 18, height: 18 }} />
+          </button>
+
+          {/* КНОПКА СКАЧИВАНИЯ С ВЫПАДАЮЩИМ МЕНЮ */}
+          <div className="download-menu-container" style={{ position: 'relative' }}>
+            <button
+              style={smallButtonStyle}
+              onClick={(e) => { e.stopPropagation(); setIsDownloadMenuOpen(!isDownloadMenuOpen); }}
+            >
+              <img src={DownloadIcon} alt="Скачать" style={{ width: 18, height: 18 }} />
+            </button>
+            {isDownloadMenuOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 44,
+                left: 0,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 6,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                zIndex: 10001,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '8px 0',
+                minWidth: 160,
+              }}>
+                <button onClick={handleDownloadPdf} style={{ ...contextMenuButtonStyle, paddingRight: 20 }}>
+                  Скачать PDF
+                </button>
+                <button onClick={handleDownloadExcel} style={{ ...contextMenuButtonStyle, paddingRight: 20 }}>
+                  Скачать Excel
+                </button>
+                <button onClick={handleDownloadWord} style={{ ...contextMenuButtonStyle, paddingRight: 20 }}>
+                  Скачать Word
+                </button>
+              </div>
+            )}
+          </div>
+          <button style={smallButtonStyle} onClick={() => setShowConfigurationPopup(true)}>
+            <img src={Icon10} alt="Настройки" style={{ width: 18, height: 16 }} />
+          </button>
         </div>
       </div>
 
@@ -874,6 +1083,20 @@ const TemplatesPage = () => {
           </div>
         </div>
       )}
+
+      {/* POPUP НАСТРОЕК КОЛОНОК */}
+      <ConfigurationPopup
+        isOpen={showConfigurationPopup}
+        onClose={() => setShowConfigurationPopup(false)}
+        title="Каталог шаблонов загрузки станции (Настройки списка)"
+        columns={ALL_COLUMNS}
+        visibleColumns={visibleColumns}
+        requiredColumns={requiredColumns}
+        onSave={(cols) => {
+          setVisibleColumns(cols);
+          // Здесь можно сохранить настройки в localStorage или на бэкенд, если нужно
+        }}
+      />
     </div>
   );
 };
