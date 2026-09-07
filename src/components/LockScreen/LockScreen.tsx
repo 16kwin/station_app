@@ -1,5 +1,5 @@
 // components/LockScreen/LockScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../services/AuthContext';
 import LOGO from '../../assets/LOGO.svg';
@@ -12,17 +12,91 @@ interface LockScreenProps {
   onUnlock: () => void;
 }
 
+const LOCK_TIMEOUT = 5 * 60 * 1000; // 5 минут до логаута
+
 const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const { userInfo, checkPassword } = useAuth();
+  const { userInfo, checkPassword, logout } = useAuth();
   const [lockState, setLockState] = useState<'locked' | 'unlocking' | 'shaking'>('locked');
   const [showPassword, setShowPassword] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [hasSuccess, setHasSuccess] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(Math.ceil(LOCK_TIMEOUT / 1000)); // в секундах
+  
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+
+  const startLogoutTimer = useCallback(() => {
+    // Очищаем старые таймеры
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    setTimeLeft(Math.ceil(LOCK_TIMEOUT / 1000));
+
+    // Таймер обратного отсчета
+    countdownIntervalRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Таймер логаута
+    logoutTimerRef.current = setTimeout(() => {
+      // Отправляем событие логаута в другие вкладки
+      channelRef.current?.postMessage({ type: 'logout' });
+      logout();
+    }, LOCK_TIMEOUT);
+  }, [logout]);
+
+  useEffect(() => {
+    // Создаем BroadcastChannel
+    channelRef.current = new BroadcastChannel('app_inactivity_channel');
+
+    const handleChannelMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (!message || !message.type) return;
+
+      if (message.type === 'unlock') {
+        // Разблокировка из другой вкладки
+        if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        setShowForm(false);
+        setPassword('');
+        setError('');
+        setSuccessMessage('');
+        setHasError(false);
+        setHasSuccess(false);
+        onUnlock();
+      }
+      if (message.type === 'logout') {
+        // Логаут из другой вкладки
+        if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        logout();
+      }
+    };
+
+    channelRef.current.onmessage = handleChannelMessage;
+
+    // Запускаем таймер логаута при монтировании
+    startLogoutTimer();
+
+    return () => {
+      channelRef.current?.close();
+      channelRef.current = null;
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, [startLogoutTimer, onUnlock, logout]);
 
   useEffect(() => {
     setShowForm(false);
@@ -61,6 +135,10 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
       setLockState('unlocking');
       setSuccessMessage('Пароль введен успешно!');
       setHasSuccess(true);
+      
+      // Отправляем событие разблокировки в другие вкладки
+      channelRef.current?.postMessage({ type: 'unlock' });
+      
       setTimeout(() => {
         setPassword('');
         onUnlock();
@@ -76,6 +154,12 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     }
     
     setIsLoading(false);
+  };
+
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
   const isButtonActive = password.length > 0;
@@ -108,6 +192,28 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
             font-family: Inter, sans-serif !important;
           }
         `}</style>
+        
+        {/* Таймер до логаута */}
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 10,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: '8px',
+          padding: '8px 16px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        }}>
+          <span style={{
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '14px',
+            fontWeight: 600,
+            color: timeLeft < 60 ? '#FF3052' : '#2D4059',
+          }}>
+            Выход через: {formatTime(timeLeft)}
+          </span>
+        </div>
+
         <AnimatePresence mode="wait">
           {!showForm && (
             <motion.div

@@ -19,8 +19,8 @@ const ConstantInfo = {
   
   // Спящий режим
   restApiCheckPassword: '/api/auth/check_password',
-  inactivityTimeout: 5 * 60 * 1000,
-  warningTimeout: 30 * 1000,
+  inactivityTimeout: 30 * 1000,
+warningTimeout: 10 * 1000,
   
   // Станции
   restApiStationsStatic: '/api/stations/static',

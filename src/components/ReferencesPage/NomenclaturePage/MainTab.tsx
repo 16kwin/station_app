@@ -230,6 +230,10 @@ const MainTab: React.FC<CommonProps> = (props) => {
   // Храним codeFlags в состоянии React, а не в localStorage
   const [codeFlags, setCodeFlags] = useState<{ [codeValue: string]: { isGenerated: boolean; codeKind: string } }>({});
 
+  // Миниатюры для штрихкода и SKU
+  const [barcodeThumbnail, setBarcodeThumbnail] = useState<string | null>(null);
+  const [skuThumbnail, setSkuThumbnail] = useState<string | null>(null);
+
   const fetchCatalogOptions = async () => {
     try {
       const res = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
@@ -315,6 +319,40 @@ const MainTab: React.FC<CommonProps> = (props) => {
 
   const currentBarcode = (localBarcodes && localBarcodes[0]) || enrichedServerBarcodes[0] || null;
   const currentSku = (localSkus && localSkus[0]) || enrichedServerSkus[0] || null;
+
+  // Генерация миниатюры штрихкода при изменении currentBarcode
+  useEffect(() => {
+    if (currentBarcode && currentBarcode.codeValue) {
+      const generateBarcodeThumbnail = async () => {
+        const result = await validateAndGenerate(currentBarcode.codeType || 'qr', currentBarcode.codeValue);
+        if (result.image) {
+          setBarcodeThumbnail(result.image);
+        } else {
+          setBarcodeThumbnail(null);
+        }
+      };
+      generateBarcodeThumbnail();
+    } else {
+      setBarcodeThumbnail(null);
+    }
+  }, [currentBarcode]);
+
+  // Генерация миниатюры SKU при изменении currentSku
+  useEffect(() => {
+    if (currentSku && currentSku.codeValue) {
+      const generateSkuThumbnail = async () => {
+        const result = await validateAndGenerate(currentSku.codeType || 'qr', currentSku.codeValue);
+        if (result.image) {
+          setSkuThumbnail(result.image);
+        } else {
+          setSkuThumbnail(null);
+        }
+      };
+      generateSkuThumbnail();
+    } else {
+      setSkuThumbnail(null);
+    }
+  }, [currentSku]);
 
   const [showBarcodePopup, setShowBarcodePopup] = useState(false);
   const [barcodeValue, setBarcodeValue] = useState('');
@@ -436,26 +474,31 @@ const MainTab: React.FC<CommonProps> = (props) => {
       userId = await fetchCurrentUser();
     }
     
-    if (currentBarcode) {
-      setBarcodeValue(currentBarcode.codeValue);
-      setBarcodeType(currentBarcode.codeType || 'qr');
-    } else {
-      setBarcodeValue('');
-      setBarcodeType('qr');
+    // Загружаем тип по умолчанию ДО установки значения
+    let defaultType: string | null = null;
+    if (userId) {
+      defaultType = await fetchDefaultCodeType(userId, 'BARCODE');
     }
     
+    let typeToSet = 'qr';
+    let setDefaultFlag = false;
+    
+    if (currentBarcode) {
+      setBarcodeValue(currentBarcode.codeValue);
+      typeToSet = currentBarcode.codeType || 'qr';
+      setDefaultFlag = typeToSet === defaultType;
+    } else {
+      setBarcodeValue('');
+      // Используем дефолтный тип, если он есть, иначе 'qr'
+      typeToSet = defaultType || 'qr';
+      setDefaultFlag = typeToSet === defaultType;
+    }
+    
+    setBarcodeType(typeToSet);
+    setBarcodeSetDefault(setDefaultFlag);
     setBarcodePreview(null);
     setBarcodeError(null);
     setBarcodeTypeOpen(false);
-    
-    // Загружаем тип по умолчанию
-    if (userId) {
-      const defaultType = await fetchDefaultCodeType(userId, 'BARCODE');
-      const currentType = currentBarcode?.codeType || 'qr';
-      setBarcodeSetDefault(currentType === defaultType);
-    } else {
-      setBarcodeSetDefault(false);
-    }
     
     setShowBarcodePopup(true);
   };
@@ -466,26 +509,31 @@ const MainTab: React.FC<CommonProps> = (props) => {
       userId = await fetchCurrentUser();
     }
     
-    if (currentSku) {
-      setSkuValue(currentSku.codeValue);
-      setSkuType(currentSku.codeType || 'qr');
-    } else {
-      setSkuValue('');
-      setSkuType('qr');
+    // Загружаем тип по умолчанию ДО установки значения
+    let defaultType: string | null = null;
+    if (userId) {
+      defaultType = await fetchDefaultCodeType(userId, 'SKU');
     }
     
+    let typeToSet = 'qr';
+    let setDefaultFlag = false;
+    
+    if (currentSku) {
+      setSkuValue(currentSku.codeValue);
+      typeToSet = currentSku.codeType || 'qr';
+      setDefaultFlag = typeToSet === defaultType;
+    } else {
+      setSkuValue('');
+      // Используем дефолтный тип, если он есть, иначе 'qr'
+      typeToSet = defaultType || 'qr';
+      setDefaultFlag = typeToSet === defaultType;
+    }
+    
+    setSkuType(typeToSet);
+    setSkuSetDefault(setDefaultFlag);
     setSkuPreview(null);
     setSkuError(null);
     setSkuTypeOpen(false);
-    
-    // Загружаем тип по умолчанию
-    if (userId) {
-      const defaultType = await fetchDefaultCodeType(userId, 'SKU');
-      const currentType = currentSku?.codeType || 'qr';
-      setSkuSetDefault(currentType === defaultType);
-    } else {
-      setSkuSetDefault(false);
-    }
     
     setShowSkuPopup(true);
   };
@@ -835,8 +883,12 @@ const MainTab: React.FC<CommonProps> = (props) => {
         <div style={{ position: 'absolute', top: 30 + 17 + 11 + 283 + 30, left: 30, right: 30 }}>
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>Штрихкод:</span>
           <div style={{ display: 'flex', gap: 10, marginTop: 12, minWidth: 0 }}>
-            <div onClick={currentBarcode ? handleBarcodeIconClick : openBarcodePopup} style={{ width: 76, height: 44, borderRadius: 10, border: currentBarcode ? activeBorder : grayBorder, backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
-              {currentBarcode && <img src={IconCODE} alt="" style={{ width: 57, height: 25 }} />}
+            <div onClick={currentBarcode ? handleBarcodeIconClick : openBarcodePopup} style={{ width: 76, height: 44, borderRadius: 10, border: currentBarcode ? activeBorder : grayBorder, backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', overflow: 'hidden', padding: '4px', boxSizing: 'border-box' }}>
+              {barcodeThumbnail ? (
+                <img src={barcodeThumbnail} alt="Штрихкод" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              ) : currentBarcode ? (
+                <img src={IconCODE} alt="" style={{ width: 57, height: 25 }} />
+              ) : null}
             </div>
             <div onClick={openBarcodePopup} style={{ flex: 1, height: 44, borderRadius: 10, border: currentBarcode ? activeBorder : grayBorder, backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', position: 'relative', boxSizing: 'border-box', minWidth: 0 }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: currentBarcode ? '#666EFE' : '#9CA3AF', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{currentBarcode?.codeValue || 'Добавить штрихкод'}</span>
@@ -851,8 +903,12 @@ const MainTab: React.FC<CommonProps> = (props) => {
         <div style={{ position: 'absolute', top: 30 + 17 + 11 + 283 + 30 + 17 + 12 + 44 + 20, left: 30, right: 30 }}>
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>SKU:</span>
           <div style={{ display: 'flex', gap: 10, marginTop: 12, minWidth: 0 }}>
-            <div onClick={currentSku ? handleSkuIconClick : openSkuPopup} style={{ width: 76, height: 44, borderRadius: 10, border: currentSku ? activeBorder : grayBorder, backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
-              {currentSku && <img src={IconCODE2} alt="" style={{ width: 31, height: 31 }} />}
+            <div onClick={currentSku ? handleSkuIconClick : openSkuPopup} style={{ width: 76, height: 44, borderRadius: 10, border: currentSku ? activeBorder : grayBorder, backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', overflow: 'hidden', padding: '4px', boxSizing: 'border-box' }}>
+              {skuThumbnail ? (
+                <img src={skuThumbnail} alt="SKU" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              ) : currentSku ? (
+                <img src={IconCODE2} alt="" style={{ width: 31, height: 31 }} />
+              ) : null}
             </div>
             <div onClick={openSkuPopup} style={{ flex: 1, height: 44, borderRadius: 10, border: currentSku ? activeBorder : grayBorder, backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 14, paddingRight: 13, cursor: 'pointer', position: 'relative', boxSizing: 'border-box', minWidth: 0 }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: currentSku ? '#666EFE' : '#9CA3AF', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{currentSku?.codeValue || 'Добавить SKU'}</span>

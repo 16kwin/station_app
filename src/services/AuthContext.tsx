@@ -49,6 +49,75 @@ const emptyUserInfo: UserInfo = {
   imgAvatar: undefined,
 };
 
+// Функция очистки всех IndexedDB баз
+const clearAllIndexedDB = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (!window.indexedDB) {
+      resolve();
+      return;
+    }
+
+    try {
+      // Получаем список всех баз
+      const request = indexedDB.databases ? indexedDB.databases() : null;
+      
+      if (request) {
+        request.then((databases) => {
+          const dbNames = databases
+            .map(db => db.name)
+            .filter((name): name is string => name !== undefined);
+          
+          dbNames.forEach(dbName => {
+            try {
+              const deleteRequest = indexedDB.deleteDatabase(dbName);
+              deleteRequest.onsuccess = () => {};
+              deleteRequest.onerror = () => {};
+              deleteRequest.onblocked = () => {};
+            } catch (e) {}
+          });
+          resolve();
+        }).catch(() => {
+          // Fallback: пробуем удалить известные базы
+          try {
+            indexedDB.deleteDatabase('nomenclature_drafts_db');
+          } catch (e) {}
+          resolve();
+        });
+      } else {
+        // Fallback: пробуем удалить известные базы
+        try {
+          indexedDB.deleteDatabase('nomenclature_drafts_db');
+        } catch (e) {}
+        resolve();
+      }
+    } catch (e) {
+      resolve();
+    }
+  });
+};
+
+// Функция очистки localStorage (кроме служебных)
+const clearLocalStorage = () => {
+  try {
+    localStorage.removeItem('tabs_state');
+    localStorage.removeItem('drafts_state');
+    localStorage.removeItem(LOCKED_STORAGE_KEY);
+    localStorage.removeItem(LOGOUT_EVENT_KEY);
+    localStorage.removeItem(LOGIN_EVENT_KEY);
+  } catch (e) {
+    console.error('Failed to clear localStorage:', e);
+  }
+};
+
+// Функция очистки sessionStorage
+const clearSessionStorage = () => {
+  try {
+    sessionStorage.clear();
+  } catch (e) {
+    console.error('Failed to clear sessionStorage:', e);
+  }
+};
+
 export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,14 +191,19 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Очищаем все данные
+      await clearAllIndexedDB();
+      clearLocalStorage();
+      clearSessionStorage();
       resetAuthState();
-      
+
       // Отправляем сигнал другим вкладкам
       try {
         localStorage.setItem(LOGOUT_EVENT_KEY, Date.now().toString());
-        localStorage.removeItem('tabs_state');
-        localStorage.removeItem('drafts_state');
       } catch (e) {}
+
+      // Перенаправляем на страницу логина
+      window.location.href = '/login';
     }
   };
 
@@ -156,6 +230,9 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
       // Синхронизация логаута
       if (e.key === LOGOUT_EVENT_KEY && e.newValue) {
         // Принудительно переходим на страницу логина
+        resetAuthState();
+        clearLocalStorage();
+        clearSessionStorage();
         window.location.href = '/login';
       }
       
