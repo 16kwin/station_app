@@ -1,7 +1,5 @@
-// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ
+// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (подсветка поиска)
 import React, { useState } from 'react';
-import AxiosService from '../../../services/AxiosService';
-import ConstantInfo from '../../../info/ConstantInfo';
 
 interface TableRow {
   id: number;
@@ -13,6 +11,7 @@ interface CellData {
   numberCell?: number;
   columnNumber?: number;
   drumNumber?: number;
+  materialUid?: string | null;
   materialName?: string | null;
   materialArticle?: string | null;
   quantity?: number | null;
@@ -32,6 +31,7 @@ interface SchablonTableCellProps {
   colStart: number;
   colEnd: number;
   cellData?: CellData;
+  highlightText?: string;
   onSelect: (id: number, ctrlKey: boolean) => void;
   onDoubleClick: (id: number) => void;
   onClear?: () => void;
@@ -39,14 +39,26 @@ interface SchablonTableCellProps {
   setRef: (id: number, element: HTMLDivElement | null) => void;
 }
 
+const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, highlight }) => {
+  if (!highlight) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(highlight.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span style={{ backgroundColor: 'rgba(102, 110, 254, 0.2)', color: '#2D4059' }}>{text.slice(idx, idx + highlight.length)}</span>
+      {text.slice(idx + highlight.length)}
+    </>
+  );
+};
+
 const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   row, isSelected, isMultiSelect, selectedColumn, isMerged,
-  rowStart, rowEnd, colStart, colEnd, cellData, onSelect, onDoubleClick,
-  onClear, onOpenDetails, setRef,
+  rowStart, rowEnd, colStart, colEnd, cellData, highlightText,
+  onSelect, onDoubleClick, onClear, onOpenDetails, setRef,
 }) => {
   const stripeColor = isMultiSelect ? '#07E098' : '#666EFE';
   const [isHovered, setIsHovered] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   let cellNumber: string;
@@ -55,28 +67,25 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   else if (rowStart !== rowEnd) cellNumber = `${colStart}-${rowStart}-${rowEnd}`;
   else cellNumber = `${colStart}-${rowStart}`;
 
-  const materialName = cellData?.materialName || '—';
+  const hasData = !!cellData?.materialUid;
+  const materialName = cellData?.materialName || (hasData ? '…' : '—');
   const materialArticle = cellData?.materialArticle || '';
   const quantity = cellData?.quantity ?? 0;
   const purposes = [cellData?.purposeMaterial, cellData?.purposeSgd].filter(Boolean);
   const purposesText = purposes.length > 0 ? purposes.join(', ') : '—';
-  const hasData = !!cellData?.materialName;
 
   const handleContextMenu = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); };
   const closeContextMenu = () => setContextMenu(null);
 
-  const handleClear = async () => {
-    if (!cellData?.uid || isClearing) return;
+  const handleClear = () => {
     closeContextMenu();
-    setIsClearing(true);
-    try { await AxiosService.delete(ConstantInfo.restApiTemplateCell(cellData.uid)); onClear?.(); }
-    catch (error) { console.error('Ошибка очистки ячейки:', error); }
-    finally { setIsClearing(false); }
+    onClear?.();
   };
 
   const handleOpenDetails = () => { closeContextMenu(); onOpenDetails?.(); };
 
   const backgroundColor = isHovered || contextMenu ? '#F5FAFF' : '#FFFFFF';
+  const hl = (highlightText || '').trim();
 
   return (
     <>
@@ -88,10 +97,28 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', backgroundColor: '#E5E7EB' }} />
         <div style={{ paddingTop: '11px', height: '100%', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', paddingLeft: '30px', paddingRight: '50px' }}>
-            <div style={{ width: '165px', flexShrink: 0 }}><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Номер ячейки</div><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: '15px', color: '#2D4059', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{cellNumber}</div></div>
-            <div style={{ width: '590px', flexShrink: 0 }}><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Номенклатура</div><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hasData ? `${materialName} ${materialArticle ? `(${materialArticle})` : ''}` : '—'}</div></div>
-            <div style={{ width: '179px', flexShrink: 0 }}><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Количество</div><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{hasData ? quantity : '—'}</div></div>
-            <div style={{ flex: 1 }}><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Назначения</div><div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{purposesText}</div></div>
+            <div style={{ width: '165px', flexShrink: 0 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Номер ячейки</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: '15px', color: '#2D4059', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{cellNumber}</div>
+            </div>
+            <div style={{ width: '590px', flexShrink: 0 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Номенклатура</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {hasData
+                  ? hl
+                    ? <><HighlightedText text={materialName} highlight={hl} />{materialArticle ? <> <HighlightedText text={`(${materialArticle})`} highlight={hl} /></> : null}</>
+                    : `${materialName} ${materialArticle ? `(${materialArticle})` : ''}`
+                  : '—'}
+              </div>
+            </div>
+            <div style={{ width: '179px', flexShrink: 0 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Количество</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{hasData ? quantity : '—'}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Назначения</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{purposesText}</div>
+            </div>
           </div>
         </div>
       </div>

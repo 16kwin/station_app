@@ -510,6 +510,7 @@ restApiNomenclatureSaveCodeDefault: '/api/nomenclature/code-default',
 restApiNomenclatureReleases: '/api/nomenclature/releases',
 
 restApiStationCopy: (uid: string) => `/api/stations/crud/${uid}/copy`,
+restApiTemplateCellsBatchSave: (uid: string) => `/api/templates/${uid}/cells/batch-save`,
 };
 
 export default ConstantInfo;
