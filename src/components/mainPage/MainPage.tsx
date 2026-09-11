@@ -1,19 +1,11 @@
+// MainPage.tsx — главная страница: панель «Информационная панель (Топ-менеджмент)» в белом блоке 1800×840
 import React from 'react';
-import Glavmenu from '../../assets/Glavmenu.svg';
+import EconomicDashboard from './economic/EconomicDashboard';
 
-const MainPage = () => {
+const MainPage: React.FC = () => {
   return (
-    <div className="h-full w-full overflow-auto p-6 flex items-center justify-center">
-      <img
-        src={Glavmenu}
-        alt="Главное меню"
-        className="w-full h-full object-contain"
-        draggable={false}
-        style={{
-          pointerEvents: 'none',
-          userSelect: 'none',
-        }}
-      />
+    <div style={{ position: 'relative', width: 1800, height: 840, padding: 0 }}>
+      <EconomicDashboard />
     </div>
   );
 };
