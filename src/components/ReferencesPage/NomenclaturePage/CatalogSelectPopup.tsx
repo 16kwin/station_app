@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен режим 'station')
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен nomenclatureTypeFilter для analogSelect)
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../elements/CustomScrollbar';
@@ -7,11 +7,10 @@ import ConstantInfo from '../../../info/ConstantInfo';
 import { useTabs } from '../../../context/TabContext';
 import CreateGroupPopup from './CreateGroupPopup';
 import TemplateCreateGroupPopup from '../TemplatesPage/TemplateCreateGroupPopup';
-import Icon1 from '../../../assets/References/Icon1.svg';
-import Icon4 from '../../../assets/References/Icon4.svg';
 import Icon11 from '../../../assets/References/Icon11.svg';
 import Icon12 from '../../../assets/References/Icon12.svg';
 import Icon13 from '../../../assets/References/Icon13.svg';
+import Icon4 from '../../../assets/References/Icon4.svg';
 import Popup2 from '../../../assets/References/popup2.svg';
 import Popup3 from '../../../assets/References/popup3.svg';
 import Popup4 from '../../../assets/References/popup4.svg';
@@ -37,6 +36,8 @@ export interface TreeItem {
   children?: TreeItem[];
   materials?: TreeItem[];
   isMaterial?: boolean;
+  typeMaterialName?: string;
+  typeMaterialUid?: string;
   [key: string]: any;
 }
 
@@ -83,7 +84,7 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
     case 'catalog':
       return { title: 'Справочник: Номенклатура (выбор каталога)', columns: [{ key: 'groupCode', title: 'Код группы', left: 500 }], createButtonLabel: 'Создать каталог', isFlat: false, hasCreateButton: true };
     case 'analogSelect':
-      return { title: 'Выбор материала для аналога', columns: [], isFlat: false, hasCreateButton: false };
+      return { title: 'Выбор номенклатуры', columns: [], isFlat: false, hasCreateButton: false };
     case 'nomenclatureGroup':
       return { title: 'Справочник: Группы номенклатуры (Выбор)', columns: [{ key: 'typeMaterialName', title: 'Группа учета', left: 500 }], createButtonLabel: 'Создать группу номенклатуры', isFlat: true, hasCreateButton: true };
     case 'nomenclatureType':
@@ -109,7 +110,7 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
     case 'shortDescription':
       return { title: 'Справочник: Типы описаний (Выбор)', columns: [], createButtonLabel: 'Создать тип описания', isFlat: true, hasCreateButton: true };
     case 'templateCategory':
-      return { title: 'Справочник: Шаблоны (выбор каталога)', columns: [], createButtonLabel: 'Создать каталог', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Категории шаблонов (Выбор)', columns: [{ key: 'code', title: 'Код', left: 500 }], createButtonLabel: 'Создать категорию', isFlat: false, hasCreateButton: true };
     case 'stationType':
       return { title: 'Справочник: Типы станций (Выбор)', columns: [], createButtonLabel: 'Создать тип станции', isFlat: true, hasCreateButton: true };
     case 'stationManufacturer':
@@ -185,15 +186,61 @@ const convertBackendTree = (backendGroups: BackendGroup[]): TreeItem[] => {
   }));
 };
 
-const convertBackendTreeWithMaterials = (backendGroups: BackendGroup[], excludeUids: string[] = []): TreeItem[] => {
+// Материал конвертируется с сохранением имени типа материала (для фильтра по ТМЦ/Готовая деталь)
+const convertBackendTreeWithMaterials = (
+  backendGroups: BackendGroup[],
+  excludeUids: string[] = [],
+  typeFilter?: string,
+): TreeItem[] => {
   const excludeSet = new Set(excludeUids);
-  return backendGroups.map(g => {
+
+  const processMaterial = (m: any): TreeItem => {
+    const typeMaterialName = m.typeMaterialName || m.typeMainName || m.typeMaterialTypeName || m.typeName || '';
+    const typeMaterialUid = m.typeMaterialUid || m.typeMainUid || m.typeMaterial || '';
+    return {
+      id: m.uid,
+      name: m.name || m.nameMaterial || 'Без названия',
+      isMaterial: true,
+      typeMaterialName,
+      typeMaterialUid,
+    };
+  };
+
+  const result: TreeItem[] = [];
+  for (const g of backendGroups) {
     const materialItems: TreeItem[] = (g.materials || [])
       .filter((m: any) => !excludeSet.has(m.uid))
-      .map((m: any) => ({ id: m.uid, name: m.name || 'Без названия', isMaterial: true }));
-    const childGroups = g.children && g.children.length > 0 ? convertBackendTreeWithMaterials(g.children, excludeUids) : [];
-    return { id: g.uid, name: g.name, groupCode: '', children: [...childGroups, ...materialItems] };
-  });
+      .map(processMaterial)
+      .filter((m: TreeItem) => {
+        if (!typeFilter) return true;
+        // если тип не задан у материала — скрываем при активном фильтре
+        return m.typeMaterialName === typeFilter;
+      });
+
+    const childGroups = g.children && g.children.length > 0
+      ? convertBackendTreeWithMaterials(g.children, excludeUids, typeFilter)
+      : [];
+
+    // пустые группы без материалов и без детей — не показываем
+    if (typeFilter && materialItems.length === 0 && childGroups.length === 0) continue;
+
+    result.push({
+      id: g.uid,
+      name: g.name,
+      groupCode: '',
+      children: [...childGroups, ...materialItems],
+    });
+  }
+  return result;
+};
+
+const convertTemplateCategoryTree = (categories: any[]): TreeItem[] => {
+  return categories.map(c => ({
+    id: c.uid,
+    name: c.name,
+    code: c.code != null ? String(c.code).padStart(4, '0') : '',
+    children: c.children && c.children.length > 0 ? convertTemplateCategoryTree(c.children) : undefined,
+  }));
 };
 
 const convertFlatReference = (items: FlatReferenceItem[]): TreeItem[] => {
@@ -241,6 +288,8 @@ interface CatalogSelectPopupProps {
   popupType: PopupType;
   filterParam?: string;
   excludeUids?: string[];
+  zIndexOverride?: number;
+  nomenclatureTypeFilter?: 'ТМЦ' | 'Готовая деталь';
 }
 
 const ROW_HEIGHT = 54;
@@ -263,7 +312,7 @@ const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, 
 };
 
 const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
-  isOpen, onClose, onSelect, popupType, filterParam, excludeUids = [],
+  isOpen, onClose, onSelect, popupType, filterParam, excludeUids = [], zIndexOverride, nomenclatureTypeFilter,
 }) => {
   const { openTab, activeTabId } = useTabs();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -292,6 +341,8 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
 
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+
+  const baseZIndex = zIndexOverride ?? 10002;
 
   useEffect(() => { if (isOpen) setInternalOpen(true); }, [isOpen]);
   useEffect(() => { if (searchExpanded && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100); }, [searchExpanded]);
@@ -336,12 +387,19 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         if (converted.length > 0) setOpenFolders(new Set([converted[0].id]));
       } else if (isAnalogSelect) {
         const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-        const converted = convertBackendTreeWithMaterials(getDataArray(response.data), excludeUids);
+        const converted = convertBackendTreeWithMaterials(
+          getDataArray(response.data),
+          excludeUids,
+          nomenclatureTypeFilter,
+        );
         setData(converted);
         if (converted.length > 0) setOpenFolders(new Set([converted[0].id]));
       } else if (isTemplateCategory) {
-        const response = await AxiosService.get(ConstantInfo.restApiTemplatesCategories);
-        setData(getDataArray(response.data).map((item: any) => ({ id: String(item.id), name: item.name })));
+        const response = await AxiosService.get(ConstantInfo.restApiTemplatesTreeWithSettings(USER_ID));
+        const tree = response.data?.tree || [];
+        const converted = convertTemplateCategoryTree(tree);
+        setData(converted);
+        if (converted.length > 0) setOpenFolders(new Set([converted[0].id]));
       } else if (popupType === 'nomenclatureGroup') {
         const url = filterParam ? `${ConstantInfo.restApiNomenclatureTypePurposes}?typeMaterialUid=${filterParam}` : ConstantInfo.restApiNomenclatureTypePurposes;
         setData(convertFlatReference(getDataArray((await AxiosService.get(url)).data)));
@@ -394,7 +452,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
           id: item.uid, name: item.name, modelName: item.modelName || '',
         })));
       } else if (popupType === 'station') {
-        // Список станций через /api/stations/crud
         const resp = await AxiosService.get(ConstantInfo.restApiStationsCrud(USER_ID));
         const items = getDataArray(resp.data?.data ?? resp.data);
         const filtered = filterParam
@@ -440,7 +497,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       loadData();
       if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData();
     }
-  }, [internalOpen, popupType, filterParam, excludeUids.join(',')]);
+  }, [internalOpen, popupType, filterParam, excludeUids.join(','), nomenclatureTypeFilter]);
 
   useEffect(() => {
     if (internalOpen) { loadData(); if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData(); }
@@ -470,18 +527,21 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     try {
       await AxiosService.post('/api/nomenclature/groups', { name: groupName, parentUid: parentUid });
       const response = await AxiosService.get(ConstantInfo.restApiNomenclatureTree);
-      setData(isAnalogSelect ? convertBackendTreeWithMaterials(getDataArray(response.data), excludeUids) : convertBackendTree(getDataArray(response.data)));
+      setData(isAnalogSelect ? convertBackendTreeWithMaterials(getDataArray(response.data), excludeUids, nomenclatureTypeFilter) : convertBackendTree(getDataArray(response.data)));
       setShowCreateGroup(false);
     } catch (error) { console.error('Ошибка создания группы:', error); }
     finally { setIsCreatingGroup(false); }
   };
 
-  const handleTemplateCreateGroup = async (groupName: string) => {
+  const handleTemplateCreateGroup = async (groupName: string, parentUid: string | null) => {
     setIsCreatingGroup(true);
     try {
-      await AxiosService.post(ConstantInfo.restApiTemplatesCategories, { name: groupName });
-      const response = await AxiosService.get(ConstantInfo.restApiTemplatesCategories);
-      setData(getDataArray(response.data).map((item: any) => ({ id: String(item.id), name: item.name })));
+      const body: any = { name: groupName };
+      if (parentUid) body.parentCategoryUid = parentUid;
+      await AxiosService.post(ConstantInfo.restApiTemplatesCategories, body);
+      const response = await AxiosService.get(ConstantInfo.restApiTemplatesTreeWithSettings(USER_ID));
+      const tree = response.data?.tree || [];
+      setData(convertTemplateCategoryTree(tree));
       setShowCreateGroup(false);
     } catch (error) { console.error('Ошибка создания категории шаблонов:', error); }
     finally { setIsCreatingGroup(false); }
@@ -596,7 +656,6 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       const isMaterial = item.isMaterial === true;
 
       const effectiveOpen = searchValue.trim() ? true : isOpen;
-      const effectiveHasChildren = searchValue.trim() ? hasChildren : hasChildren;
       const effectiveShift = searchValue.trim() ? 0 : shift;
 
       result.push(
@@ -655,7 +714,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
 
   const getCreateTitle = (): string => {
     switch (popupType) {
-      case 'templateCategory': return 'Создание каталога шаблонов';
+      case 'templateCategory': return 'Создание категории';
       case 'nomenclatureGroup': return 'Создание группы номенклатуры';
       case 'nomenclatureType': return 'Создание вида номенклатуры';
       case 'attributeType': return 'Создание вида характеристики';
@@ -683,11 +742,11 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
         onClick={handleClose}
-        style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: 10002, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: baseZIndex, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} transition={{ duration: 0.3, type: 'spring', stiffness: 300, damping: 25 }}
           onClick={e => e.stopPropagation()}
-          style={{ width: 1052, height: 680, backgroundColor: '#FFFFFF', borderRadius: 15, boxShadow: '0 20px 60px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10002 }}
+          style={{ width: 1052, height: 680, backgroundColor: '#FFFFFF', borderRadius: 15, boxShadow: '0 20px 60px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: baseZIndex }}
         >
           <button onClick={handleClose} style={{ position: 'absolute', top: 20, right: 30, width: 14, height: 14, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="1.5" y1="1.5" x2="12.5" y2="12.5" stroke="#2D4059" strokeWidth="3" strokeLinecap="round" /><line x1="12.5" y1="1.5" x2="1.5" y2="12.5" stroke="#2D4059" strokeWidth="3" strokeLinecap="round" /></svg>
@@ -749,7 +808,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       {isCatalog && <CreateGroupPopup isOpen={showCreateGroup} currentParentName={null} currentParentUid={null} groups={flattenGroups(data)} onClose={() => setShowCreateGroup(false)} onSubmit={handleCreateGroup} isLoading={isCreatingGroup} />}
       {isTemplateCategory && <TemplateCreateGroupPopup isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} onSubmit={handleTemplateCreateGroup} isLoading={isCreatingGroup} />}
       {showCreatePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10003, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: baseZIndex + 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>{getCreateTitle()}</h3>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название</label><input type="text" value={createFormName} onChange={e => setCreateFormName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} /></div>

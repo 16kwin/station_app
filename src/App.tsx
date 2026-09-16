@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен ManufacturerCreatePage)
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен раздел Документы: Контроль уровня остатков)
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -42,6 +42,8 @@ import StationCreatePage from './components/ReferencesPage/StationsCrudPage/Stat
 import LocationsPage from './components/ReferencesPage/LocationsPage/LocationsPage';
 import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
+import StockLevelControlPage from './components/DocumentsPage/StockLevelControl/StockLevelControlPage';
+import StockLevelControlCreatePage from './components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
 import OrdersPage from './components/AnalyticsPage/OrdersPage';
@@ -137,6 +139,9 @@ const AppContent = () => {
                 <Route path="references/stations/edit/:uid" element={<StationCreatePage />} />
                 <Route path="documents" element={<DocumentsPage />} />
                 <Route path="documents/schablon/:uid" element={<SchablonPage />} />
+                <Route path="documents/stock-level-control" element={<StockLevelControlPage />} />
+                <Route path="documents/stock-level-control/create/:uid" element={<StockLevelControlCreatePage />} />
+                <Route path="documents/stock-level-control/edit/:uid" element={<StockLevelControlCreatePage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="orders" element={<OrdersPage />} />

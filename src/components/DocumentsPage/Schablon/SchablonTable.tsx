@@ -1,4 +1,4 @@
-// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (подсветка поиска в ячейках)
+// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (обновлённые поля ячейки)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
@@ -18,16 +18,16 @@ interface CellData {
   numberCell?: number;
   columnNumber?: number;
   drumNumber?: number;
+  cellAssignmentUid?: string | null;
+  cellAssignmentName?: string | null;
+  cellAssignmentTypeUid?: string | null;
+  cellAssignmentTypeName?: string | null;
   materialUid?: string | null;
   materialName?: string | null;
   materialArticle?: string | null;
   quantity?: number | null;
-  typeMainUid?: string | null;
-  typeMainName?: string | null;
-  purposeMaterial?: string | null;
-  purposeSgd?: string | null;
-  maxQuantity?: number | null;
-  dimensions?: string | null;
+  returnToThisCell?: boolean | null;
+  isIndividual?: boolean | null;
 }
 
 interface SchablonTableProps {

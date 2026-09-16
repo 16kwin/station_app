@@ -1,39 +1,30 @@
-// TemplatesPage.tsx — ФИНАЛЬНАЯ ВЕРСИЯ (выпадающее меню «Скачать», кнопка печати, настройки)
-import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import CustomScrollbar from '../../elements/CustomScrollbar';
+// TemplatesPage.tsx — ПОЛНЫЙ ФАЙЛ (попап создания с моделью/конфигурацией, закрытие только по кнопке)
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useTabs } from '../../../context/TabContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import TemplateCreateGroupPopup from './TemplateCreateGroupPopup';
-import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
-import { useTabs } from '../../../context/TabContext';
-import ConfigurationPopup from '../../elements/ConfigurationPopup'; // <-- добавили
-
-import Icon1 from '../../../assets/References/Icon1.svg';
-import Icon2 from '../../../assets/References/Icon2.svg';
-import Icon3 from '../../../assets/References/Icon3.svg';
-import Icon4 from '../../../assets/References/Icon4.svg';
-import Icon6 from '../../../assets/References/Icon6.svg';
-import Icon7 from '../../../assets/References/Icon7.svg';
-import Icon10 from '../../../assets/References/Icon10.svg'; // настройки
-import Icon17 from '../../../assets/References/Icon17.svg';
-import Icon18 from '../../../assets/References/Icon18.svg';
-import Icon19 from '../../../assets/References/Icon19.svg';
+import ConfigurationPopup from '../../elements/ConfigurationPopup';
+import HistoryTable from '../../elements/HistoryTable';
+import NomenclatureDataTable from '../../elements/NomenclatureDataTable';
+import TableToolbar from '../../elements/TableToolbar';
+import type { ContextMenuItem } from '../../elements/ContextMenu';
+import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
+import Icon11 from '../../../assets/References/Icon11.svg';
+import Icon12 from '../../../assets/References/Icon12.svg';
+import Icon5 from '../../../assets/References/Icon5.svg';
+import Icon21 from '../../../assets/References/Icon21.svg';
 import Icon22 from '../../../assets/References/Icon22.svg';
 import Icon23 from '../../../assets/References/Icon23.svg';
 import Icon24 from '../../../assets/References/Icon24.svg';
 import Icon25 from '../../../assets/References/Icon25.svg';
-import IconOpen from '../../../assets/References/IconOpen.svg';
-import Iconn2 from '../../../assets/Station/Iconn2.svg';
-import Iconn3 from '../../../assets/Station/Iconn3.svg';
 import Icon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
 import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
 import PopupIcon2 from '../../../assets/Station/PopupIcon2.svg';
 import PopupIcon4 from '../../../assets/Station/PopupIcon4.svg';
 import PopupIcon7 from '../../../assets/Station/PopupIcon7.svg';
-import PrintIcon from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
-import DownloadIcon from '../../../assets/Icons/DownloadIcons/DownloadIcon18Black.svg';
+import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
+import TemplateCreateGroupPopup from './TemplateCreateGroupPopup';
 
 interface TemplateItem {
   uid: string;
@@ -42,6 +33,7 @@ interface TemplateItem {
   categoryId: number | null;
   categoryName: string | null;
   configuration: string | null;
+  configurationUid: string | null;
   configurationName: string | null;
   modelName: string | null;
   totalCells: number;
@@ -52,235 +44,264 @@ interface TemplateItem {
   stationNames: string[];
 }
 
-interface CategoryItem {
+interface CategoryNode {
   id: number;
   uid: string;
   name: string;
+  code: number | null;
+  parentCategoryId: number | null;
+  parentCategoryUid: string | null;
+  parentCategoryName: string | null;
+  children: CategoryNode[];
   templates: TemplateItem[];
 }
 
-type ContextMenuType = 'category' | 'template';
-
-interface ContextMenuState {
-  x: number;
-  y: number;
-  uid: string;
-  name: string;
-  type: ContextMenuType;
-  categoryId?: number;
+interface TemplatesTreeResponse {
+  tree: CategoryNode[];
+  columns: string[];
+  columnWidths?: Record<string, number>;
+  requiredColumns?: string[];
+  columnsJson?: string;
+  filtersJson?: string;
+  sortJson?: string;
+  currentPathJson?: string;
 }
 
-// Компонент переключателя «Активные»
-const ToggleSwitch: React.FC<{ value: boolean; onChange: () => void }> = ({ value, onChange }) => {
-  const trackWidth = 26; const trackHeight = 13; const knobSize = 11; const padding = (trackHeight - knobSize) / 2;
-  return (
-    <div onClick={(e) => { e.stopPropagation(); onChange(); }} style={{ width: trackWidth, height: trackHeight, borderRadius: trackHeight / 2, backgroundColor: value ? '#666EFE' : 'rgba(45, 64, 89, 0.44)', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'background-color 0.3s ease' }}>
-      <motion.div initial={false} animate={{ x: value ? trackWidth - knobSize - padding * 2 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 0.5 }} style={{ width: knobSize, height: knobSize, borderRadius: '50%', backgroundColor: '#FFFFFF', position: 'absolute', top: padding, left: padding }} />
-    </div>
-  );
-};
+interface ColumnItem { key: string; label: string; }
+
+interface RowItem {
+  uid: string;
+  name: string;
+  type: 'folder' | 'template';
+  depth: number;
+  code?: number | null;
+  number?: number | null;
+  configurationName?: string | null;
+  modelName?: string | null;
+  stationNames?: string[];
+  active?: boolean;
+  createdAt?: string;
+  folderData?: CategoryNode;
+  templateData?: TemplateItem;
+  isExpanded?: boolean;
+}
+
+const ALL_COLUMNS: ColumnItem[] = [
+  { key: 'name', label: 'Наименование' },
+  { key: 'number', label: 'Код' },
+  { key: 'configurationName', label: 'Конфигурация' },
+  { key: 'modelName', label: 'Модель' },
+  { key: 'stationNames', label: 'Станция' },
+  { key: 'active', label: 'Статус' },
+  { key: 'createdAt', label: 'Дата' },
+];
+
+const REQUIRED_COLUMNS = new Set([
+  'name', 'number', 'configurationName', 'modelName', 'stationNames', 'active', 'createdAt'
+]);
+
+interface SortField { key: string; label: string; }
+const SORT_FIELDS: SortField[] = [
+  { key: 'name', label: 'Наименование' },
+  { key: 'number', label: 'Код' },
+  { key: 'configurationName', label: 'Конфигурация' },
+  { key: 'modelName', label: 'Модель' },
+];
+
+interface FilterField { key: string; label: string; options?: { uid: string; name: string }[]; }
+const FILTER_FIELDS: FilterField[] = [
+  { key: 'active', label: 'Статус', options: [
+    { uid: 'true', name: 'Активные' },
+    { uid: 'false', name: 'Неактивные' },
+  ]},
+  { key: 'hasStations', label: 'Есть станции', options: [
+    { uid: 'true', name: 'Есть' },
+    { uid: 'false', name: 'Нет' },
+  ]},
+];
+
+const USER_ID = 1;
 
 const TemplatesPage = () => {
-  const navigate = useNavigate();
-  const { activeTabId } = useTabs();
+  const { openTab, activeTabId } = useTabs();
   const tabIdRef = useRef<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
-  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [currentCategoryId, setCurrentCategoryId] = useState<number | null>(null);
+
+  const [treeData, setTreeData] = useState<CategoryNode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<'templates' | 'category'>('templates');
-  const [deleteCategoryId, setDeleteCategoryId] = useState<number | null>(null);
-  const [showCopyPopup, setShowCopyPopup] = useState(false);
-  const [showCopySelectPopup, setShowCopySelectPopup] = useState(false);
-  const [showMoveSelectPopup, setShowMoveSelectPopup] = useState(false);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [showRenamePopup, setShowRenamePopup] = useState(false);
-  const [renameUid, setRenameUid] = useState<string | null>(null);
-  const [renameName, setRenameName] = useState('');
-  const [renameType, setRenameType] = useState<'category' | 'template'>('category');
-  const [isRenaming, setIsRenaming] = useState(false);
-  const contextMenuUidRef = useRef<string | null>(null);
+  const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
+  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Попап создания шаблона
   const [showCreateTemplatePopup, setShowCreateTemplatePopup] = useState(false);
   const [createTemplateName, setCreateTemplateName] = useState('');
-  const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState<number | null>(null);
+  const [createTemplateCategoryUid, setCreateTemplateCategoryUid] = useState<string | null>(null);
   const [createTemplateCategoryName, setCreateTemplateCategoryName] = useState('');
   const [createTemplateModelUid, setCreateTemplateModelUid] = useState('');
   const [createTemplateModelName, setCreateTemplateModelName] = useState('');
   const [createTemplateConfigUid, setCreateTemplateConfigUid] = useState('');
   const [createTemplateConfigName, setCreateTemplateConfigName] = useState('');
-  const [showCreateCategorySelect, setShowCreateCategorySelect] = useState(false);
-  const [showCreateModelSelect, setShowCreateModelSelect] = useState(false);
-  const [showCreateConfigSelect, setShowCreateConfigSelect] = useState(false);
+  const [showCategorySelect, setShowCategorySelect] = useState(false);
+  const [showModelSelect, setShowModelSelect] = useState(false);
+  const [showConfigSelect, setShowConfigSelect] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
-  const [showActiveOnly, setShowActiveOnly] = useState(false);
-  const [stationListData, setStationListData] = useState<{ isOpen: boolean; stationNames: string[]; templateName: string }>({ isOpen: false, stationNames: [], templateName: '' });
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [createGroupParentUid, setCreateGroupParentUid] = useState<string | null>(null);
+  const [createGroupParentName, setCreateGroupParentName] = useState<string | null>(null);
 
-  // Состояния для выпадающего меню скачивания и настроек
-  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
-  const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
+  const [showRenamePopup, setShowRenamePopup] = useState(false);
+  const [renameUid, setRenameUid] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameType, setRenameType] = useState<'category' | 'template'>('category');
+  const [isRenaming, setIsRenaming] = useState(false);
 
-  // Настройки колонок (для ConfigurationPopup)
-  const ALL_COLUMNS = [
-    { key: 'name', label: 'Наименование' },
-    { key: 'number', label: 'Код' },
-    { key: 'configurationName', label: 'Конфигурация' },
-    { key: 'modelName', label: 'Модель' },
-    { key: 'stationNames', label: 'Станция' },
-    { key: 'active', label: 'Статус' },
-    { key: 'createdAt', label: 'Дата' },
-  ];
-  const REQUIRED_COLUMNS = new Set(['name', 'number', 'configurationName', 'modelName', 'stationNames', 'active', 'createdAt']); // все обязательные
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(ALL_COLUMNS.map(c => c.key)));
-  const [requiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [showMoveSelectPopup, setShowMoveSelectPopup] = useState(false);
+  const [showCopyPopup, setShowCopyPopup] = useState(false);
+  const [showCopySelectPopup, setShowCopySelectPopup] = useState(false);
+  const [operationUid, setOperationUid] = useState<string | null>(null);
 
-  const TABLE_WIDTH = 1720;
-  const TABLE_HEIGHT = 638;
-  const ROW_HEIGHT = 58;
-  const HEADER_HEIGHT = 58;
-  const VISIBLE_ROWS = 10;
+  const [responseColumns, setResponseColumns] = useState<string[]>([]);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [searchValue, setSearchValue] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<'search' | 'sort' | 'filter' | 'barcodeSearch' | null>(null);
 
-  const COL_NAME = 85;
-  const COL_CODE = 380;
-  const COL_CONFIG = 580;
-  const COL_MODEL = 800;
-  const COL_STATION = 1020;
-  const COL_STATUS = 1370;
-  const COL_DATE = 1511;
+  useEffect(() => { tabIdRef.current = activeTabId; }, []);
 
-  // Закрытие меню при клике вне
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.download-menu-container')) {
-        setIsDownloadMenuOpen(false);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    tabIdRef.current = activeTabId;
-  }, []);
-
-  const fetchData = async () => {
+  const fetchTreeWithSettings = useCallback(async () => {
     try {
-      const [catsRes, tempsRes] = await Promise.all([
-        AxiosService.get(ConstantInfo.restApiTemplatesCategories),
-        AxiosService.get(ConstantInfo.restApiTemplates),
-      ]);
-
-      const cats: any[] = catsRes.data;
-      const temps: TemplateItem[] = tempsRes.data;
-
-      const catMap = new Map<number, TemplateItem[]>();
-      const uncategorized: TemplateItem[] = [];
-
-      temps.forEach((t: TemplateItem) => {
-        if (t.categoryId != null) {
-          if (!catMap.has(t.categoryId)) catMap.set(t.categoryId, []);
-          catMap.get(t.categoryId)!.push(t);
-        } else {
-          uncategorized.push(t);
-        }
-      });
-
-      const result: CategoryItem[] = cats.map((c: any) => ({
-        id: c.id,
-        uid: c.uid,
-        name: c.name,
-        templates: catMap.get(c.id) || [],
-      }));
-
-      if (uncategorized.length > 0) {
-        result.push({
-          id: 0,
-          uid: 'uncategorized',
-          name: 'Без категории',
-          templates: uncategorized,
+      const response = await AxiosService.get(ConstantInfo.restApiTemplatesTreeWithSettings(USER_ID));
+      const data = response.data as TemplatesTreeResponse;
+      setTreeData(data.tree || []);
+      if (data.columns && data.columns.length > 0) setResponseColumns(data.columns);
+      if (data.columnWidths && Object.keys(data.columnWidths).length > 0) setColumnWidths(data.columnWidths);
+      if (data.requiredColumns && data.requiredColumns.length > 0) setRequiredColumns(new Set(data.requiredColumns));
+      if (data.filtersJson && data.filtersJson !== '{}') {
+        const filters = JSON.parse(data.filtersJson) as Record<string, string[]>;
+        const newFilterValues: Record<string, Set<string>> = {};
+        const newActiveFilters = new Set<string>();
+        Object.entries(filters).forEach(([key, values]) => {
+          if (Array.isArray(values) && values.length > 0) {
+            newFilterValues[key] = new Set(values);
+            newActiveFilters.add(key);
+          }
         });
+        setFilterValues(newFilterValues);
+        setActiveFilters(newActiveFilters);
       }
-
-      setCategories(result);
+      if (data.sortJson && data.sortJson !== '{}') {
+        const sort = JSON.parse(data.sortJson) as { column?: string; direction?: 'asc' | 'desc' };
+        if (sort.column) {
+          setSortColumn(sort.column);
+          setSortDirection(sort.direction || 'asc');
+        }
+      }
+      if (data.currentPathJson && data.currentPathJson !== '[]') {
+        try {
+          const path = JSON.parse(data.currentPathJson) as string[];
+          if (Array.isArray(path) && path.length > 0) setExpandedFolders(new Set(path));
+        } catch (e) { /* ignore */ }
+      }
     } catch (error) {
-      console.error('Ошибка загрузки:', error);
+      console.error('Ошибка загрузки дерева шаблонов:', error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (activeTabId && activeTabId === tabIdRef.current && categories.length > 0) {
-      fetchData();
-    }
-  }, [activeTabId]);
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
+  useEffect(() => { fetchTreeWithSettings(); }, []);
+
+  const saveExpandedFolders = useCallback((folders: Set<string>) => {
+    const currentPathJson = JSON.stringify(Array.from(folders));
+    AxiosService.patch(ConstantInfo.restApiTemplatesCurrentPathSave(USER_ID), { currentPathJson }).catch(e => console.error(e));
+  }, []);
+
+  useEffect(() => { if (!isLoading) saveExpandedFolders(expandedFolders); }, [expandedFolders, isLoading]);
+
+  const saveFilters = useCallback((filters: Record<string, Set<string>>) => {
+    const filtersJsonObj: Record<string, string[]> = {};
+    Object.entries(filters).forEach(([key, values]) => {
+      if (values.size > 0) filtersJsonObj[key] = Array.from(values);
+    });
+    const filtersJson = JSON.stringify(filtersJsonObj);
+    AxiosService.patch(ConstantInfo.restApiTemplatesFiltersSettingsSave(USER_ID), { filtersJson }).catch(e => console.error(e));
+  }, []);
+
+  useEffect(() => { if (!isLoading) saveFilters(filterValues); }, [filterValues, isLoading]);
+
+  const saveSort = useCallback((column: string | null, direction: 'asc' | 'desc') => {
+    let sortJson = '{}';
+    if (column) sortJson = JSON.stringify({ column, direction });
+    AxiosService.patch(ConstantInfo.restApiTemplatesSortSettingsSave(USER_ID), { sortJson }).catch(e => console.error(e));
+  }, []);
+
+  useEffect(() => { if (!isLoading) saveSort(sortColumn, sortDirection); }, [sortColumn, sortDirection, isLoading]);
+
+  const saveColumns = useCallback((cols: string[], widths: Record<string, number>) => {
+    const columnsJsonObj: Record<string, { visible: boolean; width: number; required?: boolean }> = {};
+    ALL_COLUMNS.forEach(col => {
+      columnsJsonObj[col.key] = {
+        visible: cols.includes(col.key),
+        width: widths[col.key] || 0,
+        required: requiredColumns.has(col.key),
+      };
+    });
+    const columnsJson = JSON.stringify(columnsJsonObj);
+    AxiosService.patch(ConstantInfo.restApiTemplatesColumnsSettingsSave(USER_ID), { columnsJson }).catch(e => console.error(e));
+  }, [requiredColumns]);
+
   useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [contextMenu]);
+    if (!isLoading && responseColumns.length > 0) saveColumns(responseColumns, columnWidths);
+  }, [responseColumns, columnWidths, isLoading]);
 
-  const getFilteredCategories = (): CategoryItem[] => {
-    if (!showActiveOnly) return categories;
-    return categories.map(cat => ({
-      ...cat,
-      templates: cat.templates.filter(t => t.active)
-    })).filter(cat => cat.templates.length > 0 || cat.id === 0);
-  };
-
-  const filteredCategories = getFilteredCategories();
-
-  const currentCategory = currentCategoryId !== null
-    ? filteredCategories.find(c => c.id === currentCategoryId) || null
-    : null;
-
-  const enterCategory = (categoryId: number) => {
-    setCurrentCategoryId(categoryId);
-    setSelectedIds(new Set());
-  };
-
-  const goBack = () => {
-    setCurrentCategoryId(null);
-    setSelectedIds(new Set());
-  };
-
-  const getCurrentLevelUids = (): string[] => {
-    if (currentCategory) return currentCategory.templates.map(t => t.uid);
-    return [];
-  };
-
-  const isHeaderSelected = (): boolean => {
-    if (currentCategory) {
-      const allUids = getCurrentLevelUids();
-      if (allUids.length === 0) return false;
-      return allUids.every(uid => selectedIds.has(uid));
+  const findCategoryByUid = (nodes: CategoryNode[], uid: string): CategoryNode | null => {
+    for (const node of nodes) {
+      if (node.uid === uid) return node;
+      if (node.children) {
+        const found = findCategoryByUid(node.children, uid);
+        if (found) return found;
+      }
     }
-    return false;
+    return null;
   };
 
-  const toggleSelectAll = () => {
-    if (!currentCategory) return;
-    const allUids = getCurrentLevelUids();
-    if (allUids.length === 0) return;
-    const allSelected = allUids.every(uid => selectedIds.has(uid));
-    setSelectedIds(prev => {
+  const findTemplateByUid = (nodes: CategoryNode[], uid: string): TemplateItem | null => {
+    for (const node of nodes) {
+      const t = node.templates.find(t => t.uid === uid);
+      if (t) return t;
+      if (node.children) {
+        const found = findTemplateByUid(node.children, uid);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const collectAllUids = useCallback((node: CategoryNode): string[] => {
+    const uids: string[] = [node.uid];
+    node.templates.forEach(t => uids.push(t.uid));
+    if (node.children) {
+      node.children.forEach(child => { uids.push(...collectAllUids(child)); });
+    }
+    return uids;
+  }, []);
+
+  const toggleFolder = (folderUid: string) => {
+    setExpandedFolders(prev => {
       const next = new Set(prev);
-      if (allSelected) allUids.forEach(uid => next.delete(uid));
-      else allUids.forEach(uid => next.add(uid));
+      if (next.has(folderUid)) next.delete(folderUid);
+      else next.add(folderUid);
       return next;
     });
   };
@@ -294,108 +315,55 @@ const TemplatesPage = () => {
     });
   };
 
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string, type: ContextMenuType, categoryId?: number) => {
-    e.preventDefault();
+  const handleCheckboxClick = (uid: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, uid, name, type, categoryId });
-  };
-
-  const isMultipleSelected = (uid: string): boolean => {
-    return selectedIds.size > 1 && selectedIds.has(uid);
-  };
-
-  const handleContextMove = () => {
-    if (!contextMenu) return;
-    if (isMultipleSelected(contextMenu.uid)) {
-      setContextMenu(null);
-      setTimeout(() => setShowMoveSelectPopup(true), 50);
-    } else {
-      contextMenuUidRef.current = contextMenu.uid;
-      setSelectedIds(prev => new Set(prev).add(contextMenu.uid));
-      setContextMenu(null);
-      setTimeout(() => setShowMoveSelectPopup(true), 50);
-    }
-  };
-
-  const handleContextCopy = () => {
-    if (!contextMenu) return;
-    if (isMultipleSelected(contextMenu.uid)) {
-      setContextMenu(null);
-      setTimeout(() => setShowCopyPopup(true), 50);
-    } else {
-      contextMenuUidRef.current = contextMenu.uid;
-      setSelectedIds(prev => new Set(prev).add(contextMenu.uid));
-      setContextMenu(null);
-      setTimeout(() => setShowCopyPopup(true), 50);
-    }
-  };
-
-  const handleContextDelete = () => {
-    if (!contextMenu) return;
-    if (contextMenu.type === 'category') {
-      const cat = categories.find(c => c.uid === contextMenu.uid);
-      if (cat) {
-        setDeleteTarget('category');
-        setDeleteCategoryId(cat.id);
-        setContextMenu(null);
-        setTimeout(() => setShowDeleteConfirm(true), 50);
-        return;
+    const item = rowItems.find(r => r.uid === uid);
+    if (item?.type === 'folder') {
+      const folder = findCategoryByUid(treeData, uid);
+      if (folder) {
+        const allUids = collectAllUids(folder);
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          const allSelected = allUids.every(id => next.has(id));
+          if (allSelected) allUids.forEach(id => next.delete(id));
+          else allUids.forEach(id => next.add(id));
+          return next;
+        });
       }
-    }
-    if (isMultipleSelected(contextMenu.uid)) {
-      setDeleteTarget('templates');
-      setDeleteCategoryId(null);
-      setContextMenu(null);
-      setTimeout(() => setShowDeleteConfirm(true), 50);
     } else {
-      contextMenuUidRef.current = contextMenu.uid;
-      setSelectedIds(prev => new Set(prev).add(contextMenu.uid));
-      setDeleteTarget('templates');
-      setDeleteCategoryId(null);
-      setContextMenu(null);
-      setTimeout(() => setShowDeleteConfirm(true), 50);
+      toggleSelectItem(uid);
     }
   };
 
-  const handleContextRename = () => {
-    if (!contextMenu) return;
-    const { uid, name, type } = contextMenu;
-    setContextMenu(null);
-    setRenameUid(uid);
-    setRenameName(name);
-    setRenameType(type);
-    setShowRenamePopup(true);
+  const handleRowClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const item = rowItems.find(r => r.uid === uid);
+    if (item?.type === 'folder') toggleFolder(uid);
   };
 
-  const handleContextOpen = () => {
-    if (!contextMenu) return;
-    const { uid } = contextMenu;
-    setContextMenu(null);
-    navigate(`/documents/schablon/${uid}`);
+  const handleDoubleClick = (uid: string, name: string) => {
+    const item = rowItems.find(r => r.uid === uid);
+    if (item?.type === 'template') {
+      openTab(`/documents/schablon/${uid}`, `Шаблон - ${name}`, null);
+    } else if (item?.type === 'folder') {
+      toggleFolder(uid);
+    }
   };
 
-  const handleContextCreateTemplate = () => {
-    if (!contextMenu) return;
-    const { categoryId, name: categoryName } = contextMenu;
-    setContextMenu(null);
+  const resetCreateTemplateForm = () => {
     setCreateTemplateName('');
-    setCreateTemplateCategoryId(categoryId || null);
-    setCreateTemplateCategoryName(categoryId ? categoryName : '');
+    setCreateTemplateCategoryUid(null);
+    setCreateTemplateCategoryName('');
     setCreateTemplateModelUid('');
     setCreateTemplateModelName('');
     setCreateTemplateConfigUid('');
     setCreateTemplateConfigName('');
-    setShowCreateTemplatePopup(true);
   };
 
-  const handleCreateTemplateFromToolbar = () => {
-    setCreateTemplateName('');
-    setCreateTemplateCategoryId(currentCategoryId);
-    setCreateTemplateCategoryName(currentCategory?.name || '');
-    setCreateTemplateModelUid('');
-    setCreateTemplateModelName('');
-    setCreateTemplateConfigUid('');
-    setCreateTemplateConfigName('');
+  const handleCreateTemplate = (categoryUid: string | null, categoryName: string) => {
+    resetCreateTemplateForm();
+    setCreateTemplateCategoryUid(categoryUid);
+    setCreateTemplateCategoryName(categoryName);
     setShowCreateTemplatePopup(true);
   };
 
@@ -403,23 +371,17 @@ const TemplatesPage = () => {
     if (!createTemplateName.trim()) return;
     setIsCreatingTemplate(true);
     try {
+      const category = createTemplateCategoryUid ? findCategoryByUid(treeData, createTemplateCategoryUid) : null;
       const body: any = { name: createTemplateName.trim(), configuration: '' };
-      if (createTemplateCategoryId && createTemplateCategoryId !== 0) {
-        body.categoryId = createTemplateCategoryId;
-      }
-      if (createTemplateConfigUid) {
-        body.configurationUid = createTemplateConfigUid;
-      }
-      await AxiosService.post(ConstantInfo.restApiTemplates, body);
-      await fetchData();
+      if (category) body.categoryId = category.id;
+      if (createTemplateConfigUid) body.configurationUid = createTemplateConfigUid;
+      const res = await AxiosService.post(ConstantInfo.restApiTemplates, body);
+      const newUid = res.data.uid;
+      const newName = res.data.name || createTemplateName.trim();
+      await fetchTreeWithSettings();
       setShowCreateTemplatePopup(false);
-      setCreateTemplateName('');
-      setCreateTemplateCategoryId(null);
-      setCreateTemplateCategoryName('');
-      setCreateTemplateModelUid('');
-      setCreateTemplateModelName('');
-      setCreateTemplateConfigUid('');
-      setCreateTemplateConfigName('');
+      resetCreateTemplateForm();
+      openTab(`/documents/schablon/${newUid}`, `Шаблон - ${newName}`, null);
     } catch (error) {
       console.error('Ошибка создания шаблона:', error);
     } finally {
@@ -427,25 +389,34 @@ const TemplatesPage = () => {
     }
   };
 
-  const handleCreateCategorySelect = (id: string, name: string) => {
-    const numId = parseInt(id);
-    setCreateTemplateCategoryId(isNaN(numId) || numId === 0 ? null : numId);
-    setCreateTemplateCategoryName(name);
-    setShowCreateCategorySelect(false);
+  const handleCreateGroupFromToolbar = () => {
+    setCreateGroupParentUid(null);
+    setCreateGroupParentName(null);
+    setShowCreateGroup(true);
   };
 
-  const handleCreateModelSelect = (id: string, name: string) => {
-    setCreateTemplateModelUid(id);
-    setCreateTemplateModelName(name);
-    setCreateTemplateConfigUid('');
-    setCreateTemplateConfigName('');
-    setShowCreateModelSelect(false);
+  const handleCreateGroupFromContext = (parentUid: string, parentName: string) => {
+    setCreateGroupParentUid(parentUid);
+    setCreateGroupParentName(parentName);
+    setShowCreateGroup(true);
   };
 
-  const handleCreateConfigSelect = (id: string, name: string) => {
-    setCreateTemplateConfigUid(id);
-    setCreateTemplateConfigName(name);
-    setShowCreateConfigSelect(false);
+  const handleCreateGroup = async (name: string, parentUid: string | null) => {
+    setIsCreatingGroup(true);
+    try {
+      const body: any = { name };
+      if (parentUid) body.parentCategoryUid = parentUid;
+      await AxiosService.post(ConstantInfo.restApiTemplatesCategories, body);
+      await fetchTreeWithSettings();
+      if (parentUid) setExpandedFolders(prev => new Set(prev).add(parentUid));
+      setShowCreateGroup(false);
+      setCreateGroupParentUid(null);
+      setCreateGroupParentName(null);
+    } catch (error) {
+      console.error('Ошибка создания категории:', error);
+    } finally {
+      setIsCreatingGroup(false);
+    }
   };
 
   const handleRenameSubmit = async () => {
@@ -453,14 +424,14 @@ const TemplatesPage = () => {
     setIsRenaming(true);
     try {
       if (renameType === 'category') {
-        const cat = categories.find(c => c.uid === renameUid);
-        if (cat && cat.id !== 0) {
+        const cat = findCategoryByUid(treeData, renameUid);
+        if (cat) {
           await AxiosService.put(ConstantInfo.restApiTemplatesCategory(cat.id), { name: renameName.trim() });
         }
       } else {
         await AxiosService.put(ConstantInfo.restApiTemplate(renameUid), { name: renameName.trim() });
       }
-      await fetchData();
+      await fetchTreeWithSettings();
       setShowRenamePopup(false);
       setRenameUid(null);
       setRenameName('');
@@ -471,68 +442,25 @@ const TemplatesPage = () => {
     }
   };
 
-  const handleCreateGroupClick = () => {
-    setShowCreateGroup(true);
-  };
-
-  const handleCreateGroup = async (groupName: string) => {
-    setIsCreatingGroup(true);
-    try {
-      await AxiosService.post(ConstantInfo.restApiTemplatesCategories, { name: groupName });
-      await fetchData();
-      setShowCreateGroup(false);
-    } catch (error) {
-      console.error('Ошибка создания категории:', error);
-    } finally {
-      setIsCreatingGroup(false);
-    }
-  };
-
-  const handleDeleteClick = () => {
-    if (selectedIds.size === 0) return;
-    setDeleteTarget('templates');
-    setDeleteCategoryId(null);
-    setShowDeleteConfirm(true);
-  };
-
   const confirmDelete = async () => {
     try {
-      if (deleteTarget === 'category' && deleteCategoryId) {
-        await AxiosService.delete(ConstantInfo.restApiTemplatesCategory(deleteCategoryId));
+      if (deleteTargetUid) {
+        const cat = findCategoryByUid(treeData, deleteTargetUid);
+        if (cat) await AxiosService.delete(ConstantInfo.restApiTemplatesCategory(cat.id));
+        else await AxiosService.delete(ConstantInfo.restApiTemplate(deleteTargetUid));
       } else {
-        const validUids = Array.from(selectedIds).filter(uid => uid !== 'uncategorized');
-        for (const uid of validUids) {
-          await AxiosService.delete(ConstantInfo.restApiTemplate(uid));
+        for (const uid of selectedIds) {
+          const cat = findCategoryByUid(treeData, uid);
+          if (cat) await AxiosService.delete(ConstantInfo.restApiTemplatesCategory(cat.id));
+          else await AxiosService.delete(ConstantInfo.restApiTemplate(uid));
         }
       }
-      await fetchData();
+      await fetchTreeWithSettings();
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
-      setDeleteTarget('templates');
-      setDeleteCategoryId(null);
-      contextMenuUidRef.current = null;
+      setDeleteTargetUid(null);
     } catch (error) {
       console.error('Ошибка удаления:', error);
-    }
-  };
-
-  const handleCopyClick = () => {
-    if (selectedIds.size === 0) return;
-    setShowCopyPopup(true);
-  };
-
-  const handleCopyToCurrent = async () => {
-    try {
-      for (const uid of selectedIds) {
-        if (uid === 'uncategorized') continue;
-        await AxiosService.post(ConstantInfo.restApiTemplateCopy, { sourceTemplateUid: uid, targetCategoryId: currentCategoryId });
-      }
-      await fetchData();
-      setSelectedIds(new Set());
-      setShowCopyPopup(false);
-      contextMenuUidRef.current = null;
-    } catch (error) {
-      console.error('Ошибка копирования:', error);
     }
   };
 
@@ -541,300 +469,181 @@ const TemplatesPage = () => {
     setShowCopySelectPopup(true);
   };
 
-  const handleCopySelectGroup = async (categoryId: string, _categoryName: string) => {
+  const handleCopySelectCategory = async (targetCategoryUid: string) => {
     try {
-      for (const uid of selectedIds) {
-        if (uid === 'uncategorized') continue;
-        const numId = parseInt(categoryId);
-        await AxiosService.post(ConstantInfo.restApiTemplateCopy, {
-          sourceTemplateUid: uid,
-          targetCategoryId: isNaN(numId) || numId === 0 ? null : numId,
+      const uidToCopy = operationUid || (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null);
+      if (!uidToCopy) return;
+      const sourceTemplate = findTemplateByUid(treeData, uidToCopy);
+      const targetCat = findCategoryByUid(treeData, targetCategoryUid);
+      if (sourceTemplate) {
+        const res = await AxiosService.post(ConstantInfo.restApiTemplateCopy, {
+          sourceTemplateUid: sourceTemplate.uid,
+          targetCategoryId: targetCat ? targetCat.id : null,
         });
+        const newUid = res.data.uid;
+        const newName = res.data.name || sourceTemplate.name;
+        await fetchTreeWithSettings();
+        openTab(`/documents/schablon/${newUid}`, `Шаблон - ${newName}`, null);
       }
-      await fetchData();
       setSelectedIds(new Set());
       setShowCopySelectPopup(false);
-      contextMenuUidRef.current = null;
+      setOperationUid(null);
     } catch (error) {
       console.error('Ошибка копирования:', error);
     }
   };
 
-  const handleMoveClick = () => {
-    if (selectedIds.size === 0) return;
-    setShowMoveSelectPopup(true);
-  };
-
-  const handleMoveSelectGroup = async (categoryId: string, _categoryName: string) => {
+  const handleMoveSelectCategory = async (targetCategoryUid: string) => {
     try {
-      for (const uid of selectedIds) {
-        if (uid === 'uncategorized') continue;
-        const numId = parseInt(categoryId);
-        await AxiosService.put(ConstantInfo.restApiTemplate(uid), {
-          categoryId: isNaN(numId) || numId === 0 ? null : numId,
-        });
+      const uidToMove = operationUid || (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null);
+      if (!uidToMove) return;
+      const sourceTemplate = findTemplateByUid(treeData, uidToMove);
+      const sourceCat = findCategoryByUid(treeData, uidToMove);
+      if (sourceTemplate) {
+        await AxiosService.post(ConstantInfo.restApiTemplateMove, { templateUid: sourceTemplate.uid, newCategoryUid: targetCategoryUid });
+      } else if (sourceCat) {
+        await AxiosService.post(ConstantInfo.restApiTemplatesCategoryMove, { categoryUid: sourceCat.uid, newParentUid: targetCategoryUid });
       }
-      await fetchData();
+      await fetchTreeWithSettings();
       setSelectedIds(new Set());
       setShowMoveSelectPopup(false);
-      contextMenuUidRef.current = null;
+      setOperationUid(null);
     } catch (error) {
       console.error('Ошибка перемещения:', error);
     }
   };
 
-  const formatDate = (dateStr: string): string => {
-    if (!dateStr) return '';
-    try {
-      const d = new Date(dateStr);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return `${day}.${month}.${year} ${hours}:${minutes}`;
-    } catch {
-      return dateStr;
-    }
-  };
+  const rowItems = useMemo((): RowItem[] => {
+    const items: RowItem[] = [];
+    const q = searchValue.trim().toLowerCase();
 
-  const checkScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    setHasVerticalScroll(container.scrollHeight > container.clientHeight);
-    setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
-  };
-
-  useEffect(() => { const timer = setTimeout(checkScroll, 350); return () => clearTimeout(timer); }, [currentCategoryId, filteredCategories]);
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    checkScroll();
-    container.addEventListener('scroll', checkScroll);
-    const ro = new ResizeObserver(checkScroll); ro.observe(container);
-    return () => { container.removeEventListener('scroll', checkScroll); ro.disconnect(); };
-  }, []);
-
-  // ===== БЛОК ЭКСПОРТА =====
-  const preparePayload = () => {
-    let items: TemplateItem[] = [];
-    if (currentCategory) {
-      items = currentCategory.templates;
-    } else {
-      filteredCategories.forEach(cat => {
-        items = items.concat(cat.templates);
-      });
-    }
-
-    const columnKeys = ['name', 'number', 'configurationName', 'modelName', 'stationNames', 'active', 'createdAt'];
-    const columnLabels = ['Наименование', 'Код', 'Конфигурация', 'Модель', 'Станция', 'Статус', 'Дата'];
-
-    const preparedData = items.map(item => {
-      const row: Record<string, string> = {};
-      row['name'] = item.name;
-      row['number'] = item.number !== null ? String(item.number) : '—';
-      row['configurationName'] = item.configurationName || '—';
-      row['modelName'] = item.modelName || '—';
-      row['stationNames'] = item.stationNames?.length ? item.stationNames.join(', ') : '';
-      row['active'] = item.active ? 'Активен' : 'Неактивен';
-      row['createdAt'] = formatDate(item.createdAt);
-      return row;
-    });
-
-    const footerLines: string[] = [];
-
-    return {
-      title: 'Шаблоны пополнения',
-      columns: columnKeys,
-      columnLabels: columnLabels,
-      data: preparedData,
-      landscape: true,
-      footerLines,
+    const templateMatchesSearch = (t: TemplateItem): boolean => {
+      if (!q) return true;
+      return [t.name, t.number, t.configurationName, t.modelName, t.stationNames?.join(' ')]
+        .filter(Boolean).join(' ').toLowerCase().includes(q);
     };
-  };
 
-  const handlePrint = async () => {
-    try {
-      const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/templates/print`,
-        preparePayload(),
-        { responseType: 'blob' }
-      );
-      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.left = '-9999px';
-      iframe.style.top = '0';
-      iframe.style.width = '800px';
-      iframe.style.height = '600px';
-      iframe.style.visibility = 'visible';
-      iframe.src = pdfUrl;
-      document.body.appendChild(iframe);
-      iframe.onload = () => {
-        setTimeout(() => {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        }, 500);
-      };
-    } catch (e) { console.error('Ошибка печати', e); }
-  };
+    const templateMatchesFilters = (t: TemplateItem): boolean => {
+      if (filterValues['active']?.size) {
+        if (!filterValues['active'].has(String(t.active))) return false;
+      }
+      if (filterValues['hasStations']?.size) {
+        const has = t.stationNames && t.stationNames.length > 0;
+        if (!filterValues['hasStations'].has(String(has))) return false;
+      }
+      return true;
+    };
 
-  const handleDownloadPdf = async () => {
-    try {
-      const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/templates/export-pdf`,
-        preparePayload(),
-        { responseType: 'blob' }
-      );
-      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'templates.pdf';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) { console.error('Ошибка выгрузки PDF', e); }
-  };
+    const sortTemplates = (list: TemplateItem[]): TemplateItem[] => {
+      if (!sortColumn) return list;
+      return [...list].sort((a, b) => {
+        let aV = ''; let bV = '';
+        switch (sortColumn) {
+          case 'name': aV = (a.name || '').toLowerCase(); bV = (b.name || '').toLowerCase(); break;
+          case 'number': aV = String(a.number || 0).padStart(10, '0'); bV = String(b.number || 0).padStart(10, '0'); break;
+          case 'configurationName': aV = (a.configurationName || '').toLowerCase(); bV = (b.configurationName || '').toLowerCase(); break;
+          case 'modelName': aV = (a.modelName || '').toLowerCase(); bV = (b.modelName || '').toLowerCase(); break;
+        }
+        const r = aV.localeCompare(bV);
+        return sortDirection === 'asc' ? r : -r;
+      });
+    };
 
-  const handleDownloadExcel = async () => {
-    try {
-      const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/templates/export-excel`,
-        preparePayload(),
-        { responseType: 'blob' }
-      );
-      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'templates.xlsx';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) { console.error('Ошибка выгрузки Excel', e); }
-  };
+    const buildNode = (node: CategoryNode, depth: number) => {
+      const filteredTemplates = sortTemplates(node.templates.filter(t => templateMatchesSearch(t) && templateMatchesFilters(t)));
+      const hasChildren = node.children && node.children.length > 0;
+      const hasAnyFilter = q || activeFilters.size > 0;
+      const isExpanded = hasAnyFilter ? true : expandedFolders.has(node.uid);
+      const shouldShow = !hasAnyFilter || filteredTemplates.length > 0 || (node.children && node.children.length > 0);
+      if (!shouldShow) return;
 
-  const handleDownloadWord = async () => {
-    try {
-      const res = await AxiosService.post(
-        `${ConstantInfo.apiBaseUrl}/api/templates/export-word`,
-        preparePayload(),
-        { responseType: 'blob' }
-      );
-      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'templates.docx';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) { console.error('Ошибка выгрузки Word', e); }
-  };
-  // ===== КОНЕЦ БЛОКА =====
+      items.push({ uid: node.uid, name: node.name, type: 'folder', depth, code: node.code, folderData: node, isExpanded });
 
-  const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const mediumButtonStyle: React.CSSProperties = { height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
+      if (isExpanded) {
+        if (hasChildren) node.children.forEach(child => buildNode(child, depth + 1));
+        filteredTemplates.forEach(t => {
+          items.push({
+            uid: t.uid, name: t.name, type: 'template', depth: depth + 1,
+            number: t.number, configurationName: t.configurationName, modelName: t.modelName,
+            stationNames: t.stationNames, active: t.active, createdAt: t.createdAt, templateData: t,
+          });
+        });
+      }
+    };
 
-  const EmptySquare = ({ isSelected = false, onClick, isHeader = false }: { isSelected?: boolean; onClick?: (e: React.MouseEvent) => void; isHeader?: boolean }) => (
-    <div onClick={(e) => { e.stopPropagation(); onClick?.(e); }} style={{ width: 18, height: 18, borderRadius: 2, border: isSelected ? 'none' : `2px solid ${isHeader ? '#FFFFFF' : '#2D4059'}`, opacity: isHeader && !isSelected ? 1 : isSelected ? 1 : 0.5, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {isSelected && <img src={Icon19} alt="" style={{ width: 18, height: 18 }} />}
-    </div>
-  );
-
-  const contextMenuButtonStyle: React.CSSProperties = { height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' };
-
-  const cellTextStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
-    position: 'absolute',
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', height: 44, borderRadius: 10,
-    border: '1px solid rgba(102, 110, 254, 0.15)',
-    paddingLeft: 12, paddingRight: 12,
-    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-    color: '#2D4059', outline: 'none', boxSizing: 'border-box',
-    backgroundColor: '#FFFFFF',
-  };
-
-  const selectFieldStyle: React.CSSProperties = {
-    width: '100%', height: 44, borderRadius: 10,
-    border: '1px solid rgba(102, 110, 254, 0.15)',
-    backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center',
-    paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box',
-  };
-
-  const renderCategoryList = () => {
-    return filteredCategories.map(cat => (
-      <div key={cat.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 20, position: 'relative' }} onClick={() => enterCategory(cat.id)} onContextMenu={(e) => handleContextMenu(e, cat.uid, cat.name, 'category', cat.id)}>
-        <EmptySquare isSelected={false} onClick={(e) => { e.stopPropagation(); }} />
-        <div style={{ display: 'flex', alignItems: 'center', marginLeft: 19 }}>
-          <img src={PopupIcon4} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 10 }}>{cat.name}</span>
-        </div>
-      </div>
-    ));
-  };
-
-  const renderTemplates = () => {
-    if (!currentCategory) return null;
-    const items: React.ReactNode[] = [];
-
-    items.push(
-      <div key="back" style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onContextMenu={(e) => handleContextMenu(e, currentCategory.uid, currentCategory.name, 'category', currentCategory.id)}>
-        <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}>
-          <div style={{ width: 18, height: 18, flexShrink: 0 }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', marginLeft: 19 }}>
-          <img src={PopupIcon4} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#2D4059', marginLeft: 10, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentCategory.name}</span>
-          <button onClick={(e) => { e.stopPropagation(); goBack(); }} style={{ marginLeft: 18, width: 18, height: 18, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0 }}><img src={Icon17} alt="Назад" style={{ width: 18, height: 18 }} /></button>
-        </div>
-      </div>
-    );
-
-    currentCategory.templates.forEach(template => {
-      const isSelected = selectedIds.has(template.uid);
-      items.push(
-        <div key={template.uid} style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? '#EDF6FF' : '#FFFFFF', position: 'relative', cursor: 'pointer', boxSizing: 'border-box', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }} onDoubleClick={() => navigate(`/documents/schablon/${template.uid}`)} onContextMenu={(e) => handleContextMenu(e, template.uid, template.name, 'template', currentCategory.id)}>
-          <div style={{ paddingLeft: 20, display: 'flex', alignItems: 'center' }}><EmptySquare isSelected={isSelected} onClick={() => toggleSelectItem(template.uid)} /></div>
-          <div style={{ display: 'flex', alignItems: 'center', marginLeft: 39 }}>
-            <img src={PopupIcon7} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginLeft: 10, maxWidth: COL_CODE - 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{template.name}</span>
-          </div>
-          <span style={{ ...cellTextStyle, left: COL_CODE, maxWidth: COL_CONFIG - COL_CODE - 20 }}>{template.number || '—'}</span>
-          <span style={{ ...cellTextStyle, left: COL_CONFIG, maxWidth: COL_MODEL - COL_CONFIG - 20 }}>{template.configurationName || '—'}</span>
-          <span style={{ ...cellTextStyle, left: COL_MODEL, maxWidth: COL_STATION - COL_MODEL - 20 }}>{template.modelName || '—'}</span>
-          <span style={{ ...cellTextStyle, left: COL_STATION, maxWidth: COL_STATUS - COL_STATION - 20, cursor: template.stationNames?.length > 0 ? 'pointer' : 'default', color: '#2D4059' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (template.stationNames?.length > 0) {
-                setStationListData({ isOpen: true, stationNames: template.stationNames, templateName: template.name });
-              }
-            }}>
-            {template.stationNames?.length === 1 ? template.stationNames[0] : template.stationNames?.length > 1 ? `Станций: ${template.stationNames.length}` : ''}
-          </span>
-          <span style={{ ...cellTextStyle, left: COL_STATUS, maxWidth: COL_DATE - COL_STATUS - 20, display: 'flex', alignItems: 'center' }}>
-            {template.active && <img src={Iconn3} alt="" style={{ width: 84, height: 24 }} />}
-          </span>
-          <span style={{ ...cellTextStyle, left: COL_DATE, maxWidth: TABLE_WIDTH - COL_DATE - 60 }}>{formatDate(template.createdAt)}</span>
-        </div>
-      );
-    });
-
+    treeData.forEach(root => buildNode(root, 0));
     return items;
+  }, [treeData, expandedFolders, searchValue, filterValues, activeFilters, sortColumn, sortDirection]);
+
+  const renderCell = (key: string, item: any): string => {
+    if (item.type === 'folder') {
+      if (key === 'name') return item.name || '';
+      if (key === 'number') return item.code != null ? String(item.code).padStart(4, '0') : '—';
+      return '';
+    }
+    const val = item[key];
+    if (val === null || val === undefined) return '—';
+    if (key === 'number') return val != null ? String(val).padStart(4, '0') : '—';
+    if (key === 'active') return val ? 'Активен' : 'Неактивен';
+    if (key === 'stationNames') {
+      const arr = item.stationNames || [];
+      if (arr.length === 0) return '';
+      if (arr.length === 1) return arr[0];
+      return `Станций: ${arr.length}`;
+    }
+    if (key === 'createdAt') {
+      try { const d = new Date(val); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; } catch { return String(val); }
+    }
+    return String(val);
   };
 
-  const isInCategory = currentCategoryId !== null;
-  const totalItems = isInCategory ? 1 + (currentCategory?.templates?.length || 0) : filteredCategories.length;
-  const emptyRows = Math.max(0, VISIBLE_ROWS - totalItems);
+  const isGrayColumn = (key: string): boolean =>
+    !['name', 'number', 'configurationName', 'modelName', 'stationNames', 'active', 'createdAt'].includes(key);
+
+  const handleDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+    setDeleteTargetUid(null);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleCopyClick = () => {
+    if (selectedIds.size === 0) return;
+    setOperationUid(Array.from(selectedIds)[0]);
+    setShowCopyPopup(true);
+  };
+
+  const handleMoveClick = () => {
+    if (selectedIds.size === 0) return;
+    setOperationUid(Array.from(selectedIds)[0]);
+    setShowMoveSelectPopup(true);
+  };
+
+  const handleHistoryClick = () => {
+    setShowHistory(prev => !prev);
+    if (!showHistory) { setHistoryLoading(true); setHistoryEvents([]); setHistoryLoading(false); }
+  };
+
+  const rowContextMenuItems = useCallback((uid: string, name: string): ContextMenuItem[] => {
+    const item = rowItems.find(r => r.uid === uid);
+    if (!item) return [];
+
+    if (item.type === 'folder') {
+      return [
+        { id: 'create-template', label: 'Создать шаблон', icon: PopupIcon2, onClick: () => handleCreateTemplate(uid, name) },
+        { id: 'create-category', label: 'Создать подкатегорию', icon: Icon21, onClick: () => handleCreateGroupFromContext(uid, name) },
+        { id: 'move', label: 'Переместить', icon: Icon22, onClick: () => { setSelectedIds(new Set([uid])); setOperationUid(uid); setTimeout(() => setShowMoveSelectPopup(true), 50); } },
+        { id: 'rename', label: 'Переименовать', icon: Icon23, onClick: () => { setRenameUid(uid); setRenameName(name); setRenameType('category'); setShowRenamePopup(true); } },
+        { id: 'copy', label: 'Скопировать', icon: Icon24, onClick: () => { setSelectedIds(new Set([uid])); setOperationUid(uid); setTimeout(() => setShowCopyPopup(true), 50); } },
+        { id: 'delete', label: 'Удалить', icon: Icon25, onClick: () => { setSelectedIds(new Set([uid])); setDeleteTargetUid(uid); setTimeout(() => setShowDeleteConfirm(true), 50); } },
+      ];
+    }
+    return [
+      { id: 'open', label: 'Открыть', icon: ContextMenuOpenIcon16, onClick: () => { openTab(`/documents/schablon/${uid}`, `Шаблон - ${name}`, null); } },
+      { id: 'move', label: 'Переместить', icon: Icon22, onClick: () => { setSelectedIds(new Set([uid])); setOperationUid(uid); setTimeout(() => setShowMoveSelectPopup(true), 50); } },
+      { id: 'copy', label: 'Скопировать', icon: Icon24, onClick: () => { setSelectedIds(new Set([uid])); setOperationUid(uid); setTimeout(() => setShowCopyPopup(true), 50); } },
+      { id: 'delete', label: 'Удалить', icon: Icon25, onClick: () => { setSelectedIds(new Set([uid])); setDeleteTargetUid(uid); setTimeout(() => setShowDeleteConfirm(true), 50); } },
+    ];
+  }, [rowItems, openTab]);
 
   if (isLoading) {
     return (
@@ -847,189 +656,207 @@ const TemplatesPage = () => {
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC' }}>
       <div style={{ position: 'absolute', top: 35, left: 60 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 700, color: '#2D4059', margin: 0, lineHeight: '29px', height: 29 }}>Каталог шаблонов загрузки станции</h1>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 700, color: '#2D4059', margin: 0, lineHeight: '29px', height: 29 }}>
+          {showHistory ? 'Каталог шаблонов (История изменений)' : 'Каталог шаблонов загрузки станции'}
+        </h1>
       </div>
 
-      <div style={{ position: 'absolute', top: 79, left: 60, right: 40, height: 17 }} />
-
-      <div style={{ position: 'absolute', top: 105, left: 55, right: 55, height: 40, display: 'flex', alignItems: 'center' }}>
-        {/* Левая группа кнопок */}
-        <div style={{ display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon1} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon2} alt="" style={{ width: 20, height: 14 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon3} alt="" style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div style={{ width: 40, flexShrink: 0 }} />
-        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', whiteSpace: 'nowrap' }}>Активные</span>
-        <div style={{ width: 9, flexShrink: 0 }} />
-        <ToggleSwitch value={showActiveOnly} onChange={() => setShowActiveOnly(!showActiveOnly)} />
-
-        {/* Основные кнопки управления */}
-        <div style={{ position: 'absolute', left: 586, display: 'flex', gap: 15 }}>
-          <button style={{ ...mediumButtonStyle, width: 124 }} onClick={handleCreateTemplateFromToolbar}>
-            <img src={Icon4} alt="" style={{ width: 16, height: 16, marginLeft: 12 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать</span>
-          </button>
-          <button style={{ ...mediumButtonStyle, width: 186 }} onClick={handleCreateGroupClick}>
-            <img src={Iconn2} alt="" style={{ width: 22, height: 20, marginLeft: 13 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 15 }}>Создать группу</span>
-          </button>
-          <button style={smallButtonStyle} onClick={handleMoveClick}>
-            <img src={Icon18} alt="" style={{ width: 18, height: 18 }} />
-          </button>
-          <button style={smallButtonStyle} onClick={handleCopyClick}>
-            <img src={Icon6} alt="" style={{ width: 18, height: 18 }} />
-          </button>
-          <button style={smallButtonStyle} onClick={handleDeleteClick}>
-            <img src={Icon7} alt="" style={{ width: 18, height: 18 }} />
-          </button>
-        </div>
-
-        {/* Правая группа – только кнопка настроек */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          {/* КНОПКА ПЕЧАТИ */}
-          <button style={smallButtonStyle} onClick={handlePrint}>
-            <img src={PrintIcon} alt="Печать" style={{ width: 18, height: 18 }} />
-          </button>
-
-          {/* КНОПКА СКАЧИВАНИЯ С ВЫПАДАЮЩИМ МЕНЮ */}
-          <div className="download-menu-container" style={{ position: 'relative' }}>
-            <button
-              style={smallButtonStyle}
-              onClick={(e) => { e.stopPropagation(); setIsDownloadMenuOpen(!isDownloadMenuOpen); }}
-            >
-              <img src={DownloadIcon} alt="Скачать" style={{ width: 18, height: 18 }} />
+      <div style={{ position: 'absolute', top: 110, left: 55, right: 55, zIndex: 10 }}>
+        <TableToolbar
+          sortFields={SORT_FIELDS}
+          filterFields={FILTER_FIELDS}
+          placementLevels={[]}
+          accountingTypes={[]}
+          accountingColumnKeys={[]}
+          filterOptions={{}}
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
+          sortColumn={sortColumn}
+          sortDirection={sortDirection}
+          accountingIndex={-1}
+          onSortSelect={(col) => {
+            setSortColumn(prev => {
+              if (prev === col) { setSortDirection(d => d === 'asc' ? 'desc' : 'asc'); return prev; }
+              setSortDirection('asc');
+              return col;
+            });
+          }}
+          onClearSort={() => setSortColumn(null)}
+          activeFilters={activeFilters}
+          filterValues={filterValues}
+          placementSelections={{}}
+          hasPlacementSelections={false}
+          onFilterToggle={() => {}}
+          onCheckFilterOption={(filterKey, optionUid) => {
+            setFilterValues(prev => {
+              const current = new Set(prev[filterKey] || []);
+              if (current.has(optionUid)) current.delete(optionUid);
+              else current.add(optionUid);
+              if (current.size === 0) {
+                const { [filterKey]: _, ...rest } = prev;
+                setActiveFilters(prev2 => { const n = new Set(prev2); n.delete(filterKey); return n; });
+                return rest;
+              }
+              setActiveFilters(prev2 => { const n = new Set(prev2); n.add(filterKey); return n; });
+              return { ...prev, [filterKey]: current };
+            });
+          }}
+          onClearFilters={() => { setActiveFilters(new Set()); setFilterValues({}); }}
+          hierarchy={null}
+          modelList={[]}
+          configList={[]}
+          selectedCount={selectedIds.size}
+          onCreate={() => handleCreateTemplate(null, '')}
+          onDelete={handleDeleteClick}
+          onPrint={() => {}}
+          onPrintPdf={() => {}}
+          showHistory={showHistory}
+          onHistory={handleHistoryClick}
+          onConfiguration={() => setShowConfigurationPopup(true)}
+          extraButtons={
+            <button style={{ height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0 15px', flexShrink: 0 }}
+              onClick={handleCreateGroupFromToolbar}>
+              <img src={Icon5} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: 10 }}>Создать категорию</span>
             </button>
-            {isDownloadMenuOpen && (
-              <div style={{
-                position: 'absolute',
-                top: 44,
-                left: 0,
-                backgroundColor: '#FFFFFF',
-                borderRadius: 6,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                zIndex: 10001,
-                display: 'flex',
-                flexDirection: 'column',
-                padding: '8px 0',
-                minWidth: 160,
-              }}>
-                <button onClick={handleDownloadPdf} style={{ ...contextMenuButtonStyle, paddingRight: 20 }}>
-                  Скачать PDF
-                </button>
-                <button onClick={handleDownloadExcel} style={{ ...contextMenuButtonStyle, paddingRight: 20 }}>
-                  Скачать Excel
-                </button>
-                <button onClick={handleDownloadWord} style={{ ...contextMenuButtonStyle, paddingRight: 20 }}>
-                  Скачать Word
-                </button>
-              </div>
-            )}
-          </div>
-          <button style={smallButtonStyle} onClick={() => setShowConfigurationPopup(true)}>
-            <img src={Icon10} alt="Настройки" style={{ width: 18, height: 16 }} />
-          </button>
-        </div>
+          }
+          expanded={expanded}
+          setExpanded={setExpanded}
+        />
       </div>
 
-      <div style={{ position: 'absolute', top: 160, left: 40 }}>
-        <div style={{ width: TABLE_WIDTH, height: TABLE_HEIGHT, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', position: 'relative', paddingLeft: 20, paddingRight: 40, boxSizing: 'border-box' }}>
-            <EmptySquare isSelected={isInCategory && isHeaderSelected()} onClick={toggleSelectAll} isHeader />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_NAME }}>НАИМЕНОВАНИЕ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_CODE }}>КОД</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_CONFIG }}>КОНФИГУРАЦИЯ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_MODEL }}>МОДЕЛЬ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_STATION }}>СТАНЦИЯ</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_STATUS }}>СТАТУС</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#FFFFFF', position: 'absolute', left: COL_DATE }}>ДАТА</span>
-          </div>
-          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div style={{ minWidth: TABLE_WIDTH - 40 }}>
-              {isInCategory ? renderTemplates() : renderCategoryList()}
-              {Array.from({ length: emptyRows }).map((_, i) => (
-                <div key={`empty-${i}`} style={{ height: ROW_HEIGHT, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: 20, borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5' }}><EmptySquare /></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        {hasVerticalScroll && (<div style={{ position: 'absolute', right: -25, top: HEADER_HEIGHT, height: TABLE_HEIGHT - HEADER_HEIGHT, width: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={TABLE_HEIGHT - HEADER_HEIGHT} /></div>)}
-        {hasHorizontalScroll && (<div style={{ position: 'absolute', bottom: -21, left: 0, width: TABLE_WIDTH, height: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="horizontal" trackSize={TABLE_WIDTH} /></div>)}
+      <div style={{ position: 'absolute', top: 162, left: 40, right: 15, bottom: 0 }}>
+        <AnimatePresence initial={false}>
+          {showHistory ? (
+            <motion.div key="history"
+              initial={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(100% + 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+              <HistoryTable events={historyEvents} isLoading={historyLoading} />
+            </motion.div>
+          ) : (
+            <motion.div key="data"
+              initial={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 'calc(-100% - 40px)', opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+              <NomenclatureDataTable
+                columns={ALL_COLUMNS}
+                visibleKeys={responseColumns.length > 0 ? responseColumns : ALL_COLUMNS.map(c => c.key)}
+                data={rowItems}
+                selectedIds={selectedIds}
+                onCheckboxClick={handleCheckboxClick}
+                onSelectAll={(e) => e.stopPropagation()}
+                onRowClick={handleRowClick}
+                onDoubleClick={handleDoubleClick}
+                renderCell={renderCell}
+                isGrayColumn={isGrayColumn}
+                highlightText={searchValue.trim() || undefined}
+                initialWidths={columnWidths}
+                onWidthsChange={setColumnWidths}
+                requiredColumns={requiredColumns}
+                rowContextMenuItems={rowContextMenuItems}
+                onResetToBase={() => {
+                  setResponseColumns(ALL_COLUMNS.filter(c => requiredColumns.has(c.key)).map(c => c.key));
+                  setColumnWidths({});
+                }}
+                getRowIcon={(item: any) => {
+                  if (item.type === 'folder') return item.isExpanded ? Icon12 : Icon11;
+                  return PopupIcon7;
+                }}
+                getRowFontWeight={(item: any) => item.type === 'folder' ? 700 : 400}
+                getRowNameIndent={(item: any) => item.depth * 20}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+
+      <ConfigurationPopup
+        isOpen={showConfigurationPopup}
+        onClose={() => setShowConfigurationPopup(false)}
+        title="Каталог шаблонов (Настройки списка)"
+        columns={ALL_COLUMNS}
+        visibleColumns={new Set(responseColumns.length > 0 ? responseColumns : ALL_COLUMNS.map(c => c.key))}
+        requiredColumns={requiredColumns}
+        onSave={(cols) => {
+          const finalCols = new Set(cols);
+          requiredColumns.forEach(key => finalCols.add(key));
+          setResponseColumns(ALL_COLUMNS.filter(c => finalCols.has(c.key)).map(c => c.key));
+        }}
+      />
 
       {showCreateTemplatePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateTemplatePopup(false)}>
-          <div style={{ width: 500, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 500, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание шаблона</h3>
+
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название шаблона</label>
-              <input type="text" value={createTemplateName} onChange={e => setCreateTemplateName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplateSubmit(); else if (e.key === 'Escape') setShowCreateTemplatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
+              <input type="text" value={createTemplateName} onChange={e => setCreateTemplateName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplateSubmit(); }} placeholder="Введите название" autoFocus
+                style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }} />
             </div>
+
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Модель</label>
-              <div onClick={() => setShowCreateModelSelect(true)} style={{ ...selectFieldStyle, border: createTemplateModelUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
+              <div onClick={() => setShowModelSelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateModelUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
                 <img src={createTemplateModelUid ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
                 <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateModelUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateModelName || 'Выберите модель'}</span>
               </div>
             </div>
+
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Конфигурация</label>
-              <div onClick={() => setShowCreateConfigSelect(true)} style={{ ...selectFieldStyle, border: createTemplateConfigUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
+              <div onClick={() => setShowConfigSelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateConfigUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
                 <img src={createTemplateConfigUid ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
                 <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateConfigUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateConfigName || 'Выберите конфигурацию'}</span>
               </div>
             </div>
+
             <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Каталог</label>
-              <div onClick={() => setShowCreateCategorySelect(true)} style={{ ...selectFieldStyle, border: createTemplateCategoryId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
-                <img src={PopupIcon4} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryId ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Выберите каталог'}</span>
+              <div onClick={() => setShowCategorySelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateCategoryUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
+                <img src={Icon11} alt="" style={{ width: 18, height: 16, flexShrink: 0 }} />
+                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Без категории'}</span>
               </div>
             </div>
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={handleCreateTemplateSubmit} disabled={isCreatingTemplate || !createTemplateName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: createTemplateName.trim() && !isCreatingTemplate ? '#666EFE' : '#BCC8FF', cursor: createTemplateName.trim() && !isCreatingTemplate ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isCreatingTemplate ? 'Создание...' : 'Создать'}</button>
-              <button onClick={() => setShowCreateTemplatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              <button onClick={handleCreateTemplateSubmit} disabled={isCreatingTemplate || !createTemplateName.trim()}
+                style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: createTemplateName.trim() && !isCreatingTemplate ? '#666EFE' : '#BCC8FF', cursor: createTemplateName.trim() && !isCreatingTemplate ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>
+                {isCreatingTemplate ? 'Создание...' : 'Создать'}
+              </button>
+              <button onClick={() => { setShowCreateTemplatePopup(false); resetCreateTemplateForm(); }}
+                style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+                Отмена
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      <CatalogSelectPopup isOpen={showCreateCategorySelect} onClose={() => setShowCreateCategorySelect(false)} onSelect={handleCreateCategorySelect} popupType="templateCategory" />
-      <CatalogSelectPopup isOpen={showCreateModelSelect} onClose={() => setShowCreateModelSelect(false)} onSelect={handleCreateModelSelect} popupType="stationModel" />
-      <CatalogSelectPopup isOpen={showCreateConfigSelect} onClose={() => setShowCreateConfigSelect(false)} onSelect={handleCreateConfigSelect} popupType="stationConfiguration" filterParam={createTemplateModelUid || undefined} />
+      <CatalogSelectPopup isOpen={showCategorySelect} onClose={() => setShowCategorySelect(false)} onSelect={(id, name) => { setCreateTemplateCategoryUid(id); setCreateTemplateCategoryName(name); setShowCategorySelect(false); }} popupType="templateCategory" />
+      <CatalogSelectPopup isOpen={showModelSelect} onClose={() => setShowModelSelect(false)} onSelect={(id, name) => { setCreateTemplateModelUid(id); setCreateTemplateModelName(name); setCreateTemplateConfigUid(''); setCreateTemplateConfigName(''); setShowModelSelect(false); }} popupType="stationModel" />
+      <CatalogSelectPopup isOpen={showConfigSelect} onClose={() => setShowConfigSelect(false)} onSelect={(id, name) => { setCreateTemplateConfigUid(id); setCreateTemplateConfigName(name); setShowConfigSelect(false); }} popupType="stationConfiguration" filterParam={createTemplateModelUid || undefined} />
 
-      <TemplateCreateGroupPopup isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} onSubmit={handleCreateGroup} isLoading={isCreatingGroup} />
-
-      {contextMenu && (
-        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: contextMenu.type === 'category' && !isMultipleSelected(contextMenu.uid) ? 244 : 200, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
-          {isMultipleSelected(contextMenu.uid) ? (
-            <>
-              <button style={contextMenuButtonStyle} onClick={handleContextMove}><img src={Icon22} alt="" style={{ width: 16, height: 14, marginRight: 17 }} />Переместить</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextCopy}><img src={Icon24} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />Скопировать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextDelete}><img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />Удалить</button>
-            </>
-          ) : contextMenu.type === 'category' ? (
-            <>
-              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextCreateTemplate}><img src={PopupIcon2} alt="" style={{ width: 14, height: 14, marginRight: 17 }} />Создать шаблон</button>
-              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextRename}><img src={Icon23} alt="" style={{ width: 16, height: 15, marginRight: 17 }} />Переименовать</button>
-              <button style={{ ...contextMenuButtonStyle, width: 244 }} onClick={handleContextDelete}><img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />Удалить</button>
-            </>
-          ) : (
-            <>
-              <button style={contextMenuButtonStyle} onClick={handleContextOpen}><img src={IconOpen} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />Открыть</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextMove}><img src={Icon22} alt="" style={{ width: 16, height: 14, marginRight: 17 }} />Переместить</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextCopy}><img src={Icon24} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />Скопировать</button>
-              <button style={contextMenuButtonStyle} onClick={handleContextDelete}><img src={Icon25} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />Удалить</button>
-            </>
-          )}
-        </div>
-      )}
+      <TemplateCreateGroupPopup
+        isOpen={showCreateGroup}
+        onClose={() => { setShowCreateGroup(false); setCreateGroupParentUid(null); setCreateGroupParentName(null); }}
+        onSubmit={handleCreateGroup}
+        isLoading={isCreatingGroup}
+        initialParentUid={createGroupParentUid}
+        initialParentName={createGroupParentName}
+      />
 
       {showRenamePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowRenamePopup(false)}>
-          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Переименование {renameType === 'category' ? 'группы' : 'шаблона'}</h3>
-            <input type="text" value={renameName} onChange={(e) => setRenameName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSubmit(); else if (e.key === 'Escape') setShowRenamePopup(false); }} placeholder="Введите новое название" autoFocus style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box' }} />
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Переименование {renameType === 'category' ? 'категории' : 'шаблона'}</h3>
+            <input type="text" value={renameName} onChange={(e) => setRenameName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSubmit(); }} placeholder="Введите новое название" autoFocus
+              style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowRenamePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleRenameSubmit} disabled={isRenaming || !renameName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: renameName.trim() && !isRenaming ? '#666EFE' : '#BCC8FF', cursor: renameName.trim() && !isRenaming ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isRenaming ? 'Сохранение...' : 'Переименовать'}</button>
@@ -1039,12 +866,10 @@ const TemplatesPage = () => {
       )}
 
       {showDeleteConfirm && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
-          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>
-              {deleteTarget === 'category' ? 'Вы уверены, что хотите удалить группу и все шаблоны внутри?' : 'Вы уверены, что хотите удалить выбранные шаблоны?'}
-            </p>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Вы уверены, что хотите удалить выбранные элементы?</p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowDeleteConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={confirmDelete} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Удалить</button>
@@ -1054,49 +879,21 @@ const TemplatesPage = () => {
       )}
 
       {showCopyPopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCopyPopup(false)}>
-          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Копирование</h3>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Выберите куда скопировать выбранные шаблоны</p>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>Выберите куда скопировать</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={handleCopyToCurrent} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>В текущую группу</button>
-              <button onClick={handleCopyToOther} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>В другую группу</button>
+              <button onClick={() => setShowCopyPopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>В текущую категорию</button>
+              <button onClick={handleCopyToOther} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>В другую категорию</button>
               <button onClick={() => setShowCopyPopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
             </div>
           </div>
         </div>
       )}
 
-      <CatalogSelectPopup isOpen={showCopySelectPopup} onClose={() => setShowCopySelectPopup(false)} onSelect={handleCopySelectGroup} popupType="templateCategory" />
-      <CatalogSelectPopup isOpen={showMoveSelectPopup} onClose={() => setShowMoveSelectPopup(false)} onSelect={handleMoveSelectGroup} popupType="templateCategory" />
-
-      {stationListData.isOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setStationListData({ isOpen: false, stationNames: [], templateName: '' })}>
-          <div style={{ width: 400, maxHeight: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 15 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Станции: {stationListData.templateName}</h3>
-            <div style={{ overflowY: 'auto', maxHeight: 300 }}>
-              {stationListData.stationNames.map((name, i) => (
-                <div key={i} style={{ padding: '10px 0', borderTop: '0.5px solid #E5ECF5', fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#2D4059' }}>{name}</div>
-              ))}
-            </div>
-            <button onClick={() => setStationListData({ isOpen: false, stationNames: [], templateName: '' })} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', marginTop: 5 }}>Закрыть</button>
-          </div>
-        </div>
-      )}
-
-      {/* POPUP НАСТРОЕК КОЛОНОК */}
-      <ConfigurationPopup
-        isOpen={showConfigurationPopup}
-        onClose={() => setShowConfigurationPopup(false)}
-        title="Каталог шаблонов загрузки станции (Настройки списка)"
-        columns={ALL_COLUMNS}
-        visibleColumns={visibleColumns}
-        requiredColumns={requiredColumns}
-        onSave={(cols) => {
-          setVisibleColumns(cols);
-          // Здесь можно сохранить настройки в localStorage или на бэкенд, если нужно
-        }}
-      />
+      <CatalogSelectPopup isOpen={showCopySelectPopup} onClose={() => { setShowCopySelectPopup(false); setOperationUid(null); }} onSelect={(id) => handleCopySelectCategory(id)} popupType="templateCategory" />
+      <CatalogSelectPopup isOpen={showMoveSelectPopup} onClose={() => { setShowMoveSelectPopup(false); setOperationUid(null); }} onSelect={(id) => handleMoveSelectCategory(id)} popupType="templateCategory" />
     </div>
   );
 };

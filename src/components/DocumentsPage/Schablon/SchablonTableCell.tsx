@@ -1,4 +1,4 @@
-// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (подсветка поиска)
+// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (новая структура)
 import React, { useState } from 'react';
 
 interface TableRow {
@@ -11,12 +11,14 @@ interface CellData {
   numberCell?: number;
   columnNumber?: number;
   drumNumber?: number;
+  cellAssignmentUid?: string | null;
+  cellAssignmentName?: string | null;
   materialUid?: string | null;
   materialName?: string | null;
   materialArticle?: string | null;
   quantity?: number | null;
-  purposeMaterial?: string | null;
-  purposeSgd?: string | null;
+  returnToThisCell?: boolean | null;
+  isIndividual?: boolean | null;
 }
 
 interface SchablonTableCellProps {
@@ -68,11 +70,11 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   else cellNumber = `${colStart}-${rowStart}`;
 
   const hasData = !!cellData?.materialUid;
+  const hasAssignment = !!cellData?.cellAssignmentUid;
   const materialName = cellData?.materialName || (hasData ? '…' : '—');
   const materialArticle = cellData?.materialArticle || '';
   const quantity = cellData?.quantity ?? 0;
-  const purposes = [cellData?.purposeMaterial, cellData?.purposeSgd].filter(Boolean);
-  const purposesText = purposes.length > 0 ? purposes.join(', ') : '—';
+  const purposesText = cellData?.cellAssignmentName || '—';
 
   const handleContextMenu = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); };
   const closeContextMenu = () => setContextMenu(null);
@@ -86,6 +88,8 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
 
   const backgroundColor = isHovered || contextMenu ? '#F5FAFF' : '#FFFFFF';
   const hl = (highlightText || '').trim();
+
+  const showData = hasData || hasAssignment;
 
   return (
     <>
@@ -116,8 +120,8 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
               <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{hasData ? quantity : '—'}</div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Назначения</div>
-              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: hasData ? 500 : 400, fontSize: '15px', color: hasData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{purposesText}</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', color: 'rgba(45, 64, 89, 0.5)', height: '16px', lineHeight: '16px' }}>Назначение</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: showData ? 500 : 400, fontSize: '15px', color: showData ? '#2D4059' : 'rgba(45, 64, 89, 0.4)', height: '20px', lineHeight: '20px', marginTop: '4px' }}>{purposesText}</div>
             </div>
           </div>
         </div>
@@ -126,9 +130,9 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
         <div style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, backgroundColor: '#FFFFFF', borderRadius: '10px', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)', padding: '8px 0', zIndex: 2000, minWidth: '220px' }} onClick={(e) => e.stopPropagation()}>
           <div onClick={handleOpenDetails} style={{ padding: '10px 20px', fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2D4059', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F5FAFF')} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#666EFE" strokeWidth="1.5"/><path d="M8 4.5V8.5M8 11.5V11.51" stroke="#666EFE" strokeWidth="1.5" strokeLinecap="round"/></svg>
-            {hasData ? 'Посмотреть / Изменить' : 'Выбрать номенклатуру'}
+            {showData ? 'Посмотреть / Изменить' : 'Выбрать назначение'}
           </div>
-          {hasData && (
+          {showData && (
             <div onClick={handleClear} style={{ padding: '10px 20px', fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#FEF2F2')} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Очистить

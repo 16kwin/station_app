@@ -1,3 +1,4 @@
+// FloatingMenu.tsx — ПОЛНЫЙ ФАЙЛ (в документах добавлен Контроль уровня остатков)
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useAuth } from '../../services/AuthContext';
@@ -65,6 +66,10 @@ const referencesItems = [
   { label: 'Станции', path: '/references/stations' },
   { label: 'Направления поставщиков', path: '/references/supplier-directions' },
   { label: 'Бренды поставщиков', path: '/references/supplier-brands' },
+];
+
+const documentsItems = [
+  { label: 'Контроль уровня остатков', path: '/documents/stock-level-control' },
 ];
 
 const getPopupContent = (popupIndex: number) => {
@@ -423,16 +428,35 @@ const FloatingMenu = () => {
                       </span>
                     </div>
                   ))}
-                  {popupType === 'documents' && (
-                    <span style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: '13px',
-                      fontWeight: 400,
-                      color: 'rgba(255,255,255,0.5)',
-                    }}>
-                      В разработке
-                    </span>
-                  )}
+                  {popupType === 'documents' && documentsItems.map((item, i) => (
+                    <div
+                      key={i}
+                      onClick={() => handlePopupItemClick(item.path, `Документ: ${item.label}`)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <div style={{
+                        width: '5px',
+                        height: '5px',
+                        borderRadius: '50%',
+                        backgroundColor: '#FFFFFF',
+                        flexShrink: 0,
+                      }} />
+                      <span style={{
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: '13px',
+                        fontWeight: 400,
+                        color: '#FFFFFF',
+                      }}>
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
                   {popupType === 'reports' && (
                     <span style={{
                       fontFamily: 'Inter, sans-serif',

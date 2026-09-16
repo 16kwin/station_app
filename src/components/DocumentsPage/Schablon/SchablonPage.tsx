@@ -1,4 +1,4 @@
-// SchablonPage.tsx — ПОЛНЫЙ ФАЙЛ (canSaveAs зависит от isDirty)
+// SchablonPage.tsx — ПОЛНЫЙ ФАЙЛ (снятие установки сбрасывает станцию)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -116,10 +116,20 @@ interface ModelCell {
 }
 
 interface CellData {
-  uid?: string; numberCell?: number; columnNumber?: number; drumNumber?: number;
-  materialUid?: string | null; materialName?: string | null; materialArticle?: string | null;
-  quantity?: number | null; typeMainUid?: string | null; typeMainName?: string | null;
-  purposeMaterial?: string | null; purposeSgd?: string | null; maxQuantity?: number | null; dimensions?: string | null;
+  uid?: string;
+  numberCell?: number;
+  columnNumber?: number;
+  drumNumber?: number;
+  cellAssignmentUid?: string | null;
+  cellAssignmentName?: string | null;
+  cellAssignmentTypeUid?: string | null;
+  cellAssignmentTypeName?: string | null;
+  materialUid?: string | null;
+  materialName?: string | null;
+  materialArticle?: string | null;
+  quantity?: number | null;
+  returnToThisCell?: boolean | null;
+  isIndividual?: boolean | null;
 }
 
 const FRAMES = [frame1, frame2, frame3, frame4, frame5, frame6, frame7, frame8, frame9, frame10, frame11, frame12, frame13, frame14, frame15, frame16, frame17, frame18, frame19, frame20, frame21, frame22, frame23, frame24, frame25, frame26, frame27, frame28, frame29, frame30, frame31];
@@ -135,13 +145,11 @@ const normalizeCells = (list: CellData[]) =>
       numberCell: c.numberCell ?? null,
       columnNumber: c.columnNumber ?? null,
       drumNumber: c.drumNumber ?? null,
+      cellAssignmentUid: c.cellAssignmentUid ?? null,
       materialUid: c.materialUid ?? null,
       quantity: c.quantity ?? null,
-      typeMainUid: c.typeMainUid ?? null,
-      purposeMaterial: c.purposeMaterial ?? null,
-      purposeSgd: c.purposeSgd ?? null,
-      maxQuantity: c.maxQuantity ?? null,
-      dimensions: c.dimensions ?? null,
+      returnToThisCell: c.returnToThisCell ?? false,
+      isIndividual: c.isIndividual ?? false,
     }))
     .sort((a, b) => {
       const ak = `${a.drumNumber ?? 0}-${a.columnNumber ?? 0}-${a.numberCell ?? 0}`;
@@ -187,7 +195,6 @@ const SchablonPage: React.FC = () => {
   const [isSavingAs, setIsSavingAs] = useState(false);
   const [isStationSelectOpen, setIsStationSelectOpen] = useState(false);
 
-  // Тулбар
   const [expanded, setExpanded] = useState<'search' | 'filter' | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
@@ -376,10 +383,28 @@ const SchablonPage: React.FC = () => {
 
   const handleToggleActive = async () => {
     if (!uid) return;
+    if (isDirty) return;
     if (stationUid) {
       try {
+        const wasActive = isActive;
         await AxiosService.put(`/api/stations/${stationUid}`, { activeTemplateUid: isActive ? null : uid });
-        await fetchData();
+
+        if (wasActive) {
+          // сняли установку — чистим URL и state, левый блок снова покажет конфигурацию
+          setStationUid('');
+          setStationName('');
+          setStationNameParam('');
+          setIsActive(false);
+          setIsTmc(false);
+          setIsSgd(false);
+          setIsOk(false);
+          setParentUid(null);
+          if (activeTabId) {
+            replaceTab(activeTabId, `/documents/schablon/${uid}`, `Шаблон - ${templateName}`, <SchablonPage />);
+          }
+        } else {
+          await fetchData();
+        }
       } catch (error) { console.error('Ошибка переключения шаблона:', error); }
     } else {
       setIsStationSelectOpen(true);
@@ -388,6 +413,7 @@ const SchablonPage: React.FC = () => {
 
   const handleStationSelect = async (selectedStationUid: string, selectedStationName: string) => {
     if (!uid) return;
+    if (isDirty) return;
     try {
       await AxiosService.put(`/api/stations/${selectedStationUid}`, { activeTemplateUid: uid });
       setIsStationSelectOpen(false);
@@ -463,18 +489,16 @@ const SchablonPage: React.FC = () => {
 
   const buildBatchPayload = () => ({
     cells: localCells
-      .filter(c => c.materialUid || c.quantity != null || c.purposeMaterial || c.purposeSgd)
+      .filter(c => c.cellAssignmentUid || c.materialUid)
       .map(c => ({
         numberCell: c.numberCell ?? null,
         columnNumber: c.columnNumber ?? null,
         drumNumber: c.drumNumber ?? null,
+        cellAssignmentUid: c.cellAssignmentUid ?? null,
         materialUid: c.materialUid ?? null,
         quantity: c.quantity ?? null,
-        typeMainUid: c.typeMainUid ?? null,
-        purposeMaterial: c.purposeMaterial ?? null,
-        purposeSgd: c.purposeSgd ?? null,
-        maxQuantity: c.maxQuantity ?? null,
-        dimensions: c.dimensions ?? null,
+        returnToThisCell: c.returnToThisCell ?? false,
+        isIndividual: c.isIndividual ?? false,
       })),
   });
 
@@ -568,6 +592,20 @@ const SchablonPage: React.FC = () => {
 
   const canSave = isDirty && !isSaving && !isSavingAs;
   const canSaveAs = isDirty && !isSaving && !isSavingAs;
+  const canToggleActive = !isDirty && !isSaving && !isSavingAs;
+
+  const getOtherQuantityForMaterial = useCallback((materialUid: string, excludeKey?: { numberCell: number; columnNumber: number; drumNumber: number }) => {
+    if (!materialUid) return 0;
+    return localCells.reduce((sum, c) => {
+      if (c.materialUid !== materialUid) return sum;
+      if (excludeKey
+        && c.numberCell === excludeKey.numberCell
+        && c.columnNumber === excludeKey.columnNumber
+        && (c.drumNumber ?? 0) === (excludeKey.drumNumber ?? 0)
+      ) return sum;
+      return sum + (Number(c.quantity) || 0);
+    }, 0);
+  }, [localCells]);
 
   const filteredCells = React.useMemo(() => {
     if (!searchValue.trim() && typeFilterSet.size === 0) return null;
@@ -579,9 +617,9 @@ const SchablonPage: React.FC = () => {
         if (!nameMatch && !artMatch) return false;
       }
       if (typeFilterSet.size > 0) {
-        const isTmcCell = c.purposeMaterial === 'ТМЦ';
-        const isSgdCell = c.purposeSgd === 'СГД';
-        const isNone = !isTmcCell && !isSgdCell;
+        const isTmcCell = c.cellAssignmentTypeName === 'ТМЦ';
+        const isSgdCell = c.cellAssignmentTypeName === 'Готовая деталь';
+        const isNone = !c.cellAssignmentTypeName;
         const matched = (typeFilterSet.has('ТМЦ') && isTmcCell)
           || (typeFilterSet.has('СГД') && isSgdCell)
           || (typeFilterSet.has('НЕ_ЗАДАНО') && isNone);
@@ -606,7 +644,6 @@ const SchablonPage: React.FC = () => {
     setSubmenuOpen(null);
   };
 
-  // Тулбар
   const BTN_COLLAPSED = 54;
   const BTN_SEARCH_EXPANDED = 360;
   const BTN_GAP = 15;
@@ -695,10 +732,8 @@ const SchablonPage: React.FC = () => {
       </div>
 
       <div style={{ position: 'absolute', top: '106px', left: '577px', right: '40px', bottom: '40px' }}>
-        {/* ТУЛБАР */}
         <div style={{ position: 'relative', width: '100%', height: BTN_COLLAPSED, marginBottom: '10px', filter: isAnyPopupOpen ? 'blur(2px)' : 'none', transition: 'filter 0.3s ease', pointerEvents: isAnyPopupOpen ? 'none' : 'auto' }}>
 
-          {/* Поиск */}
           <motion.div
             style={{
               position: 'absolute', left: 0, top: 0, height: BTN_COLLAPSED, borderRadius: 15,
@@ -733,7 +768,6 @@ const SchablonPage: React.FC = () => {
             )}
           </motion.div>
 
-          {/* Фильтр */}
           <motion.div
             style={{
               position: 'absolute', left: 0, top: 0, borderRadius: 15,
@@ -902,7 +936,6 @@ const SchablonPage: React.FC = () => {
             </AnimatePresence>
           </motion.div>
 
-          {/* Очистка */}
           <motion.div
             style={{
               position: 'absolute', left: 0, top: 0, width: BTN_COLLAPSED, height: BTN_COLLAPSED,
@@ -917,7 +950,6 @@ const SchablonPage: React.FC = () => {
             <img src={Schablon5} alt="Очистка" style={{ width: 24, height: 24 }} />
           </motion.div>
 
-          {/* Центральная кнопка */}
           <motion.div
             style={{
               position: 'absolute', left: 0, top: 0, width: 411, height: BTN_COLLAPSED,
@@ -934,7 +966,6 @@ const SchablonPage: React.FC = () => {
             </span>
           </motion.div>
 
-          {/* Правые 2 кнопки */}
           <div style={{ position: 'absolute', right: 0, top: 0, display: 'flex', gap: BTN_GAP }}>
             <button style={{ width: BTN_COLLAPSED, height: BTN_COLLAPSED, borderRadius: 15, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)' }}>
               <img src={Schablon1} alt="Печать" style={{ width: 24, height: 24 }} />
@@ -945,7 +976,6 @@ const SchablonPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ТАБЛИЦА */}
         <div style={{ height: '560px' }}>
           {configLoaded && (
             <SchablonTable
@@ -974,13 +1004,16 @@ const SchablonPage: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '30px', marginTop: '30px' }}>
           <button style={{ ...bottomButtonStyle, width: '215px', backgroundColor: '#FFFFFF', color: '#2D4059', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)' }}><img src={IconD} alt="" style={{ width: '17px', height: '21px', flexShrink: 0 }} /><span style={{ marginLeft: '17px' }}>Форма документа</span></button>
           <button
-            onClick={handleToggleActive}
+            onClick={canToggleActive ? handleToggleActive : undefined}
+            disabled={!canToggleActive}
             style={{
               ...bottomButtonStyle,
               width: '175px',
               backgroundColor: isActive && stationUid ? '#666EFE' : '#FFFFFF',
               color: isActive && stationUid ? '#FFFFFF' : '#2D4059',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+              opacity: canToggleActive ? 1 : 0.35,
+              cursor: canToggleActive ? 'pointer' : 'not-allowed',
             }}
           >
             <img src={isActive && stationUid ? IconJ2 : IconJ1} alt="" style={{ width: '24px', height: '14px', filter: isActive && stationUid ? 'brightness(0) invert(1)' : 'none', transition: 'filter 0.3s ease' }} />
@@ -1018,7 +1051,25 @@ const SchablonPage: React.FC = () => {
         </div>
 
         {isClearPopupOpen && <div style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 100 }}><ClearPopup isOpen={isClearPopupOpen} onClose={handleCloseClearPopup} /></div>}
-        {isCellPopupOpen && <div style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 100 }}><CellDetailsPopup isOpen={isCellPopupOpen} onClose={() => setIsCellPopupOpen(false)} cellId={cellPopupData.id} cellName={`Ячейка ${cellPopupData.id}`} selectedColumn={cellPopupData.column} selectedDrum={cellPopupData.drum} cellData={cellPopupData.cellData} onSaved={handleCellUpdate} /></div>}
+        {isCellPopupOpen && (
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 100 }}>
+            <CellDetailsPopup
+              isOpen={isCellPopupOpen}
+              onClose={() => setIsCellPopupOpen(false)}
+              cellId={cellPopupData.id}
+              cellName={`Ячейка ${cellPopupData.id}`}
+              selectedColumn={cellPopupData.column}
+              selectedDrum={cellPopupData.drum}
+              cellData={cellPopupData.cellData}
+              onSaved={handleCellUpdate}
+              stationUid={stationUid || null}
+              stationName={stationName || null}
+              isTmc={isTmc}
+              isSgd={isSgd}
+              getOtherQuantityForMaterial={getOtherQuantityForMaterial}
+            />
+          </div>
+        )}
       </div>
 
       <SchablonSaveAsPopup
