@@ -1,4 +1,4 @@
-// ConstantInfo.ts — полный файл (добавлены эндпоинты контроля уровня остатков)
+// info/ConstantInfo.ts — полный файл (inactivityTimeout = 10 мин, warningTimeout = 1 мин)
 const ConstantInfo = {
   // База
   serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''),
@@ -19,8 +19,8 @@ const ConstantInfo = {
   
   // Спящий режим
   restApiCheckPassword: '/api/auth/check_password',
-  inactivityTimeout: 30 * 1000,
-warningTimeout: 10 * 1000,
+  inactivityTimeout: 10 * 60 * 1000,
+  warningTimeout: 1 * 60 * 1000,
   
   // Станции
   restApiStationsStatic: '/api/stations/static',

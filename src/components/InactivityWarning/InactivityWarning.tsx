@@ -32,7 +32,6 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
 
     setCountdown(Math.ceil(ConstantInfo.warningTimeout / 1000));
 
-    // Таймер обратного отсчета
     intervalRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -43,9 +42,7 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
       });
     }, 1000);
 
-    // Таймер автоблокировки
     timeoutRef.current = setTimeout(() => {
-      // Отправляем событие блокировки
       channelRef.current?.postMessage({ type: 'lock' });
     }, ConstantInfo.warningTimeout);
 
@@ -56,7 +53,6 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
   }, [show]);
 
   const handleContinue = () => {
-    // Отправляем событие отмены предупреждения
     channelRef.current?.postMessage({ type: 'cancel_warning' });
     onClose();
   };
@@ -70,24 +66,56 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black bg-opacity-50 z-[90] flex items-center justify-center"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 90000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl"
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 32,
+              maxWidth: 448,
+              width: '100%',
+              margin: '0 16px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+            }}
           >
-            <h2 className="text-2xl font-bold text-[#2D4059] mb-4">Предупреждение</h2>
-            <p className="text-gray-600 mb-2">
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: '#2D4059', marginBottom: 16, fontFamily: 'Inter, sans-serif' }}>Предупреждение</h2>
+            <p style={{ color: '#6B7280', marginBottom: 8, fontFamily: 'Inter, sans-serif' }}>
               Вы скоро будете заблокированы из-за бездействия.
             </p>
-            <p className="text-lg font-semibold text-[#666EFE] mb-6">
+            <p style={{ fontSize: 18, fontWeight: 600, color: '#666EFE', marginBottom: 24, fontFamily: 'Inter, sans-serif' }}>
               Блокировка через {countdown} секунд
             </p>
             <button
               onClick={handleContinue}
-              className="w-full bg-[#666EFE] hover:bg-[#5555dd] text-white py-3 rounded-xl transition-colors font-medium"
+              style={{
+                width: '100%',
+                backgroundColor: '#666EFE',
+                color: '#FFFFFF',
+                padding: '12px 0',
+                borderRadius: 12,
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 15,
+                fontWeight: 500,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#5555dd')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#666EFE')}
             >
               Продолжить работу
             </button>

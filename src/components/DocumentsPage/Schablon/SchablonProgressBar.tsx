@@ -1,48 +1,47 @@
-// SchablonProgressBar.tsx — ПОЛНЫЙ ФАЙЛ
+// SchablonProgressBar.tsx — ПОЛНЫЙ ФАЙЛ (убран onClick, переключение по клику)
 import React from 'react';
-import BarIcon11 from '../../../assets/Schablon/BarIcon11.svg';
-import BarIcon12 from '../../../assets/Schablon/BarIcon12.svg';
-import BarIcon21 from '../../../assets/Schablon/BarIcon21.svg';
-import BarIcon22 from '../../../assets/Schablon/BarIcon22.svg';
-import BarIcon31 from '../../../assets/Schablon/BarIcon31.svg';
-import BarIcon32 from '../../../assets/Schablon/BarIcon32.svg';
+import ProgressBarIcon18Blue1 from '../../../assets/Icons/ProgressBarIcons/ProgressBarIcon18Blue1.svg';
+import ProgressBarIcon18Gray1 from '../../../assets/Icons/ProgressBarIcons/ProgressBarIcon18Gray1.svg';
+import ProgressBarIcon18Blue2 from '../../../assets/Icons/ProgressBarIcons/ProgressBarIcon18Blue2.svg';
+import ProgressBarIcon18Gray2 from '../../../assets/Icons/ProgressBarIcons/ProgressBarIcon18Gray2.svg';
+import ProgressBarIcon18Blue3 from '../../../assets/Icons/ProgressBarIcons/ProgressBarIcon18Blue3.svg';
+import ProgressBarIcon18Gray3 from '../../../assets/Icons/ProgressBarIcons/ProgressBarIcon18Gray3.svg';
 
 interface SchablonProgressBarProps {
   currentStep: number;
-  onClick?: () => void;
 }
 
-const SchablonProgressBar: React.FC<SchablonProgressBarProps> = ({ currentStep, onClick }) => {
-  const barWidth = 477;
-  const barHeight = 5;
-  const pipWidth = 4;
-  const pipHeight = 10;
-  const pipRadius = 3;
-  const iconSize = 20;
-  const iconGap = 6;
+const SchablonProgressBar: React.FC<SchablonProgressBarProps> = ({ currentStep }) => {
+  const BAR_WIDTH = 477;
+  const BAR_HEIGHT = 5;
+  const BLOCK_HEIGHT = 67;
+
+  const PIP_WIDTH = 4;
+  const PIP_HEIGHT = 10;
+  const PIP_RADIUS = 3;
+
+  const ICON_SIZE = 18;
+  const ICON_GAP = 5;
+  const TEXT_GAP = 5;
 
   const pipPositions = [93, 231, 369];
   const fillPositions = [0, 162, 300, 477];
 
   const steps = [
-    { 
-      label: 'Шаблон загрузки',
-      iconInactive: BarIcon11, 
-      iconActive: BarIcon12,
-      isSingleLine: true,
+    {
+      labelLines: ['Шаблон загрузки'],
+      iconInactive: ProgressBarIcon18Gray1,
+      iconActive: ProgressBarIcon18Blue1,
     },
-    { 
-      labelLine1: 'Документ',
-      labelLine2: 'Пополнение станции',
-      iconInactive: BarIcon21, 
-      iconActive: BarIcon22,
-      isSingleLine: false,
+    {
+      labelLines: ['Документ', 'Пополнение станции'],
+      iconInactive: ProgressBarIcon18Gray2,
+      iconActive: ProgressBarIcon18Blue2,
     },
-    { 
-      label: 'Загрузка станции',
-      iconInactive: BarIcon31, 
-      iconActive: BarIcon32,
-      isSingleLine: true,
+    {
+      labelLines: ['Загрузка станции'],
+      iconInactive: ProgressBarIcon18Gray3,
+      iconActive: ProgressBarIcon18Blue3,
     },
   ];
 
@@ -52,116 +51,103 @@ const SchablonProgressBar: React.FC<SchablonProgressBarProps> = ({ currentStep, 
   };
 
   const getLabelColor = (index: number) => {
-    return index < currentStep ? '#2D4059' : 'rgba(45, 64, 89, 0.44)';
+    return index < currentStep ? '#666EFE' : 'rgba(45, 64, 89, 0.5)';
   };
 
   const fillWidth = fillPositions[currentStep];
 
   return (
-    <div 
-      onClick={onClick}
-      style={{ width: barWidth, height: 85, position: 'relative', flexShrink: 0, cursor: onClick ? 'pointer' : 'default', backgroundColor: '#FAFBFF' }}
+    <div
+      style={{
+        width: BAR_WIDTH,
+        height: BLOCK_HEIGHT,
+        position: 'relative',
+        flexShrink: 0,
+        backgroundColor: 'transparent',
+      }}
     >
-      {/* Иконки */}
       {pipPositions.map((pos, index) => (
-        <img 
+        <img
           key={`icon-${index}`}
           src={index < currentStep ? steps[index].iconActive : steps[index].iconInactive}
           alt=""
           style={{
             position: 'absolute',
-            left: pos - iconSize / 2,
-            bottom: barHeight + pipHeight + iconGap,
-            width: iconSize,
-            height: iconSize,
+            left: pos - ICON_SIZE / 2,
+            bottom: BAR_HEIGHT + PIP_HEIGHT + ICON_GAP,
+            width: ICON_SIZE,
+            height: ICON_SIZE,
           }}
         />
       ))}
 
-      {/* Подписи */}
       {pipPositions.map((pos, index) => {
         const step = steps[index];
         return (
-          <div 
-            key={`label-${index}`} 
-            style={{ 
-              position: 'absolute', 
-              left: pos, 
-              bottom: barHeight + pipHeight + iconGap + iconSize + 4, 
+          <div
+            key={`label-${index}`}
+            style={{
+              position: 'absolute',
+              left: pos,
+              bottom: BAR_HEIGHT + PIP_HEIGHT + ICON_GAP + ICON_SIZE + TEXT_GAP,
               transform: 'translateX(-50%)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
             }}
           >
-            {step.isSingleLine ? (
-              <span style={{ 
-                fontFamily: 'Inter, sans-serif', 
-                fontSize: 11, 
-                fontWeight: 600, 
-                color: getLabelColor(index), 
-                whiteSpace: 'nowrap', 
-                textAlign: 'center', 
-                lineHeight: '13px' 
-              }}>
-                {step.label}
+            {step.labelLines.map((line, i) => (
+              <span
+                key={i}
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: getLabelColor(index),
+                  whiteSpace: 'nowrap',
+                  textAlign: 'center',
+                  lineHeight: '13px',
+                }}
+              >
+                {line}
               </span>
-            ) : (
-              <>
-                <span style={{ 
-                  fontFamily: 'Inter, sans-serif', 
-                  fontSize: 11, 
-                  fontWeight: 600, 
-                  color: getLabelColor(index), 
-                  whiteSpace: 'nowrap', 
-                  textAlign: 'center', 
-                  lineHeight: '13px' 
-                }}>
-                  {step.labelLine1}
-                </span>
-                <span style={{ 
-                  fontFamily: 'Inter, sans-serif', 
-                  fontSize: 11, 
-                  fontWeight: 600, 
-                  color: getLabelColor(index), 
-                  whiteSpace: 'nowrap', 
-                  textAlign: 'center', 
-                  lineHeight: '13px' 
-                }}>
-                  {step.labelLine2}
-                </span>
-              </>
-            )}
+            ))}
           </div>
         );
       })}
 
-      {/* Фоновая полоса */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, width: barWidth, height: barHeight, borderRadius: barHeight / 2, backgroundColor: 'rgba(45, 64, 89, 0.15)', pointerEvents: 'none' }} />
-      
-      {/* Заполненная полоса — всегда рендерим для анимации */}
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: BAR_WIDTH,
+        height: BAR_HEIGHT,
+        borderRadius: BAR_HEIGHT / 2,
+        backgroundColor: 'rgba(45, 64, 89, 0.15)',
+        pointerEvents: 'none',
+      }} />
+
       <div style={{
         position: 'absolute',
         bottom: 0,
         left: 0,
         width: fillWidth,
-        height: barHeight,
-        borderRadius: barHeight / 2,
+        height: BAR_HEIGHT,
+        borderRadius: BAR_HEIGHT / 2,
         backgroundColor: '#666EFE',
         transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
         pointerEvents: 'none',
       }} />
-      
-      {/* Пипки */}
+
       {pipPositions.map((pos, index) => (
         <div key={`pip-${index}`} style={{
           position: 'absolute',
-          left: pos - pipWidth / 2,
-          bottom: barHeight,
-          width: pipWidth,
-          height: pipHeight,
-          borderTopLeftRadius: pipRadius,
-          borderTopRightRadius: pipRadius,
+          left: pos - PIP_WIDTH / 2,
+          bottom: BAR_HEIGHT,
+          width: PIP_WIDTH,
+          height: PIP_HEIGHT,
+          borderTopLeftRadius: PIP_RADIUS,
+          borderTopRightRadius: PIP_RADIUS,
           backgroundColor: getPipColor(index),
           transition: 'background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: 'none',

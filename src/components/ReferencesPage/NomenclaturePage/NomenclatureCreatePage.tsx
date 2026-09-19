@@ -1,4 +1,4 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ с сохранением всех данных в черновик
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (с поддержкой открытия сразу на нужной вкладке)
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -94,8 +94,6 @@ export interface CommonProps {
 
 const REQUIRED_ATTRIBUTES = ['Длина', 'Ширина', 'Высота', 'Масса'];
 
-// ==================== IndexedDB хелпер ====================
-
 const DB_NAME = 'nomenclature_drafts_db';
 const DB_VERSION = 1;
 const STORE_NAME = 'draft_files';
@@ -156,9 +154,8 @@ const clearAllFilesForDraft = async (uid: string, tabInstanceId: string): Promis
   });
 };
 
-// ==================== localStorage для метаданных ====================
-
 const getDraftKey = (uid: string, tabInstanceId: string) => `nomenclature_draft_${uid}_${tabInstanceId}`;
+const getStartTabKey = (uid: string) => `nomenclature_start_tab_${uid}`;
 
 interface DraftData {
   uid: string;
@@ -243,6 +240,17 @@ const normalizeCharacteristics = (chars: LocalCharacteristic[]) => {
   })).sort((a, b) => (a.attributeName || '').localeCompare(b.attributeName || ''));
 };
 
+// Хелпер: читаем желаемую начальную вкладку из sessionStorage (для открытия через ссылку из ячейки)
+const resolveInitialActiveTab = (uid: string | undefined): number => {
+  if (!uid) return 0;
+  try {
+    const saved = sessionStorage.getItem(getStartTabKey(uid));
+    if (saved === 'characteristics') return 1;
+    if (saved === 'documents') return 2;
+  } catch {}
+  return 0;
+};
+
 const NomenclatureCreatePage = () => {
   const { uid, code } = useParams<{ uid: string; code: string }>();
   const navigate = useNavigate();
@@ -255,7 +263,7 @@ const NomenclatureCreatePage = () => {
     currentTab?.id || `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   ).current;
 
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(() => resolveInitialActiveTab(uid));
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -548,7 +556,28 @@ const NomenclatureCreatePage = () => {
     } catch (e) { console.error(e); return []; } 
   };
 
-  useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
+  // Слушаем navigateToTab (смена вкладки внутри уже открытой страницы).
+  // Фильтруем по uid, чтобы не переключить чужую номенклатуру.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.tab === undefined) return;
+      if (detail.uid && uid && detail.uid !== uid) return;
+      setActiveTab(detail.tab);
+    };
+    window.addEventListener('navigateToTab', handler);
+    return () => window.removeEventListener('navigateToTab', handler);
+  }, [uid]);
+
+  // Очищаем sessionStorage-ключ желаемой вкладки после монтирования.
+  useEffect(() => {
+    if (!uid) return;
+    try {
+      const key = getStartTabKey(uid);
+      if (sessionStorage.getItem(key)) sessionStorage.removeItem(key);
+    } catch {}
+  }, [uid]);
+
   useEffect(() => { (async () => { try { setTypeMaterials((await AxiosService.get(ConstantInfo.restApiNomenclatureTypeMaterials)).data || []); } catch (e) { console.error(e); } })(); }, []);
 
   useEffect(() => {

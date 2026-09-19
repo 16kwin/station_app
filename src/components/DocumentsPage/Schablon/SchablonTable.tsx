@@ -1,7 +1,9 @@
-// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (обновлённые поля ячейки)
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (прокидываем multiSelectCount в SchablonTableCell)
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
+import CheckboxIcon18OffBlack from '../../../assets/Icons/СheckboxIcons/СheckboxIcon18OffBlack.svg';
+import CheckboxIcon18OnBlue from '../../../assets/Icons/СheckboxIcons/СheckboxIcon18OnBlue.svg';
 
 interface ModelCell {
   id: string;
@@ -31,9 +33,9 @@ interface CellData {
 }
 
 interface SchablonTableProps {
-  isMultiSelect: boolean;
-  onEnableMultiSelect: () => void;
   onSelectionChange: (selectedIds: Set<number>) => void;
+  onContextChange?: (column: number, drum: number) => void;
+  clearSelectionSignal?: number;
   totalRows: number;
   totalColumns: number;
   totalDrums: number;
@@ -52,7 +54,9 @@ interface SchablonTableProps {
 }
 
 const SchablonTable: React.FC<SchablonTableProps> = ({
-  isMultiSelect, onEnableMultiSelect, onSelectionChange,
+  onSelectionChange,
+  onContextChange,
+  clearSelectionSignal,
   totalRows, totalColumns, totalDrums, cellType,
   selectedDrum, onDrumChange, onCellDoubleClick, isBlurred,
   modelCells, cellsData, filteredCells = null, highlightText,
@@ -62,6 +66,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationHighlight, setAnimationHighlight] = useState<number | null>(null);
   const [selectedCellIds, setSelectedCellIds] = useState<Set<number>>(new Set());
+  const [expandedCellId, setExpandedCellId] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const cellRefsMap = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -70,6 +75,14 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   const HEADER_HEIGHT = 80;
   const ROW_HEIGHT = 80;
   const VISIBLE_ROWS = 6;
+
+  useEffect(() => {
+    onContextChange?.(selectedColumn, selectedDrum);
+  }, [selectedColumn, selectedDrum, onContextChange]);
+
+  useEffect(() => {
+    if (clearSelectionSignal !== undefined) setSelectedCellIds(new Set());
+  }, [clearSelectionSignal]);
 
   const displayModelCells = cellType === 'drum'
     ? modelCells.filter(c => c.drum === selectedDrum && !c.deleted)
@@ -96,7 +109,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     }
   }
 
-  const filteredKeys = React.useMemo(() => {
+  const filteredKeys = useMemo(() => {
     if (filteredCells === null) return null;
     const keys = new Set<string>();
     filteredCells.forEach(c => {
@@ -105,7 +118,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     return keys;
   }, [filteredCells]);
 
-  const rows = React.useMemo(() => {
+  const rows = useMemo(() => {
     const baseRows = displayModelCells
       .filter(mc => mc.column === selectedColumn)
       .map(mc => ({
@@ -132,12 +145,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
 
   useEffect(() => { onSelectionChange(selectedCellIds); }, [selectedCellIds, onSelectionChange]);
 
-  const prevMultiSelect = useRef(isMultiSelect);
-  useEffect(() => {
-    if (prevMultiSelect.current && !isMultiSelect) setSelectedCellIds(new Set());
-    prevMultiSelect.current = isMultiSelect;
-  }, [isMultiSelect]);
-
   const scrollToCell = (id: number) => {
     const cellElement = cellRefsMap.current.get(id);
     const container = scrollContainerRef.current;
@@ -148,13 +155,37 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     else if (cellRect.bottom > containerRect.bottom) container.scrollTop += (cellRect.bottom - containerRect.bottom);
   };
 
-  const handleSelect = (id: number, ctrlKey: boolean) => {
-    if (isMultiSelect || ctrlKey) {
-      if (ctrlKey && !isMultiSelect) onEnableMultiSelect();
-      setSelectedCellIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-      return;
-    }
+  const handleRowClick = (id: number) => {
     setSelectedCellIds(prev => prev.has(id) && prev.size === 1 ? new Set() : new Set([id]));
+  };
+
+  const handleCheckboxClick = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedCellIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const visibleIds = useMemo(() => rows.map(r => r.id), [rows]);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every(id => selectedCellIds.has(id));
+
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isAllSelected) {
+      setSelectedCellIds(prev => {
+        const next = new Set(prev);
+        visibleIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedCellIds(prev => {
+        const next = new Set(prev);
+        visibleIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
   };
 
   const handleDoubleClick = (_id: number) => {};
@@ -164,8 +195,11 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     else cellRefsMap.current.delete(id);
   };
 
+  const handleExpandToggle = useCallback((id: number) => {
+    setExpandedCellId(prev => prev === id ? null : id);
+  }, []);
+
   useEffect(() => {
-    if (isMultiSelect) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -184,7 +218,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMultiSelect, rows]);
+  }, [rows]);
 
   const handleColumnClick = useCallback((targetCol: number) => {
     if (isAnimating || targetCol === selectedColumn) { setSelectedColumn(targetCol); return; }
@@ -203,11 +237,27 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   useEffect(() => { return () => { if (animationTimerRef.current) clearTimeout(animationTimerRef.current); }; }, []);
 
   const trackHeight = TABLE_HEIGHT - HEADER_HEIGHT;
-  const DRUM_BUTTON_WIDTH = 144, DRUM_GAP = 40, DRUM_LEFT_OFFSET = 30, TEXT_HEIGHT = 17, TEXT_TO_LINE = 7, LINE_THICKNESS = 3, TEXT_TOP = 30;
+
+  const TEXT_HEIGHT = 17;
+  const LINE_THICKNESS = 3;
   const COLUMN_BLOCK_SIZE = 35, COLUMN_LINE_WIDTH = 29, COLUMN_GAP = 14;
-  const COLUMNS_LABEL_LEFT = totalDrums > 1 ? 405 : 0;
+
+  const TEXT_TOP = 30;
+  const TEXT_TO_LINE = 7;
   const LINE_TOP = TEXT_TOP + TEXT_HEIGHT + TEXT_TO_LINE;
   const LINE_BOTTOM = HEADER_HEIGHT - LINE_TOP - LINE_THICKNESS;
+
+  const HEADER_CHECKBOX_LEFT = 20;
+  const HEADER_CHECKBOX_SIZE = 18;
+
+  const DRUM_LABEL_WIDTH = 128;
+  const DRUM_LABEL_HEIGHT = 18;
+  const DRUM_LABEL_TOP = 27;
+  const DRUM_UNDERLINE_TOP = DRUM_LABEL_TOP + DRUM_LABEL_HEIGHT + 8;
+  const DRUM_UNDERLINE_WIDTH = 128;
+  const CHECKBOX_TO_FIRST_DRUM = 35;
+  const DRUM_GAP_BETWEEN = 34;
+  const DRUM_TO_COLUMNS_LABEL = 45;
 
   const getColumnColor = (col: number) => animationHighlight === col ? '#2D4059' : isAnimating ? 'rgba(45, 64, 89, 0.6)' : selectedColumn === col ? '#2D4059' : 'rgba(45, 64, 89, 0.6)';
   const getColumnLineColor = (col: number) => animationHighlight === col ? '#666EFE' : isAnimating ? 'rgba(45, 64, 89, 0.06)' : selectedColumn === col ? '#666EFE' : 'rgba(45, 64, 89, 0.06)';
@@ -222,21 +272,71 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     );
   };
 
+  const handleCellClear = useCallback((rowStart: number) => {
+    onCellLocalClear(rowStart, selectedColumn, selectedDrum);
+  }, [onCellLocalClear, selectedColumn, selectedDrum]);
+
+  const headerBgColor = isAllSelected ? '#DEEEFF' : '#FFFFFF';
+
+  const firstDrumLeft = HEADER_CHECKBOX_LEFT + HEADER_CHECKBOX_SIZE + CHECKBOX_TO_FIRST_DRUM;
+  const secondDrumLeft = firstDrumLeft + DRUM_UNDERLINE_WIDTH + DRUM_GAP_BETWEEN;
+  const columnsLabelLeft = secondDrumLeft + DRUM_UNDERLINE_WIDTH + DRUM_TO_COLUMNS_LABEL;
+
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', height: `${TABLE_HEIGHT}px` }}>
       <div style={{ width: '1183px', height: `${TABLE_HEIGHT}px`, backgroundColor: '#F3F4F6', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'relative', filter: isBlurred ? 'blur(2px)' : 'none', transition: 'filter 0.3s ease', pointerEvents: isBlurred ? 'none' : 'auto' }}>
-        <div style={{ height: `${HEADER_HEIGHT}px`, minHeight: `${HEADER_HEIGHT}px`, backgroundColor: '#FFFFFF', borderTopLeftRadius: '10px', borderTopRightRadius: '10px', borderBottom: '1px solid #E5E7EB', position: 'relative', display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ height: `${HEADER_HEIGHT}px`, minHeight: `${HEADER_HEIGHT}px`, backgroundColor: headerBgColor, borderTopLeftRadius: '10px', borderTopRightRadius: '10px', borderBottom: '1px solid #E5E7EB', position: 'relative', display: 'flex', alignItems: 'stretch', transition: 'background-color 0.2s ease' }}>
+
+          <div
+            onClick={handleSelectAll}
+            style={{
+              position: 'absolute', left: HEADER_CHECKBOX_LEFT, top: '50%', transform: 'translateY(-50%)',
+              width: HEADER_CHECKBOX_SIZE, height: HEADER_CHECKBOX_SIZE, cursor: 'pointer', zIndex: 5,
+            }}
+          >
+            <img
+              src={isAllSelected ? CheckboxIcon18OnBlue : CheckboxIcon18OffBlack}
+              alt=""
+              style={{ width: HEADER_CHECKBOX_SIZE, height: HEADER_CHECKBOX_SIZE, display: 'block' }}
+            />
+          </div>
+
           {totalDrums > 1 && (
-            <div style={{ position: 'relative', width: `${COLUMNS_LABEL_LEFT}px`, height: '100%', flexShrink: 0 }}>
-              {Array.from({ length: totalDrums }, (_, i) => i + 1).map((drum) => (
-                <React.Fragment key={drum}>
-                  <button onClick={() => handleDrumClick(drum)} style={{ position: 'absolute', left: `${DRUM_LEFT_OFFSET + (drum - 1) * (DRUM_BUTTON_WIDTH + DRUM_GAP)}px`, top: `${TEXT_TOP}px`, width: `${DRUM_BUTTON_WIDTH}px`, height: `${TEXT_HEIGHT}px`, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '14px', letterSpacing: '1px', color: selectedDrum === drum ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${TEXT_HEIGHT}px`, transition: 'color 0.3s ease' }}>Барабан {drum}</button>
-                  <div style={{ position: 'absolute', top: `${LINE_TOP}px`, left: `${DRUM_LEFT_OFFSET + (drum - 1) * (DRUM_BUTTON_WIDTH + DRUM_GAP)}px`, width: `${DRUM_BUTTON_WIDTH}px`, height: `${LINE_THICKNESS}px`, backgroundColor: selectedDrum === drum ? '#666EFE' : 'rgba(45, 64, 89, 0.06)', borderRadius: '1.5px', transition: 'background-color 0.3s ease' }} />
-                </React.Fragment>
-              ))}
-            </div>
+            <>
+              <div style={{ position: 'absolute', left: firstDrumLeft, top: DRUM_LABEL_TOP, width: DRUM_LABEL_WIDTH, height: DRUM_LABEL_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button
+                  onClick={() => handleDrumClick(1)}
+                  style={{ width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 15, color: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_LABEL_HEIGHT}px`, transition: 'color 0.3s ease' }}
+                >
+                  Левый барабан
+                </button>
+              </div>
+              <div style={{ position: 'absolute', left: firstDrumLeft, top: DRUM_UNDERLINE_TOP, width: DRUM_UNDERLINE_WIDTH, height: LINE_THICKNESS, backgroundColor: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.06)', borderRadius: '1.5px', transition: 'background-color 0.3s ease' }} />
+
+              <div style={{ position: 'absolute', left: secondDrumLeft, top: DRUM_LABEL_TOP, width: DRUM_LABEL_WIDTH, height: DRUM_LABEL_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button
+                  onClick={() => handleDrumClick(2)}
+                  style={{ width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 15, color: selectedDrum === 2 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_LABEL_HEIGHT}px`, transition: 'color 0.3s ease' }}
+                >
+                  Правый барабан
+                </button>
+              </div>
+              <div style={{ position: 'absolute', left: secondDrumLeft, top: DRUM_UNDERLINE_TOP, width: DRUM_UNDERLINE_WIDTH, height: LINE_THICKNESS, backgroundColor: selectedDrum === 2 ? '#666EFE' : 'rgba(45, 64, 89, 0.06)', borderRadius: '1.5px', transition: 'background-color 0.3s ease' }} />
+            </>
           )}
-          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', letterSpacing: '1px', color: '#2D4059', whiteSpace: 'nowrap', flexShrink: 0, alignSelf: 'center', marginLeft: totalDrums > 1 ? '0px' : '30px' }}>Столбцы:</span>
+
+          <span style={{
+            position: 'absolute',
+            left: totalDrums > 1 ? columnsLabelLeft : HEADER_CHECKBOX_LEFT + HEADER_CHECKBOX_SIZE + 56,
+            top: totalDrums > 1 ? 30 : '50%',
+            transform: totalDrums > 1 ? 'none' : 'translateY(-50%)',
+            fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 13, letterSpacing: '1px',
+            color: '#2D4059', whiteSpace: 'nowrap', height: totalDrums > 1 ? TEXT_HEIGHT : 'auto',
+            lineHeight: `${TEXT_HEIGHT}px`,
+          }}>
+            Столбцы:
+          </span>
+
           <div style={{ display: 'flex', gap: `${COLUMN_GAP}px`, height: '100%', position: 'relative', marginLeft: 'auto', marginRight: '30px' }}>
             {headerColumns.map((hc) => {
               const merged = mergedColumns.get(hc.originalCol);
@@ -258,7 +358,6 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
                 key={row.id}
                 row={row}
                 isSelected={selectedCellIds.has(row.id)}
-                isMultiSelect={isMultiSelect}
                 selectedColumn={selectedColumn}
                 isMerged={row.isMerged}
                 mergeCount={row.mergeCount}
@@ -268,11 +367,15 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
                 colEnd={row.colEnd}
                 cellData={cellData}
                 highlightText={highlightText}
-                onSelect={handleSelect}
+                onRowClick={handleRowClick}
+                onCheckboxClick={handleCheckboxClick}
                 onDoubleClick={handleDoubleClick}
-                onClear={() => onCellLocalClear(row.rowStart, selectedColumn, selectedDrum)}
+                onClear={() => handleCellClear(row.rowStart)}
                 onOpenDetails={() => onOpenDetails(row.rowStart, selectedColumn, cellData)}
                 setRef={setCellRef}
+                expandedCellId={expandedCellId}
+                onExpandToggle={handleExpandToggle}
+                multiSelectCount={selectedCellIds.size}
               />
             );
           })}

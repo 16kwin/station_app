@@ -1,4 +1,4 @@
-// StockLevelControlCreatePage.tsx — форма документа "Контроль уровня остатков" (с чтением query для быстрого создания)
+// StockLevelControlCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (убрана "Дата привязки" в строках)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -48,7 +48,6 @@ interface BindingRow {
   materialUid: string;
   materialName: string;
   materialArticle: string;
-  bindingDate: string;
   minStock: number | '';
   criticalStock: number | '';
 }
@@ -176,7 +175,6 @@ const StockLevelControlCreatePage = () => {
           materialUid: qMaterialUid,
           materialName: qMaterialName,
           materialArticle: qMaterialArticle,
-          bindingDate: today,
           minStock: '',
           criticalStock: '',
         }]);
@@ -258,7 +256,6 @@ const StockLevelControlCreatePage = () => {
         materialUid: b.materialUid || '',
         materialName: b.materialName || '',
         materialArticle: b.materialArticle || '',
-        bindingDate: convertISOToDot(b.bindingDate || ''),
         minStock: b.minStock ?? '',
         criticalStock: b.criticalStock ?? '',
       }));
@@ -307,7 +304,7 @@ const StockLevelControlCreatePage = () => {
         bindings: bindings.map(b => ({
           uid: b.uid || null,
           materialUid: b.materialUid || null,
-          bindingDate: convertDotToISO(b.bindingDate) || isoDate,
+          bindingDate: isoDate,
           minStock: b.minStock === '' ? null : Number(b.minStock),
           criticalStock: b.criticalStock === '' ? null : Number(b.criticalStock),
         })),
@@ -369,7 +366,6 @@ const StockLevelControlCreatePage = () => {
       materialUid: '',
       materialName: '',
       materialArticle: '',
-      bindingDate: docDate,
       minStock: '',
       criticalStock: '',
     }]);
@@ -519,7 +515,6 @@ const StockLevelControlCreatePage = () => {
           <div style={{ height: 58, backgroundColor: '#666EFE', display: 'flex', alignItems: 'center', paddingLeft: 30, paddingRight: 30, gap: 0, color: '#FFFFFF' }}>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, width: 380 }}>Номенклатура</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, width: 160 }}>Артикул</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, width: 200 }}>Дата привязки</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, width: 200 }}>Мин. остаток</span>
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, flex: 1 }}>Крит. остаток</span>
             {!isPosted && (
@@ -560,17 +555,6 @@ const StockLevelControlCreatePage = () => {
                   )}
                 </div>
                 <span style={{ width: 160, fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.materialArticle || '-'}</span>
-                <div style={{ width: 200 }}>
-                  <input
-                    type="text"
-                    value={row.bindingDate}
-                    disabled={isPosted}
-                    onChange={e => updateRow(row.localId, 'bindingDate', formatDateInput(e.target.value))}
-                    placeholder="__.__.____"
-                    maxLength={10}
-                    style={{ width: 170, height: 34, borderRadius: 8, border: '1px solid ' + (row.bindingDate ? '#666EFE' : '#A0A3BD'), paddingLeft: 10, paddingRight: 10, fontFamily: 'Inter, sans-serif', fontSize: 14, color: row.bindingDate ? '#666EFE' : '#A0A3BD', outline: 'none' }}
-                  />
-                </div>
                 <div style={{ width: 200 }}>
                   <input
                     type="text"

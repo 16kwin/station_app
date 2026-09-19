@@ -1,4 +1,4 @@
-// SchablonPopup.tsx — ПОЛНЫЙ ФАЙЛ
+// SchablonPopup.tsx — ПОЛНЫЙ ФАЙЛ (после создания шаблон сразу открывается, как из каталога)
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -101,10 +101,7 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
   const [createTemplateName, setCreateTemplateName] = useState('');
   const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState<number | null>(null);
   const [createTemplateCategoryName, setCreateTemplateCategoryName] = useState('');
-  const [createTemplateConfigUid, setCreateTemplateConfigUid] = useState('');
-  const [createTemplateConfigName, setCreateTemplateConfigName] = useState('');
   const [showCreateCategorySelect, setShowCreateCategorySelect] = useState(false);
-  const [showCreateConfigSelect, setShowCreateConfigSelect] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
   const [categoryContextMenu, setCategoryContextMenu] = useState<CategoryContextMenu | null>(null);
   const [templateContextMenu, setTemplateContextMenu] = useState<TemplateContextMenu | null>(null);
@@ -289,31 +286,53 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
 
   const handleCreateTemplateSubmit = async () => {
     if (!createTemplateName.trim()) return;
+    if (!stationConfUid) {
+      console.error('Не удалось создать шаблон: у станции не задана конфигурация');
+      return;
+    }
     setIsCreatingTemplate(true);
     try {
-      const body: any = { name: createTemplateName.trim(), configuration: '' };
+      const body: any = {
+        name: createTemplateName.trim(),
+        configuration: '',
+        configurationUid: stationConfUid,
+      };
       if (createTemplateCategoryId && createTemplateCategoryId !== 0) {
         body.categoryId = createTemplateCategoryId;
       }
-      if (createTemplateConfigUid) {
-        body.configurationUid = createTemplateConfigUid;
-      } else if (configurationUid) {
-        body.configurationUid = configurationUid;
-      }
       const response = await AxiosService.post(ConstantInfo.restApiTemplates, body);
-      setNewlyCreatedUid(response.data.uid);
+      const newUid = response.data.uid;
+      const newName = response.data.name || createTemplateName.trim();
+      setNewlyCreatedUid(newUid);
       if (createTemplateCategoryId) {
         openCategoriesRef.current.add(createTemplateCategoryId);
       } else {
         openCategoriesRef.current.add(0);
+      }
+      // Сразу привязываем созданный шаблон к станции
+      if (uid) {
+        try {
+          await AxiosService.put(`/api/stations/${uid}`, { activeTemplateUid: newUid });
+          setActiveTemplateUid(newUid);
+          setActiveTemplateName(newName);
+          onTemplateAssigned?.(newUid);
+        } catch (e) {
+          console.error('Ошибка привязки созданного шаблона к станции:', e);
+        }
       }
       await fetchData();
       setShowCreateTemplatePopup(false);
       setCreateTemplateName('');
       setCreateTemplateCategoryId(null);
       setCreateTemplateCategoryName('');
-      setCreateTemplateConfigUid('');
-      setCreateTemplateConfigName('');
+
+      // Закрываем попап и открываем вкладку шаблона (как из каталога)
+      handleClose();
+      const params = new URLSearchParams();
+      if (uid) params.set('stationUid', uid);
+      if (name) params.set('stationName', name);
+      const queryString = params.toString();
+      navigate(`/documents/schablon/${newUid}${queryString ? `?${queryString}` : ''}`);
     } catch (error) {
       console.error('Ошибка создания шаблона:', error);
     } finally {
@@ -326,12 +345,6 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     setCreateTemplateCategoryId(isNaN(numId) || numId === 0 ? null : numId);
     setCreateTemplateCategoryName(name);
     setShowCreateCategorySelect(false);
-  };
-
-  const handleCreateConfigSelect = (id: string, name: string) => {
-    setCreateTemplateConfigUid(id);
-    setCreateTemplateConfigName(name);
-    setShowCreateConfigSelect(false);
   };
 
   const handleCreateGroup = async (groupName: string) => {
@@ -364,8 +377,6 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     setCreateTemplateName('');
     setCreateTemplateCategoryId(categoryContextMenu.categoryId);
     setCreateTemplateCategoryName(categoryContextMenu.categoryName);
-    setCreateTemplateConfigUid('');
-    setCreateTemplateConfigName('');
     setCategoryContextMenu(null);
     setShowCreateTemplatePopup(true);
   };
@@ -568,8 +579,6 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
     setCreateTemplateName('');
     setCreateTemplateCategoryId(null);
     setCreateTemplateCategoryName('');
-    setCreateTemplateConfigUid('');
-    setCreateTemplateConfigName('');
     setShowCreateTemplatePopup(true);
   };
 
@@ -784,17 +793,10 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
               <input type="text" value={createTemplateName} onChange={e => setCreateTemplateName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplateSubmit(); else if (e.key === 'Escape') setShowCreateTemplatePopup(false); }} placeholder="Введите название" autoFocus style={inputStyle} />
             </div>
             <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Конфигурация</label>
-              <div onClick={() => setShowCreateConfigSelect(true)} style={{ ...selectFieldStyle, border: createTemplateConfigUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
-                <img src={createTemplateConfigUid ? Icon32 : Icon31} alt="" style={{ width: '14.5px', height: '18px', flexShrink: 0 }} />
-                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateConfigUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateConfigName || 'Выберите конфигурацию'}</span>
-              </div>
-            </div>
-            <div>
               <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Группа</label>
               <div onClick={() => setShowCreateCategorySelect(true)} style={{ ...selectFieldStyle, border: createTemplateCategoryId ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)' }}>
                 <img src={PopupIcon4} alt="" style={{ width: '14.5px', height: '18px', flexShrink: 0 }} />
-                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryId ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Выберите группу'}</span>
+                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryId ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Без категории'}</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
@@ -806,7 +808,6 @@ const SchablonPopup: React.FC<SchablonPopupProps> = ({
       )}
 
       <CatalogSelectPopup isOpen={showCreateCategorySelect} onClose={() => setShowCreateCategorySelect(false)} onSelect={handleCreateCategorySelect} popupType="templateCategory" />
-      <CatalogSelectPopup isOpen={showCreateConfigSelect} onClose={() => setShowCreateConfigSelect(false)} onSelect={handleCreateConfigSelect} popupType="stationConfiguration" />
 
       <TemplateCreateGroupPopup isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} onSubmit={handleCreateGroup} isLoading={isCreatingGroup} />
 

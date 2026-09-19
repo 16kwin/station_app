@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен nomenclatureTypeFilter для analogSelect)
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен stationFilter для фильтрации станций по isTmc / isSgd)
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../elements/CustomScrollbar';
@@ -186,7 +186,6 @@ const convertBackendTree = (backendGroups: BackendGroup[]): TreeItem[] => {
   }));
 };
 
-// Материал конвертируется с сохранением имени типа материала (для фильтра по ТМЦ/Готовая деталь)
 const convertBackendTreeWithMaterials = (
   backendGroups: BackendGroup[],
   excludeUids: string[] = [],
@@ -213,7 +212,6 @@ const convertBackendTreeWithMaterials = (
       .map(processMaterial)
       .filter((m: TreeItem) => {
         if (!typeFilter) return true;
-        // если тип не задан у материала — скрываем при активном фильтре
         return m.typeMaterialName === typeFilter;
       });
 
@@ -221,7 +219,6 @@ const convertBackendTreeWithMaterials = (
       ? convertBackendTreeWithMaterials(g.children, excludeUids, typeFilter)
       : [];
 
-    // пустые группы без материалов и без детей — не показываем
     if (typeFilter && materialItems.length === 0 && childGroups.length === 0) continue;
 
     result.push({
@@ -281,6 +278,11 @@ const getDataArray = (respData: any): any[] => {
   return [];
 };
 
+interface StationFilter {
+  needTmc: boolean;
+  needSgd: boolean;
+}
+
 interface CatalogSelectPopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -290,6 +292,7 @@ interface CatalogSelectPopupProps {
   excludeUids?: string[];
   zIndexOverride?: number;
   nomenclatureTypeFilter?: 'ТМЦ' | 'Готовая деталь';
+  stationFilter?: StationFilter;
 }
 
 const ROW_HEIGHT = 54;
@@ -312,7 +315,7 @@ const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, 
 };
 
 const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
-  isOpen, onClose, onSelect, popupType, filterParam, excludeUids = [], zIndexOverride, nomenclatureTypeFilter,
+  isOpen, onClose, onSelect, popupType, filterParam, excludeUids = [], zIndexOverride, nomenclatureTypeFilter, stationFilter,
 }) => {
   const { openTab, activeTabId } = useTabs();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -454,12 +457,24 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'station') {
         const resp = await AxiosService.get(ConstantInfo.restApiStationsCrud(USER_ID));
         const items = getDataArray(resp.data?.data ?? resp.data);
-        const filtered = filterParam
-          ? items.filter((s: any) =>
-              s.configurationUid === filterParam ||
-              s.configurationName === filterParam
-            )
-          : items;
+        let filtered = items;
+        if (filterParam) {
+          filtered = filtered.filter((s: any) =>
+            s.configurationUid === filterParam ||
+            s.configurationName === filterParam
+          );
+        }
+        // Фильтр по флагам isTmc / isSgd
+        if (stationFilter) {
+          if (stationFilter.needSgd) {
+            // Если нужны СГД — показываем только те, у которых и ТМЦ, и СГД
+            filtered = filtered.filter((s: any) => s.isTmc === true && s.isSgd === true);
+          } else if (stationFilter.needTmc) {
+            // Если только ТМЦ — показываем только те, у которых ТМЦ
+            filtered = filtered.filter((s: any) => s.isTmc === true);
+          }
+          // Если оба false — показываем все
+        }
         setData(filtered.map((item: any) => ({
           id: item.uid,
           name: item.name,
@@ -497,7 +512,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       loadData();
       if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData();
     }
-  }, [internalOpen, popupType, filterParam, excludeUids.join(','), nomenclatureTypeFilter]);
+  }, [internalOpen, popupType, filterParam, excludeUids.join(','), nomenclatureTypeFilter, stationFilter?.needTmc, stationFilter?.needSgd]);
 
   useEffect(() => {
     if (internalOpen) { loadData(); if (config.hasCreateButton && !isCatalog && !isTemplateCategory) loadReferenceData(); }

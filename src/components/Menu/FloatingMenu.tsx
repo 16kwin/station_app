@@ -1,4 +1,4 @@
-// FloatingMenu.tsx — ПОЛНЫЙ ФАЙЛ (в документах добавлен Контроль уровня остатков)
+// FloatingMenu.tsx — ПОЛНЫЙ ФАЙЛ (Шаблоны пополнения перенесены из справочников в документы)
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useAuth } from '../../services/AuthContext';
@@ -55,7 +55,6 @@ const referencesItems = [
   { label: 'Модели', path: '/references/models' },
   { label: 'Страны', path: '/references/countries' },
   { label: 'Поставщики', path: '/references/suppliers' },
-  { label: 'Шаблоны пополнения', path: '/references/templates' },
   { label: 'Предприятия', path: '/references/enterprises' },
   { label: 'Цеха', path: '/references/workshops' },
   { label: 'Участки', path: '/references/sections' },
@@ -69,6 +68,7 @@ const referencesItems = [
 ];
 
 const documentsItems = [
+  { label: 'Шаблоны пополнения', path: '/references/templates' },
   { label: 'Контроль уровня остатков', path: '/documents/stock-level-control' },
 ];
 
