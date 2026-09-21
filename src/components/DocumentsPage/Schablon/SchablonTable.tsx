@@ -1,31 +1,16 @@
-// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ
+// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (подсветка поиска в ячейках)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
 
-interface TableRow {
-  id: number;
-  name: string;
-  isMerged: boolean;
-  mergeCount: number;
-  rowStart: number;
-  rowEnd: number;
-  colStart: number;
-  colEnd: number;
-  modelCellIds: string[];
-}
-
 interface ModelCell {
   id: string;
-  column?: number;
-  row?: number;
   drum?: number;
-}
-
-interface ConfigCell {
-  id: string;
-  modelCellIds: string[];
-  deleted?: boolean;
+  column: number;
+  row: number;
+  colSpan: number;
+  rowSpan: number;
+  deleted: boolean;
 }
 
 interface CellData {
@@ -58,17 +43,20 @@ interface SchablonTableProps {
   onCellDoubleClick: (id: number, column: number, selectedIds: Set<number>) => void;
   isBlurred: boolean;
   modelCells: ModelCell[];
-  configCells: ConfigCell[];
   cellsData: CellData[];
+  filteredCells?: CellData[] | null;
+  highlightText?: string;
   onCellCleared: () => void;
   onOpenDetails: (rowId: number, column: number, cellData?: CellData) => void;
+  onCellLocalClear: (rowId: number, column: number, drum: number) => void;
 }
 
-const SchablonTable: React.FC<SchablonTableProps> = ({ 
-  isMultiSelect, onEnableMultiSelect, onSelectionChange, 
+const SchablonTable: React.FC<SchablonTableProps> = ({
+  isMultiSelect, onEnableMultiSelect, onSelectionChange,
   totalRows, totalColumns, totalDrums, cellType,
   selectedDrum, onDrumChange, onCellDoubleClick, isBlurred,
-  modelCells, configCells, cellsData, onCellCleared, onOpenDetails
+  modelCells, cellsData, filteredCells = null, highlightText,
+  onOpenDetails, onCellLocalClear
 }) => {
   const [selectedColumn, setSelectedColumn] = useState<number>(1);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -83,28 +71,16 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   const ROW_HEIGHT = 80;
   const VISIBLE_ROWS = 6;
 
-  const displayModelCells = cellType === 'drum' 
-    ? modelCells.filter(c => c.drum === selectedDrum)
-    : modelCells;
-
-  const activeConfigCells = configCells.filter(cc => !cc.deleted);
+  const displayModelCells = cellType === 'drum'
+    ? modelCells.filter(c => c.drum === selectedDrum && !c.deleted)
+    : modelCells.filter(c => !c.deleted);
 
   const mergedColumns = new Map<number, { colStart: number; colEnd: number }>();
-  
-  activeConfigCells.forEach(cc => {
-    const cols = [...new Set(cc.modelCellIds
-      .map(mid => displayModelCells.find(mc => mc.id === mid))
-      .filter((mc): mc is ModelCell => mc !== undefined)
-      .map(mc => mc.column!)
-      .filter(c => c !== undefined)
-    )].sort((a, b) => a - b);
-    
-    if (cols.length > 1) {
-      const colStart = cols[0];
-      const colEnd = cols[cols.length - 1];
-      for (let c = colStart; c <= colEnd; c++) {
-        mergedColumns.set(c, { colStart, colEnd });
-      }
+  displayModelCells.forEach(mc => {
+    if (mc.colSpan > 1) {
+      const colStart = mc.column;
+      const colEnd = mc.column + mc.colSpan - 1;
+      for (let c = colStart; c <= colEnd; c++) mergedColumns.set(c, { colStart, colEnd });
     }
   });
 
@@ -120,49 +96,37 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     }
   }
 
-  const configCellRows = new Map<string, { rowStart: number; rowEnd: number; colStart: number; colEnd: number; isMerged: boolean; mergeCount: number; modelCellIds: string[] }>();
-  
-  activeConfigCells.forEach(cc => {
-    const relatedModelCells = cc.modelCellIds
-      .map(mid => displayModelCells.find(mc => mc.id === mid))
-      .filter((mc): mc is ModelCell => mc !== undefined);
-    
-    const cols = [...new Set(relatedModelCells.map(mc => mc.column!).filter(c => c !== undefined))].sort((a, b) => a - b);
-    const colStart = cols[0] || 1;
-    const colEnd = cols[cols.length - 1] || 1;
-    
-    const columnCells = relatedModelCells.filter(mc => mc.column === selectedColumn);
-    
-    if (columnCells.length > 0) {
-      const rows = columnCells.map(mc => mc.row!).sort((a, b) => a - b);
-      const minRow = rows[0];
-      const maxRow = rows[rows.length - 1];
-      
-      configCellRows.set(cc.id, {
-        rowStart: minRow,
-        rowEnd: maxRow,
-        colStart,
-        colEnd,
-        isMerged: cc.modelCellIds.length > 1,
-        mergeCount: cc.modelCellIds.length,
-        modelCellIds: cc.modelCellIds
-      });
-    }
-  });
+  const filteredKeys = React.useMemo(() => {
+    if (filteredCells === null) return null;
+    const keys = new Set<string>();
+    filteredCells.forEach(c => {
+      keys.add(`${c.drumNumber ?? 0}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`);
+    });
+    return keys;
+  }, [filteredCells]);
 
-  const rows: TableRow[] = [...configCellRows.values()]
-    .sort((a, b) => a.rowStart - b.rowStart)
-    .map(r => ({ 
-      id: r.rowStart, 
-      name: `Ячейка ${r.rowStart}`, 
-      isMerged: r.isMerged, 
-      mergeCount: r.mergeCount,
-      rowStart: r.rowStart,
-      rowEnd: r.rowEnd,
-      colStart: r.colStart,
-      colEnd: r.colEnd,
-      modelCellIds: r.modelCellIds
-    }));
+  const rows = React.useMemo(() => {
+    const baseRows = displayModelCells
+      .filter(mc => mc.column === selectedColumn)
+      .map(mc => ({
+        id: mc.row,
+        name: `Ячейка ${mc.row}`,
+        isMerged: mc.colSpan > 1 || mc.rowSpan > 1,
+        mergeCount: mc.colSpan * mc.rowSpan,
+        rowStart: mc.row,
+        rowEnd: mc.row + mc.rowSpan - 1,
+        colStart: mc.column,
+        colEnd: mc.column + mc.colSpan - 1,
+      }))
+      .sort((a, b) => a.rowStart - b.rowStart);
+
+    if (filteredKeys === null) return baseRows;
+
+    return baseRows.filter(r => {
+      const key = `${selectedDrum}-${selectedColumn}-${r.id}`;
+      return filteredKeys.has(key);
+    });
+  }, [displayModelCells, selectedColumn, filteredKeys, selectedDrum]);
 
   const emptyRows = Math.max(0, VISIBLE_ROWS - rows.length);
 
@@ -193,7 +157,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     setSelectedCellIds(prev => prev.has(id) && prev.size === 1 ? new Set() : new Set([id]));
   };
 
-  const handleDoubleClick = (id: number) => {};
+  const handleDoubleClick = (_id: number) => {};
 
   const setCellRef = (id: number, element: HTMLDivElement | null) => {
     if (element) cellRefsMap.current.set(id, element);
@@ -250,10 +214,10 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
 
   const handleDrumClick = (drum: number) => { if (drum === selectedDrum) return; onDrumChange(drum); setSelectedCellIds(new Set()); };
 
-  const getCellDataForRow = (row: TableRow): CellData | undefined => {
-    return cellsData.find(cd => 
-      cd.numberCell === row.id && 
-      cd.columnNumber === selectedColumn && 
+  const getCellDataForRow = (row: { id: number }): CellData | undefined => {
+    return cellsData.find(cd =>
+      cd.numberCell === row.id &&
+      cd.columnNumber === selectedColumn &&
       (cd.drumNumber == null || cd.drumNumber === selectedDrum)
     );
   };
@@ -287,9 +251,31 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
           </div>
         </div>
         <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          {rows.map((row) => (
-            <SchablonTableCell key={row.id} row={row} isSelected={selectedCellIds.has(row.id)} isMultiSelect={isMultiSelect} selectedColumn={selectedColumn} isMerged={row.isMerged} mergeCount={row.mergeCount} rowStart={row.rowStart} rowEnd={row.rowEnd} colStart={row.colStart} colEnd={row.colEnd} cellData={getCellDataForRow(row)} onSelect={handleSelect} onDoubleClick={handleDoubleClick} onClear={onCellCleared} onOpenDetails={() => onOpenDetails(row.rowStart, selectedColumn, getCellDataForRow(row))} setRef={setCellRef} />
-          ))}
+          {rows.map((row) => {
+            const cellData = getCellDataForRow(row);
+            return (
+              <SchablonTableCell
+                key={row.id}
+                row={row}
+                isSelected={selectedCellIds.has(row.id)}
+                isMultiSelect={isMultiSelect}
+                selectedColumn={selectedColumn}
+                isMerged={row.isMerged}
+                mergeCount={row.mergeCount}
+                rowStart={row.rowStart}
+                rowEnd={row.rowEnd}
+                colStart={row.colStart}
+                colEnd={row.colEnd}
+                cellData={cellData}
+                highlightText={highlightText}
+                onSelect={handleSelect}
+                onDoubleClick={handleDoubleClick}
+                onClear={() => onCellLocalClear(row.rowStart, selectedColumn, selectedDrum)}
+                onOpenDetails={() => onOpenDetails(row.rowStart, selectedColumn, cellData)}
+                setRef={setCellRef}
+              />
+            );
+          })}
           {Array.from({ length: emptyRows }).map((_, i) => <div key={`empty-${i}`} style={{ height: `${ROW_HEIGHT}px`, backgroundColor: '#FFFFFF', boxSizing: 'border-box', borderTop: '0.5px solid #E5E7EB', borderBottom: '0.5px solid #E5E7EB' }} />)}
         </div>
       </div>

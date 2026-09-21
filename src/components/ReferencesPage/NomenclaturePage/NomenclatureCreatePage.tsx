@@ -1,5 +1,5 @@
-// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (добавлено поле "Выпуск")
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+// NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ с сохранением всех данных в черновик
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,7 +42,9 @@ export interface LocalCode { codeType: string; codeValue: string; codeKind: stri
 export interface ServerCode { uid: string; codeType: string; codeValue: string; codeKind: string; fileUrl: string | null; originalName: string | null; }
 
 export interface CommonProps {
-  uid?: string; code?: string; name: string; article: string; description: string; isEdit: boolean; isSaving: boolean; isUploading: boolean; isUploadingBlueprint: boolean;
+  uid?: string; 
+  tabInstanceId?: string;
+  code?: string; name: string; article: string; description: string; isEdit: boolean; isSaving: boolean; isUploading: boolean; isUploadingBlueprint: boolean;
   images: ImageItem[]; blueprints: ImageItem[]; documents: DocumentItem[]; prices: PriceItem[]; suppliers: SupplierOption[];
   selectedImageIndex: number; selectedBlueprintIndex: number; selectedCatalog: string; selectedCatalogId: string;
   selectedAccountingGroup: string; selectedAccountingGroupId: string; accountingGroupOpen: boolean;
@@ -323,6 +325,7 @@ const NomenclatureCreatePage = () => {
     usage: boolean; wasteMaterial: boolean; recycleMaterial: boolean;
   } | null>(null);
   const [initialImagesCount, setInitialImagesCount] = useState(0);
+  const [initialBlueprintsCount, setInitialBlueprintsCount] = useState(0);
   
   const hasInitializedChars = useRef(false);
 
@@ -392,21 +395,9 @@ const NomenclatureCreatePage = () => {
       localCharacteristics,
       localImagesMeta: localImages.map(img => ({ key: `${uid}_${tabInstanceId}_img_${img.url}`, fileName: img.file.name })),
       localBlueprintsMeta: localBlueprints.map(bp => ({ key: `${uid}_${tabInstanceId}_bp_${bp.url}`, fileName: bp.file.name })),
-      localBarcodesMeta: localBarcodes.map(bc => ({ 
-        key: '', 
-        codeType: bc.codeType, codeValue: bc.codeValue, codeKind: bc.codeKind, 
-        fileName: null 
-      })),
-      localSkusMeta: localSkus.map(sku => ({ 
-        key: '', 
-        codeType: sku.codeType, codeValue: sku.codeValue, codeKind: sku.codeKind, 
-        fileName: null 
-      })),
-      localQrCodesMeta: localQrCodes.map(qr => ({ 
-        key: '', 
-        codeType: qr.codeType, codeValue: qr.codeValue, codeKind: qr.codeKind, 
-        fileName: null 
-      })),
+      localBarcodesMeta: localBarcodes.map(bc => ({ key: '', codeType: bc.codeType, codeValue: bc.codeValue, codeKind: bc.codeKind, fileName: null })),
+      localSkusMeta: localSkus.map(sku => ({ key: '', codeType: sku.codeType, codeValue: sku.codeValue, codeKind: sku.codeKind, fileName: null })),
+      localQrCodesMeta: localQrCodes.map(qr => ({ key: '', codeType: qr.codeType, codeValue: qr.codeValue, codeKind: qr.codeKind, fileName: null })),
       localDocumentsMeta: localDocuments.map(doc => ({ key: `${uid}_${tabInstanceId}_doc_${doc.localId}`, localId: doc.localId, documentName: doc.documentName, fileName: doc.file.name })),
       localSuppliesMeta: localSupplies.map(sup => ({ 
         key: sup.file ? `${uid}_${tabInstanceId}_sup_${sup.localId}` : '', 
@@ -448,23 +439,10 @@ const NomenclatureCreatePage = () => {
   const restoreLocalFiles = useCallback(async (draft: DraftData) => {
     if (!uid) return;
     
-    const restoredImages: LocalImageItem[] = [];
-    for (const imgMeta of (draft.localImagesMeta || [])) {
-      const file = await getFileFromIndexedDB(imgMeta.key);
-      if (file) {
-        restoredImages.push({ file, url: URL.createObjectURL(file) });
-      }
+    if (draft.localCharacteristics && draft.localCharacteristics.length > 0) {
+      setLocalCharacteristics(draft.localCharacteristics);
+      setInitialCharacteristics(JSON.parse(JSON.stringify(draft.localCharacteristics)));
     }
-    setLocalImages(restoredImages);
-    
-    const restoredBlueprints: LocalImageItem[] = [];
-    for (const bpMeta of (draft.localBlueprintsMeta || [])) {
-      const file = await getFileFromIndexedDB(bpMeta.key);
-      if (file) {
-        restoredBlueprints.push({ file, url: URL.createObjectURL(file) });
-      }
-    }
-    setLocalBlueprints(restoredBlueprints);
     
     const restoredBarcodes: LocalCode[] = (draft.localBarcodesMeta || []).map(bcMeta => ({
       codeType: bcMeta.codeType,
@@ -492,6 +470,24 @@ const NomenclatureCreatePage = () => {
       preview: null,
     }));
     setLocalQrCodes(restoredQrCodes);
+    
+    const restoredImages: LocalImageItem[] = [];
+    for (const imgMeta of (draft.localImagesMeta || [])) {
+      const file = await getFileFromIndexedDB(imgMeta.key);
+      if (file) {
+        restoredImages.push({ file, url: URL.createObjectURL(file) });
+      }
+    }
+    setLocalImages(restoredImages);
+    
+    const restoredBlueprints: LocalImageItem[] = [];
+    for (const bpMeta of (draft.localBlueprintsMeta || [])) {
+      const file = await getFileFromIndexedDB(bpMeta.key);
+      if (file) {
+        restoredBlueprints.push({ file, url: URL.createObjectURL(file) });
+      }
+    }
+    setLocalBlueprints(restoredBlueprints);
     
     const restoredDocuments: LocalDocument[] = [];
     for (const docMeta of (draft.localDocumentsMeta || [])) {
@@ -536,8 +532,8 @@ const NomenclatureCreatePage = () => {
     } catch (e) { console.error(e); } 
   }, [uid]);
 
-  const fetchCharacteristics = async () => { 
-    if (!uid) return; 
+  const fetchCharacteristics = async (): Promise<LocalCharacteristic[]> => { 
+    if (!uid) return []; 
     try { 
       const res = await AxiosService.get(ConstantInfo.restApiNomenclatureCharacteristics(uid));
       const serverChars = res.data || [];
@@ -548,7 +544,8 @@ const NomenclatureCreatePage = () => {
       }));
       setLocalCharacteristics(mapped);
       setInitialCharacteristics(JSON.parse(JSON.stringify(mapped)));
-    } catch (e) { console.error(e); } 
+      return mapped;
+    } catch (e) { console.error(e); return []; } 
   };
 
   useEffect(() => { const handler = (e: Event) => { if ((e as CustomEvent).detail?.tab !== undefined) setActiveTab((e as CustomEvent).detail.tab); }; window.addEventListener('navigateToTab', handler); return () => window.removeEventListener('navigateToTab', handler); }, []);
@@ -563,11 +560,9 @@ const NomenclatureCreatePage = () => {
     const init = async () => {
       if (isEditMode) { 
         setIsDataSaved(true);
-        await loadMaterialData(uid);
+        const materialData = await loadMaterialData(uid);
         await fetchCharacteristics();
         await fetchTypeAttributes(); 
-        await fetchImages(); 
-        await fetchBlueprints(); 
         await fetchDocuments(); 
         await fetchPrices(); 
         await fetchSuppliers(); 
@@ -602,7 +597,9 @@ const NomenclatureCreatePage = () => {
           setWasteMaterial(draft.wasteMaterial);
           setRecycleMaterial(draft.recycleMaterial);
           setLocalCharacteristics(draft.localCharacteristics || []);
+          setInitialCharacteristics(JSON.parse(JSON.stringify(draft.localCharacteristics || [])));
           await restoreLocalFiles(draft);
+          
           setInitialState({
             name: draft.name, article: draft.article, description: draft.description,
             selectedCatalog: draft.selectedCatalog, selectedCatalogId: draft.selectedCatalogId,
@@ -617,21 +614,14 @@ const NomenclatureCreatePage = () => {
             selectedCountry: draft.selectedCountry, selectedCountryId: draft.selectedCountryId,
             usage: draft.usage, wasteMaterial: draft.wasteMaterial, recycleMaterial: draft.recycleMaterial,
           });
+          
+          await fetchImages(); 
+          await fetchBlueprints();
         } else {
-          setInitialState({
-            name, article, description,
-            selectedCatalog, selectedCatalogId,
-            selectedAccountingGroup, selectedAccountingGroupId,
-            selectedNomenclatureGroup, selectedNomenclatureGroupId,
-            selectedNomenclatureType, selectedNomenclatureTypeId,
-            selectedRelease, selectedReleaseId,
-            selectedUnit, selectedUnitId,
-            selectedManufacturer, selectedManufacturerId,
-            selectedBrand, selectedBrandId,
-            selectedModel, selectedModelId,
-            selectedCountry, selectedCountryId,
-            usage, wasteMaterial, recycleMaterial,
-          });
+          await fetchImages(); 
+          await fetchBlueprints();
+          
+          setInitialState(materialData);
         }
         setIsDataLoaded(true);
       } else { 
@@ -718,7 +708,7 @@ const NomenclatureCreatePage = () => {
 
   const fetchSuppliers = async () => { try { setSuppliers((await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliers)).data || []); } catch (e) { console.error(e); } };
   const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid)); const imgs = (res.data || []).map((img: any) => ({ uid: img.uid, url: img.url ? ConstantInfo.fileDir + img.url.replace(/^\//, '') : '', originalName: img.originalName || '' })); setImages(imgs); setInitialImagesCount(imgs.length); } catch (e) { console.error(e); } };
-  const fetchBlueprints = async () => { if (!uid) return; try { setBlueprints(((await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid))).data || []).map((bp: any) => ({ uid: bp.uid, url: bp.url ? ConstantInfo.fileDir + bp.url.replace(/^\//, '') : '', originalName: bp.originalName || '' }))); } catch (e) { console.error(e); } };
+  const fetchBlueprints = async () => { if (!uid) return; try { const bps = ((await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid))).data || []).map((bp: any) => ({ uid: bp.uid, url: bp.url ? ConstantInfo.fileDir + bp.url.replace(/^\//, '') : '', originalName: bp.originalName || '' })); setBlueprints(bps); setInitialBlueprintsCount(bps.length); } catch (e) { console.error(e); } };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
   const handleBlueprintUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
@@ -730,27 +720,87 @@ const NomenclatureCreatePage = () => {
   const handleAddPrice = async () => { if (!uid || !newPrice) return; try { await AxiosService.post(ConstantInfo.restApiNomenclaturePrices(uid), { price: parseFloat(newPrice), priceDate: newPriceDate, supplierUid: newPriceSupplierUid || null }); await fetchPrices(); setShowAddPricePopup(false); setNewPrice(''); setNewPriceSupplierUid(''); } catch (e) { console.error(e); } };
   const handleDeletePrice = async (priceUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeletePrice(priceUid)); await fetchPrices(); } catch (e) { console.error(e); } };
   
-  const loadMaterialData = async (muid: string): Promise<void> => { 
+  const loadMaterialData = async (muid: string): Promise<{
+    name: string; article: string; description: string;
+    selectedCatalog: string; selectedCatalogId: string;
+    selectedAccountingGroup: string; selectedAccountingGroupId: string;
+    selectedNomenclatureGroup: string; selectedNomenclatureGroupId: string;
+    selectedNomenclatureType: string; selectedNomenclatureTypeId: string;
+    selectedRelease: string; selectedReleaseId: string;
+    selectedUnit: string; selectedUnitId: string;
+    selectedManufacturer: string; selectedManufacturerId: string;
+    selectedBrand: string; selectedBrandId: string;
+    selectedModel: string; selectedModelId: string;
+    selectedCountry: string; selectedCountryId: string;
+    usage: boolean; wasteMaterial: boolean; recycleMaterial: boolean;
+  }> => { 
     setIsLoading(true); 
     try { 
       const d = (await AxiosService.get(ConstantInfo.restApiNomenclatureGetMaterial(muid))).data; 
-      setName(d.name || ''); 
-      setArticle(d.article || ''); 
-      setDescription(d.description || ''); 
-      setUsage(d.usage || false); 
-      setWasteMaterial(d.wasteMaterial || false); 
-      setRecycleMaterial(d.recycleMaterial || false); 
-      if (d.groupUid) { setSelectedCatalogId(d.groupUid); setSelectedCatalog(d.groupName || ''); } else { setSelectedCatalogId(''); setSelectedCatalog(''); }
-      if (d.typeMainUid) { setSelectedAccountingGroupId(d.typeMainUid); setSelectedAccountingGroup(d.typeMainName || ''); } else { setSelectedAccountingGroupId(''); setSelectedAccountingGroup(''); }
-      if (d.typePurposeUid) { setSelectedNomenclatureGroupId(d.typePurposeUid); setSelectedNomenclatureGroup(d.typePurposeName || ''); } else { setSelectedNomenclatureGroupId(''); setSelectedNomenclatureGroup(''); }
-      if (d.typeProductUid) { setSelectedNomenclatureTypeId(d.typeProductUid); setSelectedNomenclatureType(d.typeProductName || ''); } else { setSelectedNomenclatureTypeId(''); setSelectedNomenclatureType(''); }
-      if (d.releaseUid) { setSelectedReleaseId(d.releaseUid); setSelectedRelease(d.releaseName || ''); } else { setSelectedReleaseId(''); setSelectedRelease(''); }
-      if (d.measureUid) { setSelectedUnitId(d.measureUid); setSelectedUnit(d.measureName || ''); } else { setSelectedUnitId(''); setSelectedUnit(''); }
-      if (d.manufacturerUid) { setSelectedManufacturerId(d.manufacturerUid); setSelectedManufacturer(d.manufacturerName || ''); } else { setSelectedManufacturerId(''); setSelectedManufacturer(''); }
-      if (d.brandUid) { setSelectedBrandId(d.brandUid); setSelectedBrand(d.brandName || ''); } else { setSelectedBrandId(''); setSelectedBrand(''); }
-      if (d.modelOfBrandUid) { setSelectedModelId(d.modelOfBrandUid); setSelectedModel(d.modelOfBrandName || ''); } else { setSelectedModelId(''); setSelectedModel(''); }
-      if (d.countryUid) { setSelectedCountryId(d.countryUid); setSelectedCountry(d.countryName || ''); } else { setSelectedCountryId(''); setSelectedCountry(''); }
-    } catch (e) { console.error(e); } finally { setIsLoading(false); } 
+      
+      const materialData = {
+        name: d.name || '',
+        article: d.article || '',
+        description: d.description || '',
+        usage: d.usage || false,
+        wasteMaterial: d.wasteMaterial || false,
+        recycleMaterial: d.recycleMaterial || false,
+        selectedCatalog: d.groupName || '',
+        selectedCatalogId: d.groupUid || '',
+        selectedAccountingGroup: d.typeMainName || '',
+        selectedAccountingGroupId: d.typeMainUid || '',
+        selectedNomenclatureGroup: d.typePurposeName || '',
+        selectedNomenclatureGroupId: d.typePurposeUid || '',
+        selectedNomenclatureType: d.typeProductName || '',
+        selectedNomenclatureTypeId: d.typeProductUid || '',
+        selectedRelease: d.releaseName || '',
+        selectedReleaseId: d.releaseUid || '',
+        selectedUnit: d.measureName || '',
+        selectedUnitId: d.measureUid || '',
+        selectedManufacturer: d.manufacturerName || '',
+        selectedManufacturerId: d.manufacturerUid || '',
+        selectedBrand: d.brandName || '',
+        selectedBrandId: d.brandUid || '',
+        selectedModel: d.modelOfBrandName || '',
+        selectedModelId: d.modelOfBrandUid || '',
+        selectedCountry: d.countryName || '',
+        selectedCountryId: d.countryUid || '',
+      };
+      
+      setName(materialData.name);
+      setArticle(materialData.article);
+      setDescription(materialData.description);
+      setUsage(materialData.usage);
+      setWasteMaterial(materialData.wasteMaterial);
+      setRecycleMaterial(materialData.recycleMaterial);
+      setSelectedCatalog(materialData.selectedCatalog);
+      setSelectedCatalogId(materialData.selectedCatalogId);
+      setSelectedAccountingGroup(materialData.selectedAccountingGroup);
+      setSelectedAccountingGroupId(materialData.selectedAccountingGroupId);
+      setSelectedNomenclatureGroup(materialData.selectedNomenclatureGroup);
+      setSelectedNomenclatureGroupId(materialData.selectedNomenclatureGroupId);
+      setSelectedNomenclatureType(materialData.selectedNomenclatureType);
+      setSelectedNomenclatureTypeId(materialData.selectedNomenclatureTypeId);
+      setSelectedRelease(materialData.selectedRelease);
+      setSelectedReleaseId(materialData.selectedReleaseId);
+      setSelectedUnit(materialData.selectedUnit);
+      setSelectedUnitId(materialData.selectedUnitId);
+      setSelectedManufacturer(materialData.selectedManufacturer);
+      setSelectedManufacturerId(materialData.selectedManufacturerId);
+      setSelectedBrand(materialData.selectedBrand);
+      setSelectedBrandId(materialData.selectedBrandId);
+      setSelectedModel(materialData.selectedModel);
+      setSelectedModelId(materialData.selectedModelId);
+      setSelectedCountry(materialData.selectedCountry);
+      setSelectedCountryId(materialData.selectedCountryId);
+      
+      return materialData;
+    } catch (e) { 
+      console.error(e); 
+      throw e; 
+    } finally { 
+      setIsLoading(false); 
+    } 
   };
 
   const saveCharacteristics = async () => {
@@ -804,10 +854,9 @@ const NomenclatureCreatePage = () => {
   const getMissingFields = (): Set<string> => { const m = new Set<string>(); if (!name.trim()) m.add('name'); if (!article.trim()) m.add('article'); if (!selectedCatalogId) m.add('catalog'); if (!selectedAccountingGroupId) m.add('accountingGroup'); if (!selectedNomenclatureGroupId) m.add('nomenclatureGroup'); if (!selectedNomenclatureTypeId) m.add('nomenclatureType'); if (!selectedReleaseId) m.add('release'); if (!selectedUnitId) m.add('unit'); if (!selectedManufacturerId) m.add('manufacturer'); if (!selectedBrandId) m.add('brand'); if (!selectedModelId) m.add('model'); if (!selectedCountryId) m.add('country'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') m.add(`char_${n}`); }); return m; };
   const getMissingFieldLabels = (): string[] => { const l: string[] = []; if (!name.trim()) l.push('Наименование'); if (!article.trim()) l.push('Артикул'); if (!selectedCatalogId) l.push('Каталог'); if (!selectedAccountingGroupId) l.push('Группа учета'); if (!selectedNomenclatureGroupId) l.push('Группа номенклатуры'); if (!selectedNomenclatureTypeId) l.push('Вид номенклатуры'); if (!selectedReleaseId) l.push('Выпуск'); if (!selectedUnitId) l.push('Единица измерения'); if (!selectedManufacturerId) l.push('Производитель'); if (!selectedBrandId) l.push('Бренд'); if (!selectedModelId) l.push('Модель'); if (!selectedCountryId) l.push('Страна происхождения'); REQUIRED_ATTRIBUTES.forEach(n => { const c = localCharacteristics.find(x => x.attributeName === n); if (!c || !c.value || c.value.trim() === '') l.push(n); }); return l; };
 
-  const isDirty = React.useMemo(() => {
-    if (!isEdit) return true;
-    if (!initialState) return false;
+  const isDirty = useMemo(() => {
     if (!isDataLoaded) return false;
+    if (!isEdit || !initialState) return false;
     
     return (
       name !== initialState.name ||
@@ -838,16 +887,17 @@ const NomenclatureCreatePage = () => {
       recycleMaterial !== initialState.recycleMaterial ||
       JSON.stringify(normalizeCharacteristics(localCharacteristics)) !== JSON.stringify(normalizeCharacteristics(initialCharacteristics)) ||
       localImages.length > 0 ||
-      localBlueprints.length > 0 ||
       localDocuments.length > 0 ||
       localSupplies.length > 0 ||
       localBarcodes.length > 0 ||
       localSkus.length > 0 ||
       localQrCodes.length > 0 ||
-      images.length !== initialImagesCount
+      images.length !== initialImagesCount ||
+      blueprints.length !== initialBlueprintsCount
     );
   }, [
-    isEdit, initialState, isDataLoaded, name, article, description,
+    isDataLoaded,
+    isEdit, initialState, name, article, description,
     selectedCatalog, selectedCatalogId,
     selectedAccountingGroup, selectedAccountingGroupId,
     selectedNomenclatureGroup, selectedNomenclatureGroupId,
@@ -860,9 +910,10 @@ const NomenclatureCreatePage = () => {
     selectedCountry, selectedCountryId,
     usage, wasteMaterial, recycleMaterial,
     localCharacteristics, initialCharacteristics,
-    localImages, localBlueprints, localDocuments, localSupplies,
+    localImages, localDocuments, localSupplies,
     localBarcodes, localSkus, localQrCodes,
-    images.length, initialImagesCount
+    images.length, initialImagesCount,
+    blueprints.length, initialBlueprintsCount
   ]);
 
   const getStatusIcon = (): string => {
@@ -932,18 +983,6 @@ const NomenclatureCreatePage = () => {
       setLocalSkus([]); 
       setLocalDocuments([]); 
       setLocalSupplies([]); 
-      await fetchImages(); 
-      await fetchBlueprints(); 
-      await fetchDocuments(); 
-      await fetchCharacteristics(); 
-      await fetchCodes(); 
-      
-      await clearDraftStorage(uid, tabInstanceId);
-      if (uid) sessionStorage.removeItem(getPopupOpenKey());
-      
-      setIsDataSaved(true); 
-      setValidationErrors(new Set()); 
-      window.dispatchEvent(new CustomEvent('refreshEvents')); 
       
       setInitialState({
         name, article, description,
@@ -959,7 +998,23 @@ const NomenclatureCreatePage = () => {
         selectedCountry, selectedCountryId,
         usage, wasteMaterial, recycleMaterial,
       });
+      setInitialCharacteristics(JSON.parse(JSON.stringify(localCharacteristics)));
+      setIsDataSaved(true); 
+      setValidationErrors(new Set()); 
+      
+      await fetchImages(); 
+      await fetchBlueprints(); 
+      await fetchDocuments(); 
+      await fetchCharacteristics();
+      await fetchCodes(); 
+      
+      await clearDraftStorage(uid, tabInstanceId);
+      if (uid) sessionStorage.removeItem(getPopupOpenKey());
+      
+      window.dispatchEvent(new CustomEvent('refreshEvents')); 
+      
       setInitialImagesCount(images.length);
+      setInitialBlueprintsCount(blueprints.length);
       
       if (!isEdit) {
         setIsEdit(true);
@@ -1032,16 +1087,30 @@ const NomenclatureCreatePage = () => {
     if (uid) sessionStorage.removeItem(getPopupOpenKey());
   };
 
-  const canSave = getProgressStep() >= 2 && isDirty;
+  const canSave = isEdit ? isDirty : (getProgressStep() >= 2);
   const cef = ['unit', 'manufacturer', 'brand', 'model', 'country', 'char_Длина', 'char_Ширина', 'char_Высота', 'char_Масса'];
   const hasCharacteristicsErrors = cef.some(f => validationErrors.has(f));
+
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const h = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setActionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [actionsOpen]);
 
   const buttonStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : isDisabled ? '#BCC8FF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden', opacity: isDisabled ? 0.5 : 1 });
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
   const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const rightButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
-  const commonProps: CommonProps = { uid, code, name, article, description, isEdit, isSaving, isUploading, isUploadingBlueprint, images, blueprints, documents, prices, suppliers, selectedImageIndex, selectedBlueprintIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedRelease, selectedReleaseId, selectedUnit, selectedUnitId, selectedManufacturer, selectedManufacturerId, selectedBrand, selectedBrandId, selectedModel, selectedModelId, selectedCountry, selectedCountryId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, showAddPricePopup, newPrice, newPriceDate, newPriceSupplierUid, fullscreenImage, fullscreenBlueprint, isLoading, isLoadingPrices: false, typeMaterials, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, blueprintInputRef: blueprintInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localCharacteristics, setLocalCharacteristics, localDocuments, setLocalDocuments, localSupplies, setLocalSupplies, localImages, setLocalImages, localBlueprints, setLocalBlueprints, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, localQrCodes, setLocalQrCodes, serverBarcodes, serverSkus, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setSelectedRelease, setSelectedReleaseId, setSelectedUnit, setSelectedUnitId, setSelectedManufacturer, setSelectedManufacturerId, setSelectedBrand, setSelectedBrandId, setSelectedModel, setSelectedModelId, setSelectedCountry, setSelectedCountryId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, setBlueprints, setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint, setDocuments, setPrices, setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid, setSuppliers, handleImageUpload, handleDeleteImage, handleBlueprintUpload, handleDeleteBlueprint, handleDocumentUpload, handleDeleteDocument, fetchPrices, handleAddPrice, handleDeletePrice, fetchSuppliers, openPopup, handleAccountingGroupSelect, isDataSaved, validationErrors, setValidationErrors, isFinishedProduct };
+  const commonProps: CommonProps = { uid, tabInstanceId, code, name, article, description, isEdit, isSaving, isUploading, isUploadingBlueprint, images, blueprints, documents, prices, suppliers, selectedImageIndex, selectedBlueprintIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedRelease, selectedReleaseId, selectedUnit, selectedUnitId, selectedManufacturer, selectedManufacturerId, selectedBrand, selectedBrandId, selectedModel, selectedModelId, selectedCountry, selectedCountryId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, showAddPricePopup, newPrice, newPriceDate, newPriceSupplierUid, fullscreenImage, fullscreenBlueprint, isLoading, isLoadingPrices: false, typeMaterials, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, blueprintInputRef: blueprintInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localCharacteristics, setLocalCharacteristics, localDocuments, setLocalDocuments, localSupplies, setLocalSupplies, localImages, setLocalImages, localBlueprints, setLocalBlueprints, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, localQrCodes, setLocalQrCodes, serverBarcodes, serverSkus, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setSelectedRelease, setSelectedReleaseId, setSelectedUnit, setSelectedUnitId, setSelectedManufacturer, setSelectedManufacturerId, setSelectedBrand, setSelectedBrandId, setSelectedModel, setSelectedModelId, setSelectedCountry, setSelectedCountryId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, setBlueprints, setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint, setDocuments, setPrices, setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid, setSuppliers, handleImageUpload, handleDeleteImage, handleBlueprintUpload, handleDeleteBlueprint, handleDocumentUpload, handleDeleteDocument, fetchPrices, handleAddPrice, handleDeletePrice, fetchSuppliers, openPopup, handleAccountingGroupSelect, isDataSaved, validationErrors, setValidationErrors, isFinishedProduct };
 
   const isEventLogActive = activeTab === EVENT_LOG_TAB;
 
@@ -1093,7 +1162,7 @@ const NomenclatureCreatePage = () => {
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60, display: 'flex', alignItems: 'center', gap: 25, zIndex: 10 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? `Справочник: Номенклатура (${initialState?.name || 'Номенклатура'})` : 'Справочник: Номенклатура (Создание)'}</h1>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>{isEdit ? `Справочник: Номенклатура (${name || 'Номенклатура'})` : 'Справочник: Номенклатура (Создание)'}</h1>
         <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
       </div>
       
@@ -1118,12 +1187,93 @@ const NomenclatureCreatePage = () => {
             })}
           </AnimatePresence>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={rightButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={rightButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
-          <button onClick={handleEventLogClick} style={{ ...rightButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
-            <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: isEventLogActive ? 'brightness(0) invert(1)' : 'none' }} />
-          </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }} ref={actionsRef}>
+          <div style={{ position: 'relative', width: 40, height: 40 }}>
+            <motion.div 
+              style={{ 
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                borderRadius: 10,
+                backgroundColor: '#FFFFFF',
+                border: actionsOpen ? 'none' : '1px solid rgba(102, 110, 254, 0.15)',
+                boxShadow: actionsOpen ? '0 8px 32px rgba(0,0,0,0.12)' : 'none',
+                overflow: 'hidden',
+                zIndex: actionsOpen ? 20 : 1,
+              }}
+              animate={{ 
+                width: actionsOpen ? 215 : 40, 
+                height: actionsOpen ? 210 : 40 
+              }}
+              transition={{ width: { type: 'tween', duration: 0.2 }, height: { type: 'tween', duration: 0.2 } }}
+            >
+              <div 
+                onClick={() => setActionsOpen(!actionsOpen)}
+                style={{ 
+                  width: 40, 
+                  height: 40, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  cursor: 'pointer',
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  backgroundColor: '#FFFFFF',
+                }}
+              >
+                <svg width="18" height="4" viewBox="0 0 18 4" fill="none">
+                  <circle cx="2" cy="2" r="2" fill="#2D4059" />
+                  <circle cx="9" cy="2" r="2" fill="#2D4059" />
+                  <circle cx="16" cy="2" r="2" fill="#2D4059" />
+                </svg>
+              </div>
+
+              <AnimatePresence>
+                {actionsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }}
+                    exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: 175,
+                      height: 210,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      paddingLeft: 20,
+                      paddingRight: 20,
+                    }}
+                  >
+                    <div onClick={() => { setActionsOpen(false); }} style={{ height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: 20 }}>
+                      <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18, marginRight: 12 }} />
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Печать</span>
+                    </div>
+                    <div onClick={() => { setActionsOpen(false); }} style={{ height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: 20 }}>
+                      <img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18, marginRight: 14 }} />
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Скачать PDF</span>
+                    </div>
+                    <div onClick={() => { setActionsOpen(false); }} style={{ height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: 20 }}>
+                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ marginRight: 12 }}>
+                        <rect x="2" y="2" width="14" height="14" rx="2" stroke="#2D4059" strokeWidth="1.5" />
+                        <line x1="6" y1="6" x2="12" y2="6" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" />
+                        <line x1="6" y1="9" x2="12" y2="9" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" />
+                        <line x1="6" y1="12" x2="10" y2="12" stroke="#2D4059" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Скачать Word</span>
+                    </div>
+                    <div onClick={() => { setActionsOpen(false); handleEventLogClick(); }} style={{ height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', backgroundColor: isEventLogActive ? '#F0F1FF' : 'transparent' }}>
+                      <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, marginRight: 12 }} />
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Журнал изменений</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </div>
         </div>
       </div>
 

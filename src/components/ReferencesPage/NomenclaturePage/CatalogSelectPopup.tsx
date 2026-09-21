@@ -1,4 +1,4 @@
-// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен тип 'release')
+// CatalogSelectPopup.tsx — ПОЛНЫЙ ФАЙЛ (добавлен режим 'station')
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../elements/CustomScrollbar';
@@ -40,7 +40,7 @@ export interface TreeItem {
   [key: string]: any;
 }
 
-export type PopupType = 
+export type PopupType =
   | 'catalog'
   | 'accountingGroup'
   | 'nomenclatureGroup'
@@ -48,6 +48,7 @@ export type PopupType =
   | 'release'
   | 'attributeType'
   | 'unit'
+  | 'nomenclatureUnit'
   | 'manufacturer'
   | 'brand'
   | 'model'
@@ -64,7 +65,8 @@ export type PopupType =
   | 'enterprise'
   | 'workshop'
   | 'section'
-  | 'direction';
+  | 'direction'
+  | 'station';
 
 interface PopupConfig {
   title: string;
@@ -79,25 +81,27 @@ const USER_ID = 1;
 const getPopupConfig = (type: PopupType): PopupConfig => {
   switch (type) {
     case 'catalog':
-      return { title: 'Справочник: Номенклатура (выбор каталога)', columns: [{ key: 'groupCode', title: 'КОД ГРУППЫ', left: 500 }], createButtonLabel: 'Создать каталог', isFlat: false, hasCreateButton: true };
+      return { title: 'Справочник: Номенклатура (выбор каталога)', columns: [{ key: 'groupCode', title: 'Код группы', left: 500 }], createButtonLabel: 'Создать каталог', isFlat: false, hasCreateButton: true };
     case 'analogSelect':
       return { title: 'Выбор материала для аналога', columns: [], isFlat: false, hasCreateButton: false };
     case 'nomenclatureGroup':
-      return { title: 'Справочник: Группы номенклатуры (Выбор)', columns: [{ key: 'typeMaterialName', title: 'ГРУППА УЧЕТА', left: 500 }], createButtonLabel: 'Создать группу номенклатуры', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Группы номенклатуры (Выбор)', columns: [{ key: 'typeMaterialName', title: 'Группа учета', left: 500 }], createButtonLabel: 'Создать группу номенклатуры', isFlat: true, hasCreateButton: true };
     case 'nomenclatureType':
-      return { title: 'Справочник: Виды номенклатуры (Выбор)', columns: [{ key: 'typePurposeName', title: 'ГРУППА НОМЕНКЛАТУРЫ', left: 500 }], createButtonLabel: 'Создать вид номенклатуры', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Виды номенклатуры (Выбор)', columns: [{ key: 'typePurposeName', title: 'Группа номенклатуры', left: 500 }], createButtonLabel: 'Создать вид номенклатуры', isFlat: true, hasCreateButton: true };
     case 'release':
       return { title: 'Справочник: Виды выпуска (Выбор)', columns: [], isFlat: true, hasCreateButton: false };
     case 'attributeType':
-      return { title: 'Справочник: Виды характеристик (Выбор)', columns: [{ key: 'designation', title: 'ОБОЗНАЧЕНИЕ', left: 500 }], createButtonLabel: 'Создать вид характеристики', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Виды характеристик (Выбор)', columns: [{ key: 'designation', title: 'Обозначение', left: 400 }, { key: 'groupName', title: 'Группа характеристик', left: 650 }], createButtonLabel: 'Создать вид характеристики', isFlat: true, hasCreateButton: true };
     case 'unit':
-      return { title: 'Справочник: Единицы измерения (Выбор)', columns: [{ key: 'description', title: 'ОПИСАНИЕ', left: 500 }], createButtonLabel: 'Создать единицу измерения', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Единицы измерения характеристик (Выбор)', columns: [{ key: 'groupName', title: 'Группа характеристик', left: 450 }, { key: 'description', title: 'Расшифровка', left: 700 }], createButtonLabel: 'Создать единицу измерения', isFlat: true, hasCreateButton: true };
+    case 'nomenclatureUnit':
+      return { title: 'Справочник: Единицы измерения (Выбор)', columns: [{ key: 'description', title: 'Описание', left: 500 }], createButtonLabel: 'Создать единицу измерения', isFlat: true, hasCreateButton: true };
     case 'manufacturer':
-      return { title: 'Справочник: Производители (Выбор)', columns: [{ key: 'description', title: 'ОПИСАНИЕ', left: 500 }], createButtonLabel: 'Создать производителя', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Производители (Выбор)', columns: [{ key: 'description', title: 'Описание', left: 500 }], createButtonLabel: 'Создать производителя', isFlat: true, hasCreateButton: true };
     case 'brand':
-      return { title: 'Справочник: Бренды (Выбор)', columns: [{ key: 'manufacturerName', title: 'ПРОИЗВОДИТЕЛЬ', left: 500 }, { key: 'description', title: 'ОПИСАНИЕ', left: 700 }], createButtonLabel: 'Создать бренд', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Бренды (Выбор)', columns: [{ key: 'manufacturerName', title: 'Производитель', left: 500 }, { key: 'description', title: 'Описание', left: 700 }], createButtonLabel: 'Создать бренд', isFlat: true, hasCreateButton: true };
     case 'model':
-      return { title: 'Справочник: Модели (Выбор)', columns: [{ key: 'brandName', title: 'БРЕНД', left: 450 }, { key: 'manufacturerName', title: 'ПРОИЗВОДИТЕЛЬ', left: 650 }, { key: 'description', title: 'ОПИСАНИЕ', left: 850 }], createButtonLabel: 'Создать модель', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Модели (Выбор)', columns: [{ key: 'brandName', title: 'Бренд', left: 450 }, { key: 'manufacturerName', title: 'Производитель', left: 650 }, { key: 'description', title: 'Описание', left: 850 }], createButtonLabel: 'Создать модель', isFlat: true, hasCreateButton: true };
     case 'country':
       return { title: 'Справочник: Страны (Выбор)', columns: [], createButtonLabel: 'Создать страну', isFlat: true, hasCreateButton: true };
     case 'supplier':
@@ -111,17 +115,19 @@ const getPopupConfig = (type: PopupType): PopupConfig => {
     case 'stationManufacturer':
       return { title: 'Справочник: Производители станций (Выбор)', columns: [], createButtonLabel: 'Создать производителя', isFlat: true, hasCreateButton: true };
     case 'stationModel':
-      return { title: 'Справочник: Модели станций (Выбор)', columns: [{ key: 'code', title: 'КОД', left: 400 }, { key: 'article', title: 'АРТИКУЛ', left: 600 }], createButtonLabel: 'Создать модель', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Модели станций (Выбор)', columns: [{ key: 'code', title: 'Код', left: 400 }, { key: 'article', title: 'Артикул', left: 600 }], createButtonLabel: 'Создать модель', isFlat: true, hasCreateButton: true };
     case 'stationConfiguration':
-      return { title: 'Справочник: Конфигурации станций (Выбор)', columns: [{ key: 'modelName', title: 'МОДЕЛЬ', left: 500 }], createButtonLabel: 'Создать конфигурацию', isFlat: true, hasCreateButton: true };
+      return { title: 'Справочник: Конфигурации станций (Выбор)', columns: [{ key: 'modelName', title: 'Модель', left: 500 }], createButtonLabel: 'Создать конфигурацию', isFlat: true, hasCreateButton: true };
+    case 'station':
+      return { title: 'Справочник: Станции (Выбор)', columns: [{ key: 'workshopName', title: 'Цех', left: 500 }, { key: 'status', title: 'Статус', left: 800 }], isFlat: true, hasCreateButton: false };
     case 'holding':
       return { title: 'Справочник: Холдинги (Выбор)', columns: [], isFlat: true, hasCreateButton: false };
     case 'enterprise':
       return { title: 'Справочник: Предприятия (Выбор)', columns: [], isFlat: true, hasCreateButton: false };
     case 'workshop':
-      return { title: 'Справочник: Цеха (Выбор)', columns: [{ key: 'enterpriseName', title: 'ПРЕДПРИЯТИЕ', left: 500 }], isFlat: true, hasCreateButton: false };
+      return { title: 'Справочник: Цеха (Выбор)', columns: [{ key: 'enterpriseName', title: 'Предприятие', left: 500 }], isFlat: true, hasCreateButton: false };
     case 'section':
-      return { title: 'Справочник: Участки (Выбор)', columns: [{ key: 'workshopName', title: 'ЦЕХ', left: 500 }], isFlat: true, hasCreateButton: false };
+      return { title: 'Справочник: Участки (Выбор)', columns: [{ key: 'workshopName', title: 'Цех', left: 500 }], isFlat: true, hasCreateButton: false };
     case 'direction':
       return { title: 'Справочник: Направления производства (Выбор)', columns: [], createButtonLabel: 'Создать направление', isFlat: true, hasCreateButton: true };
     default:
@@ -136,6 +142,7 @@ const getFlatPopupIcon = (type: PopupType): string | null => {
     case 'release': return Popup9;
     case 'attributeType': return Popup4;
     case 'unit': return Popup5;
+    case 'nomenclatureUnit': return Popup5;
     case 'manufacturer': return Popup6;
     case 'brand': return Popup7;
     case 'model': return Popup8;
@@ -147,6 +154,7 @@ const getFlatPopupIcon = (type: PopupType): string | null => {
     case 'stationManufacturer': return Popup6;
     case 'stationModel': return Popup9;
     case 'stationConfiguration': return Popup9;
+    case 'station': return Popup9;
     case 'holding': return Popup9;
     case 'enterprise': return Popup9;
     case 'workshop': return Popup9;
@@ -204,6 +212,8 @@ const convertGenericFlat = (items: any[]): TreeItem[] => {
     manufacturerName: item.manufacturerName || '',
     brandName: item.brandName || '',
     manufacturerUid: item.manufacturerUid || '',
+    groupUid: item.groupUid || item.group_uid || '',
+    groupName: item.groupName || item.group_name || '',
   }));
 };
 
@@ -227,7 +237,7 @@ const getDataArray = (respData: any): any[] => {
 interface CatalogSelectPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect?: (id: string, name: string) => void;
+  onSelect?: (id: string, name: string, item?: any) => void;
   popupType: PopupType;
   filterParam?: string;
   excludeUids?: string[];
@@ -279,7 +289,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
   const [allBrands, setAllBrands] = useState<any[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<any[]>([]);
   const [internalOpen, setInternalOpen] = useState(false);
-  
+
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchValue, setSearchValue] = useState('');
 
@@ -341,9 +351,15 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'release') {
         setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureReleases)).data)));
       } else if (popupType === 'attributeType') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureTypeAttributes)).data)));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiTypeAttributesCrud(USER_ID))).data)));
       } else if (popupType === 'unit') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureMeasures)).data)));
+        const allMeasures = convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiMeasuresCrud(USER_ID))).data));
+        const filtered = filterParam
+          ? allMeasures.filter(item => item.groupUid === filterParam)
+          : allMeasures;
+        setData(filtered);
+      } else if (popupType === 'nomenclatureUnit') {
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiUnitsCrud(USER_ID))).data)));
       } else if (popupType === 'supplier') {
         setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiSuppliersList)).data)));
       } else if (popupType === 'shortDescription') {
@@ -359,23 +375,41 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       } else if (popupType === 'country') {
         setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiNomenclatureCountries)).data)));
       } else if (popupType === 'direction') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/production-directions?userId=${USER_ID}`)).data)));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiProductionDirections(USER_ID))).data)));
       } else if (popupType === 'stationType') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/station-types?userId=${USER_ID}`)).data)));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiStationTypes)).data)));
       } else if (popupType === 'stationManufacturer') {
-        setData(convertGenericFlat(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/station-manufacturers?userId=${USER_ID}`)).data)));
+        setData(convertGenericFlat(getDataArray((await AxiosService.get(ConstantInfo.restApiStationManufacturers)).data)));
       } else if (popupType === 'stationModel') {
-        setData(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/station-models?userId=${USER_ID}`)).data).map((item: any) => ({
+        setData(getDataArray((await AxiosService.get(ConstantInfo.restApiStationModels)).data).map((item: any) => ({
           id: item.uid, name: item.name,
           code: item.code ? String(item.code).padStart(4, '0') : '',
           article: item.article || '',
         })));
       } else if (popupType === 'stationConfiguration') {
-        const url = filterParam 
-          ? `${ConstantInfo.apiBaseUrl}/api/station-configurations?modelId=${filterParam}` 
+        const url = filterParam
+          ? ConstantInfo.restApiStationConfigurationsByModel(filterParam)
           : `${ConstantInfo.apiBaseUrl}/api/station-configurations?userId=${USER_ID}`;
         setData(getDataArray((await AxiosService.get(url)).data).map((item: any) => ({
           id: item.uid, name: item.name, modelName: item.modelName || '',
+        })));
+      } else if (popupType === 'station') {
+        // Список станций через /api/stations/crud
+        const resp = await AxiosService.get(ConstantInfo.restApiStationsCrud(USER_ID));
+        const items = getDataArray(resp.data?.data ?? resp.data);
+        const filtered = filterParam
+          ? items.filter((s: any) =>
+              s.configurationUid === filterParam ||
+              s.configurationName === filterParam
+            )
+          : items;
+        setData(filtered.map((item: any) => ({
+          id: item.uid,
+          name: item.name,
+          workshopName: item.workshopName || '',
+          status: item.status || '',
+          configurationName: item.configurationName || '',
+          configurationUid: item.configurationUid || '',
         })));
       } else if (popupType === 'holding') {
         setData(getDataArray((await AxiosService.get(`${ConstantInfo.apiBaseUrl}/api/holdings?userId=${USER_ID}`)).data).map((item: any) => ({
@@ -425,7 +459,11 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     return () => { c.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, []);
 
-  const handleItemClick = (id: string, name: string) => { onSelect?.(id, name); handleClose(); };
+  const handleItemClick = (id: string, name: string) => {
+    const item = data.find(d => d.id === id);
+    onSelect?.(id, name, item);
+    handleClose();
+  };
 
   const handleCreateGroup = async (groupName: string, parentUid: string | null) => {
     setIsCreatingGroup(true);
@@ -523,18 +561,18 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
     if (!searchValue.trim()) return items;
     const q = searchValue.toLowerCase();
     const result: TreeItem[] = [];
-    
+
     items.forEach(item => {
       const nameMatch = item.name.toLowerCase().includes(q);
       const childrenMatch = item.children ? filterTreeBySearch(item.children) : [];
-      
+
       if (nameMatch) {
         result.push({ ...item, children: item.children });
       } else if (childrenMatch.length > 0) {
         result.push({ ...item, children: childrenMatch });
       }
     });
-    
+
     return result;
   };
 
@@ -556,11 +594,11 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       const isOpen = openFolders.has(item.id);
       const shift = depth * 20;
       const isMaterial = item.isMaterial === true;
-      
+
       const effectiveOpen = searchValue.trim() ? true : isOpen;
       const effectiveHasChildren = searchValue.trim() ? hasChildren : hasChildren;
       const effectiveShift = searchValue.trim() ? 0 : shift;
-      
+
       result.push(
         <div key={item.id}
           onClick={() => { if (isMaterial) handleItemClick(item.id, item.name); else if (hasChildren && !searchValue.trim()) toggleFolder(item.id); }}
@@ -571,11 +609,15 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
           <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: isMaterial ? 400 : 700, color: '#2D4059', marginLeft: 10, maxWidth: isMaterial ? 600 : (400 - effectiveShift), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {searchValue.trim() ? <HighlightedText text={item.name} highlight={searchValue.trim()} /> : item.name}
           </span>
-          {!isAnalogSelect && config.columns.map(col => (
-            <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: col.left }}>
-              {searchValue.trim() ? <HighlightedText text={String(item[col.key] || '')} highlight={searchValue.trim()} /> : (item[col.key] || '')}
-            </span>
-          ))}
+          {!isAnalogSelect && config.columns.map(col => {
+            const colLeft = col.left ?? 0;
+            const isLastCol = config.columns.indexOf(col) === config.columns.length - 1;
+            return (
+              <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: colLeft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isLastCol ? TABLE_WIDTH - colLeft - 40 : 200 }}>
+                {searchValue.trim() ? <HighlightedText text={String(item[col.key] || '')} highlight={searchValue.trim()} /> : (item[col.key] || '')}
+              </span>
+            );
+          })}
         </div>
       );
       if (effectiveOpen && hasChildren) result.push(...renderTree(item.children!, depth + 1));
@@ -589,14 +631,18 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
         style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', cursor: 'pointer', userSelect: 'none', boxSizing: 'border-box', position: 'relative', borderTop: '0.5px solid #E5ECF5', borderBottom: '0.5px solid #E5ECF5', paddingLeft: 22, paddingRight: 40 }}
       >
         {flatIcon && <img src={flatIcon} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />}
-        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: flatIcon ? 10 : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: (config.columns[0]?.left || 500) - 50 }}>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', marginLeft: flatIcon ? 10 : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: (config.columns[0]?.left ?? 500) - 50 }}>
           {searchValue.trim() ? <HighlightedText text={item.name} highlight={searchValue.trim()} /> : item.name}
         </span>
-        {config.columns.map(col => (
-          <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: col.left, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
-            {searchValue.trim() ? <HighlightedText text={String(item[col.key] || '')} highlight={searchValue.trim()} /> : (item[col.key] || '')}
-          </span>
-        ))}
+        {config.columns.map(col => {
+          const colLeft = col.left ?? 0;
+          const isLastCol = config.columns.indexOf(col) === config.columns.length - 1;
+          return (
+            <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059', position: 'absolute', left: colLeft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isLastCol ? TABLE_WIDTH - colLeft - 40 : 200 }}>
+              {searchValue.trim() ? <HighlightedText text={String(item[col.key] || '')} highlight={searchValue.trim()} /> : (item[col.key] || '')}
+            </span>
+          );
+        })}
       </div>
     ));
   };
@@ -614,6 +660,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
       case 'nomenclatureType': return 'Создание вида номенклатуры';
       case 'attributeType': return 'Создание вида характеристики';
       case 'unit': return 'Создание единицы измерения';
+      case 'nomenclatureUnit': return 'Создание единицы измерения';
       case 'manufacturer': return 'Создание производителя';
       case 'brand': return 'Создание бренда';
       case 'model': return 'Создание модели';
@@ -647,20 +694,20 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
           </button>
           <h2 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 24, fontWeight: 500, color: '#2D4059', margin: '30px 0 0', textAlign: 'center' }}>{config.title}</h2>
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 30, paddingLeft: 45, paddingRight: 45 }}>
-            <motion.div 
-              style={{ position: 'relative', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: searchExpanded ? '#666EFE' : '#FFFFFF', border: searchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
-              animate={{ width: searchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED }} 
+            <motion.div
+              style={{ position: 'relative', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: searchExpanded ? '#666EFE' : '#FFFFFF', border: searchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }}
+              animate={{ width: searchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED }}
               transition={tween}
             >
-              <div onClick={() => { 
-                if (searchExpanded) { setSearchExpanded(false); setSearchValue(''); } 
-                else setSearchExpanded(true); 
+              <div onClick={() => {
+                if (searchExpanded) { setSearchExpanded(false); setSearchValue(''); }
+                else setSearchExpanded(true);
               }} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
                 <img src={searchExpanded ? SearchIcon18White : SearchIcon18Black} alt="" style={{ width: 18, height: 18 }} />
               </div>
               <AnimatePresence>
                 {searchExpanded && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: BTN_SEARCH_EXPANDED - 40 - 16 }}
                     exit={{ opacity: 0, width: 0 }}
@@ -685,8 +732,8 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
           <div style={{ display: 'flex', marginTop: 15, alignSelf: 'center', position: 'relative', width: TABLE_WIDTH, height: TABLE_HEIGHT }}>
             <div style={{ width: '100%', height: '100%', backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
               <div style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT, backgroundColor: '#666EFE', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 40, boxSizing: 'border-box', position: 'relative' }}>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>НАИМЕНОВАНИЕ</span>
-                {config.columns.map(col => <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: col.left }}>{col.title}</span>)}
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>Наименование</span>
+                {config.columns.map(col => <span key={col.key} style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF', position: 'absolute', left: col.left ?? 0 }}>{col.title}</span>)}
               </div>
               <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {isLoading ? <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, color: '#9CA3AF' }}>Загрузка...</span></div> :
@@ -709,7 +756,7 @@ const CatalogSelectPopup: React.FC<CatalogSelectPopupProps> = ({
             {popupType === 'nomenclatureGroup' && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Группа учета</label><select value={createFormTypeMaterialUid} onChange={e => setCreateFormTypeMaterialUid(e.target.value)} style={selectStyle}><option value="">Без группы учета</option>{typeMaterials.map((tm: any) => <option key={tm.uid} value={tm.uid}>{tm.typeName}</option>)}</select></div>}
             {popupType === 'nomenclatureType' && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Группа номенклатуры</label><select value={createFormTypePurposeUid} onChange={e => setCreateFormTypePurposeUid(e.target.value)} style={selectStyle}><option value="">Без группы</option>{typePurposes.map((tp: any) => <option key={tp.uid} value={tp.uid}>{tp.typeName}</option>)}</select></div>}
             {popupType === 'attributeType' && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Обозначение</label><input type="text" value={createFormDesignation} onChange={e => setCreateFormDesignation(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите обозначение" style={inputStyle} /></div>}
-            {(popupType === 'unit' || popupType === 'manufacturer' || popupType === 'brand' || popupType === 'model' || popupType === 'stationType' || popupType === 'stationManufacturer') && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label><input type="text" value={createFormDescription} onChange={e => setCreateFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите описание" style={inputStyle} /></div>}
+            {(popupType === 'unit' || popupType === 'nomenclatureUnit' || popupType === 'manufacturer' || popupType === 'brand' || popupType === 'model' || popupType === 'stationType' || popupType === 'stationManufacturer') && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Описание</label><input type="text" value={createFormDescription} onChange={e => setCreateFormDescription(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateSubmit(); else if (e.key === 'Escape') setShowCreatePopup(false); }} placeholder="Введите описание" style={inputStyle} /></div>}
             {(popupType === 'brand' || popupType === 'model') && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Производитель</label><select value={createFormManufacturerUid} onChange={e => popupType === 'model' ? handleManufacturerChange(e.target.value) : setCreateFormManufacturerUid(e.target.value)} style={selectStyle}><option value="">Выберите производителя</option>{manufacturers.map((m: any) => <option key={m.uid} value={m.uid}>{m.name}</option>)}</select></div>}
             {popupType === 'model' && <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Бренд</label><select value={createFormBrandUid} onChange={e => setCreateFormBrandUid(e.target.value)} style={{ ...selectStyle, opacity: createFormManufacturerUid ? 1 : 0.5, cursor: createFormManufacturerUid ? 'pointer' : 'not-allowed' }} disabled={!createFormManufacturerUid}><option value="">{createFormManufacturerUid ? 'Выберите бренд' : 'Сначала выберите производителя'}</option>{filteredBrands.map((b: any) => <option key={b.uid} value={b.uid}>{b.name}</option>)}</select></div>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}><button onClick={handleCreateSubmit} disabled={isCreating || !createFormName.trim()} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: createFormName.trim() && !isCreating ? '#666EFE' : '#BCC8FF', cursor: createFormName.trim() && !isCreating ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isCreating ? 'Сохранение...' : 'Создать'}</button><button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button></div>

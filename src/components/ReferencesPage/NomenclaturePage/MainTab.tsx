@@ -1,4 +1,4 @@
-// MainTab.tsx — ПОЛНЫЙ ФАЙЛ (поле "Выпуск" только для готовых деталей, как группа учета)
+// MainTab.tsx — ПОЛНЫЙ ФАЙЛ с синхронизацией штрихкодов и SKU с черновиком
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JsBarcode from 'jsbarcode';
@@ -188,7 +188,24 @@ const StarRatingSmall = ({ value, size = 18 }: { value: number; size?: number })
 };
 
 const MainTab: React.FC<CommonProps> = (props) => {
-  const { uid, code, name, article, description, isEdit, isUploading, images, selectedImageIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedRelease, selectedReleaseId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, fullscreenImage, typeMaterials, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setSelectedRelease, setSelectedReleaseId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, handleImageUpload, handleDeleteImage, openPopup, handleAccountingGroupSelect, localImages, setLocalImages, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, serverBarcodes, serverSkus, validationErrors, setValidationErrors, isFinishedProduct } = props;
+  const { 
+    uid, tabInstanceId, code, name, article, description, isEdit, isUploading, images, 
+    selectedImageIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, 
+    selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, 
+    selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, 
+    selectedRelease, selectedReleaseId, usage, wasteMaterial, recycleMaterial, 
+    nameFocused, articleFocused, descriptionFocused, fullscreenImage, typeMaterials,
+    setName, setArticle, setDescription, setNameFocused, setArticleFocused, 
+    setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, 
+    setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, 
+    setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, 
+    setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, 
+    setSelectedRelease, setSelectedReleaseId, setImages, setSelectedImageIndex, 
+    setIsUploading, setFullscreenImage, handleImageUpload, handleDeleteImage, 
+    openPopup, handleAccountingGroupSelect, localImages, setLocalImages, 
+    localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, 
+    serverBarcodes, serverSkus, validationErrors, setValidationErrors, isFinishedProduct 
+  } = props;
 
   const [averageRating, setAverageRating] = useState(0);
   const [localSelectedIndex, setLocalSelectedIndex] = useState(0);
@@ -205,12 +222,33 @@ const MainTab: React.FC<CommonProps> = (props) => {
   const [defaultBarcodeType, setDefaultBarcodeType] = useState<string | null>(null);
   const [defaultSkuType, setDefaultSkuType] = useState<string | null>(null);
 
-  const tabInstanceId = useRef(`tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`).current;
-
   const [codeFlags, setCodeFlags] = useState<{ [codeValue: string]: { isGenerated: boolean; codeKind: string } }>({});
 
   const [barcodeThumbnail, setBarcodeThumbnail] = useState<string | null>(null);
   const [skuThumbnail, setSkuThumbnail] = useState<string | null>(null);
+
+  // Синхронизация localBarcodes и localSkus с черновиком
+  useEffect(() => {
+    if (!uid || !tabInstanceId) return;
+    const draftKey = `nomenclature_draft_${uid}_${tabInstanceId}`;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        draft.localBarcodesMeta = (localBarcodes || []).map(bc => ({ 
+          key: '', codeType: bc.codeType, codeValue: bc.codeValue, 
+          codeKind: bc.codeKind, fileName: null 
+        }));
+        draft.localSkusMeta = (localSkus || []).map(sku => ({ 
+          key: '', codeType: sku.codeType, codeValue: sku.codeValue, 
+          codeKind: sku.codeKind, fileName: null 
+        }));
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      }
+    } catch (e) {
+      console.error('Ошибка синхронизации кодов с черновиком:', e);
+    }
+  }, [localBarcodes, localSkus, uid, tabInstanceId]);
 
   const fetchCatalogOptions = async () => {
     try {
@@ -783,7 +821,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
           />
         </div>
 
-        {/* ВЫПУСК - только для готовых деталей, как группа учета */}
         {isFinishedProduct && (
           <div style={{ position: 'absolute', top: 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30 + 17 + 11 + 44 + 30, left: 40, right: 40 }}>
             <span style={{ ...labelStyle, display: 'block', lineHeight: '17px' }}>Выпуск:</span>
@@ -1014,7 +1051,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
               </div>
             </div>
 
-            {/* Переключатель по умолчанию */}
             <div style={{ position: 'absolute', top: 16 + 18 + 30 + 17 + 11 + 44 + 30 + 140 + 30 + 17 + 11 + 44 + 19, left: 30, display: 'flex', alignItems: 'center', gap: 14 }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>Установить этот тип кода по умолчанию</span>
               <ToggleSwitch value={barcodeSetDefault} onChange={() => setBarcodeSetDefault(!barcodeSetDefault)} />
@@ -1095,7 +1131,6 @@ const MainTab: React.FC<CommonProps> = (props) => {
               </div>
             </div>
 
-            {/* Переключатель по умолчанию */}
             <div style={{ position: 'absolute', top: 16 + 18 + 30 + 17 + 11 + 44 + 30 + 140 + 30 + 17 + 11 + 44 + 19, left: 30, display: 'flex', alignItems: 'center', gap: 14 }}>
               <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' }}>Установить этот тип кода по умолчанию</span>
               <ToggleSwitch value={skuSetDefault} onChange={() => setSkuSetDefault(!skuSetDefault)} />

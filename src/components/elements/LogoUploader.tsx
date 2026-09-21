@@ -1,4 +1,4 @@
-// LogoUploader.tsx — ПОЛНЫЙ ФАЙЛ
+// LogoUploader.tsx — ПОЛНЫЙ ФАЙЛ (адаптация для height=348: стрелки по центру, 5 мини-превью)
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import CreateIcon14Gray from '../../assets/Icons/СreateIcons/СreateIcon14Gray.svg';
 import CreateIcon14Blue from '../../assets/Icons/СreateIcons/СreateIcon14Blue.svg';
@@ -36,6 +36,9 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, images.length - 1));
 
+  // Определяем "большой" вариант по высоте
+  const isLargeVariant = height >= 348;
+
   useEffect(() => {
     if (!contextMenu) return;
     const h = () => setContextMenu(null);
@@ -49,14 +52,17 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   const SMALL_H = 25;
   const GAP_3 = 15;
   const GAP_4 = 11;
+  const GAP_5 = 10;
   const TOP_PADDING_3 = 20;
   const TOP_PADDING_4 = 11;
+  const TOP_PADDING_5 = 8;
 
-  const isManyImages = images.length >= 4;
+  const isManyImages = isLargeVariant ? images.length >= 5 : images.length >= 4;
+  
+  const VISIBLE_COUNT = isLargeVariant ? 5 : 4;
+  const maxStartIndex = images.length > VISIBLE_COUNT ? images.length - VISIBLE_COUNT : 0;
 
-  const maxStartIndex = images.length > 4 ? images.length - 4 : 0;
-
-  const visibleIndices = Array.from({ length: Math.min(4, images.length) }, (_, i) => startIndex + i);
+  const visibleIndices = Array.from({ length: Math.min(VISIBLE_COUNT, images.length) }, (_, i) => startIndex + i);
 
   const smoothScrollTo = useCallback((targetIndex: number) => {
     if (scrollAnimationRef.current) {
@@ -85,22 +91,22 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   }, [startIndex]);
 
   useEffect(() => {
-    if (images.length <= 4) return;
+    if (images.length <= VISIBLE_COUNT) return;
     
     let targetStart = startIndex;
     if (safeIndex < startIndex) {
       targetStart = safeIndex;
-    } else if (safeIndex > startIndex + 3) {
-      targetStart = safeIndex - 3;
+    } else if (safeIndex > startIndex + VISIBLE_COUNT - 1) {
+      targetStart = safeIndex - (VISIBLE_COUNT - 1);
     }
     
     if (targetStart !== startIndex) {
       smoothScrollTo(targetStart);
     }
-  }, [safeIndex, images.length]);
+  }, [safeIndex, images.length, VISIBLE_COUNT]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (images.length <= 4) return;
+    if (images.length <= VISIBLE_COUNT) return;
     
     e.preventDefault();
     e.stopPropagation();
@@ -114,7 +120,7 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
     } else {
       setStartIndex(prev => Math.max(0, prev - 1));
     }
-  }, [images.length, maxStartIndex]);
+  }, [images.length, maxStartIndex, VISIBLE_COUNT]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0 && onUpload) {
@@ -134,19 +140,19 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
     
     onSelectImage && onSelectImage(newIndex);
     
-    if (images.length > 4) {
+    if (images.length > VISIBLE_COUNT) {
       let targetStart = startIndex;
       if (newIndex < startIndex) {
         targetStart = newIndex;
-      } else if (newIndex > startIndex + 3) {
-        targetStart = newIndex - 3;
+      } else if (newIndex > startIndex + VISIBLE_COUNT - 1) {
+        targetStart = newIndex - (VISIBLE_COUNT - 1);
       }
       
       if (targetStart !== startIndex) {
         smoothScrollTo(targetStart);
       }
     }
-  }, [images.length, startIndex, onSelectImage, smoothScrollTo]);
+  }, [images.length, startIndex, onSelectImage, smoothScrollTo, VISIBLE_COUNT]);
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -184,31 +190,52 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   }, [images.length, safeIndex, navigateTo]);
 
   const getThumbSize = (position: number): { width: number; height: number } => {
-    if (images.length <= 3) {
-      return { width: BIG_W, height: BIG_H };
-    }
-
-    if (position === 1 || position === 2) {
+    if (isLargeVariant) {
+      // Большой вариант: 5 видимых
+      // позиции 0 и 4 — маленькие, 1,2,3 — большие
+      if (images.length <= 4) {
+        return { width: BIG_W, height: BIG_H };
+      }
+      if (position === 0 || position === 4) {
+        return { width: SMALL_W, height: SMALL_H };
+      }
       return { width: BIG_W, height: BIG_H };
     }
     
+    // Обычный вариант: 4 видимых
+    if (images.length <= 3) {
+      return { width: BIG_W, height: BIG_H };
+    }
+    if (position === 1 || position === 2) {
+      return { width: BIG_W, height: BIG_H };
+    }
     return { width: SMALL_W, height: SMALL_H };
   };
 
+  // Стрелки по центру левой панели
+  const arrowGap = 15;
+  const arrowSize = 18;
+  const arrowUpTop = (height - arrowSize - arrowGap - arrowSize) / 2;
+  const arrowDownTop = arrowUpTop + arrowSize + arrowGap;
+
   const allRenderIndices = new Set<number>();
   visibleIndices.forEach(i => allRenderIndices.add(i));
-  if (images.length > 4) {
+  if (images.length > VISIBLE_COUNT) {
     const prevStart = Math.max(0, startIndex - 1);
     if (prevStart !== startIndex) {
-      const prevIndices = Array.from({ length: 4 }, (_, i) => prevStart + i);
+      const prevIndices = Array.from({ length: VISIBLE_COUNT }, (_, i) => prevStart + i);
       prevIndices.forEach(i => allRenderIndices.add(i));
     }
     const nextStart = Math.min(maxStartIndex, startIndex + 1);
     if (nextStart !== startIndex) {
-      const nextIndices = Array.from({ length: 4 }, (_, i) => nextStart + i);
+      const nextIndices = Array.from({ length: VISIBLE_COUNT }, (_, i) => nextStart + i);
       nextIndices.forEach(i => allRenderIndices.add(i));
     }
   }
+
+  const gap = isLargeVariant ? GAP_5 : (isManyImages ? GAP_4 : GAP_3);
+  const topPadding = isLargeVariant ? TOP_PADDING_5 : (isManyImages ? TOP_PADDING_4 : TOP_PADDING_3);
+  const thumbAreaHeight = height - topPadding - 8;
 
   return (
     <div style={{ width, height, borderRadius: 10, border: hasImage ? '1px solid #666EFE' : '1px solid #A0A3BD', overflow: 'hidden', display: 'flex', position: 'relative' }}>
@@ -219,14 +246,14 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
             <button 
               onClick={handlePrev} 
               disabled={safeIndex === 0}
-              style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 115, width: 18, height: 18, border: 'none', background: 'transparent', cursor: safeIndex === 0 ? 'default' : 'pointer', padding: 0, zIndex: 2, opacity: safeIndex === 0 ? 0.3 : 1 }}
+              style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: arrowUpTop, width: 18, height: 18, border: 'none', background: 'transparent', cursor: safeIndex === 0 ? 'default' : 'pointer', padding: 0, zIndex: 2, opacity: safeIndex === 0 ? 0.3 : 1 }}
             >
               <img src={ArrowIcon18Up} alt="" style={{ width: 18, height: 18 }} />
             </button>
             <button 
               onClick={handleNext} 
               disabled={safeIndex === images.length - 1}
-              style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 150, width: 18, height: 18, border: 'none', background: 'transparent', cursor: safeIndex === images.length - 1 ? 'default' : 'pointer', padding: 0, zIndex: 2, opacity: safeIndex === images.length - 1 ? 0.3 : 1 }}
+              style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: arrowDownTop, width: 18, height: 18, border: 'none', background: 'transparent', cursor: safeIndex === images.length - 1 ? 'default' : 'pointer', padding: 0, zIndex: 2, opacity: safeIndex === images.length - 1 ? 0.3 : 1 }}
             >
               <img src={ArrowIcon18Down} alt="" style={{ width: 18, height: 18 }} />
             </button>
@@ -323,7 +350,7 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
             top: hasImage ? 107 : 77, 
             left: 0, 
             width: 56, 
-            height: 175,
+            height: thumbAreaHeight,
             overflow: 'hidden',
           }}
         >
@@ -335,13 +362,31 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
             const isVisible = currentPosition !== -1;
             
             const isSelected = imgIdx === safeIndex;
-            const thumbSize = getThumbSize(currentPosition !== -1 ? currentPosition : (imgIdx < startIndex ? 0 : 3));
-            const gap = isManyImages ? GAP_4 : GAP_3;
-            
-            const topPadding = isManyImages ? TOP_PADDING_4 : TOP_PADDING_3;
+            const thumbSize = getThumbSize(currentPosition !== -1 ? currentPosition : (imgIdx < startIndex ? 0 : VISIBLE_COUNT - 1));
             
             let positionY = topPadding;
-            if (isManyImages) {
+            
+            if (isLargeVariant) {
+              // Большой вариант: 5 видимых
+              if (imgIdx === startIndex) {
+                positionY = topPadding;
+              } else if (imgIdx === startIndex + 1) {
+                positionY = topPadding + SMALL_H + gap;
+              } else if (imgIdx === startIndex + 2) {
+                positionY = topPadding + SMALL_H + gap + BIG_H + gap;
+              } else if (imgIdx === startIndex + 3) {
+                positionY = topPadding + SMALL_H + gap + BIG_H + gap + BIG_H + gap;
+              } else if (imgIdx === startIndex + 4) {
+                positionY = topPadding + SMALL_H + gap + BIG_H + gap + BIG_H + gap + BIG_H + gap;
+              } else if (imgIdx < startIndex) {
+                const offset = startIndex - imgIdx;
+                positionY = topPadding - offset * (SMALL_H + gap);
+              } else {
+                const offset = imgIdx - (startIndex + 4);
+                positionY = topPadding + SMALL_H + gap + BIG_H + gap + BIG_H + gap + BIG_H + gap + SMALL_H + gap + (offset - 1) * (SMALL_H + gap);
+              }
+            } else {
+              // Обычный вариант: 4 видимых
               if (imgIdx === startIndex) {
                 positionY = topPadding;
               } else if (imgIdx === startIndex + 1) {
@@ -357,8 +402,6 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
                 const offset = imgIdx - (startIndex + 3);
                 positionY = topPadding + SMALL_H + gap + BIG_H + gap + BIG_H + gap + SMALL_H + gap + (offset - 1) * (SMALL_H + gap);
               }
-            } else {
-              positionY = topPadding + imgIdx * (BIG_H + gap);
             }
             
             return (
