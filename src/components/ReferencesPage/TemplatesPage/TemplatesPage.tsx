@@ -1,4 +1,4 @@
-// TemplatesPage.tsx — ПОЛНЫЙ ФАЙЛ (попап создания с моделью/конфигурацией, закрытие только по кнопке)
+// TemplatesPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,13 +18,11 @@ import Icon22 from '../../../assets/References/Icon22.svg';
 import Icon23 from '../../../assets/References/Icon23.svg';
 import Icon24 from '../../../assets/References/Icon24.svg';
 import Icon25 from '../../../assets/References/Icon25.svg';
-import Icon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
-import Icon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
 import PopupIcon2 from '../../../assets/Station/PopupIcon2.svg';
-import PopupIcon4 from '../../../assets/Station/PopupIcon4.svg';
 import PopupIcon7 from '../../../assets/Station/PopupIcon7.svg';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import TemplateCreateGroupPopup from './TemplateCreateGroupPopup';
+import TemplateCreateEditPopup from './TemplateCreateEditPopup';
 
 interface TemplateItem {
   uid: string;
@@ -137,8 +135,8 @@ const TemplatesPage = () => {
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Попап создания шаблона
   const [showCreateTemplatePopup, setShowCreateTemplatePopup] = useState(false);
+  const [createMode, setCreateMode] = useState<'create' | 'copy'>('create');
   const [createTemplateName, setCreateTemplateName] = useState('');
   const [createTemplateCategoryUid, setCreateTemplateCategoryUid] = useState<string | null>(null);
   const [createTemplateCategoryName, setCreateTemplateCategoryName] = useState('');
@@ -358,12 +356,14 @@ const TemplatesPage = () => {
     setCreateTemplateModelName('');
     setCreateTemplateConfigUid('');
     setCreateTemplateConfigName('');
+    setCreateMode('create');
   };
 
   const handleCreateTemplate = (categoryUid: string | null, categoryName: string) => {
     resetCreateTemplateForm();
     setCreateTemplateCategoryUid(categoryUid);
     setCreateTemplateCategoryName(categoryName);
+    setCreateMode('create');
     setShowCreateTemplatePopup(true);
   };
 
@@ -606,18 +606,6 @@ const TemplatesPage = () => {
     setShowDeleteConfirm(true);
   };
 
-  const handleCopyClick = () => {
-    if (selectedIds.size === 0) return;
-    setOperationUid(Array.from(selectedIds)[0]);
-    setShowCopyPopup(true);
-  };
-
-  const handleMoveClick = () => {
-    if (selectedIds.size === 0) return;
-    setOperationUid(Array.from(selectedIds)[0]);
-    setShowMoveSelectPopup(true);
-  };
-
   const handleHistoryClick = () => {
     setShowHistory(prev => !prev);
     if (!showHistory) { setHistoryLoading(true); setHistoryEvents([]); setHistoryLoading(false); }
@@ -789,54 +777,27 @@ const TemplatesPage = () => {
         }}
       />
 
-      {showCreateTemplatePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ width: 500, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание шаблона</h3>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название шаблона</label>
-              <input type="text" value={createTemplateName} onChange={e => setCreateTemplateName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplateSubmit(); }} placeholder="Введите название" autoFocus
-                style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', paddingLeft: 12, paddingRight: 12, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', outline: 'none', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }} />
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Модель</label>
-              <div onClick={() => setShowModelSelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateModelUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
-                <img src={createTemplateModelUid ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
-                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateModelUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateModelName || 'Выберите модель'}</span>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Конфигурация</label>
-              <div onClick={() => setShowConfigSelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateConfigUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
-                <img src={createTemplateConfigUid ? Icon32 : Icon31} alt="" style={{ width: 14.5, height: 18, flexShrink: 0 }} />
-                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateConfigUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateConfigName || 'Выберите конфигурацию'}</span>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Каталог</label>
-              <div onClick={() => setShowCategorySelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: createTemplateCategoryUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
-                <img src={Icon11} alt="" style={{ width: 18, height: 16, flexShrink: 0 }} />
-                <span style={{ marginLeft: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: createTemplateCategoryUid ? '#666EFE' : '#A0A3BD' }}>{createTemplateCategoryName || 'Без категории'}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={handleCreateTemplateSubmit} disabled={isCreatingTemplate || !createTemplateName.trim()}
-                style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: createTemplateName.trim() && !isCreatingTemplate ? '#666EFE' : '#BCC8FF', cursor: createTemplateName.trim() && !isCreatingTemplate ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>
-                {isCreatingTemplate ? 'Создание...' : 'Создать'}
-              </button>
-              <button onClick={() => { setShowCreateTemplatePopup(false); resetCreateTemplateForm(); }}
-                style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
-                Отмена
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TemplateCreateEditPopup
+        isOpen={showCreateTemplatePopup}
+        onClose={() => { setShowCreateTemplatePopup(false); resetCreateTemplateForm(); }}
+        onConfirm={handleCreateTemplateSubmit}
+        name={createTemplateName}
+        onNameChange={setCreateTemplateName}
+        categoryUid={createTemplateCategoryUid}
+        categoryName={createTemplateCategoryName}
+        onCategoryChange={(uid, name) => { setCreateTemplateCategoryUid(uid || null); setCreateTemplateCategoryName(name); }}
+        onOpenCategoryFullList={() => setShowCategorySelect(true)}
+        modelUid={createTemplateModelUid}
+        modelName={createTemplateModelName}
+        onModelChange={(uid, name) => { setCreateTemplateModelUid(uid); setCreateTemplateModelName(name); }}
+        onOpenModelFullList={() => setShowModelSelect(true)}
+        configUid={createTemplateConfigUid}
+        configName={createTemplateConfigName}
+        onConfigChange={(uid, name) => { setCreateTemplateConfigUid(uid); setCreateTemplateConfigName(name); }}
+        onOpenConfigFullList={() => setShowConfigSelect(true)}
+        isSubmitting={isCreatingTemplate}
+        mode={createMode}
+      />
 
       <CatalogSelectPopup isOpen={showCategorySelect} onClose={() => setShowCategorySelect(false)} onSelect={(id, name) => { setCreateTemplateCategoryUid(id); setCreateTemplateCategoryName(name); setShowCategorySelect(false); }} popupType="templateCategory" />
       <CatalogSelectPopup isOpen={showModelSelect} onClose={() => setShowModelSelect(false)} onSelect={(id, name) => { setCreateTemplateModelUid(id); setCreateTemplateModelName(name); setCreateTemplateConfigUid(''); setCreateTemplateConfigName(''); setShowModelSelect(false); }} popupType="stationModel" />

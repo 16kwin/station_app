@@ -1,4 +1,4 @@
-// CellDetailsPopup.tsx — ПОЛНЫЙ ФАЙЛ (без createPortal, чтобы state сохранялся между вкладками)
+// CellDetailsPopup.tsx — ПОЛНЫЙ ФАЙЛ (readOnly без блюра, только блокировка кликов)
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
@@ -76,6 +76,8 @@ interface CellDetailsPopupProps {
   isTmc?: boolean;
   isSgd?: boolean;
   getOtherQuantityForMaterial?: (materialUid: string, excludeKey?: { numberCell: number; columnNumber: number; drumNumber: number }) => number;
+  readOnly?: boolean;
+  targetCells?: { numberCell: number; columnNumber: number; drumNumber: number }[];
 }
 
 interface MaterialDetail {
@@ -104,10 +106,10 @@ interface RawMaterialOption {
   typeMaterialName: string;
 }
 
-const ToggleSwitch = React.memo(({ value, onChange }: { value: boolean; onChange: () => void }) => {
+const ToggleSwitch = React.memo(({ value, onChange, disabled }: { value: boolean; onChange: () => void; disabled?: boolean }) => {
   const trackWidth = 26; const trackHeight = 13; const knobSize = 11; const padding = (trackHeight - knobSize) / 2;
   return (
-    <div onClick={(e) => { e.stopPropagation(); onChange(); }} style={{ width: trackWidth, height: trackHeight, borderRadius: trackHeight / 2, backgroundColor: value ? '#666EFE' : 'rgba(45, 64, 89, 0.44)', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'background-color 0.3s ease' }}>
+    <div onClick={(e) => { e.stopPropagation(); if (disabled) return; onChange(); }} style={{ width: trackWidth, height: trackHeight, borderRadius: trackHeight / 2, backgroundColor: value ? '#666EFE' : 'rgba(45, 64, 89, 0.44)', cursor: disabled ? 'not-allowed' : 'pointer', position: 'relative', flexShrink: 0, transition: 'background-color 0.3s ease', opacity: disabled ? 0.5 : 1 }}>
       <motion.div initial={false} animate={{ x: value ? trackWidth - knobSize - padding * 2 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 0.5 }} style={{ width: knobSize, height: knobSize, borderRadius: '50%', backgroundColor: '#FFFFFF', position: 'absolute', top: padding, left: padding }} />
     </div>
   );
@@ -125,6 +127,8 @@ const sanitizeQuantity = (raw: string): number => {
 const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   isOpen, onClose, cellId, cellName, selectedColumn, selectedDrum, cellData, onSaved,
   stationUid, stationName, isTmc: stationIsTmc, isSgd: stationIsSgd, getOtherQuantityForMaterial,
+  readOnly = false,
+  targetCells,
 }) => {
   const { openTab } = useTabs();
 
@@ -148,9 +152,6 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   const [regData, setRegData] = useState<StockLevelReg | null>(null);
   const [regLoaded, setRegLoaded] = useState(false);
 
-  // === Ключ, по которому инициализируется состояние попапа ===
-  // Пока этот ключ не меняется — useEffect не перезаписывает локальные правки.
-  // Меняется только при открытии новой ячейки или при изменении cellData с бэка.
   const initializedKeyRef = useRef<string>('');
 
   const materialDetailRef = useRef<MaterialDetail | null>(null);
@@ -222,10 +223,6 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
     loadMaterials();
   }, [isOpen, rawMaterialOptions.length]);
 
-  // === Инициализация состояния попапа ===
-  // Срабатывает только когда меняется ключ (cellId/column/drum). Если попап остаётся
-  // открытым и мы просто переключаем вкладку — useEffect не сработает повторно,
-  // и локальные правки сохранятся.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -339,6 +336,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   }, [isOpen, stationUid, selectedMaterialUid, loadReg]);
 
   const handleSelectMaterial = async (uid: string, name: string) => {
+    if (readOnly) return;
     setIsLoading(true);
     setSelectedMaterialUid(uid);
     selectedMaterialUidRef.current = uid;
@@ -354,6 +352,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   };
 
   const handleAssignmentChange = (newUid: string) => {
+    if (readOnly) return;
     if (newUid !== cellAssignmentUid) {
       setSelectedMaterialUid('');
       selectedMaterialUidRef.current = '';
@@ -378,7 +377,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   const isTmcAssignment = assignmentTypeName === 'ТМЦ';
   const isReadyDetail = assignmentTypeName === 'Готовая деталь';
   const isLom = currentAssignmentName === 'Лом';
-  const isBrak = currentAssignmentName === 'Возврат брака ТМЦ';
+  const isBrak = currentAssignmentName === 'Возврата брака ТМЦ';
   const isPeretochka = currentAssignmentName === 'Инструмент на переточку';
   const isReadyDetailFromProduction = currentAssignmentName === 'Готовая деталь (с производства)';
   const isReadyDetailPassed = currentAssignmentName === 'Готовая деталь (контроль качества пройден)';
@@ -432,6 +431,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
     (quantityIsRequired && quantityIsEmpty);
 
   const handleOpenCreateDocument = () => {
+    if (readOnly) return;
     if (!stationUid || !selectedMaterialUid) return;
 
     let newUid: string;
@@ -451,32 +451,36 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
 
     const path = `/documents/stock-level-control/create/${newUid}?${params.toString()}`;
     openTab(path, 'Контроль остатков (новый)', null);
-    // onClose() не вызываем — попап остаётся открытым и с сохранённым состоянием.
   };
 
   const handleSave = () => {
+    if (readOnly) return;
     if (isSaveDisabled) return;
 
-    const key = { numberCell: cellId, columnNumber: selectedColumn, drumNumber: selectedDrum };
+    const targets = (targetCells && targetCells.length > 0)
+      ? targetCells
+      : [{ numberCell: cellId, columnNumber: selectedColumn, drumNumber: selectedDrum }];
+
     const uid = selectedMaterialUidRef.current;
     const detail = materialDetailRef.current;
 
     if (isLom) {
-      onSaved({
+      const payload: Partial<CellData> = {
         cellAssignmentUid: cellAssignmentUid || null,
         cellAssignmentName: currentAssignmentName || null,
         cellAssignmentTypeUid: currentAssignment?.typeUid || null,
         cellAssignmentTypeName: currentAssignment?.typeName || null,
         materialUid: null, materialName: null, materialArticle: null, quantity: null,
         returnToThisCell: false, isIndividual: false,
-      }, key);
+      };
+      targets.forEach(t => onSaved(payload as CellData, t));
       onClose();
       return;
     }
 
     if (showNomenclatureFields && uid) {
       const safeQuantity = sanitizeQuantity(String(quantity));
-      onSaved({
+      const payload: Partial<CellData> = {
         cellAssignmentUid: cellAssignmentUid || null,
         cellAssignmentName: currentAssignmentName || null,
         cellAssignmentTypeUid: currentAssignment?.typeUid || null,
@@ -487,25 +491,28 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
         quantity: detail?.usage === true ? 1 : safeQuantity,
         returnToThisCell: returnToThisCell,
         isIndividual: showIndividualToggle ? individualCell : false,
-      }, key);
-    } else if (cellData?.materialUid || cellData?.cellAssignmentUid) {
-      if (!cellAssignmentUid) { onSaved(null, key); }
-      else {
-        onSaved({
-          cellAssignmentUid, cellAssignmentName: currentAssignmentName || null,
-          cellAssignmentTypeUid: currentAssignment?.typeUid || null, cellAssignmentTypeName: currentAssignment?.typeName || null,
-          materialUid: null, materialName: null, materialArticle: null, quantity: null,
-          returnToThisCell: false, isIndividual: showIndividualToggle ? individualCell : false,
-        }, key);
-      }
-    } else if (cellAssignmentUid) {
-      onSaved({
-        cellAssignmentUid, cellAssignmentName: currentAssignmentName || null,
-        cellAssignmentTypeUid: currentAssignment?.typeUid || null, cellAssignmentTypeName: currentAssignment?.typeName || null,
-        materialUid: null, materialName: null, materialArticle: null, quantity: null,
-        returnToThisCell: false, isIndividual: showIndividualToggle ? individualCell : false,
-      }, key);
+      };
+      targets.forEach(t => onSaved(payload as CellData, t));
+      onClose();
+      return;
     }
+
+    if (!cellAssignmentUid) {
+      targets.forEach(t => onSaved(null, t));
+      onClose();
+      return;
+    }
+
+    const payload: Partial<CellData> = {
+      cellAssignmentUid,
+      cellAssignmentName: currentAssignmentName || null,
+      cellAssignmentTypeUid: currentAssignment?.typeUid || null,
+      cellAssignmentTypeName: currentAssignment?.typeName || null,
+      materialUid: null, materialName: null, materialArticle: null, quantity: null,
+      returnToThisCell: false,
+      isIndividual: showIndividualToggle ? individualCell : false,
+    };
+    targets.forEach(t => onSaved(payload as CellData, t));
     onClose();
   };
 
@@ -517,7 +524,6 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
     if (!uid) return;
     const code = detail?.codeMaterial ?? 0;
     openTab(`/references/nomenclature/edit/${uid}/${code}`, `Номенклатура: ${detail?.nameMaterial || uid}`, null);
-    // onClose() тоже не вызываем — попап сохраняется.
   };
 
   const renderImageBlock = () => {
@@ -721,6 +727,17 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   const quantityFieldIcon = quantity > 0 ? CodeIcon20Blue : CodeIcon20Gray;
   const quantityFieldIconActive = CodeIcon20Blue;
 
+  // === READ-ONLY: левая часть просто блокируется по кликам, без блюра ===
+  const leftPartWrapperStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '50%',
+    height: '100%',
+    pointerEvents: readOnly ? 'none' : 'auto',
+    userSelect: readOnly ? 'none' : 'auto',
+  };
+
   const content = (
     <>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backgroundColor: 'rgba(0, 0, 0, 0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
@@ -733,111 +750,159 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
           <div style={{ position: 'absolute', top: 79, left: '50%', transform: 'translateX(-50%)', width: '1px', height: '493px', backgroundColor: 'rgba(160, 163, 189, 0.2)' }} />
 
           {/* ЛЕВАЯ ЧАСТЬ */}
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '50%', height: '100%' }}>
-
-            <div style={{ position: 'absolute', top: posAssignmentLabel, left: LEFT_OFFSET }}>
-              <span style={labelStyle}>Назначение ячейки:</span>
-            </div>
-            <div style={{ position: 'absolute', top: posAssignmentField, left: LEFT_OFFSET }}>
-              <FormField
-                width={FIELD_WIDTH}
-                height={FIELD_HEIGHT}
-                value={currentAssignmentName}
-                placeholder="Выберите назначение"
-                type="expand"
-                icon={AccountingIcon16Gray}
-                iconActive={AccountingIcon16Blue}
-                selectIconWidth={16}
-                selectIconHeight={16}
-                expandOptions={assignmentExpandOptions}
-                onSelectOption={(uid) => handleAssignmentChange(uid)}
-                labelMarginBottom={LABEL_TO_FIELD}
-              />
-            </div>
-
-            {showIndividualToggle && (
-              <div style={{ position: 'absolute', top: posIndividualRow, left: 0, height: individualRowHeight, display: 'flex', alignItems: 'center' }}>
-                <img
-                  src={InfoIcon18Blue}
-                  alt=""
-                  style={{ width: 18, height: 18, position: 'absolute', left: INFO_ICON_LEFT, top: '50%', transform: 'translateY(-50%)' }}
-                />
-                <div style={{ marginLeft: INFO_TEXT_LEFT, display: 'flex', alignItems: 'center', height: individualRowHeight }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 15, color: '#2D4059', lineHeight: `${individualRowHeight}px` }}>
-                    Под каждую номенклатуру индивидуальная ячейка
-                  </span>
-                  <div style={{ marginLeft: 18 }}>
-                    <ToggleSwitch value={individualCell} onChange={() => setIndividualCell(!individualCell)} />
-                  </div>
-                </div>
+          <div style={leftPartWrapperStyle}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+              <div style={{ position: 'absolute', top: posAssignmentLabel, left: LEFT_OFFSET }}>
+                <span style={labelStyle}>Назначение ячейки:</span>
               </div>
-            )}
+              <div style={{ position: 'absolute', top: posAssignmentField, left: LEFT_OFFSET }}>
+                <FormField
+                  width={FIELD_WIDTH}
+                  height={FIELD_HEIGHT}
+                  value={currentAssignmentName}
+                  placeholder="Выберите назначение"
+                  type="expand"
+                  icon={AccountingIcon16Gray}
+                  iconActive={AccountingIcon16Blue}
+                  selectIconWidth={16}
+                  selectIconHeight={16}
+                  expandOptions={assignmentExpandOptions}
+                  onSelectOption={(uid) => handleAssignmentChange(uid)}
+                  labelMarginBottom={LABEL_TO_FIELD}
+                />
+              </div>
 
-            {showNomenclatureFields && (
-              <>
-                <div style={{ position: 'absolute', top: posNomenclatureLabel, left: LEFT_OFFSET }}>
-                  <FormField
-                    width={FIELD_WIDTH}
-                    height={FIELD_HEIGHT}
-                    label="Номенклатура:"
-                    value={selectedMaterialName}
-                    placeholder="Выберите номенклатуру"
-                    type="select"
-                    icon={NomenclatureIcon16Gray}
-                    iconActive={NomenclatureIcon16Blue}
-                    selectIconWidth={16}
-                    selectIconHeight={18}
-                    searchOptions={materialSearchOptions}
-                    onSelectOption={handleSelectMaterialFromSearch}
-                    onOpenFullList={() => setShowCatalog(true)}
-                    searchTitle="Найденная номенклатура"
-                    searchNotFoundText="Номенклатура не найдена"
-                    labelMarginBottom={LABEL_TO_FIELD}
+              {showIndividualToggle && (
+                <div style={{ position: 'absolute', top: posIndividualRow, left: 0, height: individualRowHeight, display: 'flex', alignItems: 'center' }}>
+                  <img
+                    src={InfoIcon18Blue}
+                    alt=""
+                    style={{ width: 18, height: 18, position: 'absolute', left: INFO_ICON_LEFT, top: '50%', transform: 'translateY(-50%)' }}
                   />
-                </div>
-
-                <div style={{ position: 'absolute', top: posQuantityLabel, left: LEFT_OFFSET }}>
-                  <FormField
-                    width={FIELD_WIDTH}
-                    height={FIELD_HEIGHT}
-                    label="Количество в ячейке:"
-                    value={quantityFieldValue}
-                    placeholder="0"
-                    type="input"
-                    inputType="number"
-                    disabled={isMultiUsage}
-                    icon={quantityFieldIcon}
-                    iconActive={quantityFieldIconActive}
-                    iconWidth={20}
-                    iconHeight={14}
-                    onChange={e => setQuantity(sanitizeQuantity(e.target.value))}
-                    labelMarginBottom={LABEL_TO_FIELD}
-                  />
-                </div>
-
-                {showReturnToggle && (
-                  <div style={{ position: 'absolute', top: posReturnToggle, left: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-                    <img
-                      src={InfoIcon18Blue}
-                      alt=""
-                      style={{ width: 18, height: 18, position: 'absolute', left: INFO_ICON_LEFT, top: '50%', transform: 'translateY(-50%)' }}
-                    />
-                    <div style={{ marginLeft: INFO_TEXT_LEFT, display: 'flex', alignItems: 'center', height: 18 }}>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 15, color: '#2D4059', lineHeight: '18px' }}>
-                        Возвращать в эту ячейку
-                      </span>
-                      <div style={{ marginLeft: 18 }}>
-                        <ToggleSwitch value={returnToThisCell} onChange={() => setReturnToThisCell(!returnToThisCell)} />
-                      </div>
+                  <div style={{ marginLeft: INFO_TEXT_LEFT, display: 'flex', alignItems: 'center', height: individualRowHeight }}>
+                    <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 15, color: '#2D4059', lineHeight: `${individualRowHeight}px` }}>
+                      Под каждую номенклатуру индивидуальная ячейка
+                    </span>
+                    <div style={{ marginLeft: 18 }}>
+                      <ToggleSwitch value={individualCell} onChange={() => setIndividualCell(!individualCell)} />
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {showKuoBlock && selectedMaterialUid && (isMultiUsage || isSingleUsage || (showIndividualToggle && individualCell)) && !regLoading && (
-                  <>
-                    {hasReg ? (
-                      needInfo ? (
-                        <div style={{ position: 'absolute', top: posInfoTop, left: 0, width: FIELD_WIDTH }}>
+              {showNomenclatureFields && (
+                <>
+                  <div style={{ position: 'absolute', top: posNomenclatureLabel, left: LEFT_OFFSET }}>
+                    <FormField
+                      width={FIELD_WIDTH}
+                      height={FIELD_HEIGHT}
+                      label="Номенклатура:"
+                      value={selectedMaterialName}
+                      placeholder="Выберите номенклатуру"
+                      type="select"
+                      icon={NomenclatureIcon16Gray}
+                      iconActive={NomenclatureIcon16Blue}
+                      selectIconWidth={16}
+                      selectIconHeight={18}
+                      searchOptions={materialSearchOptions}
+                      onSelectOption={handleSelectMaterialFromSearch}
+                      onOpenFullList={() => setShowCatalog(true)}
+                      searchTitle="Найденная номенклатура"
+                      searchNotFoundText="Номенклатура не найдена"
+                      labelMarginBottom={LABEL_TO_FIELD}
+                    />
+                  </div>
+
+                  <div style={{ position: 'absolute', top: posQuantityLabel, left: LEFT_OFFSET }}>
+                    <FormField
+                      width={FIELD_WIDTH}
+                      height={FIELD_HEIGHT}
+                      label="Количество в ячейке:"
+                      value={quantityFieldValue}
+                      placeholder="0"
+                      type="input"
+                      inputType="number"
+                      disabled={isMultiUsage}
+                      icon={quantityFieldIcon}
+                      iconActive={quantityFieldIconActive}
+                      iconWidth={20}
+                      iconHeight={14}
+                      onChange={e => setQuantity(sanitizeQuantity(e.target.value))}
+                      labelMarginBottom={LABEL_TO_FIELD}
+                    />
+                  </div>
+
+                  {showReturnToggle && (
+                    <div style={{ position: 'absolute', top: posReturnToggle, left: 0, height: 18, display: 'flex', alignItems: 'center' }}>
+                      <img
+                        src={InfoIcon18Blue}
+                        alt=""
+                        style={{ width: 18, height: 18, position: 'absolute', left: INFO_ICON_LEFT, top: '50%', transform: 'translateY(-50%)' }}
+                      />
+                      <div style={{ marginLeft: INFO_TEXT_LEFT, display: 'flex', alignItems: 'center', height: 18 }}>
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 15, color: '#2D4059', lineHeight: '18px' }}>
+                          Возвращать в эту ячейку
+                        </span>
+                        <div style={{ marginLeft: 18 }}>
+                          <ToggleSwitch value={returnToThisCell} onChange={() => setReturnToThisCell(!returnToThisCell)} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {showKuoBlock && selectedMaterialUid && (isMultiUsage || isSingleUsage || (showIndividualToggle && individualCell)) && !regLoading && (
+                    <>
+                      {hasReg ? (
+                        needInfo ? (
+                          <div style={{ position: 'absolute', top: posInfoTop, left: 0, width: FIELD_WIDTH }}>
+                            <img
+                              src={InfoIcon18Blue}
+                              alt=""
+                              style={{ width: 18, height: 18, position: 'absolute', left: INFO_ICON_LEFT, top: 0 }}
+                            />
+                            <span style={{
+                              position: 'absolute', left: INFO_TEXT_LEFT, top: 0,
+                              fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14,
+                              color: '#2D4059', lineHeight: `${LABEL_HEIGHT}px`, display: 'block',
+                            }}>
+                              Информация
+                            </span>
+
+                            <div style={{
+                              position: 'absolute',
+                              top: POS_INFO_TEXT_TOP,
+                              left: POS_INFO_TEXT_LEFT,
+                              width: 410,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 20,
+                            }}>
+                              <div>
+                                <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
+                                  Минимально определенный остаток этой номенклатуры
+                                </div>
+                                <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
+                                  на этой станции:{' '}
+                                  <span style={{ fontWeight: 700, color: '#666EFE' }}>{minStock ?? 0}</span>{' '}
+                                  единицы
+                                </div>
+                              </div>
+
+                              <div>
+                                <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
+                                  Забронируйте ячейки для этой номенклатуры еще
+                                </div>
+                                <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
+                                  минимум на:{' '}
+                                  <span style={{ fontWeight: 700, color: '#666EFE' }}>{needToAdd}</span>{' '}
+                                  единицы
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null
+                      ) : (
+                        <div style={{ position: 'absolute', top: POS_NOTSET_TOP, left: 0, width: FIELD_WIDTH }}>
                           <img
                             src={InfoIcon18Blue}
                             alt=""
@@ -851,78 +916,31 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
                             Информация
                           </span>
 
-                          <div style={{
-                            position: 'absolute',
-                            top: POS_INFO_TEXT_TOP,
-                            left: POS_INFO_TEXT_LEFT,
-                            width: 410,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 20,
-                          }}>
-                            <div>
-                              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
-                                Минимально определенный остаток этой номенклатуры
-                              </div>
-                              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
-                                на этой станции:{' '}
-                                <span style={{ fontWeight: 700, color: '#666EFE' }}>{minStock ?? 0}</span>{' '}
-                                единицы
-                              </div>
-                            </div>
-
-                            <div>
-                              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
-                                Забронируйте ячейки для этой номенклатуры еще
-                              </div>
-                              <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '20px' }}>
-                                минимум на:{' '}
-                                <span style={{ fontWeight: 700, color: '#666EFE' }}>{needToAdd}</span>{' '}
-                                единицы
-                              </div>
-                            </div>
+                          <div
+                            onClick={handleOpenCreateDocument}
+                            style={{
+                              position: 'absolute',
+                              top: POS_INFO_TEXT_TOP,
+                              left: POS_INFO_TEXT_LEFT,
+                              width: 410,
+                              cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif',
+                              fontWeight: 500,
+                              fontSize: 14,
+                              color: '#FF3052',
+                              lineHeight: '18px',
+                              userSelect: 'none',
+                            }}
+                          >
+                            Для выбранной номенклатуры не установлен контроль уровня остатков. Для работы функции автоматического контроля уровня остатка определите уровни остатков данной номенклатуры в документе "Контроль уровней остатков"
                           </div>
                         </div>
-                      ) : null
-                    ) : (
-                      <div style={{ position: 'absolute', top: POS_NOTSET_TOP, left: 0, width: FIELD_WIDTH }}>
-                        <img
-                          src={InfoIcon18Blue}
-                          alt=""
-                          style={{ width: 18, height: 18, position: 'absolute', left: INFO_ICON_LEFT, top: 0 }}
-                        />
-                        <span style={{
-                          position: 'absolute', left: INFO_TEXT_LEFT, top: 0,
-                          fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14,
-                          color: '#2D4059', lineHeight: `${LABEL_HEIGHT}px`, display: 'block',
-                        }}>
-                          Информация
-                        </span>
-
-                        <div
-                          onClick={handleOpenCreateDocument}
-                          style={{
-                            position: 'absolute',
-                            top: POS_INFO_TEXT_TOP,
-                            left: POS_INFO_TEXT_LEFT,
-                            width: 410,
-                            cursor: 'pointer',
-                            fontFamily: 'Inter, sans-serif',
-                            fontWeight: 500,
-                            fontSize: 14,
-                            color: '#FF3052',
-                            lineHeight: '18px',
-                            userSelect: 'none',
-                          }}
-                        >
-                          Для выбранной номенклатуры не установлен контроль уровня остатков. Для работы функции автоматического контроля уровня остатка определите уровни остатков данной номенклатуры в документе "Контроль уровней остатков"
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* ПРАВАЯ ЧАСТЬ */}
@@ -1072,31 +1090,33 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
 
           {/* КНОПКИ ВНИЗУ СПРАВА */}
           <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 30 }}>
-            <button
-              onClick={handleSave}
-              disabled={isSaveDisabled}
-              style={{
-                width: 156,
-                height: 44,
-                borderRadius: 10,
-                border: 'none',
-                backgroundColor: '#666EFE',
-                cursor: isSaveDisabled ? 'not-allowed' : 'pointer',
-                opacity: isSaveDisabled ? 0.5 : 1,
-                pointerEvents: isSaveDisabled ? 'none' : 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: 18,
-                paddingRight: 18,
-                boxSizing: 'border-box',
-                gap: 17,
-              }}
-            >
-              <img src={WriteIcon20White} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 14, color: '#FFFFFF' }}>
-                Сохранить
-              </span>
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleSave}
+                disabled={isSaveDisabled}
+                style={{
+                  width: 156,
+                  height: 44,
+                  borderRadius: 10,
+                  border: 'none',
+                  backgroundColor: '#666EFE',
+                  cursor: isSaveDisabled ? 'not-allowed' : 'pointer',
+                  opacity: isSaveDisabled ? 0.5 : 1,
+                  pointerEvents: isSaveDisabled ? 'none' : 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingLeft: 18,
+                  paddingRight: 18,
+                  boxSizing: 'border-box',
+                  gap: 17,
+                }}
+              >
+                <img src={WriteIcon20White} alt="" style={{ width: 20, height: 20, flexShrink: 0 }} />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 14, color: '#FFFFFF' }}>
+                  Сохранить
+                </span>
+              </button>
+            )}
 
             <button
               onClick={handleCancel}
@@ -1126,7 +1146,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
         </div>
       )}
 
-      {showCatalog && (
+      {showCatalog && !readOnly && (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000 }}>
           <CatalogSelectPopup
             isOpen={showCatalog}

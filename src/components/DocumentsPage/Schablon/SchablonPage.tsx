@@ -1,4 +1,4 @@
-// SchablonPage.tsx — ПОЛНЫЙ ФАЙЛ (нижние блоки уходят под общий z-index, чтобы блюрились/перекрывались как остальное)
+// SchablonPage.tsx — ПОЛНЫЙ ФАЙЛ (иконки 18 внутри кнопок 40, анимации как в TableToolbar)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -86,13 +86,36 @@ import InstallationIcon20Black from '../../../assets/Icons/InstallationIcons/Ins
 import ShapeIcon24Black from '../../../assets/Icons/ShapeIcons/ShapeIcon24Black.svg';
 import InfoIcon18Blue from '../../../assets/Icons/InfoIcons/InfoIcon18Blue.svg';
 
+import CodeIcon20Gray from '../../../assets/Icons/CodeIcons/CodeIcon20Gray.svg';
+import CodeIcon20Blue from '../../../assets/Icons/CodeIcons/CodeIcon20Blue.svg';
+import AccountingIcon16Gray from '../../../assets/Icons/AccountingIcons/AccountingIcon16Gray.svg';
+import AccountingIcon16Blue from '../../../assets/Icons/AccountingIcons/AccountingIcon16Blue.svg';
+import StationIcon16Gray from '../../../assets/Icons/StationIcons/StationIcon16Gray.svg';
+import StationIcon16Blue from '../../../assets/Icons/StationIcons/StationIcon16Blue.svg';
+import NameIcon18Gray from '../../../assets/Icons/NameIcons/NameIcon18Gray.svg';
+import NameIcon18Blue from '../../../assets/Icons/NameIcons/NameIcon18Blue.svg';
+
+// Большие иконки (24) — интерактивная форма
 import SearchIcon24Black from '../../../assets/Icons/SearchIcons/SearchIcon24Black.svg';
 import SearchIcon24White from '../../../assets/Icons/SearchIcons/SearchIcon24White.svg';
 import FilterIcon24Black from '../../../assets/Icons/FilterIcons/FilterIcon24Black.svg';
 import FilterIcon24White from '../../../assets/Icons/FilterIcons/FilterIcon24White.svg';
-import CleanIcon26Black from '../../../assets/Icons/CleanIcons/CleanIcon26Black.svg';
 import PrintIcon24Black from '../../../assets/Icons/PrintIcons/PrintIcon24Black.svg';
 import DownloadIcon24Black from '../../../assets/Icons/DownloadIcons/DownloadIcon24Black.svg';
+import CleanIcon26Black from '../../../assets/Icons/CleanIcons/CleanIcon26Black.svg';
+
+// Маленькие иконки (18) — документальная форма: поиск, фильтр, печать, скачать, история
+import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
+import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
+import FilterIcon18Black from '../../../assets/Icons/FilterIcons/FilterIcon18Black.svg';
+import FilterIcon18White from '../../../assets/Icons/FilterIcons/FilterIcon18White.svg';
+import PrintIcon18Black from '../../../assets/Icons/PrintIcons/PrintIcon18Black.svg';
+import DownloadIcon18Black from '../../../assets/Icons/DownloadIcons/DownloadIcon18Black.svg';
+import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
+
+import CellIcon16Black from '../../../assets/Icons/CellIcons/CellIcon16Black.svg';
+import CleanIcon16Black from '../../../assets/Icons/CleanIcons/CleanIcon16Black.svg';
+import WatchIcon16Black from '../../../assets/Icons/WatchIcons/WatchIcon16Black.svg';
 
 import ArrowIcon6Black from '../../../assets/Icons/ArrowIcons/ArrowIcon6Black.svg';
 import ArrowIcon6Blue from '../../../assets/Icons/ArrowIcons/ArrowIcon6Blue.svg';
@@ -106,10 +129,7 @@ import CellDetailsPopup from './CellDetailsPopup';
 import SchablonSaveAsPopup from './SchablonSaveAsPopup';
 import CatalogSelectPopup from '../../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import DataTable from '../../elements/DataTable';
-import type { ContextMenuItem } from '../../elements/ContextMenu';
-import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
-import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
-import StationIcon16Black from '../../../assets/Icons/StationIcons/StationIcon16Black.svg';
+import FormField from '../../elements/FormField';
 
 interface ModelCell {
   id: string;
@@ -146,7 +166,14 @@ interface DocumentRow {
   materialArticle: string;
   quantity: string;
   usage: string;
-  _cellData: CellData;
+  _cellData: CellData | null;
+  _target: { numberCell: number; columnNumber: number; drumNumber: number } | null;
+}
+
+interface CellTarget {
+  numberCell: number;
+  columnNumber: number;
+  drumNumber: number;
 }
 
 const FRAMES = [frame1, frame2, frame3, frame4, frame5, frame6, frame7, frame8, frame9, frame10, frame11, frame12, frame13, frame14, frame15, frame16, frame17, frame18, frame19, frame20, frame21, frame22, frame23, frame24, frame25, frame26, frame27, frame28, frame29, frame30, frame31];
@@ -158,7 +185,7 @@ const SUPPORTED_CELL_TYPE = 'drum'; const SUPPORTED_TOTAL_DRUMS = 2; const SUPPO
 
 const DOC_COLUMNS = [
   { key: 'numberCell', label: 'Номер ячейки' },
-  { key: 'cellAssignmentName', label: 'Назначение' },
+  { key: 'cellAssignmentName', label: 'Назначение ячейки' },
   { key: 'materialName', label: 'Номенклатура в ячейке' },
   { key: 'materialArticle', label: 'Артикул' },
   { key: 'quantity', label: 'Количество' },
@@ -247,7 +274,14 @@ const SchablonPage: React.FC = () => {
 
   const [isClearPopupOpen, setIsClearPopupOpen] = useState(false);
   const [isCellPopupOpen, setIsCellPopupOpen] = useState(false);
-  const [cellPopupData, setCellPopupData] = useState<{ id: number; column: number; drum: number; cellData: CellData | null }>({ id: 0, column: 1, drum: 1, cellData: null });
+  const [cellPopupReadOnly, setCellPopupReadOnly] = useState(false);
+  const [cellPopupData, setCellPopupData] = useState<{
+    id: number;
+    column: number;
+    drum: number;
+    cellData: CellData | null;
+    targetCells: CellTarget[];
+  }>({ id: 0, column: 1, drum: 1, cellData: null, targetCells: [] });
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -259,6 +293,9 @@ const SchablonPage: React.FC = () => {
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
   const [typeFilterSet, setTypeFilterSet] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [docSelectedIds, setDocSelectedIds] = useState<Set<string>>(new Set());
+  const [docContextMenu, setDocContextMenu] = useState<{ x: number; y: number; uid: string; target: CellTarget | null; cellData: CellData | null } | null>(null);
 
   const isAnyPopupOpen = isClearPopupOpen || isCellPopupOpen || isSaveAsOpen || showCloseConfirm || isStationSelectOpen;
   const prevSelectedIdsRef = useRef<Set<number>>(new Set());
@@ -455,6 +492,13 @@ const SchablonPage: React.FC = () => {
     if (expanded === 'search' && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 100);
   }, [expanded]);
 
+  useEffect(() => {
+    if (!docContextMenu) return;
+    const handler = () => setDocContextMenu(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [docContextMenu]);
+
   const handleToggleActive = async () => {
     if (!uid) return;
     if (isDirty) return;
@@ -522,9 +566,9 @@ const SchablonPage: React.FC = () => {
     setInstallFading(false);
   };
 
-  const formatDate = (dateStr: string): string => { if (!dateStr) return ''; try { const d = new Date(dateStr); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; } catch { return dateStr; } };
+  const formatDate = (dateStr: string): string => { if (!dateStr) return ''; try { const d = new Date(dateStr); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`; } catch { return dateStr; } };
 
-  const title = `Документ: Схема загрузки станции (${stationName || templateConfigName || '...'}) №${templateNumber || '—'} от ${formatDate(templateDate)}`;
+  const title = `Документ: Шаблон (${stationName || templateConfigName || '...'}) №${templateNumber || '—'} от ${formatDate(templateDate)}`;
 
   const leftBlockTitle = stationUid ? (stationName || 'Станция') : (templateConfigName || 'Без конфигурации');
 
@@ -571,18 +615,55 @@ const SchablonPage: React.FC = () => {
     setActiveButtons(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
   };
 
-  const handleDrumChange = useCallback((drum: number) => { if (drum === selectedDrum) return; setSelectedDrum(drum); }, [selectedDrum]);
+  const handleDrumChange = useCallback((drum: number) => { if (drum === selectedDrum) return; setSelectedDrum(drum); setDocSelectedIds(new Set()); }, [selectedDrum]);
+
+  const buildTargets = useCallback((fallbackRowId: number, column: number, drum: number): CellTarget[] => {
+    if (selectedCellIds.size > 1) {
+      return Array.from(selectedCellIds).map(rowId => ({
+        numberCell: rowId,
+        columnNumber: column,
+        drumNumber: drum,
+      }));
+    }
+    return [{ numberCell: fallbackRowId, columnNumber: column, drumNumber: drum }];
+  }, [selectedCellIds]);
 
   const handleCellDoubleClick = useCallback((id: number, column: number, _selectedIds: Set<number>) => {
     const cd = localCells.find(c => c.numberCell === id && c.columnNumber === column && (c.drumNumber == null || c.drumNumber === selectedDrum));
-    setCellPopupData({ id, column, drum: selectedDrum, cellData: cd || null });
+    setCellPopupReadOnly(false);
+    setCellPopupData({
+      id, column, drum: selectedDrum,
+      cellData: cd || null,
+      targetCells: buildTargets(id, column, selectedDrum),
+    });
     setIsCellPopupOpen(true);
-  }, [localCells, selectedDrum]);
+  }, [localCells, selectedDrum, buildTargets]);
 
   const handleOpenDetails = useCallback((rowId: number, column: number, cellData?: CellData) => {
-    setCellPopupData({ id: rowId, column, drum: selectedDrum, cellData: cellData || null });
+    setCellPopupReadOnly(false);
+    setCellPopupData({
+      id: rowId, column, drum: selectedDrum,
+      cellData: cellData || null,
+      targetCells: buildTargets(rowId, column, selectedDrum),
+    });
     setIsCellPopupOpen(true);
-  }, [selectedDrum]);
+  }, [selectedDrum, buildTargets]);
+
+  const handleOpenView = useCallback((rowId: number, column: number, cellData?: CellData) => {
+    const cd = cellData || localCells.find(c =>
+      c.numberCell === rowId &&
+      c.columnNumber === column &&
+      (c.drumNumber == null || c.drumNumber === selectedDrum)
+    ) || null;
+    if (!cd) return;
+    setCellPopupReadOnly(true);
+    setCellPopupData({
+      id: rowId, column, drum: selectedDrum,
+      cellData: cd,
+      targetCells: [],
+    });
+    setIsCellPopupOpen(true);
+  }, [localCells, selectedDrum]);
 
   const handleCellUpdate = useCallback((updated: CellData | null, key: { numberCell: number; columnNumber: number; drumNumber: number }) => {
     setLocalCells(prev => {
@@ -670,7 +751,6 @@ const SchablonPage: React.FC = () => {
   const bottomButtonStyle: React.CSSProperties = { height: '50px', borderRadius: '10px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 700 };
   const activeCells = modelCells.filter(c => !c.deleted);
   const totalActiveCells = activeCells.length;
-  const getDrumCellCount = (drum: number): number => activeCells.filter(c => c.drum === drum).length;
   const displayDrums = Math.min(totalDrums, MAX_DRUMS);
 
   const filledCellsCount = useMemo(() => localCells.filter(c => c.materialUid).length, [localCells]);
@@ -878,56 +958,167 @@ const SchablonPage: React.FC = () => {
   };
 
   const documentRows: DocumentRow[] = useMemo(() => {
-    return [...localCells]
-      .filter(c => c.materialUid || c.cellAssignmentUid)
-      .sort((a, b) => {
-        const ak = `${a.drumNumber ?? 0}-${a.columnNumber ?? 0}-${a.numberCell ?? 0}`;
-        const bk = `${b.drumNumber ?? 0}-${b.columnNumber ?? 0}-${b.numberCell ?? 0}`;
-        return ak.localeCompare(bk);
-      })
-      .map(c => {
-        const numberCell = `${c.drumNumber ?? 1}-${c.numberCell ?? ''}`;
-        const usage = c.materialUid
-          ? (c.cellAssignmentTypeName === 'Готовая деталь' ? 'Готовая деталь' : 'Многоразовое')
+    const rows: DocumentRow[] = [];
+    const d = selectedDrum;
+    for (let col = 1; col <= totalColumns; col++) {
+      const cellsInCol = modelCells
+        .filter(mc => !mc.deleted && mc.column === col && (mc.drum == null || mc.drum === d))
+        .sort((a, b) => a.row - b.row);
+
+      const rowsToUse = cellsInCol.length > 0
+        ? cellsInCol.map(mc => mc.row)
+        : Array.from({ length: totalRows }, (_, i) => i + 1);
+
+      rowsToUse.forEach(rowNum => {
+        const cd = localCells.find(c =>
+          c.numberCell === rowNum &&
+          c.columnNumber === col &&
+          (c.drumNumber == null || c.drumNumber === d)
+        ) || null;
+
+        const numberCell = `${col}-${rowNum}`;
+        const hasMaterial = !!cd?.materialUid;
+        const usage = hasMaterial
+          ? (cd?.cellAssignmentTypeName === 'Готовая деталь' ? 'Готовая деталь'
+            : (cd?.returnToThisCell ? 'Многоразовое' : 'Одноразовое'))
           : '—';
-        return {
-          uid: c.uid || `${c.drumNumber ?? 0}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
+
+        rows.push({
+          uid: cd?.uid || `${d}-${col}-${rowNum}`,
           numberCell,
-          cellAssignmentName: c.cellAssignmentName || '—',
-          materialName: c.materialName || '—',
-          materialArticle: c.materialArticle || '—',
-          quantity: c.quantity != null ? String(c.quantity) : '—',
+          cellAssignmentName: cd?.cellAssignmentName || '—',
+          materialName: cd?.materialName || '—',
+          materialArticle: hasMaterial ? (cd?.materialArticle || '—') : '—',
+          quantity: hasMaterial && cd?.quantity != null ? String(cd.quantity) : '—',
           usage,
-          _cellData: c,
-        } as DocumentRow;
+          _cellData: cd,
+          _target: { numberCell: rowNum, columnNumber: col, drumNumber: d },
+        });
       });
-  }, [localCells]);
+    }
+    return rows;
+  }, [modelCells, localCells, totalColumns, totalRows, selectedDrum]);
 
   const accountingLabel = useMemo(() => {
     const parts: string[] = [];
     if (isTmc) parts.push('ТМЦ');
     if (isSgd) parts.push('СГД');
     if (isOk) parts.push('ОК');
-    return parts.length > 0 ? parts.join(' - ') : '—';
+    return parts.length > 0 ? parts.join(' - ') : '';
   }, [isTmc, isSgd, isOk]);
 
   const handleDocumentRowDoubleClick = (uid: string) => {
     const row = documentRows.find(r => r.uid === uid);
-    if (!row) return;
-    const c = row._cellData;
-    handleOpenDetails(c.numberCell ?? 0, c.columnNumber ?? 1, c);
+    if (!row || !row._target) return;
+    handleOpenDetails(row._target.numberCell, row._target.columnNumber, row._cellData || undefined);
   };
 
-  const documentRowContextMenuItems = (uid: string, _name: string): ContextMenuItem[] => {
+  const handleDocCheckboxClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDocSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  };
+
+  const handleDocSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const allSelected = documentRows.length > 0 && documentRows.every(r => docSelectedIds.has(r.uid));
+    if (allSelected) setDocSelectedIds(new Set());
+    else setDocSelectedIds(new Set(documentRows.map(r => r.uid)));
+  };
+
+  const handleDocRowClick = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDocSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  };
+
+  const handleDocContextMenu = (e: React.MouseEvent, uid: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
     const row = documentRows.find(r => r.uid === uid);
-    if (!row) return [];
-    return [
-      { id: 'open', label: 'Открыть', icon: ContextMenuOpenIcon16, onClick: () => handleDocumentRowDoubleClick(uid) },
-      { id: 'clear', label: 'Очистить', icon: ContextMenuDeleteIcon16, onClick: () => {
-        const c = row._cellData;
-        handleLocalClear(c.numberCell ?? 0, c.columnNumber ?? 1, c.drumNumber ?? 1);
-      }},
-    ];
+    if (!row || !row._target) return;
+    setDocContextMenu({ x: e.clientX, y: e.clientY, uid, target: row._target, cellData: row._cellData });
+  };
+
+  const handleDocContextOpenDetails = () => {
+    if (!docContextMenu) return;
+
+    if (docSelectedIds.size > 1) {
+      const targets: CellTarget[] = [];
+      documentRows.forEach(r => {
+        if (docSelectedIds.has(r.uid) && r._target) targets.push(r._target);
+      });
+      if (targets.length === 0) { setDocContextMenu(null); return; }
+      setCellPopupReadOnly(false);
+      setCellPopupData({
+        id: targets[0].numberCell,
+        column: targets[0].columnNumber,
+        drum: targets[0].drumNumber,
+        cellData: docContextMenu.cellData,
+        targetCells: targets,
+      });
+      setIsCellPopupOpen(true);
+      setDocContextMenu(null);
+      return;
+    }
+
+    if (!docContextMenu.target) return;
+    const t = docContextMenu.target;
+    const cd = docContextMenu.cellData || localCells.find(c =>
+      c.numberCell === t.numberCell && c.columnNumber === t.columnNumber && (c.drumNumber ?? 0) === t.drumNumber
+    ) || null;
+    setCellPopupReadOnly(false);
+    setCellPopupData({
+      id: t.numberCell,
+      column: t.columnNumber,
+      drum: t.drumNumber,
+      cellData: cd,
+      targetCells: [{ numberCell: t.numberCell, columnNumber: t.columnNumber, drumNumber: t.drumNumber }],
+    });
+    setIsCellPopupOpen(true);
+    setDocContextMenu(null);
+  };
+
+  const handleDocContextClear = () => {
+    if (!docContextMenu) return;
+
+    if (docSelectedIds.size > 1) {
+      setLocalCells(prev => prev.filter(c => {
+        const uid = `${c.drumNumber ?? 0}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`;
+        return !docSelectedIds.has(uid);
+      }));
+      setDocSelectedIds(new Set());
+    } else if (docContextMenu.target) {
+      const t = docContextMenu.target;
+      handleLocalClear(t.numberCell, t.columnNumber, t.drumNumber);
+    }
+    setDocContextMenu(null);
+  };
+
+  const handleDocContextView = () => {
+    if (!docContextMenu || !docContextMenu.target) return;
+    if (docSelectedIds.size > 1) { setDocContextMenu(null); return; }
+    const t = docContextMenu.target;
+    const cd = docContextMenu.cellData || localCells.find(c =>
+      c.numberCell === t.numberCell && c.columnNumber === t.columnNumber && (c.drumNumber ?? 0) === t.drumNumber
+    ) || null;
+    if (!cd) { setDocContextMenu(null); return; }
+    setCellPopupReadOnly(true);
+    setCellPopupData({
+      id: t.numberCell,
+      column: t.columnNumber,
+      drum: t.drumNumber,
+      cellData: cd,
+      targetCells: [],
+    });
+    setIsCellPopupOpen(true);
+    setDocContextMenu(null);
   };
 
   const documentRenderCell = (key: string, item: DocumentRow): string => {
@@ -1049,7 +1240,23 @@ const SchablonPage: React.FC = () => {
     }, 120);
   };
 
-  const clearButtonDisabled = selectedCellIds.size < 2;
+  const clearButtonDisabled = selectedCellIds.size < 1;
+
+  const docBtnStyle: React.CSSProperties = {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    border: '1px solid rgba(102, 110, 254, 0.15)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    flexShrink: 0,
+  };
+
+  const docViewDisabled = docSelectedIds.size > 1;
 
   return (
     <div ref={containerRef} style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
@@ -1339,7 +1546,7 @@ const SchablonPage: React.FC = () => {
                     transition={SPRING}
                   >
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      Схема загрузки: {templateName || '—'}
+                      Шаблон: {templateName || '—'}
                     </span>
                   </motion.div>
 
@@ -1376,6 +1583,7 @@ const SchablonPage: React.FC = () => {
                       highlightText={searchValue}
                       onCellCleared={() => {}}
                       onOpenDetails={handleOpenDetails}
+                      onOpenView={handleOpenView}
                       onCellLocalClear={handleLocalClear}
                     />
                   )}
@@ -1384,86 +1592,435 @@ const SchablonPage: React.FC = () => {
             )}
 
             {viewMode === 'document' && (
-              <div style={{ position: 'absolute', top: '84px', left: '40px', right: '40px', bottom: '110px', display: 'flex', flexDirection: 'column', gap: 15 }}>
-                <div style={{ display: 'flex', gap: 20, alignItems: 'stretch' }}>
-                  <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
-                    <div>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: 'rgba(45, 64, 89, 0.7)', display: 'block', marginBottom: 8, lineHeight: '16px' }}>Код:</span>
-                      <div style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', paddingLeft: 13, paddingRight: 14, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' }}>
-                        {templateNumber != null ? `${String(templateNumber).padStart(4, '0')}` : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: 'rgba(45, 64, 89, 0.7)', display: 'block', marginBottom: 8, lineHeight: '16px' }}>Наименование схемы загрузки:</span>
-                      <div style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', paddingLeft: 13, paddingRight: 14, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' }}>
-                        {templateName || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: 'rgba(45, 64, 89, 0.7)', display: 'block', marginBottom: 8, lineHeight: '16px' }}>Станция:</span>
-                      <div style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', paddingLeft: 13, paddingRight: 14, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' }}>
-                        {stationUid ? (stationName || 'Станция') : (templateConfigName || '—')}
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: 'rgba(45, 64, 89, 0.7)', display: 'block', marginBottom: 8, lineHeight: '16px' }}>Вид учёта станции:</span>
-                      <div style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', paddingLeft: 13, paddingRight: 14, fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' }}>
-                        {accountingLabel}
-                      </div>
-                    </div>
+              <>
+                <div style={{ position: 'absolute', top: 100, left: 40, width: 1720, height: 142, backgroundColor: '#FFFFFF', borderRadius: 15 }}>
+                  <div style={{ position: 'absolute', top: 30, left: 40 }}>
+                    <FormField width={340} height={44} label="Код:" value={templateNumber != null ? `${String(templateNumber).padStart(4, '0')}` : ''} type="input" disabled icon={CodeIcon20Gray} iconActive={CodeIcon20Blue} iconWidth={20} iconHeight={14} labelMarginBottom={11} />
                   </div>
-
-                  <div style={{ width: 90, height: 90, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#F5F6FA', flexShrink: 0, alignSelf: 'flex-end', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 30, left: 40 + 340 + 50 }}>
+                    <FormField width={340} height={44} label="Наименование шаблона:" value={templateName || ''} type="input" disabled icon={NameIcon18Gray} iconActive={NameIcon18Blue} iconWidth={18} iconHeight={18} labelMarginBottom={11} />
+                  </div>
+                  <div style={{ position: 'absolute', top: 30, left: 40 + (340 + 50) * 2 }}>
+                    <FormField width={340} height={44} label="Станция:" value={stationUid ? (stationName || '') : ''} type="input" disabled icon={StationIcon16Gray} iconActive={StationIcon16Blue} iconWidth={16} iconHeight={16} labelMarginBottom={11} />
+                  </div>
+                  <div style={{ position: 'absolute', top: 30, left: 40 + (340 + 50) * 3 }}>
+                    <FormField width={340} height={44} label="Вид учёта станции:" value={stationUid ? accountingLabel : ''} type="input" disabled icon={AccountingIcon16Gray} iconActive={AccountingIcon16Blue} iconWidth={16} iconHeight={16} labelMarginBottom={11} />
+                  </div>
+                  <div style={{ position: 'absolute', top: 10, right: 40, width: 80, height: 122, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img src={StationFull} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none', userSelect: 'none' }} />
                   </div>
                 </div>
 
-                <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 100 + 142 + 30, left: 40, width: 1720, height: 40 }}>
+                  <div style={{ position: 'absolute', left: 15, top: 0, display: 'flex', gap: 15 }}>
+                    <motion.div
+                      style={{
+                        position: 'relative',
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: expanded === 'search' ? '#666EFE' : '#FFFFFF',
+                        border: expanded === 'search' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: 0,
+                        overflow: 'hidden',
+                        zIndex: expanded === 'search' ? 20 : 5,
+                      }}
+                      animate={{ width: searchWidth }}
+                      transition={TWEEN}
+                    >
+                      <div
+                        onClick={() => {
+                          if (expanded === 'search') { setExpanded(null); setSearchValue(''); }
+                          else { setExpanded('search'); setSubmenuOpen(null); }
+                        }}
+                        style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}
+                      >
+                        <img src={expanded === 'search' ? SearchIcon18White : SearchIcon18Black} alt="Поиск" style={{ width: 18, height: 18 }} />
+                      </div>
+                      <AnimatePresence>
+                        {expanded === 'search' && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1, transition: { duration: 0.15, delay: 0.1 } }}
+                            exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }}
+                            style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden', marginRight: 12 }}
+                          >
+                            <input
+                              ref={searchInputRef}
+                              type="text"
+                              value={searchValue}
+                              onChange={e => setSearchValue(e.target.value)}
+                              placeholder="Поиск"
+                              style={{ width: '100%', height: 38, border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', backgroundColor: 'transparent' }}
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+
+                    <motion.div
+                      style={{
+                        position: 'relative',
+                        borderRadius: 10,
+                        backgroundColor: '#FFFFFF',
+                        border: expanded === 'filter' || hasActiveFilter ? 'none' : '1px solid rgba(102, 110, 254, 0.15)',
+                        boxShadow: expanded === 'filter' ? '0 8px 32px rgba(0,0,0,0.12)' : 'none',
+                        overflow: 'visible',
+                        zIndex: expanded === 'filter' ? 25 : 5,
+                      }}
+                      animate={{
+                        width: filterWidth,
+                        height: expanded === 'filter' ? BTN_HEADER + filterListHeight + BTN_CLEAR : 40,
+                      }}
+                      transition={TWEEN}
+                    >
+                      <div
+                        onClick={() => {
+                          if (expanded === 'filter') { setExpanded(null); setSubmenuOpen(null); }
+                          else { setExpanded('filter'); setSearchValue(''); }
+                        }}
+                        style={{
+                          height: expanded === 'filter' ? BTN_HEADER : 40,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer',
+                          backgroundColor: expanded === 'filter' || hasActiveFilter ? '#666EFE' : 'transparent',
+                          borderRadius: expanded === 'filter' ? '10px 10px 0 0' : 10,
+                          transition: 'height 0.2s ease',
+                        }}
+                      >
+                        {expanded === 'filter'
+                          ? <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#FFFFFF' }}>Фильтр</span>
+                          : <img src={hasActiveFilter ? FilterIcon18White : FilterIcon18Black} alt="Фильтр" style={{ width: 18, height: 18, display: 'block' }} />
+                        }
+                      </div>
+
+                      <AnimatePresence>
+                        {expanded === 'filter' && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }}
+                            exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }}
+                            style={{ position: 'relative', height: filterListHeight, overflow: 'visible' }}
+                          >
+                            <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
+                              {filterFields.map((field, fieldIdx) => {
+                                const isActive = field.key === 'type' ? typeFilterSet.size > 0 : false;
+                                return (
+                                  <div
+                                    key={field.key}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => setSubmenuOpen(prev => prev === field.key ? null : field.key)}
+                                    style={{
+                                      height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer',
+                                      marginBottom: fieldIdx < filterFields.length - 1 ? ITEM_GAP : 0,
+                                      paddingLeft: LEFT_OFFSET, position: 'relative',
+                                    }}
+                                  >
+                                    <span style={{
+                                      fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500,
+                                      color: isActive ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`,
+                                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                                    }}>
+                                      {field.label}
+                                    </span>
+                                    <div style={{ position: 'absolute', right: 20, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                      <img src={isActive ? ArrowIcon6Blue : ArrowIcon6Black} alt="" style={{ width: 6, height: 10 }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <AnimatePresence>
+                              {submenuOpen && (
+                                <motion.div
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -10 }}
+                                  transition={{ duration: 0.2 }}
+                                  style={{
+                                    position: 'absolute',
+                                    left: filterWidth + SUBMENU_OFFSET,
+                                    top: getSubmenuTop(submenuOpen),
+                                    width: SUBMENU_WIDTH,
+                                    height: getSubmenuHeight(submenuOpen),
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: '0 15px 15px 15px',
+                                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                                    border: '1px solid rgba(102, 110, 254, 0.15)',
+                                    zIndex: 30,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none', maxHeight: 400 }}>
+                                    {getSubmenuOptions(submenuOpen).length === 0 ? (
+                                      <div style={{ height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: LEFT_OFFSET, paddingRight: 20 }}>
+                                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#9CA3AF' }}>Нет данных</span>
+                                      </div>
+                                    ) : getSubmenuOptions(submenuOpen).map((option, i, arr) => {
+                                      const checked = isOptionChecked(submenuOpen, option.uid);
+                                      return (
+                                        <div
+                                          key={option.uid}
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => handleCheckOption(submenuOpen, option.uid)}
+                                          style={{
+                                            height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer',
+                                            marginBottom: i < arr.length - 1 ? ITEM_GAP : 0,
+                                            paddingLeft: SUBMENU_LEFT_PAD, position: 'relative',
+                                          }}
+                                        >
+                                          {checked && (
+                                            <motion.div
+                                              initial={{ opacity: 0, scaleY: 0 }}
+                                              animate={{ opacity: 1, scaleY: 1 }}
+                                              exit={{ opacity: 0, scaleY: 0 }}
+                                              transition={{ duration: 0.15 }}
+                                              style={{
+                                                position: 'absolute', left: INDICATOR_LEFT, top: (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2,
+                                                width: INDICATOR_WIDTH, height: INDICATOR_HEIGHT,
+                                                backgroundColor: '#666EFE', borderRadius: 999, zIndex: 1, pointerEvents: 'none',
+                                              }}
+                                            />
+                                          )}
+                                          <span style={{
+                                            fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500,
+                                            color: checked ? '#666EFE' : '#2D4059', lineHeight: `${TEXT_HEIGHT}px`,
+                                            maxWidth: SUBMENU_WIDTH - SUBMENU_LEFT_PAD - 20 - SUBMENU_CHECKBOX_WIDTH - SUBMENU_RIGHT_PAD,
+                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                          }}>
+                                            {option.name}
+                                          </span>
+                                          <div style={{ position: 'absolute', right: SUBMENU_RIGHT_PAD, width: SUBMENU_CHECKBOX_WIDTH, height: SUBMENU_CHECKBOX_WIDTH }}>
+                                            <img src={checked ? CheckboxIcon18OnBlue : CheckboxIcon18OffBlack} alt="" style={{ width: SUBMENU_CHECKBOX_WIDTH, height: SUBMENU_CHECKBOX_WIDTH }} />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <AnimatePresence>
+                        {expanded === 'filter' && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1, transition: { duration: 0.2, delay: 0.1 } }}
+                            exit={{ opacity: 0, transition: { duration: 0.1, delay: 0 } }}
+                          >
+                            <div style={{ height: 3, backgroundColor: 'transparent', borderTop: '1px solid rgba(45, 64, 89, 0.1)' }} />
+                            <button
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={clearFilters}
+                              style={{
+                                width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent',
+                                cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+                                display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 13, lineHeight: '18px',
+                                borderRadius: '0 0 10px 10px',
+                              }}
+                            >
+                              Очистить фильтр
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </div>
+
+                  {totalDrums > 1 && (
+                    <div style={{ position: 'absolute', left: 15 + searchWidth + 15 + filterWidth + 30, top: 0, display: 'flex', gap: 34, height: 40, alignItems: 'center' }}>
+                      <div
+                        onClick={() => handleDrumChange(1)}
+                        style={{
+                          cursor: selectedDrum === 1 ? 'default' : 'pointer',
+                          fontFamily: 'Inter, sans-serif',
+                          fontWeight: 500,
+                          fontSize: 15,
+                          color: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)',
+                          lineHeight: '18px',
+                          position: 'relative',
+                          paddingBottom: 8,
+                          userSelect: 'none',
+                        }}
+                      >
+                        Левый барабан
+                        <div style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 3,
+                          borderRadius: 1.5,
+                          backgroundColor: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.06)',
+                          transition: 'background-color 0.3s ease',
+                        }} />
+                      </div>
+                      <div
+                        onClick={() => handleDrumChange(2)}
+                        style={{
+                          cursor: selectedDrum === 2 ? 'default' : 'pointer',
+                          fontFamily: 'Inter, sans-serif',
+                          fontWeight: 500,
+                          fontSize: 15,
+                          color: selectedDrum === 2 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)',
+                          lineHeight: '18px',
+                          position: 'relative',
+                          paddingBottom: 8,
+                          userSelect: 'none',
+                        }}
+                      >
+                        Правый барабан
+                        <div style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 3,
+                          borderRadius: 1.5,
+                          backgroundColor: selectedDrum === 2 ? '#666EFE' : 'rgba(45, 64, 89, 0.06)',
+                          transition: 'background-color 0.3s ease',
+                        }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ position: 'absolute', right: 15, top: 0, display: 'flex', gap: 15, height: 40 }}>
+                    <button style={docBtnStyle} title="Скачать">
+                      <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+                    </button>
+                    <button style={docBtnStyle} title="Печать">
+                      <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+                    </button>
+                    <button style={docBtnStyle} title="История изменений">
+                      <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ position: 'absolute', top: 100 + 142 + 30 + 40 + 12, left: 40, width: 1720, height: 406 }}>
                   <DataTable
                     columns={DOC_COLUMNS}
                     visibleKeys={docVisibleColumns}
                     data={documentRows}
-                    selectedIds={new Set()}
-                    onCheckboxClick={() => {}}
-                    onSelectAll={() => {}}
-                    onRowClick={() => {}}
+                    selectedIds={docSelectedIds}
+                    onCheckboxClick={handleDocCheckboxClick}
+                    onSelectAll={handleDocSelectAll}
+                    onRowClick={handleDocRowClick}
+                    onContextMenu={handleDocContextMenu}
                     onDoubleClick={handleDocumentRowDoubleClick}
                     renderCell={documentRenderCell}
                     isGrayColumn={(key) => key !== 'numberCell' && key !== 'cellAssignmentName' && key !== 'materialName'}
-                    rowIcon={StationIcon16Black}
                     tableWidth={1720}
                     rowHeight={58}
                     headerHeight={58}
-                    visibleRows={8}
-                    rowContextMenuItems={documentRowContextMenuItems}
-                    hideCheckbox
+                    visibleRows={6}
+                    fitToWidth
                   />
                 </div>
-              </div>
+
+                {docContextMenu && (
+                  <>
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1999 }} onClick={() => setDocContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setDocContextMenu(null); }} />
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        position: 'fixed',
+                        left: docContextMenu.x,
+                        top: docContextMenu.y,
+                        width: 247,
+                        height: 134,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 10,
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+                        zIndex: 2000,
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <div
+                        onClick={handleDocContextOpenDetails}
+                        style={{
+                          position: 'absolute',
+                          top: 20,
+                          left: 20,
+                          right: 20,
+                          height: 18,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>
+                          <img src={CellIcon16Black} alt="" style={{ width: 16, height: 16 }} />
+                        </div>
+                        <span style={{ marginLeft: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>
+                          Выбрать номенклатуру
+                        </span>
+                      </div>
+
+                      <div
+                        onClick={handleDocContextClear}
+                        style={{
+                          position: 'absolute',
+                          top: 58,
+                          left: 20,
+                          right: 20,
+                          height: 18,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>
+                          <img src={CleanIcon16Black} alt="" style={{ width: 16, height: 15 }} />
+                        </div>
+                        <span style={{ marginLeft: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>
+                          Очистить
+                        </span>
+                      </div>
+
+                      <div
+                        onClick={docViewDisabled ? undefined : handleDocContextView}
+                        style={{
+                          position: 'absolute',
+                          top: 96,
+                          left: 20,
+                          right: 20,
+                          height: 18,
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: docViewDisabled ? 'not-allowed' : 'pointer',
+                          opacity: docViewDisabled ? 0.4 : 1,
+                          pointerEvents: docViewDisabled ? 'none' : 'auto',
+                        }}
+                      >
+                        <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>
+                          <img src={WatchIcon16Black} alt="" style={{ width: 16, height: 10 }} />
+                        </div>
+                        <span style={{ marginLeft: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>
+                          Посмотреть
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <div style={{
-        position: 'absolute', bottom: 30, left: 40, right: 30,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-        zIndex: 10,
-        pointerEvents: 'none',
-      }}>
+      <div style={{ position: 'absolute', bottom: 30, left: 40, right: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 10, pointerEvents: 'none' }}>
         <div style={{ pointerEvents: 'auto', width: 507 }}>
           <motion.div
             onClick={() => setCountersExpanded(v => !v)}
             animate={{ height: countersExpanded ? 398 : 60 }}
             transition={{ type: 'tween', duration: 0.25, ease: 'easeInOut' }}
-            style={{
-              width: '100%',
-              backgroundColor: '#FFFFFF',
-              borderRadius: 15,
-              boxShadow: countersExpanded ? '0 8px 32px rgba(0,0,0,0.12)' : 'none',
-              cursor: 'pointer',
-              overflow: 'hidden',
-              position: 'relative',
-            }}
+            style={{ width: '100%', backgroundColor: '#FFFFFF', borderRadius: 15, boxShadow: countersExpanded ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
           >
             <AnimatePresence>
               {countersExpanded && (
@@ -1474,11 +2031,7 @@ const SchablonPage: React.FC = () => {
                   transition={{ duration: 0.15 }}
                   style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 60 }}
                 >
-                  <img
-                    src={InfoIcon18Blue}
-                    alt=""
-                    style={{ position: 'absolute', top: 14, left: 14, width: 18, height: 18 }}
-                  />
+                  <img src={InfoIcon18Blue} alt="" style={{ position: 'absolute', top: 14, left: 14, width: 18, height: 18 }} />
                   <div style={{ position: 'absolute', top: 14, left: 42, height: 18, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#666EFE', lineHeight: '18px' }}>
                     Информация
                   </div>
@@ -1503,19 +2056,8 @@ const SchablonPage: React.FC = () => {
                     {filledPercent}%
                   </div>
 
-                  {renderDistributionBlock(
-                    SECTION_4_TOP,
-                    'Распределение по назначениям ячеек (Материал)',
-                    distributionMaterial,
-                    DISTRIBUTION_ITEMS_MATERIAL,
-                  )}
-
-                  {renderDistributionBlock(
-                    SECTION_5_TOP,
-                    'Распределение по назначениям ячеек (СГД)',
-                    distributionSgd,
-                    DISTRIBUTION_ITEMS_SGD,
-                  )}
+                  {renderDistributionBlock(SECTION_4_TOP, 'Распределение по назначениям ячеек (Материал)', distributionMaterial, DISTRIBUTION_ITEMS_MATERIAL)}
+                  {renderDistributionBlock(SECTION_5_TOP, 'Распределение по назначениям ячеек (СГД)', distributionSgd, DISTRIBUTION_ITEMS_SGD)}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1527,10 +2069,7 @@ const SchablonPage: React.FC = () => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 60,
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 36,
-                  }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 36 }}
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>Всего ячеек</span>
@@ -1553,31 +2092,10 @@ const SchablonPage: React.FC = () => {
         <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 30 }}>
           <button
             onClick={handleToggleViewMode}
-            style={{
-              ...bottomButtonStyle,
-              width: viewMode === 'graphic' ? 222 : 254,
-              backgroundColor: '#FFFFFF',
-              color: '#2D4059',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-              justifyContent: 'flex-start',
-              paddingLeft: 19,
-              transition: 'width 0.2s ease',
-              overflow: 'hidden',
-            }}
+            style={{ ...bottomButtonStyle, width: viewMode === 'graphic' ? 222 : 254, backgroundColor: '#FFFFFF', color: '#2D4059', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)', justifyContent: 'flex-start', paddingLeft: 19, transition: 'width 0.2s ease', overflow: 'hidden' }}
           >
             <img src={ShapeIcon24Black} alt="" style={{ width: 24, height: 20, flexShrink: 0, opacity: viewModeFading ? 0 : 1, transition: 'opacity 0.15s ease' }} />
-            <span
-              style={{
-                marginLeft: 17,
-                opacity: viewModeFading ? 0 : 1,
-                transition: 'opacity 0.15s ease',
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                textAlign: 'left',
-              }}
-            >
+            <span style={{ marginLeft: 17, opacity: viewModeFading ? 0 : 1, transition: 'opacity 0.15s ease', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
               {viewMode === 'graphic' ? 'Форма документа' : 'Интерактивная форма'}
             </span>
           </button>
@@ -1585,33 +2103,10 @@ const SchablonPage: React.FC = () => {
           <button
             onClick={canToggleActive ? handleToggleActive : undefined}
             disabled={!canToggleActive}
-            style={{
-              ...bottomButtonStyle,
-              width: isActive && stationUid ? 127 : 168,
-              backgroundColor: '#FFFFFF',
-              color: '#2D4059',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-              opacity: canToggleActive ? 1 : 0.35,
-              cursor: canToggleActive ? 'pointer' : 'not-allowed',
-              justifyContent: 'flex-start',
-              paddingLeft: 22,
-              transition: 'width 0.2s ease, opacity 0.2s ease',
-              overflow: 'hidden',
-            }}
+            style={{ ...bottomButtonStyle, width: isActive && stationUid ? 127 : 168, backgroundColor: '#FFFFFF', color: '#2D4059', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)', opacity: canToggleActive ? 1 : 0.35, cursor: canToggleActive ? 'pointer' : 'not-allowed', justifyContent: 'flex-start', paddingLeft: 22, transition: 'width 0.2s ease, opacity 0.2s ease', overflow: 'hidden' }}
           >
             <img src={InstallationIcon20Black} alt="" style={{ width: 20, height: 11, flexShrink: 0, opacity: installFading ? 0 : 1, transition: 'opacity 0.15s ease' }} />
-            <span
-              style={{
-                marginLeft: 15,
-                opacity: installFading ? 0 : 1,
-                transition: 'opacity 0.15s ease',
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                textAlign: 'left',
-              }}
-            >
+            <span style={{ marginLeft: 15, opacity: installFading ? 0 : 1, transition: 'opacity 0.15s ease', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
               {stationUid && isActive ? 'Снять' : 'Установить'}
             </span>
           </button>
@@ -1619,13 +2114,7 @@ const SchablonPage: React.FC = () => {
           <button
             onClick={canSaveAs ? () => setIsSaveAsOpen(true) : undefined}
             disabled={!canSaveAs}
-            style={{
-              ...bottomButtonStyle, width: 182,
-              backgroundColor: '#FFFFFF', color: '#2D4059',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-              opacity: canSaveAs ? 1 : 0.35,
-              cursor: canSaveAs ? 'pointer' : 'not-allowed',
-            }}
+            style={{ ...bottomButtonStyle, width: 182, backgroundColor: '#FFFFFF', color: '#2D4059', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)', opacity: canSaveAs ? 1 : 0.35, cursor: canSaveAs ? 'pointer' : 'not-allowed' }}
           >
             <img src={IconW} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />
             <span style={{ marginLeft: '17px' }}>{isSavingAs ? 'Создание...' : 'Записать как'}</span>
@@ -1634,13 +2123,7 @@ const SchablonPage: React.FC = () => {
           <button
             onClick={canSave ? handleSave : undefined}
             disabled={!canSave}
-            style={{
-              ...bottomButtonStyle, width: 153,
-              backgroundColor: '#FFFFFF', color: '#2D4059',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-              opacity: canSave ? 1 : 0.35,
-              cursor: canSave ? 'pointer' : 'not-allowed',
-            }}
+            style={{ ...bottomButtonStyle, width: 153, backgroundColor: '#FFFFFF', color: '#2D4059', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)', opacity: canSave ? 1 : 0.35, cursor: canSave ? 'pointer' : 'not-allowed' }}
           >
             <img src={IconW} alt="" style={{ width: '21px', height: '21px', flexShrink: 0 }} />
             <span style={{ marginLeft: '17px' }}>{isSaving ? 'Сохранение...' : 'Записать'}</span>
@@ -1672,7 +2155,7 @@ const SchablonPage: React.FC = () => {
         <div style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 100 }}>
           <CellDetailsPopup
             isOpen={isCellPopupOpen}
-            onClose={() => setIsCellPopupOpen(false)}
+            onClose={() => { setIsCellPopupOpen(false); setCellPopupReadOnly(false); }}
             cellId={cellPopupData.id}
             cellName={`Ячейка ${cellPopupData.id}`}
             selectedColumn={cellPopupData.column}
@@ -1684,6 +2167,8 @@ const SchablonPage: React.FC = () => {
             isTmc={isTmc}
             isSgd={isSgd}
             getOtherQuantityForMaterial={getOtherQuantityForMaterial}
+            readOnly={cellPopupReadOnly}
+            targetCells={cellPopupData.targetCells}
           />
         </div>
       )}

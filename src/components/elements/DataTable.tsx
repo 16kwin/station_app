@@ -1,4 +1,4 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (меню закрывается при клике на пункт)
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (шрифты: шапка Inter SemiBold 16, ячейки Inter Regular 15)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,6 +52,15 @@ const ROW_ICON_BLOCK_WIDTH = 20;
 const CHECKBOX_TO_ICON_GAP = 17;
 const ICON_TO_FIRST_TEXT = 17;
 const CHECKBOX_LEFT = 17;
+
+// Шрифты: шапка и ячейки
+const HEADER_FONT_FAMILY = 'Inter, sans-serif';
+const HEADER_FONT_SIZE = 16;
+const HEADER_FONT_WEIGHT = 600;
+
+const CELL_FONT_FAMILY = 'Inter, sans-serif';
+const CELL_FONT_SIZE = 15;
+const CELL_FONT_WEIGHT = 400;
 
 const getTextWidth = (text: string, fontSize: number, fontWeight: number): number => {
   const canvas = document.createElement('canvas');
@@ -120,7 +129,7 @@ const DataTable: React.FC<DataTableProps> = ({
   const baseAvailableWidth = tableWidth - effectiveFirstColLeft - LAST_COLUMN_RIGHT_PADDING;
 
   const getMinWidth = useCallback((col: ColumnItem): number => {
-    return getTextWidth(col.label.charAt(0).toUpperCase() + col.label.slice(1), 16, 600) + 1;
+    return getTextWidth(col.label.charAt(0).toUpperCase() + col.label.slice(1), HEADER_FONT_SIZE, HEADER_FONT_WEIGHT) + 1;
   }, []);
 
   const getContentWidth = useCallback((col: ColumnItem): number => {
@@ -128,7 +137,7 @@ const DataTable: React.FC<DataTableProps> = ({
     
     data.forEach(item => {
       const cellText = renderCell(col.key, item);
-      const textWidth = getTextWidth(cellText, 15, 400);
+      const textWidth = getTextWidth(cellText, CELL_FONT_SIZE, CELL_FONT_WEIGHT);
       if (textWidth + 1 > maxWidth) {
         maxWidth = textWidth + 1;
       }
@@ -203,7 +212,6 @@ const DataTable: React.FC<DataTableProps> = ({
     }
   }, [rowContextMenuItems, onContextMenu]);
 
-  // Закрываем при клике и скролле
   useEffect(() => {
     if (!headerContextMenu) return;
     const h = () => setHeaderContextMenu(null);
@@ -572,9 +580,9 @@ const DataTable: React.FC<DataTableProps> = ({
                 height: headerHeight, 
                 display: 'flex', 
                 alignItems: 'center', 
-                fontFamily: 'Inter, sans-serif', 
-                fontSize: 16, 
-                fontWeight: 600, 
+                fontFamily: HEADER_FONT_FAMILY,
+                fontSize: HEADER_FONT_SIZE,
+                fontWeight: HEADER_FONT_WEIGHT,
                 color: '#FFFFFF', 
                 overflow: 'hidden', 
                 whiteSpace: 'nowrap', 
@@ -663,7 +671,7 @@ const DataTable: React.FC<DataTableProps> = ({
                 }
                 
                 return (
-                  <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
+                  <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
                     {cellContent}
                   </span>
                 );

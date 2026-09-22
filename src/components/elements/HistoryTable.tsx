@@ -1,4 +1,4 @@
-// HistoryTable.tsx — ПОЛНЫЙ ФАЙЛ (без поиска)
+// HistoryTable.tsx — ПОЛНЫЙ ФАЙЛ (шрифты: шапка Inter SemiBold 16, ячейки Inter Regular 15)
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +33,15 @@ const LAST_COLUMN_RIGHT_PADDING = 30;
 const FIRST_COL_LEFT = 70;
 const ICON_LEFT = 40;
 const ICON_SIZE = 18;
+
+// Шрифты: шапка и ячейки
+const HEADER_FONT_FAMILY = 'Inter, sans-serif';
+const HEADER_FONT_SIZE = 16;
+const HEADER_FONT_WEIGHT = 600;
+
+const CELL_FONT_FAMILY = 'Inter, sans-serif';
+const CELL_FONT_SIZE = 15;
+const CELL_FONT_WEIGHT = 400;
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '';
@@ -152,17 +161,17 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
     <div style={{ width: tableWidth, height: tableHeight, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', borderRadius: 10 }}>
         <div style={{ height: headerHeight, backgroundColor: headerColor, display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 2, minWidth: contentWidth, borderRadius: '10px 10px 0 0' }}>
-          <span style={{ position: 'absolute', left: colDateLeft, top: 0, height: headerHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
+          <span style={{ position: 'absolute', left: colDateLeft, top: 0, height: headerHeight, display: 'flex', alignItems: 'center', fontFamily: HEADER_FONT_FAMILY, fontSize: HEADER_FONT_SIZE, fontWeight: HEADER_FONT_WEIGHT, color: '#FFFFFF', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
               {dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1)}
             </span>
           </span>
-          <span style={{ position: 'absolute', left: colAuthorLeft, top: 0, height: headerHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
+          <span style={{ position: 'absolute', left: colAuthorLeft, top: 0, height: headerHeight, display: 'flex', alignItems: 'center', fontFamily: HEADER_FONT_FAMILY, fontSize: HEADER_FONT_SIZE, fontWeight: HEADER_FONT_WEIGHT, color: '#FFFFFF', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
               {authorLabel.charAt(0).toUpperCase() + authorLabel.slice(1)}
             </span>
           </span>
-          <span style={{ position: 'absolute', left: colEventLeft, top: 0, height: headerHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
+          <span style={{ position: 'absolute', left: colEventLeft, top: 0, height: headerHeight, display: 'flex', alignItems: 'center', fontFamily: HEADER_FONT_FAMILY, fontSize: HEADER_FONT_SIZE, fontWeight: HEADER_FONT_WEIGHT, color: '#FFFFFF', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
               {eventLabel.charAt(0).toUpperCase() + eventLabel.slice(1)}
             </span>
@@ -171,7 +180,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
 
         {isLoading ? (
           <div style={{ height: rowHeight * visibleRows, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: contentWidth }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span>
+            <span style={{ fontFamily: CELL_FONT_FAMILY, fontSize: 14, color: '#9CA3AF' }}>Загрузка...</span>
           </div>
         ) : (
           <>
@@ -186,7 +195,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
                     <img src={HistoryIcon18Black} alt="" style={{ width: ICON_SIZE, height: ICON_SIZE, flexShrink: 0 }} />
                   </div>
                   
-                  <span style={{ position: 'absolute', left: colDateLeft, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
+                  <span style={{ position: 'absolute', left: colDateLeft, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
                     <span 
                       style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
                       onMouseEnter={(e) => handleMouseEnter(e, dateText)} 
@@ -196,7 +205,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
                     </span>
                   </span>
                   
-                  <span style={{ position: 'absolute', left: colAuthorLeft, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
+                  <span style={{ position: 'absolute', left: colAuthorLeft, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
                     <span 
                       style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
                       onMouseEnter={(e) => handleMouseEnter(e, authorText)} 
@@ -206,7 +215,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({
                     </span>
                   </span>
                   
-                  <span style={{ position: 'absolute', left: colEventLeft, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
+                  <span style={{ position: 'absolute', left: colEventLeft, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: colWidth, boxSizing: 'border-box', margin: 0, cursor: 'default' }}>
                     <span 
                       style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
                       onMouseEnter={(e) => handleMouseEnter(e, eventText)} 

@@ -1,4 +1,4 @@
-// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (новое контекстное меню на 3 кнопки)
+// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (иконка WatchIcon16Black 16x10 для «Посмотреть»)
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JsBarcode from 'jsbarcode';
@@ -16,6 +16,7 @@ import LinkIcons14Gray from '../../../assets/Icons/LinkIcons/LinkIcons14Gray.svg
 import CodeIcon20Black from '../../../assets/Icons/CodeIcons/CodeIcon20Black.svg';
 import CellIcon16Black from '../../../assets/Icons/CellIcons/CellIcon16Black.svg';
 import CleanIcon16Black from '../../../assets/Icons/CleanIcons/CleanIcon16Black.svg';
+import WatchIcon16Black from '../../../assets/Icons/WatchIcons/WatchIcon16Black.svg';
 
 interface TableRow {
   id: number;
@@ -65,6 +66,7 @@ interface SchablonTableCellProps {
   onDoubleClick: (id: number) => void;
   onClear?: () => void;
   onOpenDetails?: () => void;
+  onOpenView?: () => void;
   setRef: (id: number, element: HTMLDivElement | null) => void;
   expandedCellId: number | null;
   onExpandToggle: (id: number) => void;
@@ -142,7 +144,7 @@ const formatAssignmentName = (name: string): string => {
 const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   row, isSelected, selectedColumn, isMerged,
   rowStart, rowEnd, colStart, colEnd, cellData, highlightText,
-  onRowClick, onCheckboxClick, onDoubleClick, onClear, onOpenDetails, setRef,
+  onRowClick, onCheckboxClick, onDoubleClick, onClear, onOpenDetails, onOpenView, setRef,
   expandedCellId, onExpandToggle, multiSelectCount,
 }) => {
   const { openTab } = useTabs();
@@ -189,12 +191,18 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   const handleContextMenu = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); };
   const closeContextMenu = () => setContextMenu(null);
 
-  const handleSelectCell = () => { closeContextMenu(); onRowClick(row.id); };
-  const handleClearClick = () => { closeContextMenu(); onClear?.(); };
-  const handleEditClick = () => {
-    if (multiSelectCount > 1) return;
+  const handleSelectNomenclature = () => {
     closeContextMenu();
     onOpenDetails?.();
+  };
+  const handleClearClick = () => {
+    closeContextMenu();
+    onClear?.();
+  };
+  const handleView = () => {
+    if (multiSelectCount > 1) return;
+    closeContextMenu();
+    onOpenView?.();
   };
 
   const handleExpandClick = (e: React.MouseEvent) => {
@@ -322,7 +330,7 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   const expandedBoxBg = isSelected ? '#CDE4FF' : '#FFFFFF';
   const expandedBoxShadow = isSelected ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.08)';
 
-  const editDisabled = multiSelectCount > 1;
+  const viewDisabled = multiSelectCount > 1;
 
   return (
     <>
@@ -578,9 +586,9 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
               boxSizing: 'border-box',
             }}
           >
-            {/* Выбрать ячейку */}
+            {/* Выбрать номенклатуру */}
             <div
-              onClick={handleSelectCell}
+              onClick={handleSelectNomenclature}
               style={{
                 position: 'absolute',
                 top: 20,
@@ -596,7 +604,7 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
                 <img src={CellIcon16Black} alt="" style={{ width: 16, height: 16 }} />
               </div>
               <span style={{ marginLeft: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>
-                Выбрать ячейку
+                Выбрать номенклатуру
               </span>
             </div>
 
@@ -622,9 +630,9 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
               </span>
             </div>
 
-            {/* Редактировать */}
+            {/* Посмотреть */}
             <div
-              onClick={editDisabled ? undefined : handleEditClick}
+              onClick={viewDisabled ? undefined : handleView}
               style={{
                 position: 'absolute',
                 top: 96,
@@ -633,16 +641,16 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
                 height: 18,
                 display: 'flex',
                 alignItems: 'center',
-                cursor: editDisabled ? 'not-allowed' : 'pointer',
-                opacity: editDisabled ? 0.4 : 1,
-                pointerEvents: editDisabled ? 'none' : 'auto',
+                cursor: viewDisabled ? 'not-allowed' : 'pointer',
+                opacity: viewDisabled ? 0.4 : 1,
+                pointerEvents: viewDisabled ? 'none' : 'auto',
               }}
             >
               <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>
-                <img src={CellIcon16Black} alt="" style={{ width: 16, height: 16 }} />
+                <img src={WatchIcon16Black} alt="" style={{ width: 16, height: 10 }} />
               </div>
               <span style={{ marginLeft: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059', lineHeight: '18px' }}>
-                Редактировать
+                Посмотреть
               </span>
             </div>
           </div>

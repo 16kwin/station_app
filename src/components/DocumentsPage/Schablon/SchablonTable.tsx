@@ -1,4 +1,4 @@
-// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (прокидываем multiSelectCount в SchablonTableCell)
+// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
@@ -50,6 +50,7 @@ interface SchablonTableProps {
   highlightText?: string;
   onCellCleared: () => void;
   onOpenDetails: (rowId: number, column: number, cellData?: CellData) => void;
+  onOpenView: (rowId: number, column: number, cellData?: CellData) => void;
   onCellLocalClear: (rowId: number, column: number, drum: number) => void;
 }
 
@@ -60,7 +61,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   totalRows, totalColumns, totalDrums, cellType,
   selectedDrum, onDrumChange, onCellDoubleClick, isBlurred,
   modelCells, cellsData, filteredCells = null, highlightText,
-  onOpenDetails, onCellLocalClear
+  onOpenDetails, onOpenView, onCellLocalClear
 }) => {
   const [selectedColumn, setSelectedColumn] = useState<number>(1);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -188,7 +189,9 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     }
   };
 
-  const handleDoubleClick = (_id: number) => {};
+  const handleDoubleClick = (id: number) => {
+    onCellDoubleClick(id, selectedColumn, selectedCellIds);
+  };
 
   const setCellRef = (id: number, element: HTMLDivElement | null) => {
     if (element) cellRefsMap.current.set(id, element);
@@ -273,8 +276,13 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   };
 
   const handleCellClear = useCallback((rowStart: number) => {
+    if (selectedCellIds.size > 1) {
+      selectedCellIds.forEach(id => onCellLocalClear(id, selectedColumn, selectedDrum));
+      setSelectedCellIds(new Set());
+      return;
+    }
     onCellLocalClear(rowStart, selectedColumn, selectedDrum);
-  }, [onCellLocalClear, selectedColumn, selectedDrum]);
+  }, [onCellLocalClear, selectedColumn, selectedDrum, selectedCellIds]);
 
   const headerBgColor = isAllSelected ? '#DEEEFF' : '#FFFFFF';
 
@@ -372,6 +380,7 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
                 onDoubleClick={handleDoubleClick}
                 onClear={() => handleCellClear(row.rowStart)}
                 onOpenDetails={() => onOpenDetails(row.rowStart, selectedColumn, cellData)}
+                onOpenView={() => onOpenView(row.rowStart, selectedColumn, cellData)}
                 setRef={setCellRef}
                 expandedCellId={expandedCellId}
                 onExpandToggle={handleExpandToggle}
