@@ -1,4 +1,5 @@
-// EconomicDashboard.tsx — холст панели «Экономический блок» 1800×840: шапка, загрузка данных, попапы и пять карточек
+// EconomicDashboard.tsx — холст панели «Экономический блок» 1800×840: загрузка данных,
+// попапы настроек карточек и пять карточек. Шапка и выбор периода — на главной странице.
 import React, { useEffect, useState } from 'react';
 import { CANVAS, COLORS, FONT, SHADOWS } from './layout';
 import { fetchEconomicDashboard, saveDashboardSettings } from './api';
@@ -12,9 +13,6 @@ import type {
   TypeAmount,
   TypePercent,
 } from './types';
-import DashboardHeader from './DashboardHeader';
-import DateRangePopup from './DateRangePopup';
-import type { AnchorRect } from './DateRangePopup';
 import DashboardSettingsPopup from './DashboardSettingsPopup';
 import CostsChart from './CostsChart';
 import CostsByTypeCard from './CostsByTypeCard';
@@ -22,7 +20,6 @@ import CostIndicatorsCard from './CostIndicatorsCard';
 import BudgetExecutionCard from './BudgetExecutionCard';
 import CostDistributionRadar from './CostDistributionRadar';
 
-const DEFAULT_RANGE: DateRange = { from: '2025-01-01', to: '2025-11-30' };
 const FETCH_ERROR_TEXT = 'Не удалось загрузить данные панели';
 const SAVE_ERROR_TEXT = 'Не удалось сохранить настройки панели';
 
@@ -38,20 +35,21 @@ type SettingsCard = 'bars' | 'radar' | null;
 
 const sameList = (a: string[], b: string[]): boolean => a.length === b.length && a.every((key, i) => key === b[i]);
 
-const EconomicDashboard: React.FC = () => {
-  const [range, setRange] = useState<DateRange>(DEFAULT_RANGE);
+interface EconomicDashboardProps {
+  range: DateRange;
+}
+
+const EconomicDashboard: React.FC<EconomicDashboardProps> = ({ range }) => {
   const [requestSeq, setRequestSeq] = useState(0); // номер запроса: +1 при каждом (пере)запросе данных
   const [settledSeq, setSettledSeq] = useState(-1); // номер последнего завершённого запроса
   const [data, setData] = useState<EconomicDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [animationKey, setAnimationKey] = useState(0);
-  const [dateOpen, setDateOpen] = useState(false);
-  const [dateAnchor, setDateAnchor] = useState<AnchorRect | null>(null);
   const [settingsCard, setSettingsCard] = useState<SettingsCard>(null);
 
   const loading = settledSeq !== requestSeq;
 
-  // Загрузка данных при монтировании и при каждом новом запросе (смена диапазона, сброс, сохранение настроек).
+  // Загрузка данных при монтировании и при каждом новом запросе (смена диапазона, сохранение настроек).
   // Пока идёт запрос, старые данные остаются на экране; ответ устаревшего запроса игнорируется
   useEffect(() => {
     let cancelled = false;
@@ -72,23 +70,6 @@ const EconomicDashboard: React.FC = () => {
       cancelled = true;
     };
   }, [range, requestSeq]);
-
-  const requestData = (nextRange: DateRange) => {
-    setRange(nextRange);
-    setRequestSeq(seq => seq + 1);
-  };
-
-  // Пилюля дат: клик открывает/закрывает попап, крестик сбрасывает диапазон
-  const handleDateClick = (anchor: AnchorRect) => {
-    setDateAnchor(anchor);
-    setDateOpen(open => !open);
-  };
-  const handleDateClose = () => setDateOpen(false);
-  const handleRangeConfirm = (nextRange: DateRange) => requestData(nextRange);
-  const handleDateReset = () => {
-    setDateOpen(false);
-    requestData(DEFAULT_RANGE);
-  };
 
   // Настройки карточек: сохранить оба списка (второй — из текущих данных), затем перезапросить данные.
   // При ошибке сохранения данные не трогаем, показываем текст ошибки
@@ -125,8 +106,6 @@ const EconomicDashboard: React.FC = () => {
         userSelect: 'none',
       }}
     >
-      <DashboardHeader range={range} onDateClick={handleDateClick} onDateReset={handleDateReset} />
-
       {/* Карточки позиционируются сами по CARD_RECTS; пока данных нет — пустые значения */}
       <CostsChart
         points={data?.costs.points ?? EMPTY_POINTS}
@@ -175,14 +154,6 @@ const EconomicDashboard: React.FC = () => {
           {error}
         </div>
       )}
-
-      <DateRangePopup
-        isOpen={dateOpen}
-        anchorRect={dateAnchor}
-        range={range}
-        onClose={handleDateClose}
-        onConfirm={handleRangeConfirm}
-      />
 
       <DashboardSettingsPopup
         isOpen={settingsCard === 'bars'}

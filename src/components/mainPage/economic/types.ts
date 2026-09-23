@@ -1,10 +1,7 @@
 // types.ts — контракт API и пропсы карточек панели «Экономический блок» (главная страница)
+export type { DateRange, AnimatedCardProps } from '../shared/types';
 
-/** Диапазон дат в формате ISO 'YYYY-MM-DD' (включительно) */
-export interface DateRange {
-  from: string;
-  to: string;
-}
+import type { AnimatedCardProps } from '../shared/types';
 
 /** Точка графика «Затраты на приобретение» — одна на каждый день, суммы в рублях */
 export interface CostPoint {
@@ -51,11 +48,6 @@ export const BAR_TYPES_MIN = 1;
 export const BAR_TYPES_MAX = 9;
 export const RADAR_TYPES_MIN = 5;
 export const RADAR_TYPES_MAX = 9;
-
-/** Общий проп всех карточек: при изменении значения анимация загрузки проигрывается заново */
-export interface AnimatedCardProps {
-  animationKey: number;
-}
 
 export interface CostsChartProps extends AnimatedCardProps {
   points: CostPoint[];
