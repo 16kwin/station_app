@@ -34,25 +34,28 @@ interface QualityDashboardProps {
 const QualityDashboard: React.FC<QualityDashboardProps> = ({ range }) => {
   const [data, setData] = useState<QualityDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Период последнего завершённого запроса (успех или ошибка). Пока он не совпадает с текущим `range` —
+  // идёт загрузка: каждый новый период от главной страницы — новый объект, поэтому хватает сравнения ссылок
+  const [settledRange, setSettledRange] = useState<DateRange | null>(null);
   const [animationKey, setAnimationKey] = useState(0);
+
+  const loading = settledRange !== range;
 
   // Пока идёт запрос, старые данные остаются на экране; ответ устаревшего запроса игнорируется
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetchQualityDashboard(range)
       .then(result => {
         if (cancelled) return;
         setData(result);
         setError(null);
         setAnimationKey(key => key + 1);
-        setLoading(false);
+        setSettledRange(range);
       })
       .catch(() => {
         if (cancelled) return;
         setError(FETCH_ERROR_TEXT);
-        setLoading(false);
+        setSettledRange(range);
       });
     return () => {
       cancelled = true;
@@ -98,6 +101,7 @@ const QualityDashboard: React.FC<QualityDashboardProps> = ({ range }) => {
         rect={CARD_RECTS.releases}
         title="Выпуск продукции"
         items={releases.map(item => ({ id: item.id, title: item.name, at: item.at }))}
+        onSecondScreen={() => window.open('/screen/events?source=release', '_blank', 'noopener')}
       />
 
       {error && (

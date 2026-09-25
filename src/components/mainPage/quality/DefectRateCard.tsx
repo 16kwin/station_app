@@ -1,6 +1,7 @@
 // DefectRateCard.tsx — карточка «Уровень брака»: два вида (по деталям / по подразделениям),
 // столбики растут снизу вверх, часть выше среднего уровня брака по предприятию окрашивается в красный.
 // По наведению — всплывающая подсказка с кнопкой «Подробнее», по кнопке — окно со списком.
+// Размер карточки и палитру можно задать пропсами (панели контролера); без них — прежний вид «Показателей».
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { DefectItem, DefectRateCardProps, DefectSubject, DefectView, DefectViewKind } from './types';
 import { ANIM, CARD_RECTS, COLORS, FONT, SHADOWS } from './layout';
@@ -11,16 +12,19 @@ import DashboardCard from '../shared/DashboardCard';
 import DetailsPopup from '../shared/DetailsPopup';
 import type { DetailsColumn, DetailsRow } from '../shared/DetailsPopup';
 
-/* ---------- Геометрия карточки (локальные координаты, px) ---------- */
-const CARD_W = CARD_RECTS.defects.w; // 1000
-const CARD_H = CARD_RECTS.defects.h; // 343
+/* ---------- Геометрия карточки (локальные координаты, px) ----------
+ * Горизонталь считается от ширины карточки, вертикаль — от высоты (подписи оси X и низ графика
+ * привязаны к низу карточки). При «домашнем» размере 1000×343 получаются прежние числа:
+ * правый край графика 972, низ графика 272, подписи оси X на 298. */
 const PLOT_LEFT = 78;
-const PLOT_RIGHT = 972;
+/** Правый край графика: w − 28 */
+const PLOT_RIGHT_INSET = 28;
 const PLOT_TOP = 82;
-const PLOT_BOTTOM = 272;
-const PLOT_H = PLOT_BOTTOM - PLOT_TOP;
+/** Низ графика: h − 71 */
+const PLOT_BOTTOM_INSET = 71;
 const Y_LABEL_RIGHT = 66;
-const X_LABEL_CY = 298;
+/** Центр подписей оси X: h − 45 */
+const X_LABEL_BOTTOM_INSET = 45;
 const BAR_W = 38;
 /** Скругление столбика — мягкий прямоугольник, а не «пилюля» */
 const BAR_R = 8;
@@ -126,7 +130,15 @@ const collectItems = (view: DefectView): { key: string; name: string }[] => {
   return Array.from(seen, ([key, name]) => ({ key, name }));
 };
 
-const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from, to, animationKey }) => {
+const DefectRateCard: React.FC<DefectRateCardProps> = ({
+  parts,
+  workshops,
+  from,
+  to,
+  animationKey,
+  rect = CARD_RECTS.defects,
+  palette,
+}) => {
   const [viewKind, setViewKind] = useState<DefectViewKind>('parts');
   const [filterKey, setFilterKey] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -138,17 +150,33 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
 
   const progress = useProgress(animationKey, ANIM.defectBars);
 
+  const cardW = rect.w;
+  const cardH = rect.h;
+  const plotRight = cardW - PLOT_RIGHT_INSET;
+  const plotBottom = cardH - PLOT_BOTTOM_INSET;
+  const plotH = plotBottom - PLOT_TOP;
+  const xLabelCy = cardH - X_LABEL_BOTTOM_INSET;
+
   const view = viewKind === 'parts' ? parts : workshops;
   const meta = VIEW_META[viewKind];
   const filterItems = useMemo(() => collectItems(view), [view]);
   const { bars, average } = useMemo(() => applyFilter(view, filterKey), [view, filterKey]);
 
-  // Смена вида сбрасывает фильтр и подсказку: списки элементов у видов разные
-  useEffect(() => {
+  // Палитра из пропсов заменяет собственные пары цветов обоих видов
+  const barColor = palette?.bar ?? meta.bar;
+  const barOverColor = palette?.barOver ?? meta.barOver;
+  const outlineColor = palette?.avgLine ?? meta.line;
+  const averageLineColor = palette?.avgLine ?? COLORS.defectAvgLine;
+
+  // Смена вида сбрасывает фильтр и подсказку: списки элементов у видов разные.
+  // Сброс — в обработчике вкладки, а не в эффекте: одно обновление вместо лишнего кадра со старым фильтром
+  const selectView = (kind: DefectViewKind) => {
+    if (kind === viewKind) return;
+    setViewKind(kind);
     setFilterKey(null);
     setFilterOpen(false);
     setHoverKey(null);
-  }, [viewKind]);
+  };
 
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
@@ -167,8 +195,9 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
     closeTimer.current = window.setTimeout(() => setHoverKey(null), TOOLTIP_CLOSE_DELAY);
   };
 
-  const yOf = (percent: number): number => PLOT_BOTTOM - (safePercent(percent) / 100) * PLOT_H;
-  const slotW = bars.length > 0 ? (PLOT_RIGHT - PLOT_LEFT) / bars.length : 0;
+  const yOf = (percent: number): number => plotBottom - (safePercent(percent) / 100) * plotH;
+  // Столбики делят ширину графика поровну: при любом их числе занимают всю область
+  const slotW = bars.length > 0 ? (plotRight - PLOT_LEFT) / bars.length : 0;
   const xOf = (index: number): number => PLOT_LEFT + slotW * (index + 0.5);
   const averageY = yOf(average);
 
@@ -184,8 +213,8 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
   const tooltipHeight = viewKind === 'parts' ? 116 : 62 + Math.max(1, tooltipRows.length) * 22 + 46;
   const hoveredTop = hovered ? yOf(hovered.percent * progress) : 0;
   const tooltipAbove = hoveredTop - TOOLTIP_GAP - tooltipHeight;
-  const tooltipTop = tooltipAbove >= 0 ? tooltipAbove : Math.min(hoveredTop + TOOLTIP_GAP, CARD_H - tooltipHeight);
-  const tooltipLeft = hovered ? clamp(xOf(hoveredIndex) - tooltipWidth / 2, 8, CARD_W - tooltipWidth - 8) : 0;
+  const tooltipTop = tooltipAbove >= 0 ? tooltipAbove : Math.min(hoveredTop + TOOLTIP_GAP, cardH - tooltipHeight);
+  const tooltipLeft = hovered ? clamp(xOf(hoveredIndex) - tooltipWidth / 2, 8, cardW - tooltipWidth - 8) : 0;
 
   /* ---------- Окно «Подробнее» ---------- */
   const detailsColumns: DetailsColumn[] =
@@ -222,7 +251,7 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
   const detailsHint = details && details.percent > average ? OVER_AVERAGE_HINT : undefined;
 
   return (
-    <DashboardCard rect={CARD_RECTS.defects} title={meta.title}>
+    <DashboardCard rect={rect} title={meta.title}>
       {/* Вкладки вида графика */}
       <div style={{ position: 'absolute', left: 430, top: 20, display: 'flex', gap: 24, zIndex: 2 }}>
         {(['parts', 'workshops'] as DefectViewKind[]).map(kind => {
@@ -231,7 +260,7 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
             <button
               key={kind}
               type="button"
-              onClick={() => setViewKind(kind)}
+              onClick={() => selectView(kind)}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -339,15 +368,15 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
       </div>
 
       <svg
-        width={CARD_W}
-        height={CARD_H}
-        viewBox={`0 0 ${CARD_W} ${CARD_H}`}
+        width={cardW}
+        height={cardH}
+        viewBox={`0 0 ${cardW} ${cardH}`}
         style={{ position: 'absolute', left: 0, top: 0, display: 'block', overflow: 'visible' }}
       >
         <defs>
           {/* Красной рисуется только часть столбика выше среднего уровня брака */}
           <clipPath id={clipId}>
-            <rect x={0} y={0} width={CARD_W} height={Math.max(0, averageY)} />
+            <rect x={0} y={0} width={cardW} height={Math.max(0, averageY)} />
           </clipPath>
         </defs>
 
@@ -356,7 +385,7 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
           const y = yOf(step);
           return (
             <g key={step}>
-              <line x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={y} y2={y} stroke={COLORS.grid} strokeWidth={1} strokeLinecap="round" />
+              <line x1={PLOT_LEFT} x2={plotRight} y1={y} y2={y} stroke={COLORS.grid} strokeWidth={1} strokeLinecap="round" />
               <text
                 x={Y_LABEL_RIGHT}
                 y={y}
@@ -373,11 +402,11 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
           );
         })}
 
-        {/* Столбики: оранжевые до линии среднего, красные выше неё */}
+        {/* Столбики: до линии среднего — основным цветом, выше неё — цветом превышения */}
         {bars.map((bar, index) => {
           const cx = xOf(index);
           const top = yOf(bar.percent * progress);
-          const height = Math.max(0, PLOT_BOTTOM - top);
+          const height = Math.max(0, plotBottom - top);
           const x = cx - BAR_W / 2;
           const dimmed = hoverKey !== null && hoverKey !== bar.key;
 
@@ -385,9 +414,9 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
             <g key={bar.key} opacity={dimmed ? 0.55 : 1}>
               {height > 0 && (
                 <>
-                  <rect x={x} y={top} width={BAR_W} height={height} rx={BAR_R} ry={BAR_R} fill={meta.bar} />
+                  <rect x={x} y={top} width={BAR_W} height={height} rx={BAR_R} ry={BAR_R} fill={barColor} />
                   <g clipPath={`url(#${clipId})`}>
-                    <rect x={x} y={top} width={BAR_W} height={height} rx={BAR_R} ry={BAR_R} fill={meta.barOver} />
+                    <rect x={x} y={top} width={BAR_W} height={height} rx={BAR_R} ry={BAR_R} fill={barOverColor} />
                   </g>
                 </>
               )}
@@ -401,13 +430,13 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
                   rx={BAR_R + 3}
                   ry={BAR_R + 3}
                   fill="none"
-                  stroke={meta.line}
+                  stroke={outlineColor}
                   strokeWidth={1.5}
                 />
               )}
               <text
                 x={cx}
-                y={X_LABEL_CY}
+                y={xLabelCy}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize={13}
@@ -424,10 +453,10 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
         {/* Линия среднего уровня брака по предприятию */}
         <line
           x1={PLOT_LEFT}
-          x2={PLOT_RIGHT}
+          x2={plotRight}
           y1={averageY}
           y2={averageY}
-          stroke={COLORS.defectAvgLine}
+          stroke={averageLineColor}
           strokeWidth={1.5}
           strokeLinecap="round"
         />
@@ -450,7 +479,7 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
             x={xOf(index) - slotW / 2}
             y={PLOT_TOP}
             width={slotW}
-            height={PLOT_BOTTOM - PLOT_TOP}
+            height={plotBottom - PLOT_TOP}
             fill="transparent"
             pointerEvents="all"
             onMouseEnter={() => openTooltip(bar.key)}
@@ -493,7 +522,7 @@ const DefectRateCard: React.FC<DefectRateCardProps> = ({ parts, workshops, from,
                   {hovered.name}
                 </span>
                 <span style={{ flex: 1, height: 1, backgroundColor: '#E5ECF5' }} />
-                <span style={{ fontSize: 14, fontWeight: 600, lineHeight: '17px', color: meta.barOver, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, lineHeight: '17px', color: barOverColor, whiteSpace: 'nowrap' }}>
                   {formatCount(hovered.defect)}
                 </span>
               </div>

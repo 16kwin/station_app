@@ -2,6 +2,7 @@
 export type { DateRange, AnimatedCardProps } from '../shared/types';
 
 import type { AnimatedCardProps } from '../shared/types';
+import type { CardRect } from '../shared/layout';
 
 /** Точка графика «Затраты на приобретение» — одна на каждый день, суммы в рублях */
 export interface CostPoint {
@@ -53,6 +54,12 @@ export interface CostsChartProps extends AnimatedCardProps {
   points: CostPoint[];
   from: string;
   to: string;
+  /** Место карточки на холсте; по умолчанию CARD_RECTS.costs (970×390). Область графика и подписи осей — от его ширины и высоты */
+  rect?: CardRect;
+  /** Заголовок; по умолчанию «Затраты на приобретение производственной номенклатуры (по предприятию)» */
+  title?: string;
+  /** Легенда «Факт затрат | План затрат»: 'bottom' — под графиком по центру (по умолчанию), 'header' — справа в строке заголовка */
+  legend?: 'bottom' | 'header';
 }
 
 export interface CostsByTypeCardProps extends AnimatedCardProps {
@@ -68,6 +75,8 @@ export interface CostIndicatorsCardProps extends AnimatedCardProps {
 export interface BudgetExecutionCardProps extends AnimatedCardProps {
   /** Факт / План × 100, может быть больше 300 */
   percent: number;
+  /** Место карточки на холсте; по умолчанию CARD_RECTS.budget (412×273). Кольца и легенда центрируются в карточке другого размера */
+  rect?: CardRect;
 }
 
 export interface CostDistributionRadarProps extends AnimatedCardProps {
