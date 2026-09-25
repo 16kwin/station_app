@@ -75,7 +75,7 @@ const ClearPopup: React.FC<ClearPopupProps> = ({
               textAlign: 'center',
             }}
           >
-            Очистить шаблон{templateName ? ` "${templateName}"` : ''}?
+            Очистить?
           </span>
         </div>
 

@@ -1,4 +1,5 @@
 // DataTable.tsx — ПОЛНЫЙ ФАЙЛ (шрифты: шапка Inter SemiBold 16, ячейки Inter Regular 15)
+// Добавлен проп centerColumns для центрирования шапки и ячеек указанных колонок
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,6 +43,8 @@ interface DataTableProps {
   onResetToBase?: () => void;
   fitToWidth?: boolean;
   hideCheckbox?: boolean;
+  /** Ключи колонок, у которых шапка и ячейки центрируются по горизонтали */
+  centerColumns?: string[];
 }
 
 const MAX_COLUMN_WIDTH = 1000;
@@ -99,6 +102,7 @@ const DataTable: React.FC<DataTableProps> = ({
   onResetToBase,
   fitToWidth = false,
   hideCheckbox = false,
+  centerColumns = [],
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
@@ -119,6 +123,9 @@ const DataTable: React.FC<DataTableProps> = ({
   
   const [headerContextMenu, setHeaderContextMenu] = useState<{ x: number; y: number; columnKey: string } | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; uid: string; name: string; items: ContextMenuItem[] } | null>(null);
+
+  // Множество центрируемых колонок для быстрого поиска
+  const centeredSet = useMemo(() => new Set(centerColumns), [centerColumns]);
 
   const tableHeight = rowHeight * visibleRows + headerHeight;
   
@@ -570,32 +577,37 @@ const DataTable: React.FC<DataTableProps> = ({
             </div>
           )}
           
-          {columnLayout.layout.map(col => (
-            <div key={col.key} 
-              onContextMenu={(e) => handleHeaderContextMenu(e, col.key)}
-              style={{ 
-                position: 'absolute', 
-                left: col.left, 
-                top: 0, 
-                height: headerHeight, 
-                display: 'flex', 
-                alignItems: 'center', 
-                fontFamily: HEADER_FONT_FAMILY,
-                fontSize: HEADER_FONT_SIZE,
-                fontWeight: HEADER_FONT_WEIGHT,
-                color: '#FFFFFF', 
-                overflow: 'hidden', 
-                whiteSpace: 'nowrap', 
-                width: col.width, 
-                boxSizing: 'border-box', 
-                margin: 0, 
-                cursor: 'context-menu'
-              }}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
-                {col.label}
-              </span>
-            </div>
-          ))}
+          {columnLayout.layout.map(col => {
+            const isCentered = centeredSet.has(col.key);
+            return (
+              <div key={col.key} 
+                onContextMenu={(e) => handleHeaderContextMenu(e, col.key)}
+                style={{ 
+                  position: 'absolute', 
+                  left: col.left, 
+                  top: 0, 
+                  height: headerHeight, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: isCentered ? 'center' : 'flex-start',
+                  textAlign: isCentered ? 'center' : 'left',
+                  fontFamily: HEADER_FONT_FAMILY,
+                  fontSize: HEADER_FONT_SIZE,
+                  fontWeight: HEADER_FONT_WEIGHT,
+                  color: '#FFFFFF', 
+                  overflow: 'hidden', 
+                  whiteSpace: 'nowrap', 
+                  width: col.width, 
+                  boxSizing: 'border-box', 
+                  margin: 0, 
+                  cursor: 'context-menu'
+                }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: isCentered ? 'center' : 'left' }}>
+                  {col.label}
+                </span>
+              </div>
+            );
+          })}
           
           {columnLayout.layout.map((col, idx) => {
             if (idx === columnLayout.layout.length - 1) return null;
@@ -652,6 +664,7 @@ const DataTable: React.FC<DataTableProps> = ({
               {columnLayout.layout.map(col => {
                 const cellText = renderCell(col.key, item);
                 const noWrap = noWrapColumns.includes(col.key);
+                const isCentered = centeredSet.has(col.key);
                 
                 let cellContent: React.ReactNode = null;
                 if (renderCellNode) {
@@ -661,7 +674,7 @@ const DataTable: React.FC<DataTableProps> = ({
                 if (cellContent === null || cellContent === undefined) {
                   cellContent = (
                     <span 
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%' }}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%', textAlign: isCentered ? 'center' : 'left' }}
                       onMouseEnter={(e) => handleMouseEnter(e, cellText)} 
                       onMouseLeave={handleMouseLeave}
                     >
@@ -671,7 +684,7 @@ const DataTable: React.FC<DataTableProps> = ({
                 }
                 
                 return (
-                  <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
+                  <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', justifyContent: isCentered ? 'center' : 'flex-start', textAlign: isCentered ? 'center' : 'left', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
                     {cellContent}
                   </span>
                 );

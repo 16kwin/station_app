@@ -554,6 +554,8 @@ const ConstantInfo = {
   restApiStockLevelControlSortSettingsSave: (userId: number) => `/api/documents/stock-level-control/sort-settings?userId=${userId}`,
     restApiStockLevelControlReg: (stationUid: string, materialUid: string) =>
     `/api/documents/stock-level-control/reg?stationUid=${encodeURIComponent(stationUid)}&materialUid=${encodeURIComponent(materialUid)}`,
+     restApiTemplateEvents: (uid: string) => `/api/templates/${uid}/events`,
+  restApiTemplateEventsAll: '/api/templates/events',
 };
 
 export default ConstantInfo;

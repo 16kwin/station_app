@@ -1,4 +1,4 @@
-// CellDetailsPopup.tsx — ПОЛНЫЙ ФАЙЛ (readOnly без блюра, только блокировка кликов)
+// CellDetailsPopup.tsx — ПОЛНЫЙ ФАЙЛ (у брака ТМЦ логика как у переточки: тумблер + иконки)
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
@@ -75,7 +75,10 @@ interface CellDetailsPopupProps {
   stationName?: string | null;
   isTmc?: boolean;
   isSgd?: boolean;
-  getOtherQuantityForMaterial?: (materialUid: string, excludeKey?: { numberCell: number; columnNumber: number; drumNumber: number }) => number;
+  getOtherQuantityForMaterial?: (
+    materialUid: string,
+    excludeKeys?: { numberCell: number; columnNumber: number; drumNumber: number }[]
+  ) => number;
   readOnly?: boolean;
   targetCells?: { numberCell: number; columnNumber: number; drumNumber: number }[];
 }
@@ -377,16 +380,21 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   const isTmcAssignment = assignmentTypeName === 'ТМЦ';
   const isReadyDetail = assignmentTypeName === 'Готовая деталь';
   const isLom = currentAssignmentName === 'Лом';
-  const isBrak = currentAssignmentName === 'Возврата брака ТМЦ';
+  const isBrak = currentAssignmentName === 'Возврат брака ТМЦ';
   const isPeretochka = currentAssignmentName === 'Инструмент на переточку';
   const isReadyDetailFromProduction = currentAssignmentName === 'Готовая деталь (с производства)';
   const isReadyDetailPassed = currentAssignmentName === 'Готовая деталь (контроль качества пройден)';
   const isReadyDetailFailed = currentAssignmentName === 'Готовая деталь (контроль качества не пройден)';
 
+  // === Возвращаем логику: тумблер показывается и для Брака ТМЦ, и для Переточки ===
   const showIndividualToggle = isBrak || isPeretochka;
+
+  // Номенклатурные поля — только когда тумблер включён (для брака/переточки),
+  // либо для ТМЦ (кроме Лома) и Готовой детали.
   const showNomenclatureFields =
     (isTmcAssignment && !isLom && (!showIndividualToggle || individualCell))
     || isReadyDetail;
+
   const showReturnToggle = currentAssignmentName === 'ТМЦ' && materialDetail?.usage === true;
 
   const showRightPart = !!cellAssignmentUid;
@@ -394,8 +402,9 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   const isMultiUsage = materialDetail?.usage === true;
   const isSingleUsage = materialDetail?.usage === false;
 
+  // Для Брака ТМЦ фильтр номенклатуры — ТМЦ (как для ТМЦ).
   const nomenclatureTypeFilter: 'ТМЦ' | 'Готовая деталь' | undefined =
-    isTmcAssignment ? 'ТМЦ'
+    (isTmcAssignment || isBrak || isPeretochka) ? 'ТМЦ'
     : isReadyDetail ? 'Готовая деталь'
     : undefined;
 
@@ -408,14 +417,16 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
       .map(m => ({ uid: m.uid, name: m.name }));
   }, [rawMaterialOptions, nomenclatureTypeFilter]);
 
+  const targetKeys = (targetCells && targetCells.length > 0)
+    ? targetCells
+    : [{ numberCell: cellId, columnNumber: selectedColumn, drumNumber: selectedDrum }];
+
   const otherQty = (selectedMaterialUid && getOtherQuantityForMaterial)
-    ? getOtherQuantityForMaterial(selectedMaterialUid, {
-        numberCell: cellId,
-        columnNumber: selectedColumn,
-        drumNumber: selectedDrum,
-      })
+    ? getOtherQuantityForMaterial(selectedMaterialUid, targetKeys)
     : 0;
-  const totalQty = otherQty + (Number(quantity) || 0);
+
+  const cellsCount = targetKeys.length;
+  const totalQty = otherQty + (Number(quantity) || 0) * cellsCount;
 
   const minStock = regData?.minStock ?? null;
   const hasReg = !!regData;
@@ -540,6 +551,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
       );
     }
 
+    // === Переточка ===
     if (isPeretochka) {
       if (!individualCell) {
         return (
@@ -562,6 +574,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
       );
     }
 
+    // === Брак ТМЦ — та же логика, что и у переточки ===
     if (isBrak) {
       if (!individualCell) {
         return (
@@ -584,6 +597,7 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
       );
     }
 
+    // === Готовая деталь ===
     if (isReadyDetail) {
       let icon = CellTypeIcon62Green;
       if (isReadyDetailFromProduction) icon = CellTypeIcon89Yellow;
@@ -727,7 +741,6 @@ const CellDetailsPopup: React.FC<CellDetailsPopupProps> = ({
   const quantityFieldIcon = quantity > 0 ? CodeIcon20Blue : CodeIcon20Gray;
   const quantityFieldIconActive = CodeIcon20Blue;
 
-  // === READ-ONLY: левая часть просто блокируется по кликам, без блюра ===
   const leftPartWrapperStyle: React.CSSProperties = {
     position: 'absolute',
     top: 0,

@@ -1,5 +1,5 @@
-// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (иконка WatchIcon16Black 16x10 для «Посмотреть»)
-import React, { useState, useEffect, useCallback } from 'react';
+// SchablonTableCell.tsx — ПОЛНЫЙ ФАЙЛ (фон E1ECFD 46% при раскрытии, контекстное меню по правилам без блюра, умное позиционирование меню)
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JsBarcode from 'jsbarcode';
 import bwipjs from 'bwip-js';
@@ -141,6 +141,15 @@ const formatAssignmentName = (name: string): string => {
   return name;
 };
 
+// === Размеры контекстного меню ===
+const CONTEXT_MENU_WIDTH = 247;
+const CONTEXT_MENU_HEIGHT = 134;
+// Отступ от курсора при открытии
+const CONTEXT_MENU_OFFSET_X = 2;
+const CONTEXT_MENU_OFFSET_Y = 2;
+// Отступ от края окна
+const CONTEXT_MENU_MARGIN = 8;
+
 const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   row, isSelected, selectedColumn, isMerged,
   rowStart, rowEnd, colStart, colEnd, cellData, highlightText,
@@ -188,19 +197,60 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
     ? (materialArticle ? `${materialName} (${materialArticle})` : materialName)
     : (hasAssignment ? assignmentDisplay : '—');
 
-  const handleContextMenu = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); };
+  // === Правила контекстного меню ===
+  const cellIsEmpty = !hasData && !hasAssignment;
+  const isMultiSelect = multiSelectCount > 1;
+  const isEmptyMultiple = isMultiSelect && cellIsEmpty;
+
+  const selectNomenclatureEnabled = !isMultiSelect || isEmptyMultiple;
+  const clearEnabled = isMultiSelect ? true : !cellIsEmpty;
+  const viewEnabled = !isMultiSelect && !cellIsEmpty;
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // По умолчанию — справа и снизу от курсора
+    let x = e.clientX + CONTEXT_MENU_OFFSET_X;
+    let y = e.clientY + CONTEXT_MENU_OFFSET_Y;
+
+    // Если не помещается справа — открываем слева от курсора
+    if (x + CONTEXT_MENU_WIDTH + CONTEXT_MENU_MARGIN > viewportWidth) {
+      x = e.clientX - CONTEXT_MENU_WIDTH - CONTEXT_MENU_OFFSET_X;
+    }
+    // Если и слева не помещается (очень узкий экран) — прижимаем к правому краю
+    if (x < CONTEXT_MENU_MARGIN) {
+      x = Math.max(CONTEXT_MENU_MARGIN, viewportWidth - CONTEXT_MENU_WIDTH - CONTEXT_MENU_MARGIN);
+    }
+
+    // Если не помещается снизу — открываем сверху от курсора
+    if (y + CONTEXT_MENU_HEIGHT + CONTEXT_MENU_MARGIN > viewportHeight) {
+      y = e.clientY - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_OFFSET_Y;
+    }
+    // Если и сверху не помещается (очень низкий экран) — прижимаем к нижнему краю
+    if (y < CONTEXT_MENU_MARGIN) {
+      y = Math.max(CONTEXT_MENU_MARGIN, viewportHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_MARGIN);
+    }
+
+    setContextMenu({ x, y });
+  };
   const closeContextMenu = () => setContextMenu(null);
 
   const handleSelectNomenclature = () => {
+    if (!selectNomenclatureEnabled) return;
     closeContextMenu();
     onOpenDetails?.();
   };
   const handleClearClick = () => {
+    if (!clearEnabled) return;
     closeContextMenu();
     onClear?.();
   };
   const handleView = () => {
-    if (multiSelectCount > 1) return;
+    if (!viewEnabled) return;
     closeContextMenu();
     onOpenView?.();
   };
@@ -327,10 +377,14 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
   const COL_ASSIGNMENT = 939;
   const TOP_PADDING = 11;
 
-  const expandedBoxBg = isSelected ? '#CDE4FF' : '#FFFFFF';
+  // === Фон блоков внутри раскрытой ячейки ===
+  // - выделена — #CDE4FF (как было)
+  // - раскрыта, но не выделена — rgba(225, 236, 253, 0.46)
+  // - не раскрыта — #FFFFFF
+  const expandedBoxBg = isSelected
+    ? '#CDE4FF'
+    : (isExpanded ? 'rgba(225, 236, 253, 0.46)' : '#FFFFFF');
   const expandedBoxShadow = isSelected ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.08)';
-
-  const viewDisabled = multiSelectCount > 1;
 
   return (
     <>
@@ -577,8 +631,8 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
               position: 'fixed',
               left: contextMenu.x,
               top: contextMenu.y,
-              width: 247,
-              height: 134,
+              width: CONTEXT_MENU_WIDTH,
+              height: CONTEXT_MENU_HEIGHT,
               backgroundColor: '#FFFFFF',
               borderRadius: 10,
               boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
@@ -588,7 +642,7 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
           >
             {/* Выбрать номенклатуру */}
             <div
-              onClick={handleSelectNomenclature}
+              onClick={selectNomenclatureEnabled ? handleSelectNomenclature : undefined}
               style={{
                 position: 'absolute',
                 top: 20,
@@ -597,7 +651,9 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
                 height: 18,
                 display: 'flex',
                 alignItems: 'center',
-                cursor: 'pointer',
+                cursor: selectNomenclatureEnabled ? 'pointer' : 'not-allowed',
+                opacity: selectNomenclatureEnabled ? 1 : 0.35,
+                pointerEvents: selectNomenclatureEnabled ? 'auto' : 'none',
               }}
             >
               <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>
@@ -610,7 +666,7 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
 
             {/* Очистить */}
             <div
-              onClick={handleClearClick}
+              onClick={clearEnabled ? handleClearClick : undefined}
               style={{
                 position: 'absolute',
                 top: 58,
@@ -619,7 +675,9 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
                 height: 18,
                 display: 'flex',
                 alignItems: 'center',
-                cursor: 'pointer',
+                cursor: clearEnabled ? 'pointer' : 'not-allowed',
+                opacity: clearEnabled ? 1 : 0.35,
+                pointerEvents: clearEnabled ? 'auto' : 'none',
               }}
             >
               <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>
@@ -632,7 +690,7 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
 
             {/* Посмотреть */}
             <div
-              onClick={viewDisabled ? undefined : handleView}
+              onClick={viewEnabled ? handleView : undefined}
               style={{
                 position: 'absolute',
                 top: 96,
@@ -641,9 +699,9 @@ const SchablonTableCell: React.FC<SchablonTableCellProps> = ({
                 height: 18,
                 display: 'flex',
                 alignItems: 'center',
-                cursor: viewDisabled ? 'not-allowed' : 'pointer',
-                opacity: viewDisabled ? 0.4 : 1,
-                pointerEvents: viewDisabled ? 'none' : 'auto',
+                cursor: viewEnabled ? 'pointer' : 'not-allowed',
+                opacity: viewEnabled ? 1 : 0.35,
+                pointerEvents: viewEnabled ? 'auto' : 'none',
               }}
             >
               <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'transparent' }}>

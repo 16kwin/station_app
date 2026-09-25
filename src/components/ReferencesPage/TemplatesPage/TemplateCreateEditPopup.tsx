@@ -1,14 +1,14 @@
-// TemplateCreateEditPopup.tsx — ПОЛНЫЙ ФАЙЛ
+// TemplateCreateEditPopup.tsx — ПОЛНЫЙ ФАЙЛ (иконка «Наименование шаблона» как в SupplierMainTab)
 import React, { useEffect, useState } from 'react';
 import FormField from '../../elements/FormField';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
-import NameIcon from '../../../assets/References/Icon11.svg';
-import GroupIcon from '../../../assets/Station/PopupIcon4.svg';
-import ModelIcon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
-import ModelIcon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
-import ConfigIcon31 from '../../../assets/References/NomenclatureCreatePage/Icon31.svg';
-import ConfigIcon32 from '../../../assets/References/NomenclatureCreatePage/Icon32.svg';
+import NameIcon18Gray from '../../../assets/Icons/NameIcons/NameIcon18Gray.svg';
+import NameIcon18Blue from '../../../assets/Icons/NameIcons/NameIcon18Blue.svg';
+import TemplatesGroupIcon14Blue from '../../../assets/Icons/TemplatesGroupIcons/TemplatesGroupIcon14Blue.svg';
+import TemplatesGroupIcon14Gray from '../../../assets/Icons/TemplatesGroupIcons/TemplatesGroupIcon14Gray.svg';
+import StationIcon16Blue from '../../../assets/Icons/StationIcons/StationIcon16Blue.svg';
+import StationIcon16Gray from '../../../assets/Icons/StationIcons/StationIcon16Gray.svg';
 
 export interface TemplateCreateEditPopupProps {
   isOpen: boolean;
@@ -50,7 +50,6 @@ const toArray = (v: any): any[] => {
   return [];
 };
 
-// Рекурсивно уплощаем дерево категорий, чтобы в поиске были ВСЕ категории (и корневые, и вложенные)
 const flattenCategories = (nodes: any[]): { uid: string; name: string }[] => {
   const result: { uid: string; name: string }[] = [];
   const walk = (arr: any[]) => {
@@ -159,7 +158,7 @@ const TemplateCreateEditPopup: React.FC<TemplateCreateEditPopupProps> = ({
   const handleSelectConfig = (uid: string, name: string) => onConfigChange(uid, name);
   const handleSelectCategory = (uid: string, name: string) => onCategoryChange(uid, name);
 
-  const title = mode === 'copy' ? 'Создание копии схемы загрузки' : 'Создание схемы загрузки';
+  const title = mode === 'copy' ? 'Создание копии шаблона загрузки' : 'Создание шаблона загрузки';
 
   const requiredFilled =
     name.trim().length > 0 &&
@@ -170,6 +169,26 @@ const TemplateCreateEditPopup: React.FC<TemplateCreateEditPopupProps> = ({
   const canSubmit = requiredFilled && !isSubmitting;
 
   if (!isOpen) return null;
+
+  const TITLE_TOP = 30;
+  const TITLE_HEIGHT = 21;
+  const GAP_TITLE_TO_FIRST_LABEL = 30;
+  const LABEL_H = 17;
+  const LABEL_TO_FIELD = 11;
+  const FIELD_H = FIELD_HEIGHT;
+  const FIELD_W = FIELD_WIDTH;
+  const GAP_FIELD_TO_NEXT_LABEL = 30;
+  const BLOCK_STEP = LABEL_H + LABEL_TO_FIELD + FIELD_H + GAP_FIELD_TO_NEXT_LABEL;
+
+  const FIRST_LABEL_TOP = TITLE_TOP + TITLE_HEIGHT + GAP_TITLE_TO_FIRST_LABEL;
+  const FIELD_TOP_1 = FIRST_LABEL_TOP + LABEL_H + LABEL_TO_FIELD;
+  const FIELD_TOP_2 = FIELD_TOP_1 + BLOCK_STEP;
+  const FIELD_TOP_3 = FIELD_TOP_2 + BLOCK_STEP;
+  const FIELD_TOP_4 = FIELD_TOP_3 + BLOCK_STEP;
+
+  const LAST_FIELD_BOTTOM = FIELD_TOP_4 + FIELD_H;
+  const BUTTONS_TOP = LAST_FIELD_BOTTOM + 47;
+  const POPUP_HEIGHT = BUTTONS_TOP + 44 + 30;
 
   return (
     <div
@@ -191,6 +210,7 @@ const TemplateCreateEditPopup: React.FC<TemplateCreateEditPopupProps> = ({
       <div
         style={{
           width: POPUP_WIDTH,
+          height: POPUP_HEIGHT,
           backgroundColor: '#FFFFFF',
           borderRadius: 10,
           boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
@@ -198,13 +218,14 @@ const TemplateCreateEditPopup: React.FC<TemplateCreateEditPopupProps> = ({
           boxSizing: 'border-box',
         }}
       >
+        {/* Заголовок */}
         <div
           style={{
             position: 'absolute',
-            top: 30,
+            top: TITLE_TOP,
             left: 0,
             right: 0,
-            height: 21,
+            height: TITLE_HEIGHT,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -214,101 +235,103 @@ const TemplateCreateEditPopup: React.FC<TemplateCreateEditPopupProps> = ({
             style={{
               fontFamily: 'Inter, sans-serif',
               fontSize: 17,
-              fontWeight: 600,
+              fontWeight: 500,
               color: '#2D4059',
-              lineHeight: '21px',
+              lineHeight: `${TITLE_HEIGHT}px`,
             }}
           >
             {title}
           </span>
         </div>
 
-        <div
-          style={{
-            position: 'absolute',
-            top: 30 + 21 + 30,
-            left: 40,
-            width: FIELD_WIDTH,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 30,
-          }}
-        >
+        {/* Поле 1: Наименование шаблона */}
+        <div style={{ position: 'absolute', top: FIELD_TOP_1, left: 40 }}>
           <FormField
-            width={FIELD_WIDTH}
-            height={FIELD_HEIGHT}
-            label="Наименование схемы"
+            width={FIELD_W}
+            height={FIELD_H}
+            label="Наименование шаблона"
             type="input"
-            icon={NameIcon}
+            icon={NameIcon18Gray}
+            iconActive={NameIcon18Blue}
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder="Введите наименование"
-            labelMarginBottom={11}
+            labelMarginBottom={LABEL_TO_FIELD}
             iconWidth={18}
-            iconHeight={16}
+            iconHeight={18}
           />
+        </div>
 
+        {/* Поле 2: Группа шаблонов */}
+        <div style={{ position: 'absolute', top: FIELD_TOP_2, left: 40 }}>
           <FormField
-            width={FIELD_WIDTH}
-            height={FIELD_HEIGHT}
-            label="Группа схем"
+            width={FIELD_W}
+            height={FIELD_H}
+            label="Группа шаблонов"
             type="select"
-            icon={GroupIcon}
-            iconActive={GroupIcon}
+            icon={TemplatesGroupIcon14Gray}
+            iconActive={TemplatesGroupIcon14Blue}
             value={categoryName}
             active={!!categoryUid}
             placeholder="Выберите группу"
-            labelMarginBottom={11}
-            selectIconWidth={14.5}
+            labelMarginBottom={LABEL_TO_FIELD}
+            selectIconWidth={14}
             selectIconHeight={18}
             searchOptions={categoryOptions}
             onSelectOption={handleSelectCategory}
             onOpenFullList={onOpenCategoryFullList}
           />
+        </div>
 
+        {/* Поле 3: Модель станции */}
+        <div style={{ position: 'absolute', top: FIELD_TOP_3, left: 40 }}>
           <FormField
-            width={FIELD_WIDTH}
-            height={FIELD_HEIGHT}
-            label="Модель"
+            width={FIELD_W}
+            height={FIELD_H}
+            label="Модель станции"
             type="select"
-            icon={modelUid ? ModelIcon32 : ModelIcon31}
-            iconActive={ModelIcon32}
+            icon={StationIcon16Gray}
+            iconActive={StationIcon16Blue}
             value={modelName}
             active={!!modelUid}
             disabled={modelDisabled}
             placeholder="Выберите модель"
-            labelMarginBottom={11}
-            selectIconWidth={14.5}
-            selectIconHeight={18}
+            labelMarginBottom={LABEL_TO_FIELD}
+            selectIconWidth={16}
+            selectIconHeight={16}
             searchOptions={modelOptions}
             onSelectOption={handleSelectModel}
             onOpenFullList={onOpenModelFullList}
           />
+        </div>
 
+        {/* Поле 4: Конфигурация станции */}
+        <div style={{ position: 'absolute', top: FIELD_TOP_4, left: 40 }}>
           <FormField
-            width={FIELD_WIDTH}
-            height={FIELD_HEIGHT}
-            label="Конфигурация"
+            width={FIELD_W}
+            height={FIELD_H}
+            label="Конфигурация станции"
             type="select"
-            icon={configUid ? ConfigIcon32 : ConfigIcon31}
-            iconActive={ConfigIcon32}
+            icon={StationIcon16Gray}
+            iconActive={StationIcon16Blue}
             value={configName}
             active={!!configUid}
             disabled={configDisabled}
             placeholder="Выберите конфигурацию"
-            labelMarginBottom={11}
-            selectIconWidth={14.5}
-            selectIconHeight={18}
+            labelMarginBottom={LABEL_TO_FIELD}
+            selectIconWidth={16}
+            selectIconHeight={16}
             searchOptions={configOptions}
             onSelectOption={handleSelectConfig}
             onOpenFullList={onOpenConfigFullList}
           />
         </div>
 
+        {/* Кнопки внизу справа */}
         <div
           style={{
             position: 'absolute',
-            top: 30 + 21 + 30 + (17 + 11 + FIELD_HEIGHT) * 4 + 30 * 3 + 47,
+            top: BUTTONS_TOP,
             right: 40,
             display: 'flex',
             gap: 30,
@@ -354,13 +377,6 @@ const TemplateCreateEditPopup: React.FC<TemplateCreateEditPopupProps> = ({
             Отмена
           </button>
         </div>
-
-        <div
-          style={{
-            height:
-              30 + 21 + 30 + (17 + 11 + FIELD_HEIGHT) * 4 + 30 * 3 + 47 + 44 + 30,
-          }}
-        />
       </div>
     </div>
   );

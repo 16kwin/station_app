@@ -1,4 +1,4 @@
-// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ
+// SchablonTable.tsx — ПОЛНЫЙ ФАЙЛ (синхронная анимация линии, фикс TS-ошибки)
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import SchablonTableCell from './SchablonTableCell';
@@ -53,6 +53,125 @@ interface SchablonTableProps {
   onOpenView: (rowId: number, column: number, cellData?: CellData) => void;
   onCellLocalClear: (rowId: number, column: number, drum: number) => void;
 }
+
+// === Глобальные часы для синхронизации всех "змеек" ===
+// Все SnakeBorder используют один источник времени и одну скорость,
+// поэтому двигаются абсолютно синхронно, независимо от момента включения.
+const snakeClock = {
+  start: (typeof performance !== 'undefined' ? performance.now() : Date.now()),
+  subscribers: new Set<() => void>(),
+};
+
+// === Непрерывно движущаяся линия по периметру со скруглением ===
+// Позиция головы зависит только от глобального времени и длины периметра,
+// поэтому в момент появления линия всегда находится в одной и той же "фазе".
+const SnakeBorder: React.FC<{
+  width: number;
+  height: number;
+  radius?: number;
+  speed?: number;       // px/сек
+  dashLen?: number;     // длина видимой "змейки"
+  thickness?: number;
+  phase?: number;       // смещение фазы, 0..1 (по умолчанию 0 — синхронно)
+}> = ({ width, height, radius = 8, speed = 45, dashLen = 22, thickness = 1.5, phase = 0 }) => {
+  const r = Math.min(radius, width / 2, height / 2);
+  const wStraight = width - 2 * r;
+  const hStraight = height - 2 * r;
+  const arc = (Math.PI * r) / 2;
+  const perim = 2 * wStraight + 2 * hStraight + 4 * arc;
+  const sideLens = [wStraight + arc, hStraight + arc, wStraight + arc, hStraight + arc];
+
+  // Точка на периметре в пикселях
+  const pointAt = (d: number): { x: number; y: number } => {
+    d = ((d % perim) + perim) % perim;
+    let acc = 0;
+    if (d <= acc + sideLens[0]) {
+      const local = d - acc;
+      if (local <= wStraight) return { x: r + local, y: 0 };
+      const a = local - wStraight;
+      const angle = -Math.PI / 2 + (a / arc) * (Math.PI / 2);
+      return { x: width - r + Math.cos(angle) * r, y: r + Math.sin(angle) * r };
+    }
+    acc += sideLens[0];
+    if (d <= acc + sideLens[1]) {
+      const local = d - acc;
+      if (local <= hStraight) return { x: width, y: r + local };
+      const a = local - hStraight;
+      const angle = 0 + (a / arc) * (Math.PI / 2);
+      return { x: width - r + Math.cos(angle) * r, y: height - r + Math.sin(angle) * r };
+    }
+    acc += sideLens[1];
+    if (d <= acc + sideLens[2]) {
+      const local = d - acc;
+      if (local <= wStraight) return { x: width - r - local, y: height };
+      const a = local - wStraight;
+      const angle = Math.PI / 2 + (a / arc) * (Math.PI / 2);
+      return { x: r + Math.cos(angle) * r, y: height - r + Math.sin(angle) * r };
+    }
+    acc += sideLens[2];
+    {
+      const local = d - acc;
+      if (local <= hStraight) return { x: 0, y: height - r - local };
+      const a = local - hStraight;
+      const angle = Math.PI + (a / arc) * (Math.PI / 2);
+      return { x: r + Math.cos(angle) * r, y: r + Math.sin(angle) * r };
+    }
+  };
+
+  // Рисуем позицию на основе глобального времени — синхронно для всех
+  const [head, setHead] = useState(() => {
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const t = (now - snakeClock.start) / 1000;
+    return ((t * speed + phase * perim) % perim + perim) % perim;
+  });
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const t = (now - snakeClock.start) / 1000;
+      const next = ((t * speed + phase * perim) % perim + perim) % perim;
+      setHead(next);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [speed, perim, phase]);
+
+  const tail = ((head - dashLen) % perim + perim) % perim;
+
+  const points: string = useMemo(() => {
+    const total = ((head - tail) % perim + perim) % perim;
+    if (total <= 0.001) return '';
+    const steps = Math.max(8, Math.ceil(total / 2));
+    const pts: string[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const d = (tail + (total * i) / steps) % perim;
+      const p = pointAt(d);
+      pts.push(`${p.x},${p.y}`);
+    }
+    return pts.join(' ');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [head, tail, perim, width, height, radius]);
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', pointerEvents: 'none', background: 'transparent' }}
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="rgba(102, 110, 254, 0.75)"
+        strokeWidth={thickness}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
 
 const SchablonTable: React.FC<SchablonTableProps> = ({
   onSelectionChange,
@@ -118,6 +237,27 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     });
     return keys;
   }, [filteredCells]);
+
+  const filteredColumnsSet = useMemo(() => {
+    if (filteredCells === null) return null;
+    const set = new Set<number>();
+    filteredCells.forEach(c => {
+      if (c.columnNumber != null) set.add(c.columnNumber);
+    });
+    return set;
+  }, [filteredCells]);
+
+  const filteredDrumsSet = useMemo(() => {
+    if (filteredCells === null) return null;
+    const set = new Set<number>();
+    filteredCells.forEach(c => {
+      const d = c.drumNumber ?? 1;
+      set.add(d);
+    });
+    return set;
+  }, [filteredCells]);
+
+  const isSearchActive = filteredCells !== null;
 
   const rows = useMemo(() => {
     const baseRows = displayModelCells
@@ -224,6 +364,10 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   }, [rows]);
 
   const handleColumnClick = useCallback((targetCol: number) => {
+    if (targetCol !== selectedColumn) {
+      setSelectedCellIds(new Set());
+      setExpandedCellId(null);
+    }
     if (isAnimating || targetCol === selectedColumn) { setSelectedColumn(targetCol); return; }
     setIsAnimating(true);
     const start = selectedColumn, end = targetCol, step = start < end ? 1 : -1;
@@ -265,7 +409,12 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
   const getColumnColor = (col: number) => animationHighlight === col ? '#2D4059' : isAnimating ? 'rgba(45, 64, 89, 0.6)' : selectedColumn === col ? '#2D4059' : 'rgba(45, 64, 89, 0.6)';
   const getColumnLineColor = (col: number) => animationHighlight === col ? '#666EFE' : isAnimating ? 'rgba(45, 64, 89, 0.06)' : selectedColumn === col ? '#666EFE' : 'rgba(45, 64, 89, 0.06)';
 
-  const handleDrumClick = (drum: number) => { if (drum === selectedDrum) return; onDrumChange(drum); setSelectedCellIds(new Set()); };
+  const handleDrumClick = (drum: number) => {
+    if (drum === selectedDrum) return;
+    onDrumChange(drum);
+    setSelectedCellIds(new Set());
+    setExpandedCellId(null);
+  };
 
   const getCellDataForRow = (row: { id: number }): CellData | undefined => {
     return cellsData.find(cd =>
@@ -284,11 +433,34 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
     onCellLocalClear(rowStart, selectedColumn, selectedDrum);
   }, [onCellLocalClear, selectedColumn, selectedDrum, selectedCellIds]);
 
-  const headerBgColor = isAllSelected ? '#DEEEFF' : '#FFFFFF';
+  const headerBgColor = '#FFFFFF';
 
   const firstDrumLeft = HEADER_CHECKBOX_LEFT + HEADER_CHECKBOX_SIZE + CHECKBOX_TO_FIRST_DRUM;
   const secondDrumLeft = firstDrumLeft + DRUM_UNDERLINE_WIDTH + DRUM_GAP_BETWEEN;
   const columnsLabelLeft = secondDrumLeft + DRUM_UNDERLINE_WIDTH + DRUM_TO_COLUMNS_LABEL;
+
+  const hasDrumSnake = (drum: number): boolean => {
+    if (!isSearchActive) return false;
+    if (totalDrums <= 1) return false;
+    return filteredDrumsSet?.has(drum) ?? false;
+  };
+
+  const hasColumnSnake = (originalCol: number): boolean => {
+    if (!isSearchActive) return false;
+    const merged = mergedColumns.get(originalCol);
+    if (merged) {
+      for (let c = merged.colStart; c <= merged.colEnd; c++) {
+        if (filteredColumnsSet?.has(c)) return true;
+      }
+      return false;
+    }
+    return filteredColumnsSet?.has(originalCol) ?? false;
+  };
+
+  const DRUM_SNAKE_W = DRUM_LABEL_WIDTH + 10;
+  const DRUM_SNAKE_H = DRUM_LABEL_HEIGHT + 8;
+  const COL_SNAKE_W = COLUMN_BLOCK_SIZE + 4;
+  const COL_SNAKE_H = TEXT_HEIGHT + 8;
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', height: `${TABLE_HEIGHT}px` }}>
@@ -312,9 +484,14 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
           {totalDrums > 1 && (
             <>
               <div style={{ position: 'absolute', left: firstDrumLeft, top: DRUM_LABEL_TOP, width: DRUM_LABEL_WIDTH, height: DRUM_LABEL_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {hasDrumSnake(1) && (
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: DRUM_SNAKE_W, height: DRUM_SNAKE_H, pointerEvents: 'none', zIndex: 4 }}>
+                    <SnakeBorder width={DRUM_SNAKE_W} height={DRUM_SNAKE_H} radius={6} speed={45} dashLen={60} thickness={2} />
+                  </div>
+                )}
                 <button
                   onClick={() => handleDrumClick(1)}
-                  style={{ width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 15, color: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_LABEL_HEIGHT}px`, transition: 'color 0.3s ease' }}
+                  style={{ position: 'relative', zIndex: 5, width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 15, color: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_LABEL_HEIGHT}px`, transition: 'color 0.3s ease' }}
                 >
                   Левый барабан
                 </button>
@@ -322,9 +499,14 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
               <div style={{ position: 'absolute', left: firstDrumLeft, top: DRUM_UNDERLINE_TOP, width: DRUM_UNDERLINE_WIDTH, height: LINE_THICKNESS, backgroundColor: selectedDrum === 1 ? '#666EFE' : 'rgba(45, 64, 89, 0.06)', borderRadius: '1.5px', transition: 'background-color 0.3s ease' }} />
 
               <div style={{ position: 'absolute', left: secondDrumLeft, top: DRUM_LABEL_TOP, width: DRUM_LABEL_WIDTH, height: DRUM_LABEL_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {hasDrumSnake(2) && (
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: DRUM_SNAKE_W, height: DRUM_SNAKE_H, pointerEvents: 'none', zIndex: 4 }}>
+                    <SnakeBorder width={DRUM_SNAKE_W} height={DRUM_SNAKE_H} radius={6} speed={45} dashLen={60} thickness={2} />
+                  </div>
+                )}
                 <button
                   onClick={() => handleDrumClick(2)}
-                  style={{ width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 15, color: selectedDrum === 2 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_LABEL_HEIGHT}px`, transition: 'color 0.3s ease' }}
+                  style={{ position: 'relative', zIndex: 5, width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 15, color: selectedDrum === 2 ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_LABEL_HEIGHT}px`, transition: 'color 0.3s ease' }}
                 >
                   Правый барабан
                 </button>
@@ -349,9 +531,15 @@ const SchablonTable: React.FC<SchablonTableProps> = ({
             {headerColumns.map((hc) => {
               const merged = mergedColumns.get(hc.originalCol);
               const blockWidth = merged && hc.originalCol === merged.colStart ? COLUMN_BLOCK_SIZE * (merged.colEnd - merged.colStart + 1) + COLUMN_GAP * (merged.colEnd - merged.colStart) : COLUMN_BLOCK_SIZE;
+              const showSnake = hasColumnSnake(hc.originalCol);
               return (
                 <div key={hc.key} style={{ width: `${blockWidth}px`, height: '100%', position: 'relative' }}>
-                  <button onClick={() => handleColumnClick(hc.originalCol)} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', height: `${TEXT_HEIGHT}px`, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', letterSpacing: '1px', color: getColumnColor(hc.originalCol), lineHeight: `${TEXT_HEIGHT}px`, textAlign: 'center', transition: 'color 0.15s ease' }}>{hc.label}</button>
+                  {showSnake && (
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: COL_SNAKE_W, height: COL_SNAKE_H, pointerEvents: 'none', zIndex: 4 }}>
+                      <SnakeBorder width={COL_SNAKE_W} height={COL_SNAKE_H} radius={5} speed={45} dashLen={22} thickness={1.5} />
+                    </div>
+                  )}
+                  <button onClick={() => handleColumnClick(hc.originalCol)} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', height: `${TEXT_HEIGHT}px`, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', letterSpacing: '1px', color: getColumnColor(hc.originalCol), lineHeight: `${TEXT_HEIGHT}px`, textAlign: 'center', transition: 'color 0.15s ease', zIndex: 5 }}>{hc.label}</button>
                   <div style={{ position: 'absolute', bottom: `${LINE_BOTTOM}px`, left: '50%', transform: 'translateX(-50%)', width: `${merged ? COLUMN_LINE_WIDTH * (merged.colEnd - merged.colStart + 1) + COLUMN_GAP * (merged.colEnd - merged.colStart) : COLUMN_LINE_WIDTH}px`, height: `${LINE_THICKNESS}px`, backgroundColor: getColumnLineColor(hc.originalCol), borderRadius: '1.5px', transition: 'background-color 0.15s ease' }} />
                 </div>
               );
