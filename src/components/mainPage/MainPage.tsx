@@ -12,6 +12,10 @@ import type { DateRange } from './shared/types';
 import EconomicDashboard from './economic/EconomicDashboard';
 import QualityDashboard from './quality/QualityDashboard';
 import OperatorDashboard from './operator/OperatorDashboard';
+import PurchasingDashboard from './purchasing/PurchasingDashboard';
+import AuditorDashboard from './auditor/AuditorDashboard';
+import ControllerDashboard from './controller/ControllerDashboard';
+import ShopHeadDashboard from './shopHead/ShopHeadDashboard';
 
 /** Высота полосы шапки над карточками панели */
 const HEADER_HEIGHT = 107;
@@ -60,6 +64,11 @@ const MainPage: React.FC = () => {
       {block.key === 'economic' && <EconomicDashboard range={range} />}
       {block.key === 'quality' && <QualityDashboard range={range} />}
       {block.key === 'workshop' && <OperatorDashboard />}
+      {block.key === 'purchasing' && <PurchasingDashboard />}
+      {block.key === 'auditor' && <AuditorDashboard range={range} />}
+      {block.key === 'controller' && <ControllerDashboard scope="section" />}
+      {block.key === 'chiefController' && <ControllerDashboard scope="enterprise" />}
+      {block.key === 'shopHead' && <ShopHeadDashboard />}
 
       {/* Шапка лежит поверх панели: панель занимает весь холст и иначе перехватывала бы клики */}
       <div style={{ position: 'absolute', left: 0, top: 0, width: CANVAS.width, height: HEADER_HEIGHT, zIndex: 6 }}>
@@ -72,6 +81,7 @@ const MainPage: React.FC = () => {
           range={role.hasDateRange ? range : undefined}
           onDateClick={handleDateClick}
           onDateReset={handleDateReset}
+          showTools={role.showTools !== false}
         />
       </div>
 

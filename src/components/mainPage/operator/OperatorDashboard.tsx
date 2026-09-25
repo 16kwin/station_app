@@ -29,9 +29,10 @@ const OperatorDashboard: React.FC = () => {
   const [ordersTab, setOrdersTab] = useState('active');
   const [eventsTab, setEventsTab] = useState('active');
 
+  // loading стартует с true, а эффект запускается один раз при монтировании — поэтому в теле эффекта
+  // его не выставляем (react-hooks/set-state-in-effect), меняется он только в .then/.catch
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetchOperatorDashboard()
       .then(result => {
         if (cancelled) return;
@@ -99,6 +100,7 @@ const OperatorDashboard: React.FC = () => {
         tabs={FEED_TABS}
         activeTab={eventsTab}
         onTabChange={setEventsTab}
+        onSecondScreen={() => window.open('/screen/events?source=operator', '_blank', 'noopener')}
       />
 
       {error && (

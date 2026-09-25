@@ -24,6 +24,8 @@ export interface DashboardHeaderProps {
   range?: { from: string; to: string };
   onDateClick?: (anchor: AnchorRect) => void;
   onDateReset?: () => void;
+  /** Кнопки «Фильтр» и «Куб» рядом с пилюлей дат; у аудитора по макету их нет */
+  showTools?: boolean;
 }
 
 // Геометрия шапки в координатах холста 1800×840
@@ -125,6 +127,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   range,
   onDateClick,
   onDateReset,
+  showTools = true,
 }) => {
   const handlePrevBlock = () => onBlockChange((blockIndex - 1 + blocks.length) % blocks.length);
   const handleNextBlock = () => onBlockChange((blockIndex + 1) % blocks.length);
@@ -302,12 +305,16 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </button>
           </div>
 
-          <button type="button" aria-label="Фильтр" style={toolButtonStyle}>
-            <img src={FilterIcon18Black} alt="" draggable={false} style={{ width: 18, height: 18 }} />
-          </button>
-          <button type="button" aria-label="Куб" style={toolButtonStyle}>
-            <CubeIcon />
-          </button>
+          {showTools && (
+            <>
+              <button type="button" aria-label="Фильтр" style={toolButtonStyle}>
+                <img src={FilterIcon18Black} alt="" draggable={false} style={{ width: 18, height: 18 }} />
+              </button>
+              <button type="button" aria-label="Куб" style={toolButtonStyle}>
+                <CubeIcon />
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

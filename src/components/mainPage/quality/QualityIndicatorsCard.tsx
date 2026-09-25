@@ -1,65 +1,115 @@
 // QualityIndicatorsCard.tsx — карточка «Показатели качества»: два столбика-«градусника» Брак/Выпуск.
 // Столбики, бейджи со значениями и сами числа растут одной анимацией.
+// Панели ролей переиспользуют карточку со своим местом, заголовком и подписями/цветами столбиков
+// (например, «Крит. остатки / В заказ» у начальника цеха).
 import React, { useId } from 'react';
-import type { QualityIndicatorsCardProps } from './types';
+import type { IndicatorColumn, QualityIndicatorsCardProps } from './types';
 import { ANIM, CARD_RECTS, COLORS, FONT } from './layout';
+import type { CardRect } from './layout';
 import { formatCount } from '../shared/format';
 import { useProgress } from '../shared/animation';
 import DashboardCard from '../shared/DashboardCard';
 
 /* ---------- Геометрия (локальные координаты карточки, px) ---------- */
-const CARD_W = CARD_RECTS.quality.w; // 340
-const CARD_H = CARD_RECTS.quality.h; // 250
-const COLUMN_BOTTOM = 168;
 const COLUMN_STROKE = 2.5;
-const BASE_H = 82; // h = 82 × (0.45 + 0.55 × value / max)
-const MIN_SHARE = 0.45;
+const MIN_SHARE = 0.45; // h = BASE_H × (0.45 + 0.55 × value / max)
 const GLOW_W = 50;
 const GLOW_R = 25;
-const GLOW_BOTTOM = 210;
 const BADGE_W = 88;
 const BADGE_H = 24;
 const BADGE_GAP = 7;
-const CIRCLE_CY = 190;
 const CIRCLE_R = 13;
-const LABEL_CY = 226;
+
+/** Раскладка столбиков: центры по x, низ линии, высота самого высокого столбика, кружок, подпись */
+interface ColumnsLayout {
+  cx: [number, number];
+  columnBottom: number;
+  baseH: number;
+  glowBottom: number;
+  circleCy: number;
+  labelCy: number;
+}
+
+/** Прежняя раскладка панели «Показатели» (карточка 400×250) */
+const HOME_LAYOUT: ColumnsLayout = {
+  cx: [140, 260],
+  columnBottom: 168,
+  baseH: 82,
+  glowBottom: 210,
+  circleCy: 190,
+  labelCy: 226,
+};
+
+/* Раскладка панелей ролей (1.png, 6.png): столбики на ≈31% и ≈70% ширины, кружок с буквой на h − 71,
+ * подпись на h − 30. Линия столбика кончается на 9px выше кружка — как в прежней раскладке и на макетах;
+ * верх самого высокого столбика — на 97, чтобы бейдж над ним не наезжал на заголовок. */
+const ROLE_LEFT_SHARE = 0.31;
+const ROLE_RIGHT_SHARE = 0.7;
+const ROLE_CIRCLE_INSET = 71;
+const ROLE_LABEL_INSET = 30;
+const ROLE_COLUMN_CIRCLE_GAP = 9;
+const ROLE_TALLEST_TOP = 97;
+/** Низ свечения — ниже центра кружка, как в прежней раскладке (190 → 210) */
+const GLOW_BELOW_CIRCLE = 20;
+
+const roleLayout = (rect: CardRect): ColumnsLayout => {
+  const circleCy = rect.h - ROLE_CIRCLE_INSET;
+  const columnBottom = circleCy - CIRCLE_R - ROLE_COLUMN_CIRCLE_GAP;
+  return {
+    cx: [Math.round(rect.w * ROLE_LEFT_SHARE), Math.round(rect.w * ROLE_RIGHT_SHARE)],
+    columnBottom,
+    baseH: Math.max(0, columnBottom - ROLE_TALLEST_TOP),
+    glowBottom: circleCy + GLOW_BELOW_CIRCLE,
+    circleCy,
+    labelCy: rect.h - ROLE_LABEL_INSET,
+  };
+};
+
+const DEFAULT_COLUMNS: { left: IndicatorColumn; right: IndicatorColumn } = {
+  left: { label: 'Брак', letter: 'Б', color: COLORS.crimson, circleColor: COLORS.crimsonDark },
+  right: { label: 'Выпуск', letter: 'В', color: COLORS.green, circleColor: COLORS.greenDark },
+};
 
 const TEXT_STYLE: React.CSSProperties = { fontFamily: FONT, userSelect: 'none' };
 
-interface ColumnSpec {
-  key: string;
-  cx: number;
-  color: string;
-  circleColor: string;
-  letter: string;
-  label: string;
-}
-
-const COLUMN_SPECS: ColumnSpec[] = [
-  { key: 'defect', cx: 140, color: COLORS.crimson, circleColor: COLORS.crimsonDark, letter: 'Б', label: 'Брак' },
-  { key: 'released', cx: 260, color: COLORS.green, circleColor: COLORS.greenDark, letter: 'В', label: 'Выпуск' },
-];
-
 const safeValue = (value: number): number => (Number.isFinite(value) && value > 0 ? value : 0);
 
-const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released, defect, total, animationKey }) => {
+const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({
+  released,
+  defect,
+  total,
+  animationKey,
+  rect,
+  title = 'Показатели качества',
+  columns = DEFAULT_COLUMNS,
+  showTotal = true,
+}) => {
   const progress = useProgress(animationKey, ANIM.indicators);
   const rawId = useId();
   const idBase = `qlt-indicators-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+
+  // Без rect — прежнее место и раскладка «Показателей»; с rect — раскладка панелей ролей от размера карточки
+  const cardRect = rect ?? CARD_RECTS.quality;
+  const layout = rect ? roleLayout(rect) : HOME_LAYOUT;
+
+  const specs = [
+    { key: 'defect', cx: layout.cx[0], ...columns.left },
+    { key: 'released', cx: layout.cx[1], ...columns.right },
+  ];
 
   const values = [safeValue(defect), safeValue(released)];
   const maxValue = Math.max(values[0], values[1]);
 
   return (
-    <DashboardCard rect={CARD_RECTS.quality} title="Показатели качества">
+    <DashboardCard rect={cardRect} title={title}>
       <svg
-        width={CARD_W}
-        height={CARD_H}
-        viewBox={`0 0 ${CARD_W} ${CARD_H}`}
+        width={cardRect.w}
+        height={cardRect.h}
+        viewBox={`0 0 ${cardRect.w} ${cardRect.h}`}
         style={{ position: 'absolute', left: 0, top: 0, display: 'block', overflow: 'visible' }}
       >
         <defs>
-          {COLUMN_SPECS.map(spec => (
+          {specs.map(spec => (
             <linearGradient key={spec.key} id={`${idBase}-${spec.key}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor={spec.color} stopOpacity={0} />
               <stop offset="1" stopColor={spec.color} stopOpacity={0.4} />
@@ -67,11 +117,11 @@ const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released,
           ))}
         </defs>
 
-        {COLUMN_SPECS.map((spec, index) => {
+        {specs.map((spec, index) => {
           const value = values[index];
-          const fullHeight = maxValue > 0 ? BASE_H * (MIN_SHARE + (1 - MIN_SHARE) * (value / maxValue)) : 0;
+          const fullHeight = maxValue > 0 ? layout.baseH * (MIN_SHARE + (1 - MIN_SHARE) * (value / maxValue)) : 0;
           const height = fullHeight * progress;
-          const top = COLUMN_BOTTOM - height;
+          const top = layout.columnBottom - height;
           const badgeTop = top - BADGE_GAP - BADGE_H;
           const animatedValue = value * progress;
 
@@ -82,7 +132,7 @@ const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released,
                 x={spec.cx - GLOW_W / 2}
                 y={top}
                 width={GLOW_W}
-                height={GLOW_BOTTOM - top}
+                height={layout.glowBottom - top}
                 rx={GLOW_R}
                 ry={GLOW_R}
                 fill={`url(#${idBase}-${spec.key})`}
@@ -92,7 +142,7 @@ const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released,
               {height > 0 && (
                 <line
                   x1={spec.cx}
-                  y1={COLUMN_BOTTOM}
+                  y1={layout.columnBottom}
                   x2={spec.cx}
                   y2={top}
                   stroke={spec.color}
@@ -115,10 +165,10 @@ const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released,
                 {formatCount(animatedValue)}
               </text>
 
-              <circle cx={spec.cx} cy={CIRCLE_CY} r={CIRCLE_R} fill={spec.circleColor} />
+              <circle cx={spec.cx} cy={layout.circleCy} r={CIRCLE_R} fill={spec.circleColor} />
               <text
                 x={spec.cx}
-                y={CIRCLE_CY}
+                y={layout.circleCy}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize={12}
@@ -131,7 +181,7 @@ const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released,
 
               <text
                 x={spec.cx}
-                y={LABEL_CY}
+                y={layout.labelCy}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize={13}
@@ -147,22 +197,24 @@ const QualityIndicatorsCard: React.FC<QualityIndicatorsCardProps> = ({ released,
       </svg>
 
       {/* Всего выпуск с производства — база, от которой считается уровень брака */}
-      <div
-        style={{
-          position: 'absolute',
-          right: 28,
-          top: 24,
-          fontFamily: FONT,
-          fontSize: 13,
-          fontWeight: 500,
-          lineHeight: '17px',
-          color: COLORS.textMuted,
-          whiteSpace: 'nowrap',
-          userSelect: 'none',
-        }}
-      >
-        {`Всего ${formatCount(safeValue(total))}`}
-      </div>
+      {showTotal && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 28,
+            top: 24,
+            fontFamily: FONT,
+            fontSize: 13,
+            fontWeight: 500,
+            lineHeight: '17px',
+            color: COLORS.textMuted,
+            whiteSpace: 'nowrap',
+            userSelect: 'none',
+          }}
+        >
+          {`Всего ${formatCount(safeValue(total))}`}
+        </div>
+      )}
     </DashboardCard>
   );
 };

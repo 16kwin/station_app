@@ -17,14 +17,19 @@ interface RoleSwitchPopupProps {
   onClose: () => void;
 }
 
-const WINDOW_WIDTH = 560;
 const ROW_HEIGHT = 84;
 const ROW_GAP = 14;
 const CONTENT_TOP = 104;
 const SIDE = 32;
+/** Больше четырёх ролей не помещаются столбцом по высоте — раскладываем в две колонки */
+const COLUMNS = ROLES.length > 4 ? 2 : 1;
+const COLUMN_GAP = 16;
+const WINDOW_WIDTH = COLUMNS === 2 ? 880 : 560;
+const ROW_WIDTH = (WINDOW_WIDTH - SIDE * 2 - COLUMN_GAP * (COLUMNS - 1)) / COLUMNS;
+const ROW_COUNT = Math.ceil(ROLES.length / COLUMNS);
+const WINDOW_HEIGHT = CONTENT_TOP + ROW_COUNT * ROW_HEIGHT + (ROW_COUNT - 1) * ROW_GAP + SIDE;
 
 const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value, onSelect, onClose }) => {
-  const windowHeight = CONTENT_TOP + ROLES.length * ROW_HEIGHT + (ROLES.length - 1) * ROW_GAP + SIDE;
 
   const handleSelect = (role: RoleKey) => {
     if (role !== value) onSelect(role);
@@ -59,7 +64,7 @@ const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value,
         transition={{ duration: 0.2 }}
         style={{
           width: WINDOW_WIDTH,
-          height: windowHeight,
+          height: WINDOW_HEIGHT,
           backgroundColor: COLORS.white,
           borderRadius: 15,
           boxShadow: SHADOWS.modal,
@@ -125,9 +130,9 @@ const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value,
               onClick={() => handleSelect(role.key)}
               style={{
                 position: 'absolute',
-                left: SIDE,
-                top: CONTENT_TOP + index * (ROW_HEIGHT + ROW_GAP),
-                width: WINDOW_WIDTH - SIDE * 2,
+                left: SIDE + (index % COLUMNS) * (ROW_WIDTH + COLUMN_GAP),
+                top: CONTENT_TOP + Math.floor(index / COLUMNS) * (ROW_HEIGHT + ROW_GAP),
+                width: ROW_WIDTH,
                 height: ROW_HEIGHT,
                 padding: '0 20px',
                 borderRadius: 12,

@@ -1,7 +1,16 @@
 // types.ts — контракт GET /api/dashboard/operator и пропсы карточек панели «Оператор склада»
 import type { AnimatedCardProps } from '../shared/types';
+import type { CardRect } from '../shared/layout';
 
 export type { AnimatedCardProps } from '../shared/types';
+
+/**
+ * Белая иконка в цветном кружке кольца-показателя (shared/MetricGauge):
+ * 'stations' — коробка с галочкой (ТМЦ в станциях), 'issued' — лоток со стрелкой (выдано ТМЦ),
+ * 'overNorm' — стопка со стрелкой вверх (выдано сверхнормы), 'sgd' — склад (СГД),
+ * 'incidents' — треугольник с «!» (инциденты)
+ */
+export type MetricIconKind = 'stations' | 'issued' | 'overNorm' | 'sgd' | 'incidents';
 
 /** Карточка-показатель: значение, база доли и сама доля (насколько заполнено кольцо) */
 export interface OperatorMetric {
@@ -57,11 +66,31 @@ export interface OperatorDashboardData {
 
 export interface OperatorMetricCardProps extends AnimatedCardProps {
   metric: OperatorMetric;
+  /** Порядковый номер карточки: место, цвет и сдвиг волн по умолчанию */
   index: number;
+  /** Место карточки на холсте; по умолчанию METRIC_RECTS[index] */
+  rect?: CardRect;
+  /** Цвет волн, дуги и кружка; по умолчанию METRIC_COLORS[index] */
+  color?: string;
+  /**
+   * Иконка кольца. Если задана — карточка рисуется по макету начальника цеха (6.png):
+   * название 16px тёмным, число 20px, кольцо у низа карточки с цветным кружком и белой иконкой, без подписи доли.
+   * Без неё — как на панели оператора склада.
+   */
+  icon?: MetricIconKind;
 }
 
 export interface StationBalanceCardProps extends AnimatedCardProps {
   stations: Station[];
   /** Период, который показывается в подсказке над столбиком */
   period: { from: string; to: string };
+  /** Место карточки на холсте; по умолчанию CARD_RECTS.stations */
+  rect?: CardRect;
+  /** Заголовок; по умолчанию «Критические и минимальные остатки по станциям» */
+  title?: string;
+  /**
+   * 'full' (по умолчанию) — как на панели оператора склада;
+   * 'compact' — «трубки» на три видимые станции с горизонтальной прокруткой и кнопкой сортировки по остатку (7.png)
+   */
+  variant?: 'full' | 'compact';
 }

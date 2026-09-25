@@ -6,9 +6,13 @@ import { formatBudgetPercent } from './format';
 import { easeOutCubic, useProgress } from './animation';
 import type { BudgetExecutionCardProps } from './types';
 
-const RECT = CARD_RECTS.budget;
+/**
+ * Кольца и легенда нарисованы в координатах «домашней» карточки 412×273 (CARD_RECTS.budget).
+ * В карточке другого размера этот блок центрируется: сдвиг ((w − 412) / 2, (h − 273) / 2), заголовок остаётся на месте.
+ */
+const DESIGN = CARD_RECTS.budget;
 
-/** Центр колец в локальных координатах карточки */
+/** Центр колец в локальных координатах блока 412×273 */
 const CX = 137;
 const CY = 156;
 
@@ -87,7 +91,11 @@ const arcPath = (r: number, share: number): string => {
  * Число в центре растёт синхронно с дугами: percent × (нарисовано / всего). Свыше 300% все три кольца
  * полные, меняется только число.
  */
-const BudgetExecutionCard: React.FC<BudgetExecutionCardProps> = ({ percent, animationKey }) => {
+const BudgetExecutionCard: React.FC<BudgetExecutionCardProps> = ({ percent, animationKey, rect = CARD_RECTS.budget }) => {
+  // Сдвиг блока колец и легенды к центру карточки (0, 0 — на «домашнем» месте)
+  const offsetX = (rect.w - DESIGN.w) / 2;
+  const offsetY = (rect.h - DESIGN.h) / 2;
+
   // Защита от NaN/Infinity/отрицательных значений (например, План = 0)
   const safePercent = Number.isFinite(percent) ? Math.max(0, percent) : 0;
 
@@ -120,15 +128,15 @@ const BudgetExecutionCard: React.FC<BudgetExecutionCardProps> = ({ percent, anim
   const captionLines = safePercent > 100 ? ['Превышение', 'бюджета'] : ['Затраты в рамках', 'бюджета'];
 
   return (
-    <DashboardCard rect={RECT} title="Исполнение бюджета">
+    <DashboardCard rect={rect} title="Исполнение бюджета">
       <svg
-        width={RECT.w}
-        height={RECT.h}
-        viewBox={`0 0 ${RECT.w} ${RECT.h}`}
+        width={DESIGN.w}
+        height={DESIGN.h}
+        viewBox={`0 0 ${DESIGN.w} ${DESIGN.h}`}
         style={{
           position: 'absolute',
-          left: 0,
-          top: 0,
+          left: offsetX,
+          top: offsetY,
           display: 'block',
           overflow: 'visible',
           fontFamily: FONT,

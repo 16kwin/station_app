@@ -6,6 +6,8 @@ import PrivateRoute from './services/PrivateRoute';
 import MainLayout from './layouts/MainLayout';
 import LoginPage from './components/loginPage/LoginPage';
 import MainPage from './components/mainPage/MainPage';
+import EventsScreenPage from './components/mainPage/eventsScreen/EventsScreenPage';
+import PurchaseGraphPage from './components/mainPage/purchaseGraph/PurchaseGraphPage';
 import StationsPage from './components/StationsPage/StationsPage';
 import ReferencesPage from './components/ReferencesPage/ReferencesPage';
 import NomenclaturePage from './components/ReferencesPage/NomenclaturePage/NomenclaturePage';
@@ -92,6 +94,9 @@ const AppContent = () => {
           <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <Routes>
               <Route path="/login" element={<Navigate to="/main" replace />} />
+              {/* Отдельные вкладки браузера без меню приложения: второй экран и граф закупок */}
+              <Route path="/screen/events" element={<PrivateRoute><EventsScreenPage /></PrivateRoute>} />
+              <Route path="/screen/purchase-graph" element={<PrivateRoute><PurchaseGraphPage /></PrivateRoute>} />
               <Route path="/" element={<PrivateRoute><TabProvider><MainLayout /></TabProvider></PrivateRoute>}>
                 <Route index element={<MainPage />} />
                 <Route path="main" element={<MainPage />} />
