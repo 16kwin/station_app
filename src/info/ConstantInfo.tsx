@@ -1,4 +1,4 @@
-// ConstantInfo.ts — полный файл (добавлены эндпоинты настроек номенклатуры)
+// info/ConstantInfo.ts — полный файл (inactivityTimeout = 10 мин, warningTimeout = 1 мин)
 const ConstantInfo = {
   // База
   serverHost: window.config.ip_api.replace('http://', '').replace('https://', ''),
@@ -19,8 +19,8 @@ const ConstantInfo = {
   
   // Спящий режим
   restApiCheckPassword: '/api/auth/check_password',
-  inactivityTimeout: 30 * 1000,
-warningTimeout: 10 * 1000,
+  inactivityTimeout: 10 * 60 * 1000,
+  warningTimeout: 1 * 60 * 1000,
   
   // Станции
   restApiStationsStatic: '/api/stations/static',
@@ -152,14 +152,31 @@ warningTimeout: 10 * 1000,
   // Шаблоны
   restApiTemplatesCategories: '/api/templates/categories',
   restApiTemplatesCategory: (id: number) => `/api/templates/categories/${id}`,
+  restApiTemplateCategoryByUid: (uid: string) => `/api/templates/categories/uid/${uid}`,
+  restApiTemplatesCategoryMove: '/api/templates/categories/move',
   restApiTemplates: '/api/templates',
   restApiTemplate: (uid: string) => `/api/templates/${uid}`,
   restApiTemplateCopy: '/api/templates/copy',
+  restApiTemplateMove: '/api/templates/move',
   restApiTemplateStations: (uid: string) => `/api/templates/${uid}/stations`,
   restApiTemplateCells: (uid: string) => `/api/templates/${uid}/cells`,
   restApiTemplateCell: (uid: string) => `/api/templates/cells/${uid}`,
   restApiTemplateCellsClearBatch: '/api/templates/cells/clear-batch',
   restApiTemplateCellsCreate: '/api/templates/cells',
+  restApiTemplateCellsBatchSave: (uid: string) => `/api/templates/${uid}/cells/batch-save`,
+
+  // Шаблоны — настройки (колонки, фильтры, сортировка, путь)
+  restApiTemplatesTreeWithSettings: (userId: number) => `/api/templates/tree-with-settings?userId=${userId}`,
+  restApiTemplatesAllSettings: (userId: number) => `/api/templates/settings?userId=${userId}`,
+  restApiTemplatesAllSettingsSave: (userId: number) => `/api/templates/settings?userId=${userId}`,
+  restApiTemplatesColumnsSettings: (userId: number) => `/api/templates/columns-settings?userId=${userId}`,
+  restApiTemplatesColumnsSettingsSave: (userId: number) => `/api/templates/columns-settings?userId=${userId}`,
+  restApiTemplatesFiltersSettings: (userId: number) => `/api/templates/filters-settings?userId=${userId}`,
+  restApiTemplatesFiltersSettingsSave: (userId: number) => `/api/templates/filters-settings?userId=${userId}`,
+  restApiTemplatesSortSettings: (userId: number) => `/api/templates/sort-settings?userId=${userId}`,
+  restApiTemplatesSortSettingsSave: (userId: number) => `/api/templates/sort-settings?userId=${userId}`,
+  restApiTemplatesCurrentPath: (userId: number) => `/api/templates/current-path?userId=${userId}`,
+  restApiTemplatesCurrentPathSave: (userId: number) => `/api/templates/current-path?userId=${userId}`,
 
   // Предприятия, цеха, участки
   restApiEnterprises: '/api/enterprises',
@@ -323,14 +340,12 @@ warningTimeout: 10 * 1000,
   restApiStationConfigurationFiltersSettingsSave: (userId: number) => `/api/station-configurations/filters-settings?userId=${userId}`,
   restApiStationConfigurationSortSettings: (userId: number) => `/api/station-configurations/sort-settings?userId=${userId}`,
   restApiStationConfigurationSortSettingsSave: (userId: number) => `/api/station-configurations/sort-settings?userId=${userId}`,
-  // Экспорт в Excel и Word для конфигураций
   restApiStationConfigurationExportExcel: '/api/station-configurations/export-excel',
   restApiStationConfigurationExportWord: '/api/station-configurations/export-word',
 
-  // Экспорт в Excel и Word для моделей
   restApiStationModelExportExcel: '/api/station-models/export-excel',
   restApiStationModelExportWord: '/api/station-models/export-word',
-  // Расположения — все настройки
+
   restApiLocationAllSettings: (userId: number) => `/api/locations-crud/settings?userId=${userId}`,
   restApiLocationSortSettings: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
   restApiLocationSortSettingsSave: (userId: number) => `/api/locations-crud/sort-settings?userId=${userId}`,
@@ -346,7 +361,7 @@ warningTimeout: 10 * 1000,
   restApiStationModelRenameDocument: (documentUid: string, documentName: string) => `/api/station-models/documents/${documentUid}/rename?documentName=${encodeURIComponent(documentName)}`,
   restApiStationEventsByUid: (uid: string) => `/api/stations/crud/${uid}/events`,
 
-    // Группы учета — события и настройки
+  // Группы учета
   restApiTypeMaterials: (userId: number) => `/api/type-materials?userId=${userId}`,
   restApiTypeMaterialCreate: '/api/type-materials',
   restApiTypeMaterial: (uid: string) => `/api/type-materials/${uid}`,
@@ -357,7 +372,8 @@ warningTimeout: 10 * 1000,
   restApiTypeMaterialColumnsSettingsSave: (userId: number) => `/api/type-materials/columns-settings?userId=${userId}`,
   restApiTypeMaterialSortSettings: (userId: number) => `/api/type-materials/sort-settings?userId=${userId}`,
   restApiTypeMaterialSortSettingsSave: (userId: number) => `/api/type-materials/sort-settings?userId=${userId}`,
-    // Группы номенклатуры — события и настройки
+
+  // Группы номенклатуры
   restApiTypePurposes: (userId: number) => `/api/type-purposes?userId=${userId}`,
   restApiTypePurposeCreate: '/api/type-purposes',
   restApiTypePurpose: (uid: string) => `/api/type-purposes/${uid}`,
@@ -371,7 +387,7 @@ warningTimeout: 10 * 1000,
   restApiTypePurposeSortSettings: (userId: number) => `/api/type-purposes/sort-settings?userId=${userId}`,
   restApiTypePurposeSortSettingsSave: (userId: number) => `/api/type-purposes/sort-settings?userId=${userId}`,
 
-   // Виды номенклатуры — события и настройки
+  // Виды номенклатуры
   restApiTypeProducts: (userId: number) => `/api/type-products?userId=${userId}`,
   restApiTypeProductCreate: '/api/type-products',
   restApiTypeProduct: (uid: string) => `/api/type-products/${uid}`,
@@ -385,7 +401,7 @@ warningTimeout: 10 * 1000,
   restApiTypeProductSortSettings: (userId: number) => `/api/type-products/sort-settings?userId=${userId}`,
   restApiTypeProductSortSettingsSave: (userId: number) => `/api/type-products/sort-settings?userId=${userId}`,
 
-    // Группы характеристик
+  // Группы характеристик
   restApiAttributeGroups: (userId: number) => `/api/attribute-groups?userId=${userId}`,
   restApiAttributeGroupCreate: '/api/attribute-groups',
   restApiAttributeGroup: (uid: string) => `/api/attribute-groups/${uid}`,
@@ -424,6 +440,7 @@ warningTimeout: 10 * 1000,
   restApiMeasureFiltersSettingsSave: (userId: number) => `/api/measures-crud/filters-settings?userId=${userId}`,
   restApiMeasureSortSettings: (userId: number) => `/api/measures-crud/sort-settings?userId=${userId}`,
   restApiMeasureSortSettingsSave: (userId: number) => `/api/measures-crud/sort-settings?userId=${userId}`,
+
   // Единицы измерения (номенклатура)
   restApiUnitsCrud: (userId: number) => `/api/units-crud?userId=${userId}`,
   restApiUnitCreate: '/api/units-crud',
@@ -436,7 +453,7 @@ warningTimeout: 10 * 1000,
   restApiUnitSortSettings: (userId: number) => `/api/units-crud/sort-settings?userId=${userId}`,
   restApiUnitSortSettingsSave: (userId: number) => `/api/units-crud/sort-settings?userId=${userId}`,
 
-    // Направления производства
+  // Направления производства
   restApiProductionDirections: (userId: number) => `/api/production-directions?userId=${userId}`,
   restApiProductionDirectionCreate: '/api/production-directions',
   restApiProductionDirection: (uid: string) => `/api/production-directions/${uid}`,
@@ -462,6 +479,7 @@ warningTimeout: 10 * 1000,
   restApiManufacturerFiltersSettingsSave: (userId: number) => `/api/manufacturers-crud/filters-settings?userId=${userId}`,
   restApiManufacturerSortSettings: (userId: number) => `/api/manufacturers-crud/sort-settings?userId=${userId}`,
   restApiManufacturerSortSettingsSave: (userId: number) => `/api/manufacturers-crud/sort-settings?userId=${userId}`,
+
   // Модели брендов
   restApiModelsCrud: (userId: number) => `/api/models-crud?userId=${userId}`,
   restApiModelCreate: '/api/models-crud',
@@ -475,7 +493,8 @@ warningTimeout: 10 * 1000,
   restApiModelFiltersSettingsSave: (userId: number) => `/api/models-crud/filters-settings?userId=${userId}`,
   restApiModelSortSettings: (userId: number) => `/api/models-crud/sort-settings?userId=${userId}`,
   restApiModelSortSettingsSave: (userId: number) => `/api/models-crud/sort-settings?userId=${userId}`,
-    // Направления поставщиков
+
+  // Направления поставщиков
   restApiSupplierDirections: (userId: number) => `/api/supplier-directions?userId=${userId}`,
   restApiSupplierDirectionCreate: '/api/supplier-directions',
   restApiSupplierDirection: (uid: string) => `/api/supplier-directions/${uid}`,
@@ -500,17 +519,43 @@ warningTimeout: 10 * 1000,
   restApiSupplierBrandFiltersSettingsSave: (userId: number) => `/api/supplier-brands/filters-settings?userId=${userId}`,
   restApiSupplierBrandSortSettings: (userId: number) => `/api/supplier-brands/sort-settings?userId=${userId}`,
   restApiSupplierBrandSortSettingsSave: (userId: number) => `/api/supplier-brands/sort-settings?userId=${userId}`,
-   restApiManufacturerDocuments: (manufacturerUid: string) => `/api/manufacturers-crud/${manufacturerUid}/documents`,
+
+  restApiManufacturerDocuments: (manufacturerUid: string) => `/api/manufacturers-crud/${manufacturerUid}/documents`,
   restApiManufacturerDeleteDocument: (documentUid: string) => `/api/manufacturers-crud/documents/${documentUid}`,
   restApiManufacturerGet: (uid: string) => `/api/manufacturers-crud/${uid}`,
   restApiManufacturerImages: (uid: string) => `/api/manufacturers-crud/${uid}/images`,
-restApiManufacturerDeleteImage: (imageUid: string) => `/api/manufacturers-crud/images/${imageUid}`,
-restApiNomenclatureGetCodeDefault: (userId: number, codeKind: string) => `/api/nomenclature/code-default?userId=${userId}&codeKind=${codeKind}`,
-restApiNomenclatureSaveCodeDefault: '/api/nomenclature/code-default',
-restApiNomenclatureReleases: '/api/nomenclature/releases',
+  restApiManufacturerDeleteImage: (imageUid: string) => `/api/manufacturers-crud/images/${imageUid}`,
 
-restApiStationCopy: (uid: string) => `/api/stations/crud/${uid}/copy`,
-restApiTemplateCellsBatchSave: (uid: string) => `/api/templates/${uid}/cells/batch-save`,
+  restApiNomenclatureGetCodeDefault: (userId: number, codeKind: string) => `/api/nomenclature/code-default?userId=${userId}&codeKind=${codeKind}`,
+  restApiNomenclatureSaveCodeDefault: '/api/nomenclature/code-default',
+  restApiNomenclatureReleases: '/api/nomenclature/releases',
+
+  restApiStationCopy: (uid: string) => `/api/stations/crud/${uid}/copy`,
+
+  // === Шаблоны (старые эндпоинты) ===
+  restApiTemplatesCategoriesOld: '/api/templates/categories',
+  restApiTemplatesCategoryOld: (id: number) => `/api/templates/categories/${id}`,
+  restApiCellAssignments: '/api/templates/cell-assignments',
+
+  // === Документы: Контроль уровня остатков ===
+  restApiStockLevelControlCrud: (userId: number) => `/api/documents/stock-level-control/crud?userId=${userId}`,
+  restApiStockLevelControlGenerateCode: '/api/documents/stock-level-control/crud/generate-code',
+  restApiStockLevelControl: (uid: string) => `/api/documents/stock-level-control/crud/${uid}`,
+  restApiStockLevelControlPost: (uid: string) => `/api/documents/stock-level-control/crud/${uid}/post`,
+  restApiStockLevelControlUnpost: (uid: string) => `/api/documents/stock-level-control/crud/${uid}/unpost`,
+  restApiStockLevelControlEvents: '/api/documents/stock-level-control/crud/events',
+  restApiStockLevelControlEventsByUid: (uid: string) => `/api/documents/stock-level-control/crud/${uid}/events`,
+  restApiStockLevelControlAllSettings: (userId: number) => `/api/documents/stock-level-control/settings?userId=${userId}`,
+  restApiStockLevelControlColumnsSettings: (userId: number) => `/api/documents/stock-level-control/columns-settings?userId=${userId}`,
+  restApiStockLevelControlColumnsSettingsSave: (userId: number) => `/api/documents/stock-level-control/columns-settings?userId=${userId}`,
+  restApiStockLevelControlFiltersSettings: (userId: number) => `/api/documents/stock-level-control/filters-settings?userId=${userId}`,
+  restApiStockLevelControlFiltersSettingsSave: (userId: number) => `/api/documents/stock-level-control/filters-settings?userId=${userId}`,
+  restApiStockLevelControlSortSettings: (userId: number) => `/api/documents/stock-level-control/sort-settings?userId=${userId}`,
+  restApiStockLevelControlSortSettingsSave: (userId: number) => `/api/documents/stock-level-control/sort-settings?userId=${userId}`,
+    restApiStockLevelControlReg: (stationUid: string, materialUid: string) =>
+    `/api/documents/stock-level-control/reg?stationUid=${encodeURIComponent(stationUid)}&materialUid=${encodeURIComponent(materialUid)}`,
+     restApiTemplateEvents: (uid: string) => `/api/templates/${uid}/events`,
+  restApiTemplateEventsAll: '/api/templates/events',
 };
 
 export default ConstantInfo;

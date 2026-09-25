@@ -1,4 +1,4 @@
-// components/LockScreen/LockScreen.tsx
+// components/LockScreen/LockScreen.tsx — полный файл (LOCK_TIMEOUT = 1 час)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../services/AuthContext';
@@ -12,7 +12,7 @@ interface LockScreenProps {
   onUnlock: () => void;
 }
 
-const LOCK_TIMEOUT = 5 * 60 * 1000; // 5 минут до логаута
+const LOCK_TIMEOUT = 60 * 60 * 1000; // 1 час до логаута
 
 const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const [password, setPassword] = useState('');
@@ -136,7 +136,7 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
       setSuccessMessage('Пароль введен успешно!');
       setHasSuccess(true);
       
-      // Отправляем событие разблокировки в другие вкладки
+      // Отправляем сообщение о разблокировке в другие вкладки
       channelRef.current?.postMessage({ type: 'unlock' });
       
       setTimeout(() => {
@@ -157,9 +157,10 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   };
 
   const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
   const isButtonActive = password.length > 0;
