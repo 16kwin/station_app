@@ -7,7 +7,7 @@ import AxiosService from '../../services/AxiosService';
 import ConstantInfo from '../../info/ConstantInfo';
 import type { AxiosError } from 'axios';
 import LOGO from '../../assets/LOGO.svg';
-import LOGIN_IMAGE from '../../assets/Login.svg';
+import LOGIN_VIDEO from '../../assets/Videos/Login.mp4';
 import Hand from '../../assets/Hand.svg';
 import Checkbox from '../elements/Checkbox';
 import EyeIconSvg from '../../assets/Eye.svg';
@@ -235,7 +235,6 @@ const LoginPage = () => {
       if (response.status === 200) {
         savePasswordToBrowser(username, password);
         
-        // Отправляем сигнал другим вкладкам о входе
         try {
           localStorage.setItem('app_login_event', Date.now().toString());
         } catch (e) {}
@@ -380,7 +379,15 @@ const LoginPage = () => {
                     </form>
                   </div>
                   <div style={{ width: '625px', height: '800px', overflow: 'hidden' }}>
-                    <img src={LOGIN_IMAGE} alt="Login" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', userSelect: 'none' }} />
+                    <video
+                      src={LOGIN_VIDEO}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      draggable={false}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', userSelect: 'none' }}
+                    />
                   </div>
                 </div>
               </motion.div>

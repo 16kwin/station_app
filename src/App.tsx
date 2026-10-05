@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен раздел Документы: Контроль уровня остатков)
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен раздел Документы: Пополнение)
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -46,6 +46,8 @@ import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPa
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import StockLevelControlPage from './components/DocumentsPage/StockLevelControl/StockLevelControlPage';
 import StockLevelControlCreatePage from './components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
+import RefillPage from './components/DocumentsPage/Refill/RefillPage';
+import RefillCreatePage from './components/DocumentsPage/Refill/RefillCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
 import OrdersPage from './components/AnalyticsPage/OrdersPage';
@@ -122,6 +124,7 @@ const AppContent = () => {
                 <Route path="references/manufacturers/edit/:uid/:code" element={<ManufacturerCreatePage />} />
                 <Route path="references/brands" element={<BrandsPage />} />
                 <Route path="references/models" element={<ModelsPage />} />
+                <Route path="references/countries" element={<CountriesPage />} />
                 <Route path="references/supplier-directions" element={<SupplierDirectionsPage />} />
                 <Route path="references/supplier-brands" element={<SupplierBrandsPage />} />
                 <Route path="references/suppliers" element={<SuppliersPage />} />
@@ -147,6 +150,9 @@ const AppContent = () => {
                 <Route path="documents/stock-level-control" element={<StockLevelControlPage />} />
                 <Route path="documents/stock-level-control/create/:uid" element={<StockLevelControlCreatePage />} />
                 <Route path="documents/stock-level-control/edit/:uid" element={<StockLevelControlCreatePage />} />
+                <Route path="documents/refill" element={<RefillPage />} />
+                <Route path="documents/refill/create/:uid" element={<RefillCreatePage />} />
+                <Route path="documents/refill/edit/:uid" element={<RefillCreatePage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="orders" element={<OrdersPage />} />

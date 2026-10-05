@@ -556,6 +556,38 @@ const ConstantInfo = {
     `/api/documents/stock-level-control/reg?stationUid=${encodeURIComponent(stationUid)}&materialUid=${encodeURIComponent(materialUid)}`,
      restApiTemplateEvents: (uid: string) => `/api/templates/${uid}/events`,
   restApiTemplateEventsAll: '/api/templates/events',
+    // === Документы: Пополнение ===
+  restApiRefillCrud: (userId: number) => `/api/documents/refill/crud?userId=${userId}`,
+  restApiRefillGenerateCode: '/api/documents/refill/crud/generate-code',
+  restApiRefill: (uid: string) => `/api/documents/refill/crud/${uid}`,
+  restApiRefillPost: (uid: string) => `/api/documents/refill/crud/${uid}/post`,
+  restApiRefillEvents: '/api/documents/refill/crud/events',
+  restApiRefillEventsByUid: (uid: string) => `/api/documents/refill/crud/${uid}/events`,
+  restApiRefillAllSettings: (userId: number) => `/api/documents/refill/settings?userId=${userId}`,
+  restApiRefillColumnsSettings: (userId: number) => `/api/documents/refill/columns-settings?userId=${userId}`,
+  restApiRefillColumnsSettingsSave: (userId: number) => `/api/documents/refill/columns-settings?userId=${userId}`,
+  restApiRefillFiltersSettings: (userId: number) => `/api/documents/refill/filters-settings?userId=${userId}`,
+  restApiRefillFiltersSettingsSave: (userId: number) => `/api/documents/refill/filters-settings?userId=${userId}`,
+  restApiRefillSortSettings: (userId: number) => `/api/documents/refill/sort-settings?userId=${userId}`,
+  restApiRefillSortSettingsSave: (userId: number) => `/api/documents/refill/sort-settings?userId=${userId}`,
+  restApiRefillSnapshot: (stationUid: string, templateUid?: string) =>
+  `/api/documents/refill/snapshot?stationUid=${encodeURIComponent(stationUid)}` +
+  (templateUid ? `&templateUid=${encodeURIComponent(templateUid)}` : ''),
+    // Брони по документу пополнения (для тултипа «Информация»)
+  restApiRefillStockReservations: (uid: string) =>
+    `/api/documents/refill/crud/${uid}/stock/reservations`,
+  restApiRefillStockBalances: (stockUid?: string) =>
+    `/api/documents/refill/stock/balances` + (stockUid ? `?stockUid=${encodeURIComponent(stockUid)}` : ''),
+  restApiRefillStockAvailable: (materialUids: string[], stockUid?: string) => {
+    const params = new URLSearchParams();
+    materialUids.forEach(u => params.append('materialUids', u));
+    if (stockUid) params.append('stockUid', stockUid);
+    return `/api/documents/refill/stock/available?${params.toString()}`;
+    
+  },
+    restApiRefillStockReservationsByMaterial: (materialUid: string, stockUid?: string) =>
+    `/api/documents/refill/stock/reservations?materialUid=${encodeURIComponent(materialUid)}` +
+    (stockUid ? `&stockUid=${encodeURIComponent(stockUid)}` : ''),
 };
 
 export default ConstantInfo;
