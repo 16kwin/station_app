@@ -27,6 +27,7 @@ interface RefillCell {
   materialUid?: string | null;
   materialName?: string | null;
   materialArticle?: string | null;
+  materialCode?: number | null;
   templateQuantity?: number | null;
   factQuantity?: number | null;
   returnToThisCell?: boolean | null;
@@ -115,13 +116,6 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
   docRefillUid,
 }) => {
   const { openTab } = useTabs();
-
-  console.log('[RefillTableCell] render. uid=', cell.uid,
-    'materialUid=', cell.materialUid,
-    'stockAvailable=', cell.stockAvailable,
-    'stockMinStock=', cell.stockMinStock,
-    'stockCriticalStock=', cell.stockCriticalStock,
-    'refillQuantity=', cell.refillQuantity);
 
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -406,36 +400,17 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
   };
 
   const checkStockWarning = (qty: number): null | 'critical' | 'insufficient' => {
-    console.log('[RefillTableCell][checkStockWarning] start. qty=', qty,
-      'cell.stockAvailable=', cell.stockAvailable,
-      'stockMinStock=', cell.stockMinStock,
-      'stockCriticalStock=', cell.stockCriticalStock);
-    if (qty <= 0) {
-      console.log('[RefillTableCell][checkStockWarning] early return: qty <= 0');
-      return null;
-    }
+    if (qty <= 0) return null;
     const stockAvailable = cell.stockAvailable;
-    if (stockAvailable == null) {
-      console.log('[RefillTableCell][checkStockWarning] early return: stockAvailable == null');
-      return null;
-    }
+    if (stockAvailable == null) return null;
     const after = stockAvailable - qty;
     const crit = cell.stockCriticalStock ?? null;
-    console.log('[RefillTableCell][checkStockWarning] after=', after, 'crit=', crit);
-    if (after < 0) {
-      console.log('[RefillTableCell][checkStockWarning] -> insufficient (after < 0)');
-      return 'insufficient';
-    }
-    if (crit != null && after < crit) {
-      console.log('[RefillTableCell][checkStockWarning] -> critical (after < crit)');
-      return 'critical';
-    }
-    console.log('[RefillTableCell][checkStockWarning] -> null');
+    if (after < 0) return 'insufficient';
+    if (crit != null && after < crit) return 'critical';
     return null;
   };
 
   const loadStockReservations = useCallback(async () => {
-    console.log('[RefillTableCell][loadStockReservations] start. materialUid=', cell.materialUid, 'docRefillUid=', docRefillUid);
     if (!cell.materialUid) {
       setStockReservations([]);
       return;
@@ -444,7 +419,6 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
       const res = await AxiosService.get(
         ConstantInfo.restApiRefillStockReservationsByMaterial(cell.materialUid)
       );
-      console.log('[RefillTableCell][loadStockReservations] response=', res.data);
       const list = (res.data || []) as ReservationDto[];
       const filtered = list
         .filter(r => r.blocked === false && r.docRefillUid !== docRefillUid)
@@ -454,7 +428,6 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
           docRefillCode: r.docRefillCode,
           reservedQuantity: r.reservedQuantity,
         }));
-      console.log('[RefillTableCell][loadStockReservations] filtered=', filtered);
       setStockReservations(filtered);
     } catch (e) {
       console.error('[RefillTableCell][loadStockReservations] error:', e);
@@ -471,9 +444,7 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
 
   const handleQtyBlur = () => {
     const trimmed = editValue.replace(/[^0-9]/g, '');
-    console.log('[RefillTableCell][handleQtyBlur] start. editValue=', editValue, 'trimmed=', trimmed);
     const isOverflow = checkOverflow(trimmed);
-    console.log('[RefillTableCell][handleQtyBlur] isOverflow(schema)=', isOverflow);
     if (isOverflow) {
       setEditValue(cell.refillQuantity == null ? '' : String(cell.refillQuantity));
       setIsEditing(false);
@@ -483,7 +454,6 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
     }
     const num = trimmed === '' ? 0 : Number(trimmed);
     const kind = checkStockWarning(num);
-    console.log('[RefillTableCell][handleQtyBlur] stockWarning kind=', kind);
     if (kind) {
       setPendingCommit(trimmed);
       setStockWarning(kind);
@@ -654,18 +624,18 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
       )
     : null;
 
-  const factQtyNum = Number(cell.factQuantity ?? 0);
-  const factQtyText = `${factQtyNum} ${pluralizeUnits(factQtyNum)}`;
-
   const minStockNum = stockReg?.minStock ?? null;
   const critStockNum = stockReg?.criticalStock ?? null;
 
   const minStockText = minStockNum != null ? `${minStockNum} ${pluralizeUnits(minStockNum)}` : '';
   const critStockText = critStockNum != null ? `${critStockNum} ${pluralizeUnits(critStockNum)}` : '';
 
-  const boxHeight = hasKuo ? 100 : 49;
-
   const requestQtyForWarning = pendingCommit == null || pendingCommit === '' ? 0 : Number(pendingCommit);
+
+  // Код номенклатуры для раскрытого блока
+  const materialCodeDisplay = detail?.codeMaterial != null
+    ? String(detail.codeMaterial).padStart(4, '0')
+    : '—';
 
   return (
     <>
@@ -817,6 +787,7 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
             >
               <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 1123, height: 2, backgroundColor: '#BCD8FF' }} />
 
+              {/* Изображение */}
               <div style={{ position: 'absolute', top: 20, left: 60 }}>
                 <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 13, color: 'rgba(45, 64, 89, 0.5)', height: 16, lineHeight: '16px' }}>Изображение</div>
                 <div
@@ -839,86 +810,37 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
                 </div>
               </div>
 
+              {/* Код номенклатуры */}
               <div style={{ position: 'absolute', top: 20, left: 225, width: 220 }}>
-                <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 13, color: 'rgba(45, 64, 89, 0.5)', height: 16, lineHeight: '16px' }}>Количество номенклатуры</div>
-
+                <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 13, color: 'rgba(45, 64, 89, 0.5)', height: 16, lineHeight: '16px' }}>Код номенклатуры</div>
                 <div style={{
                   marginTop: 4,
                   width: 220,
-                  height: boxHeight,
+                  height: 49,
                   borderRadius: 8,
                   backgroundColor: expandedBoxBg,
                   boxShadow: expandedBoxShadow,
-                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingLeft: 15,
                   boxSizing: 'border-box',
                 }}>
-                  <div style={{
-                    position: 'absolute',
-                    top: hasKuo ? 0 : '50%',
-                    left: 13,
-                    height: hasKuo ? 44 : 'auto',
-                    transform: hasKuo ? 'none' : 'translateY(-50%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}>
-                    <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <img src={CodeIcon20Black} alt="" style={{ width: 20, height: 14, display: 'block' }} />
-                    </div>
-                    <div style={{
-                      marginLeft: 13,
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: '#2D4059',
-                      lineHeight: '18px',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {factQtyText}
-                    </div>
+                  <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <img src={CodeIcon20Black} alt="" style={{ width: 20, height: 14 }} />
                   </div>
-
-                  {hasKuo && (
-                    <>
-                      <div style={{
-                        position: 'absolute',
-                        top: 46,
-                        left: 15,
-                        right: 15,
-                        height: 17,
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#FDA373',
-                        lineHeight: '17px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        Мин. остаток: {minStockText}
-                      </div>
-
-                      <div style={{
-                        position: 'absolute',
-                        top: 46 + 17 + 8,
-                        left: 15,
-                        right: 15,
-                        height: 17,
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#FF3052',
-                        lineHeight: '17px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        Крит. остаток: {critStockText}
-                      </div>
-                    </>
-                  )}
+                  <span style={{
+                    marginLeft: 15,
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: '#2D4059',
+                  }}>
+                    {materialCodeDisplay}
+                  </span>
                 </div>
               </div>
 
+              {/* Партия */}
               <div style={{ position: 'absolute', top: 20, left: 225 + 220 + 40, width: 220 }}>
                 <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 13, color: 'rgba(45, 64, 89, 0.5)', height: 16, lineHeight: '16px' }}>Партия</div>
                 <div style={{
@@ -930,6 +852,62 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
                 </div>
               </div>
 
+              {/* Контроль остатков (КУО) — только если есть */}
+              {hasKuo && (
+                <div style={{ position: 'absolute', top: 20, left: 225 + 220 + 40 + 220 + 40, width: 220 }}>
+                  <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 13, color: 'rgba(45, 64, 89, 0.5)', height: 16, lineHeight: '16px' }}>Контроль остатков</div>
+                  <div style={{
+                    marginTop: 4,
+                    width: 220,
+                    height: 49,
+                    borderRadius: 8,
+                    backgroundColor: expandedBoxBg,
+                    boxShadow: expandedBoxShadow,
+                    position: 'relative',
+                    boxSizing: 'border-box',
+                  }}>
+                    {minStockNum != null && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 8,
+                        left: 15,
+                        right: 15,
+                        height: 17,
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: '#FDA373',
+                        lineHeight: '17px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        Мин.: {minStockNum} {pluralizeUnits(minStockNum)}
+                      </div>
+                    )}
+                    {critStockNum != null && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 8 + 17 + 4,
+                        left: 15,
+                        right: 15,
+                        height: 17,
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: '#FF3052',
+                        lineHeight: '17px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        Крит.: {critStockNum} {pluralizeUnits(critStockNum)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={(e) => { e.stopPropagation(); onOpenDetails?.(cell.uid); }}
                 style={{
@@ -937,7 +915,8 @@ const RefillTableCell: React.FC<RefillTableCellProps> = ({
                   borderRadius: 10, border: 'none', backgroundColor: '#666EFE',
                   cursor: 'pointer', fontFamily: 'Inter, sans-serif',
                   fontSize: 15, fontWeight: 700, color: '#FFFFFF',
-                }}>
+                }}
+              >
                 Открыть
               </button>
             </motion.div>

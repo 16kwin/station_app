@@ -1,5 +1,5 @@
-// RefillCreatePage.tsx — форма документа пополнения
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// RefillCreatePage.tsx — форма документа пополнения (savedCells/localCells, isDirty только по refillQuantity, обновление снимковых полей при перезагрузке)
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import AxiosService from '../../../services/AxiosService';
@@ -251,6 +251,27 @@ const isActiveTmcCell = (c: RefillCell | null | undefined): boolean => {
   return isTmc && (hasAssignment || hasMaterial);
 };
 
+// Нормализация набора ячеек для сравнения (ТОЛЬКО редактируемые поля).
+// Снимковые поля (templateQuantity, factQuantity, min/critical, stockControlExists)
+// намеренно НЕ участвуют в сравнении — они живые и меняются на бэке.
+const normalizeEditableCells = (list: RefillCell[]) =>
+  [...list]
+    .map(c => ({
+      drumNumber: c.drumNumber ?? null,
+      columnNumber: c.columnNumber ?? null,
+      numberCell: c.numberCell ?? null,
+      cellAssignmentUid: c.cellAssignmentUid ?? null,
+      materialUid: c.materialUid ?? null,
+      refillQuantity: c.refillQuantity ?? null,
+      returnToThisCell: c.returnToThisCell ?? false,
+      isIndividual: c.isIndividual ?? false,
+    }))
+    .sort((a, b) => {
+      const ak = `${a.drumNumber ?? 0}-${a.columnNumber ?? 0}-${a.numberCell ?? 0}`;
+      const bk = `${b.drumNumber ?? 0}-${b.columnNumber ?? 0}-${b.numberCell ?? 0}`;
+      return ak.localeCompare(bk);
+    });
+
 const RefillCreatePage: React.FC = () => {
   const { uid } = useParams<{ uid: string }>();
   const [searchParams] = useSearchParams();
@@ -264,7 +285,14 @@ const RefillCreatePage: React.FC = () => {
 
   const isEdit = !!uid && location.pathname.startsWith(`/documents/refill/edit/${uid}`);
 
+  const draftKey = useMemo(() => {
+    if (isEdit && uid) return `refill_localCells_${uid}`;
+    if (stationUidParam) return `refill_localCells_new_${stationUidParam}`;
+    return 'refill_localCells_new';
+  }, [isEdit, uid, stationUidParam]);
+
   const [doc, setDoc] = useState<DocRefill | null>(null);
+  const [savedCells, setSavedCells] = useState<RefillCell[]>([]);
   const [localCells, setLocalCells] = useState<RefillCell[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -290,22 +318,22 @@ const RefillCreatePage: React.FC = () => {
   const [parentUid, setParentUid] = useState<string | null>(null);
 
   const [stockRegs, setStockRegs] = useState<Record<string, StockReg>>({});
-  const stockRegsLoadedRef = React.useRef<string>('');
+  const stockRegsLoadedRef = useRef<string>('');
 
   const [currentFrameArr, setCurrentFrameArr] = useState<number[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(0));
   const [isWingOpenArr, setIsWingOpenArr] = useState<boolean[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(false));
-  const isAnimatingRef = React.useRef<boolean[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(false));
-  const currentFrameRef = React.useRef<number[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(0));
-  const animationFrameRef = React.useRef<(number | null)[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(null));
-  const lastFrameTimeRef = React.useRef<(number | null)[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(null));
-  const directionRef = React.useRef<('open' | 'close')[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill('open'));
+  const isAnimatingRef = useRef<boolean[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(false));
+  const currentFrameRef = useRef<number[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(0));
+  const animationFrameRef = useRef<(number | null)[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(null));
+  const lastFrameTimeRef = useRef<(number | null)[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill(null));
+  const directionRef = useRef<('open' | 'close')[]>(Array(MAX_DRUMS * TOGGLES_COUNT).fill('open'));
   const LAST_FRAME_INDEX = FRAMES_COUNT - 1;
   const getWingIndex = useCallback((drumIndex: number, cellIndex: number) => drumIndex * TOGGLES_COUNT + cellIndex, []);
 
-  const prevSelectedIdsRef = React.useRef<Set<string>>(new Set());
-  const prevContextRef = React.useRef<{ drum: number; column: number }>({ drum: 1, column: 1 });
-  const currentDrumRef = React.useRef<number>(1);
-  const currentColumnRef = React.useRef<number>(1);
+  const prevSelectedIdsRef = useRef<Set<string>>(new Set());
+  const prevContextRef = useRef<{ drum: number; column: number }>({ drum: 1, column: 1 });
+  const currentDrumRef = useRef<number>(1);
+  const currentColumnRef = useRef<number>(1);
   useEffect(() => { currentDrumRef.current = selectedDrum; }, [selectedDrum]);
 
   const startWingAnimation = useCallback((wingIndex: number, opening: boolean) => {
@@ -453,7 +481,6 @@ const RefillCreatePage: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
   const [isClearPopupOpen, setIsClearPopupOpen] = useState(false);
   const [countersExpanded, setCountersExpanded] = useState(false);
 
@@ -461,6 +488,11 @@ const RefillCreatePage: React.FC = () => {
   const [isCellPopupOpen, setIsCellPopupOpen] = useState(false);
   const [cellPopupUid, setCellPopupUid] = useState<string | null>(null);
   const [cellPopupReadOnly, setCellPopupReadOnly] = useState(false);
+
+  // ============ isDirty — только редактируемые поля ============
+  const isDirty = useMemo(() => {
+    return JSON.stringify(normalizeEditableCells(localCells)) !== JSON.stringify(normalizeEditableCells(savedCells));
+  }, [localCells, savedCells]);
 
   useEffect(() => {
     if (!cellContextMenu) return;
@@ -489,6 +521,35 @@ const RefillCreatePage: React.FC = () => {
     });
   }, []);
 
+  // ============ Слияние: живые снимковые поля из бэка + локальный refillQuantity ===
+  // Для каждого адреса: берём свежую ячейку с бэка (fresh) и накладываем локальный refillQuantity,
+  // если пользователь его вводил (в localCells он не null).
+  const mergeLiveFieldsWithLocalRefill = useCallback(
+    (freshFromServer: RefillCell[], localDraft: RefillCell[]): RefillCell[] => {
+      const localByAddr = new Map<string, RefillCell>();
+      localDraft.forEach(c => {
+        const key = `${c.drumNumber ?? 0}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`;
+        localByAddr.set(key, c);
+      });
+
+      return freshFromServer.map(fresh => {
+        const key = `${fresh.drumNumber ?? 0}-${fresh.columnNumber ?? 0}-${fresh.numberCell ?? 0}`;
+        const local = localByAddr.get(key);
+        if (!local) return fresh;
+
+        // Берём все снимковые/справочные поля из fresh, refillQuantity/returnToThisCell/isIndividual — локальные
+        return {
+          ...fresh,
+          refillQuantity: local.refillQuantity ?? null,
+          returnToThisCell: local.returnToThisCell ?? fresh.returnToThisCell ?? false,
+          isIndividual: local.isIndividual ?? fresh.isIndividual ?? false,
+        };
+      });
+    },
+    []
+  );
+
+  // ============ ЗАГРУЗКА ДАННЫХ ============
   useEffect(() => {
     if (!uid) { setIsLoading(false); return; }
 
@@ -502,20 +563,29 @@ const RefillCreatePage: React.FC = () => {
                 ConstantInfo.restApiRefillSnapshot(stationUidParam)
               );
               const snap = snapRes.data as DocRefill;
-              console.log('[RefillCreatePage] snapshot cells:', (snap.cells || []).map((c: any) => ({
-                uid: c.uid,
-                materialUid: c.materialUid,
-                stockAvailable: c.stockAvailable,
-                stockMinStock: c.stockMinStock,
-                stockCriticalStock: c.stockCriticalStock,
-              })));
               setDoc(snap);
 
               const cells: RefillCell[] = (snap.cells || []).map((c: RefillCell) => ({
                 ...c,
                 uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
               }));
-              setLocalCells(cells);
+
+              const savedSnapshot = cells.map(c => ({ ...c, refillQuantity: null }));
+              setSavedCells(savedSnapshot);
+
+              let hasDraft = false;
+              try {
+                const raw = sessionStorage.getItem(draftKey);
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    hasDraft = true;
+                    // Уже при первом открытии: свежие снимковые поля + локальный refillQuantity
+                    setLocalCells(mergeLiveFieldsWithLocalRefill(cells, parsed as RefillCell[]));
+                  }
+                }
+              } catch {}
+              if (!hasDraft) setLocalCells(savedSnapshot);
             } catch (e) {
               console.error('Ошибка загрузки снимка:', e);
             }
@@ -560,27 +630,34 @@ const RefillCreatePage: React.FC = () => {
       return;
     }
 
+    // === EDIT: GET документа, обновляем снимковые поля, сохраняем локальный refillQuantity ===
     setIsLoading(true);
     AxiosService.get(ConstantInfo.restApiRefill(uid))
       .then(r => {
         const d = r.data as DocRefill;
-        console.log('[RefillCreatePage] loaded doc cells:', (d.cells || []).map((c: any) => ({
-          uid: c.uid,
-          materialUid: c.materialUid,
-          stockAvailable: c.stockAvailable,
-          stockMinStock: c.stockMinStock,
-          stockCriticalStock: c.stockCriticalStock,
-        })));
         setDoc(d);
         const cells: RefillCell[] = (d.cells || []).map((c: RefillCell) => ({
           ...c,
           uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
         }));
-        setLocalCells(cells);
+        setSavedCells(cells);
+
+        let hasDraft = false;
+        try {
+          const raw = sessionStorage.getItem(draftKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              hasDraft = true;
+              setLocalCells(mergeLiveFieldsWithLocalRefill(cells, parsed as RefillCell[]));
+            }
+          }
+        } catch {}
+        if (!hasDraft) setLocalCells(cells);
       })
       .catch(e => console.error(e))
       .finally(() => setIsLoading(false));
-  }, [uid, isEdit, stationUidParam]);
+  }, [uid, isEdit, stationUidParam, draftKey, mergeLiveFieldsWithLocalRefill]);
 
   useEffect(() => {
     if (!doc?.stationUid) return;
@@ -623,6 +700,17 @@ const RefillCreatePage: React.FC = () => {
       .catch(e => { console.error(e); setConfigLoaded(true); });
   }, [doc?.stationUid, configLoaded]);
 
+  // ============ СОХРАНЕНИЕ ЧЕРНОВИКА В sessionStorage ============
+  useEffect(() => {
+    if (isLoading) return;
+    if (localCells.length === 0) return;
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify(localCells));
+    } catch (e) {
+      console.error('Не удалось сохранить черновик пополнения:', e);
+    }
+  }, [localCells, draftKey, isLoading]);
+
   useEffect(() => {
     const stationUid = doc?.stationUid || stationUidParam;
     if (!stationUid) { setStockRegs({}); stockRegsLoadedRef.current = ''; return; }
@@ -643,7 +731,6 @@ const RefillCreatePage: React.FC = () => {
         try {
           const res = await AxiosService.get(ConstantInfo.restApiStockLevelControlReg(stationUid, mUid));
           const data = res.data;
-          console.log('[RefillCreatePage][stockRegs] materialUid=', mUid, 'data=', data);
           if (data) {
             regs[mUid] = {
               minStock: data.minStock ?? null,
@@ -654,11 +741,9 @@ const RefillCreatePage: React.FC = () => {
             regs[mUid] = { minStock: null, criticalStock: null, exists: false };
           }
         } catch (e) {
-          console.log('[RefillCreatePage][stockRegs] error for', mUid, e);
           regs[mUid] = { minStock: null, criticalStock: null, exists: false };
         }
       }));
-      console.log('[RefillCreatePage][stockRegs] final regs=', regs);
       if (!cancelled) setStockRegs(regs);
     })();
 
@@ -750,7 +835,6 @@ const RefillCreatePage: React.FC = () => {
       }
       return { ...c, refillQuantity: safe };
     }));
-    setIsDirty(true);
   }, []);
 
   const selectedCellsCount = useMemo(
@@ -773,6 +857,11 @@ const RefillCreatePage: React.FC = () => {
     ? Math.round((cellsToLoadCount / totalCellsInStation) * 100)
     : 0;
 
+  const clearDraft = useCallback(() => {
+    try { sessionStorage.removeItem(draftKey); } catch {}
+  }, [draftKey]);
+
+  // ============ SAVE ============
   const handleSave = async (): Promise<boolean> => {
     if (isSaving) return false;
     if (!uid) return false;
@@ -832,8 +921,9 @@ const RefillCreatePage: React.FC = () => {
           ...c,
           uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
         }));
+        setSavedCells(fresh);
         setLocalCells(fresh);
-        setIsDirty(false);
+        clearDraft();
         setEditMode(false);
         if (activeTabId && d.uid && d.code != null) {
           replaceTab(
@@ -847,13 +937,15 @@ const RefillCreatePage: React.FC = () => {
       }
 
       const res = await AxiosService.patch(ConstantInfo.restApiRefill(doc!.uid), { status: 'SAVED', cells });
-      setDoc(res.data);
-      const fresh: RefillCell[] = (res.data.cells || []).map((c: RefillCell) => ({
+      const d = res.data as DocRefill;
+      setDoc(d);
+      const fresh: RefillCell[] = (d.cells || []).map((c: RefillCell) => ({
         ...c,
         uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
       }));
+      setSavedCells(fresh);
       setLocalCells(fresh);
-      setIsDirty(false);
+      clearDraft();
       setEditMode(false);
       return true;
     } catch (e) {
@@ -864,6 +956,12 @@ const RefillCreatePage: React.FC = () => {
     }
   };
 
+  // ============ LOAD (как было) ============
+  const handleLoad = () => {
+    if (!isLoaded) setIsLoaded(true);
+  };
+
+  // ============ POST ============
   const handlePost = async () => {
     if (!doc?.uid || !isEdit) return;
     if (invalidCells.size > 0) {
@@ -872,13 +970,17 @@ const RefillCreatePage: React.FC = () => {
     }
     try {
       const res = await AxiosService.post(ConstantInfo.restApiRefillPost(doc.uid));
-      setDoc(res.data);
+      const d = res.data as DocRefill;
+      setDoc(d);
+      const fresh: RefillCell[] = (d.cells || []).map((c: RefillCell) => ({
+        ...c,
+        uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
+      }));
+      setSavedCells(fresh);
+      setLocalCells(fresh);
+      clearDraft();
       setEditMode(false);
     } catch (e) { console.error(e); }
-  };
-
-  const handleLoad = () => {
-    if (!isLoaded) setIsLoaded(true);
   };
 
   const handleClose = () => {
@@ -893,6 +995,7 @@ const RefillCreatePage: React.FC = () => {
 
   const handleCloseWithoutSaving = () => {
     setShowCloseConfirm(false);
+    clearDraft();
     const currentTab = tabs.find(tab => tab.id === activeTabId);
     if (currentTab) closeTab(currentTab.id);
   };
@@ -936,7 +1039,6 @@ const RefillCreatePage: React.FC = () => {
     }
     prevSelectedIdsRef.current = new Set();
     setLocalCells(prev => prev.map(c => ({ ...c, refillQuantity: null })));
-    setIsDirty(true);
     setDocSelectedIds(new Set());
     setIsClearPopupOpen(false);
   };
@@ -947,7 +1049,6 @@ const RefillCreatePage: React.FC = () => {
     }
     prevSelectedIdsRef.current = new Set();
     setLocalCells(prev => prev.map(c => docSelectedIds.has(c.uid) ? { ...c, refillQuantity: null } : c));
-    setIsDirty(true);
     setDocSelectedIds(new Set());
     setIsClearPopupOpen(false);
   };
@@ -1811,7 +1912,6 @@ const RefillCreatePage: React.FC = () => {
 
             <div onClick={clearEnabled ? () => {
               setLocalCells(prev => prev.map(c => c.uid === cellContextMenu.uid ? { ...c, refillQuantity: null } : c));
-              setIsDirty(true);
               setCellContextMenu(null);
             } : undefined} style={{
               position: 'absolute', top: 58, left: 20, right: 20, height: 18,
@@ -1888,7 +1988,6 @@ const RefillCreatePage: React.FC = () => {
               </div>
             </div>
           </div>
-          
         </>
       )}
     </div>

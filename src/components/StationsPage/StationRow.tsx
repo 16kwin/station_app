@@ -1,4 +1,4 @@
-// StationRow.tsx — ПОЛНЫЙ ФАЙЛ
+// StationRow.tsx — ПОЛНЫЙ ФАЙЛ (добавлено открытие документа пополнения + попап "Шаблон не установлен")
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +23,11 @@ import Config3 from '../../assets/Station/Config3.svg';
 import Config4 from '../../assets/Station/Config4.svg';
 import Config5 from '../../assets/Station/Config5.svg';
 
+import AxiosService from '../../services/AxiosService';
+import ConstantInfo from '../../info/ConstantInfo';
+import { useTabs } from '../../context/TabContext';
+import NoTemplatePopup from './NoTemplatePopup';
+
 const glassPulse = `@keyframes glassPulse { 0%, 100% { opacity: 0.67; transform: translateX(0); } 50% { opacity: 1; transform: translateX(6px); } }`;
 const glassPulseRight = `@keyframes glassPulseRight { 0%, 100% { opacity: 0.67; transform: translateX(0); } 50% { opacity: 1; transform: translateX(-6px); } }`;
 const shimmer = `@keyframes shimmer { 0%, 100% { opacity: 0.6; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }`;
@@ -34,7 +39,6 @@ interface StationRowProps {
   totalCells?: number; filledCells?: number; templateNomenclatureCount?: number; remainingNomenclatureCount?: number;
   maxReadyParts?: number; readyPartsCount?: number;
   onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
-  // Новые пропсы
   isConfigMode?: boolean;
   onConfigToggle?: (uid: string) => void;
 }
@@ -49,6 +53,7 @@ const StationRow: React.FC<StationRowProps> = ({
   onConfigToggle,
 }) => {
   const navigate = useNavigate();
+  const { openTab } = useTabs();
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
   const [animatedFilled, setAnimatedFilled] = useState(0);
@@ -66,6 +71,9 @@ const StationRow: React.FC<StationRowProps> = ({
   const [arrowPressed, setArrowPressed] = useState(false);
   const [configHovered, setConfigHovered] = useState<number | null>(null);
   const [configPressed, setConfigPressed] = useState<number | null>(null);
+
+  const [noTemplatePopupOpen, setNoTemplatePopupOpen] = useState(false);
+  const [refillLoading, setRefillLoading] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setStartAnimation(true), 300); return () => clearTimeout(t); }, []);
   useEffect(() => {
@@ -124,6 +132,37 @@ const StationRow: React.FC<StationRowProps> = ({
   const handleRightButtonClick = (e: React.MouseEvent) => { e.stopPropagation(); onConfigToggle?.(uid || ''); };
   const handleSchablonClick = (e: React.MouseEvent) => { e.stopPropagation(); if (onOpenSchablonPopup) onOpenSchablonPopup({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' }); };
   const handleSettingsClick = (e: React.MouseEvent) => { e.stopPropagation(); if (uid) navigate(`/references/stations/edit/${uid}`); };
+
+  // === Пополнить ===
+  const handleRefillClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!uid) return;
+    if (refillLoading) return;
+    setRefillLoading(true);
+    try {
+      const res = await AxiosService.get(ConstantInfo.restApiStationStatic(uid));
+      const station = res.data;
+      const hasTemplate = !!station?.activeTemplateUid;
+      if (!hasTemplate) {
+        setNoTemplatePopupOpen(true);
+        return;
+      }
+      const path = `/documents/refill/create/${uid}?stationUid=${encodeURIComponent(uid)}&stationName=${encodeURIComponent(name || '')}`;
+      openTab(path, `Пополнение: ${name || uid}`, null);
+    } catch (err) {
+      console.error('Ошибка проверки шаблона станции:', err);
+      setNoTemplatePopupOpen(true);
+    } finally {
+      setRefillLoading(false);
+    }
+  };
+
+  const handleNoTemplateSelect = () => {
+    setNoTemplatePopupOpen(false);
+    if (onOpenSchablonPopup) {
+      onOpenSchablonPopup({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' });
+    }
+  };
 
   const glassBlockLeft = 41, glassBlockWidth = 70, statusIconsLeft = glassBlockLeft + glassBlockWidth + 30;
   const statusIconWidth = 30, statusIconHeight = 17, statusIconGap = 4;
@@ -186,7 +225,7 @@ const StationRow: React.FC<StationRowProps> = ({
       <style>{glassPulse}</style><style>{glassPulseRight}</style><style>{shimmer}</style>
       <div style={{ width: '1720px', height: '112px', borderRadius: '25px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)', display: 'flex', alignItems: 'center', position: 'relative', transition: 'box-shadow 0.2s ease', overflow: 'hidden', ...getBackgroundStyle() }}
         onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)'; }} onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'; }}>
-        
+
         <div style={{ position: 'absolute', width: '306px', height: '306px', borderRadius: '50%', top: '-18px', left: '-74px', background: 'radial-gradient(circle, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.3) 100%)', pointerEvents: 'none', zIndex: 0, animation: 'glassPulse 10s ease-in-out infinite' }} />
         <div style={{ position: 'absolute', width: '306px', height: '306px', borderRadius: '50%', top: '32px', left: '760px', background: 'linear-gradient(135deg, transparent 0%, transparent 20%, rgba(255, 255, 255, 0.25) 60%, rgba(255, 255, 255, 0.12) 100%)', pointerEvents: 'none', zIndex: 0, animation: 'shimmer 8s ease-in-out infinite' }} />
         <div style={{ position: 'absolute', width: '242px', height: '242px', borderRadius: '50%', top: '-125px', right: '-109px', background: 'radial-gradient(circle, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.3) 100%)', pointerEvents: 'none', zIndex: 0, animation: 'glassPulseRight 10s ease-in-out infinite' }} />
@@ -269,7 +308,7 @@ const StationRow: React.FC<StationRowProps> = ({
                 style={{ ...getGlassBtnStyle(dashHovered, dashPressed, roundBtnSize, roundBtnSize, '50%'), right: `${iconDashBtnRight}px`, top: '50%' }}>
                 <img src={IconDash} alt="" style={{ width: '23px', height: '24px' }} />
               </button>
-              <button onClick={(e) => { e.stopPropagation(); console.log('Пополнить', uid); }} onMouseEnter={() => setRefillHovered(true)} onMouseLeave={() => { setRefillHovered(false); setRefillPressed(false); }} onMouseDown={() => setRefillPressed(true)} onMouseUp={() => setTimeout(() => setRefillPressed(false), 100)}
+              <button onClick={handleRefillClick} onMouseEnter={() => setRefillHovered(true)} onMouseLeave={() => { setRefillHovered(false); setRefillPressed(false); }} onMouseDown={() => setRefillPressed(true)} onMouseUp={() => setTimeout(() => setRefillPressed(false), 100)}
                 style={{ ...getGlassBtnStyle(refillHovered, refillPressed, refillBtnWidth, refillBtnHeight, '34px'), right: `${refillBtnRight}px`, top: '50%' }}>
                 <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '15px', color: '#FFFFFF', ...textSmoothing }}>Пополнить</span>
               </button>
@@ -299,6 +338,13 @@ const StationRow: React.FC<StationRowProps> = ({
           )}
         </AnimatePresence>
       </div>
+
+      <NoTemplatePopup
+        isOpen={noTemplatePopupOpen}
+        onClose={() => setNoTemplatePopupOpen(false)}
+        onSelectTemplate={handleNoTemplateSelect}
+        stationName={displayName}
+      />
     </>
   );
 };
