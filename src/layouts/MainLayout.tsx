@@ -1,4 +1,4 @@
-// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты контроля уровня остатков)
+// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты пополнения)
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -19,6 +19,8 @@ import AccountPage from '../components/AccountPage/AccountPage';
 import SchablonPage from '../components/DocumentsPage/Schablon/SchablonPage';
 import StockLevelControlPage from '../components/DocumentsPage/StockLevelControl/StockLevelControlPage';
 import StockLevelControlCreatePage from '../components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
+import RefillPage from '../components/DocumentsPage/Refill/RefillPage';
+import RefillCreatePage from '../components/DocumentsPage/Refill/RefillCreatePage';
 import NomenclaturePage from '../components/ReferencesPage/NomenclaturePage/NomenclaturePage';
 import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage';
 import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
@@ -101,6 +103,7 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/references/station-configurations': <StationConfigurationsPage />, '/references/stations': <StationsCrudPage />,
   '/references/locations': <LocationsPage />,
   '/documents/stock-level-control': <StockLevelControlPage />,
+  '/documents/refill': <RefillPage />,
 };
 
 const isChildPath = (path: string): boolean => {
@@ -121,7 +124,9 @@ const isChildPath = (path: string): boolean => {
     path.match(/^\/tkp\/[^/]+$/) !== null ||
     path.startsWith('/documents/schablon/') ||
     path.startsWith('/documents/stock-level-control/create/') ||
-    path.startsWith('/documents/stock-level-control/edit/');
+    path.startsWith('/documents/stock-level-control/edit/') ||
+    path.startsWith('/documents/refill/create/') ||
+    path.startsWith('/documents/refill/edit/');
 };
 
 const getComponentByPath = (path: string): React.ReactNode => {
@@ -143,6 +148,8 @@ const getComponentByPath = (path: string): React.ReactNode => {
   if (path.match(/^\/tkp\/[^/]+$/)) return <TkpViewPage />;
   if (path.startsWith('/documents/stock-level-control/create/')) return <StockLevelControlCreatePage />;
   if (path.startsWith('/documents/stock-level-control/edit/')) return <StockLevelControlCreatePage />;
+  if (path.startsWith('/documents/refill/create/')) return <RefillCreatePage />;
+  if (path.startsWith('/documents/refill/edit/')) return <RefillCreatePage />;
   const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
   if (schablonMatch) return <SchablonPage />;
   return null;
@@ -172,6 +179,7 @@ const getLabelByPath = (path: string): string => {
     '/references/station-models': 'Справочник: Модели станций', '/references/station-configurations': 'Справочник: Конфигурации станций',
     '/references/stations': 'Справочник: Станции', '/references/locations': 'Справочник: Расположения',
     '/documents/stock-level-control': 'Документ: Контроль уровня остатков',
+    '/documents/refill': 'Документ: Пополнение',
   };
   if (staticLabels[path]) return staticLabels[path];
   if (path.startsWith('/references/nomenclature/create/')) { const code = path.split('/').pop(); return `Номенклатура: ${code}`; }
@@ -191,6 +199,8 @@ const getLabelByPath = (path: string): string => {
   if (path.match(/^\/tkp\/[^/]+$/)) { const uid = path.split('/').pop(); return `ТКП ${uid?.slice(0, 8)}`; }
   if (path.startsWith('/documents/stock-level-control/create/')) { return 'Контроль уровня остатков (новый)'; }
   if (path.startsWith('/documents/stock-level-control/edit/')) { return 'Контроль уровня остатков'; }
+  if (path.startsWith('/documents/refill/create/')) { return 'Пополнение (новый)'; }
+  if (path.startsWith('/documents/refill/edit/')) { return 'Пополнение'; }
   if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };

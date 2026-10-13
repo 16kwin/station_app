@@ -1,4 +1,4 @@
-// StationCell.tsx — ПОЛНЫЙ ФАЙЛ
+// StationCell.tsx — ПОЛНЫЙ ФАЙЛ (добавлено открытие документа пополнения + попап "Шаблон не установлен")
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,6 +23,11 @@ import Zaklad1 from '../../assets/Station/Zaklad1.svg';
 import Zaklad2 from '../../assets/Station/Zaklad2.svg';
 import IconGraf from '../../assets/Station/IconGraf.svg';
 import OstatokIcon from '../../assets/Station/KRIT.svg';
+
+import AxiosService from '../../services/AxiosService';
+import ConstantInfo from '../../info/ConstantInfo';
+import { useTabs } from '../../context/TabContext';
+import NoTemplatePopup from './NoTemplatePopup';
 
 const glassPulseTop = `
 @keyframes glassPulseTop {
@@ -60,7 +65,6 @@ interface StationCellProps {
   maxReadyParts?: number;
   readyPartsCount?: number;
   onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
-  // Новые пропсы для управления переворотом
   isFlipped?: boolean;
   flippedSide?: 'back1' | 'back2' | null;
   onFlip?: (uid: string, side: 'back1' | 'back2') => void;
@@ -97,15 +101,16 @@ const StationCell: React.FC<StationCellProps> = ({
   onFlipBack,
 }) => {
   const navigate = useNavigate();
+  const { openTab } = useTabs();
   const [displaySide, setDisplaySide] = useState<CardSide>('front');
   const [isAnimating, setIsAnimating] = useState(false);
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
-  
+
   const [animatedFilled, setAnimatedFilled] = useState(0);
   const [animatedRemaining, setAnimatedRemaining] = useState(0);
   const [animatedReady, setAnimatedReady] = useState(0);
-  
+
   const [startAnimation, setStartAnimation] = useState(false);
 
   const [isZakladActive, setIsZakladActive] = useState(false);
@@ -131,17 +136,17 @@ const StationCell: React.FC<StationCellProps> = ({
   const [menuHovered, setMenuHovered] = useState<number | null>(null);
   const [menuPressed, setMenuPressed] = useState<number | null>(null);
 
-  // Синхронизация с родительским состоянием
+  const [noTemplatePopupOpen, setNoTemplatePopupOpen] = useState(false);
+  const [refillLoading, setRefillLoading] = useState(false);
+
   useEffect(() => {
     if (!isFlipped) {
-      // Возвращаем на front
       setIsAnimating(true);
       setTimeout(() => {
         setDisplaySide('front');
         setIsAnimating(false);
       }, 600);
     } else if (flippedSide) {
-      // Переворачиваем на нужную сторону
       setIsAnimating(true);
       setDisplaySide(flippedSide);
       setTimeout(() => {
@@ -154,27 +159,27 @@ const StationCell: React.FC<StationCellProps> = ({
     const timer = setTimeout(() => {
       setStartAnimation(true);
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     if (!startAnimation) return;
-    
+
     const duration = 1000;
     const steps = 60;
     const interval = duration / steps;
-    
+
     let step = 0;
-    
+
     const timer = setInterval(() => {
       step++;
       const progress = step / steps;
-      
+
       setAnimatedFilled(filledCellsPercent * progress);
       setAnimatedRemaining(remainingNomenclaturePercent * progress);
       setAnimatedReady(readyPartsPercent * progress);
-      
+
       if (step >= steps) {
         clearInterval(timer);
         setAnimatedFilled(filledCellsPercent);
@@ -182,7 +187,7 @@ const StationCell: React.FC<StationCellProps> = ({
         setAnimatedReady(readyPartsPercent);
       }
     }, interval);
-    
+
     return () => clearInterval(timer);
   }, [startAnimation, filledCellsPercent, remainingNomenclaturePercent, readyPartsPercent]);
 
@@ -254,6 +259,37 @@ const StationCell: React.FC<StationCellProps> = ({
     e.stopPropagation();
     if (uid) {
       navigate(`/references/stations/edit/${uid}`);
+    }
+  };
+
+  // === Пополнить ===
+  const handleRefillClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!uid) return;
+    if (refillLoading) return;
+    setRefillLoading(true);
+    try {
+      const res = await AxiosService.get(ConstantInfo.restApiStationStatic(uid));
+      const station = res.data;
+      const hasTemplate = !!station?.activeTemplateUid;
+      if (!hasTemplate) {
+        setNoTemplatePopupOpen(true);
+        return;
+      }
+      const path = `/documents/refill/create/${uid}?stationUid=${encodeURIComponent(uid)}&stationName=${encodeURIComponent(name || '')}`;
+      openTab(path, `Пополнение: ${name || uid}`, null);
+    } catch (err) {
+      console.error('Ошибка проверки шаблона станции:', err);
+      setNoTemplatePopupOpen(true);
+    } finally {
+      setRefillLoading(false);
+    }
+  };
+
+  const handleNoTemplateSelect = () => {
+    setNoTemplatePopupOpen(false);
+    if (onOpenSchablonPopup) {
+      onOpenSchablonPopup({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' });
     }
   };
 
@@ -413,7 +449,7 @@ const StationCell: React.FC<StationCellProps> = ({
       </div>
       <div style={{ position: 'absolute', left: `${percentLeft}px`, top: `${bar3Top}px`, height: `${barHeight}px`, display: 'flex', alignItems: 'center', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '12px', letterSpacing: '2%', color: '#FFFFFF', whiteSpace: 'nowrap', ...textSmoothing }}>{Math.round(animatedReady)}%</div>
 
-      <button onClick={(e) => { e.stopPropagation(); console.log('Пополнить'); }} onMouseEnter={() => setRefillBtnHovered(true)} onMouseLeave={() => { setRefillBtnHovered(false); setRefillBtnPressed(false); }} onMouseDown={() => setRefillBtnPressed(true)} onMouseUp={() => setTimeout(() => setRefillBtnPressed(false), 100)} style={{ ...getGlassBottomBtnStyle(refillBtnHovered, refillBtnPressed, refillBtnWidth, refillBtnHeight, `${refillBtnHeight}px`), left: `${refillBtnLeft}px`, top: `${bottomBtnsTop}px` }}>
+      <button onClick={handleRefillClick} onMouseEnter={() => setRefillBtnHovered(true)} onMouseLeave={() => { setRefillBtnHovered(false); setRefillBtnPressed(false); }} onMouseDown={() => setRefillBtnPressed(true)} onMouseUp={() => setTimeout(() => setRefillBtnPressed(false), 100)} style={{ ...getGlassBottomBtnStyle(refillBtnHovered, refillBtnPressed, refillBtnWidth, refillBtnHeight, `${refillBtnHeight}px`), left: `${refillBtnLeft}px`, top: `${bottomBtnsTop}px` }}>
         <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: '13px', letterSpacing: '1%', color: '#FFFFFF', whiteSpace: 'nowrap', ...textSmoothing }}>Пополнить</span>
       </button>
 
@@ -549,6 +585,13 @@ const StationCell: React.FC<StationCellProps> = ({
           </div>
         </div>
       </div>
+
+      <NoTemplatePopup
+        isOpen={noTemplatePopupOpen}
+        onClose={() => setNoTemplatePopupOpen(false)}
+        onSelectTemplate={handleNoTemplateSelect}
+        stationName={displayName}
+      />
     </>
   );
 };

@@ -1,4 +1,4 @@
-// TabContext.tsx — ИСПРАВЛЕННЫЙ (добавлен replaceTab)
+// TabContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,11 +16,17 @@ interface TabContextType {
   activeTabId: string | null;
   openTab: (path: string, label: string, component: ReactNode, parentTabId?: string) => string;
   closeTab: (id: string) => void;
+  closeAllTabs: () => void;
   switchTab: (id: string) => void;
   openNewTab: () => void;
   updateTabComponent: (id: string, component: ReactNode) => void;
   updateTabLabel: (id: string, label: string) => void;
   replaceTab: (id: string, path: string, label: string, component: ReactNode) => void;
+  setTabLocked: (id: string, locked: boolean) => void;
+  isTabLocked: (id: string) => boolean;
+  registerTabCloseGuard: (id: string, handler: () => void) => void;
+  unregisterTabCloseGuard: (id: string) => void;
+  triggerTabCloseGuard: (id: string) => boolean;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -28,11 +34,9 @@ const TabContext = createContext<TabContextType | undefined>(undefined);
 const getLabelWithNumber = (path: string, baseLabel: string, existingTabs: Tab[]): string => {
   const samePathTabs = existingTabs.filter(tab => tab.path === path);
   const count = samePathTabs.length;
-  
   if (count === 0) {
     return baseLabel;
   }
-  
   return `${baseLabel} (${count + 1})`;
 };
 
@@ -65,6 +69,8 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isRestored, setIsRestored] = useState(false);
+  const [lockedTabs, setLockedTabs] = useState<Set<string>>(new Set());
+  const closeGuardsRef = React.useRef<Map<string, () => void>>(new Map());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -76,7 +82,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       }));
       setTabs(restoredTabs);
       setActiveTabId(saved.activeTabId);
-      
+
       const activeTab = restoredTabs.find(t => t.id === saved.activeTabId);
       if (activeTab) {
         navigate(activeTab.path);
@@ -112,7 +118,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       navigate(path);
       return existingTab.id;
     }
-    
+
     const label = getLabelWithNumber(path, baseLabel, tabs);
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 6);
     const newTab: Tab = {
@@ -122,7 +128,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       component,
       parentTabId,
     };
-    
+
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newId);
     navigate(path);
@@ -130,23 +136,23 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   }, [tabs, activeTabId, navigate]);
 
   const replaceTab = useCallback((id: string, path: string, label: string, component: ReactNode) => {
-    setTabs(prevTabs => 
-      prevTabs.map(tab => 
+    setTabs(prevTabs =>
+      prevTabs.map(tab =>
         tab.id === id ? { ...tab, path, label, component } : tab
       )
     );
     navigate(path, { replace: true });
   }, [navigate]);
 
-  const closeTab = useCallback((id: string) => {
+  const closeTabInternal = useCallback((id: string) => {
     const tabToClose = tabs.find(tab => tab.id === id);
-    
+
     if (tabs.length === 1 && tabToClose?.path === '/main') {
       return;
     }
-    
+
     const newTabs = tabs.filter(tab => tab.id !== id);
-    
+
     if (newTabs.length === 0) {
       const mainTab: Tab = {
         id: Date.now().toString(),
@@ -159,9 +165,9 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       navigate('/main');
       return;
     }
-    
+
     setTabs(newTabs);
-    
+
     if (activeTabId === id) {
       if (tabToClose?.parentTabId) {
         const parentTab = newTabs.find(t => t.id === tabToClose.parentTabId);
@@ -171,7 +177,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
       }
-      
+
       const tabIndex = tabs.findIndex(tab => tab.id === id);
       const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
       const newActiveTab = newTabs[newActiveIndex];
@@ -179,6 +185,23 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       navigate(newActiveTab.path);
     }
   }, [tabs, activeTabId, navigate]);
+
+  // Простое закрытие без проверок guard
+  const closeTab = useCallback((id: string) => {
+    closeTabInternal(id);
+  }, [closeTabInternal]);
+
+  const closeAllTabs = useCallback(() => {
+    const mainTab: Tab = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+      path: '/main',
+      label: 'Главная',
+      component: null,
+    };
+    setTabs([mainTab]);
+    setActiveTabId(mainTab.id);
+    navigate('/main');
+  }, [navigate]);
 
   const switchTab = useCallback((id: string) => {
     const tab = tabs.find(t => t.id === id);
@@ -193,19 +216,48 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   }, [openTab]);
 
   const updateTabComponent = useCallback((id: string, component: ReactNode) => {
-    setTabs(prevTabs => 
-      prevTabs.map(tab => 
+    setTabs(prevTabs =>
+      prevTabs.map(tab =>
         tab.id === id ? { ...tab, component } : tab
       )
     );
   }, []);
 
   const updateTabLabel = useCallback((id: string, label: string) => {
-    setTabs(prevTabs => 
-      prevTabs.map(tab => 
+    setTabs(prevTabs =>
+      prevTabs.map(tab =>
         tab.id === id ? { ...tab, label } : tab
       )
     );
+  }, []);
+
+  const setTabLocked = useCallback((id: string, locked: boolean) => {
+    setLockedTabs(prev => {
+      const next = new Set(prev);
+      if (locked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const isTabLocked = useCallback((id: string) => lockedTabs.has(id), [lockedTabs]);
+
+  // Guard-методы оставлены — страница может сама их вызывать при необходимости.
+  // Но closeTab их больше не дёргает.
+  const registerTabCloseGuard = useCallback((id: string, handler: () => void) => {
+    closeGuardsRef.current.set(id, handler);
+  }, []);
+
+  const unregisterTabCloseGuard = useCallback((id: string) => {
+    closeGuardsRef.current.delete(id);
+  }, []);
+
+  const triggerTabCloseGuard = useCallback((id: string): boolean => {
+    const guard = closeGuardsRef.current.get(id);
+    if (guard) {
+      guard();
+      return true;
+    }
+    return false;
   }, []);
 
   if (!isRestored) {
@@ -213,16 +265,22 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <TabContext.Provider value={{ 
-      tabs, 
-      activeTabId, 
-      openTab, 
-      closeTab, 
-      switchTab, 
-      openNewTab, 
+    <TabContext.Provider value={{
+      tabs,
+      activeTabId,
+      openTab,
+      closeTab,
+      closeAllTabs,
+      switchTab,
+      openNewTab,
       updateTabComponent,
       updateTabLabel,
       replaceTab,
+      setTabLocked,
+      isTabLocked,
+      registerTabCloseGuard,
+      unregisterTabCloseGuard,
+      triggerTabCloseGuard,
     }}>
       {children}
     </TabContext.Provider>

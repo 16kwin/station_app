@@ -7,7 +7,7 @@ import Arrow from '../../assets/Menu/Arrow.svg';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TabBar = () => {
-  const { tabs, activeTabId, closeTab, switchTab } = useTabs();
+  const { tabs, activeTabId, closeTab, closeAllTabs, switchTab } = useTabs();
   const [showDropdown, setShowDropdown] = useState(false);
   const [visibleTabs, setVisibleTabs] = useState<Tab[]>([]);
   const [tabWidths, setTabWidths] = useState<number[]>([]);
@@ -53,6 +53,8 @@ const TabBar = () => {
   const INDICATOR_WIDTH = 2;
   const INDICATOR_HEIGHT = 22;
   const TEXT_MAX_WIDTH = 205;
+
+  const BTN_CLEAR = 44;
 
   const canCloseTab = (tab: Tab): boolean => {
     if (tabs.length > 1) return true;
@@ -290,17 +292,15 @@ const TabBar = () => {
   }, []);
 
   const handleCloseTab = (tabId: string) => {
-    // Сбрасываем тултип dropdown
     if (dropdownTooltipTimeoutRef.current) { clearTimeout(dropdownTooltipTimeoutRef.current); dropdownTooltipTimeoutRef.current = null; }
     setDropdownTooltip(null);
     setHoveredDropdownTabId(null);
-    
-    // Сбрасываем тултип TabBar
+
     if (tooltipTimeoutRef.current) { clearTimeout(tooltipTimeoutRef.current); tooltipTimeoutRef.current = null; }
     setHoveredTabId(null);
 
     const currentIndex = tabs.findIndex(t => t.id === tabId);
-    
+
     if (activeTabId === tabId) {
       if (currentIndex > 0) {
         const upperTab = tabs[currentIndex - 1];
@@ -310,10 +310,22 @@ const TabBar = () => {
         switchTab(lowerTab.id);
       }
     }
-    
+
     setTimeout(() => {
       closeTab(tabId);
     }, 0);
+  };
+
+  const handleCloseAllTabs = () => {
+    if (dropdownTooltipTimeoutRef.current) { clearTimeout(dropdownTooltipTimeoutRef.current); dropdownTooltipTimeoutRef.current = null; }
+    setDropdownTooltip(null);
+    setHoveredDropdownTabId(null);
+
+    if (tooltipTimeoutRef.current) { clearTimeout(tooltipTimeoutRef.current); tooltipTimeoutRef.current = null; }
+    setHoveredTabId(null);
+
+    closeAllTabs();
+    setShowDropdown(false);
   };
 
   const checkTextOverflow = (tabId: string) => {
@@ -326,9 +338,9 @@ const TabBar = () => {
 
   const handleDropdownMouseEnter = (tabId: string, index: number) => {
     setHoveredDropdownTabId(tabId);
-    
+
     if (dropdownTooltipTimeoutRef.current) clearTimeout(dropdownTooltipTimeoutRef.current);
-    
+
     dropdownTooltipTimeoutRef.current = setTimeout(() => {
       const isOverflow = checkTextOverflow(tabId);
       if (isOverflow) {
@@ -349,22 +361,24 @@ const TabBar = () => {
 
   const getIndicatorColor = (tabId: string, index: number): string => {
     if (!showDropdown) return 'rgba(45, 64, 89, 0.5)';
-    
+
     const target = getIndicatorTarget(index);
     const currentIndicatorCenter = indicatorY + INDICATOR_HEIGHT / 2;
     const rowCenter = target + INDICATOR_HEIGHT / 2;
     const distance = Math.abs(currentIndicatorCenter - rowCenter);
     const threshold = TEXT_HEIGHT / 2 + 2;
-    
+
     if (distance <= threshold) return '#666EFE';
     if (hoveredDropdownTabId === tabId) return '#2D4059';
-    
+
     return 'rgba(45, 64, 89, 0.5)';
   };
 
   const displayCount = tabs.length > 99 ? '99+' : tabs.length;
-  const totalHeight = tabs.length * ROW_FULL_HEIGHT + ROW_TOP_PADDING * 2 - ROW_GAP;
-  const dropdownMaxHeight = Math.min(totalHeight, 500);
+  const listHeight = tabs.length * ROW_FULL_HEIGHT - ROW_GAP;
+  const totalHeight = ROW_TOP_PADDING * 2 + listHeight;
+  const dropdownMaxHeight = Math.min(totalHeight + 3 + BTN_CLEAR, 500);
+  const showClearButton = tabs.length > 0;
 
   return (
     <>
@@ -438,7 +452,7 @@ const TabBar = () => {
                             ref={el => { if (el) textRefs.current.set(tab.id, el); else textRefs.current.delete(tab.id); }}
                             onClick={() => switchTab(tab.id)}
                             style={{
-                              fontSize: 15, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: indicatorColor,
+                              fontSize: 15, fontWeight: 500, fontFamily: 'Inter, sans-serif', color: indicatorColor,
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                               marginLeft: 20, marginRight: showCloseButton ? 36 : 27,
                               flex: 1, transition: 'color 0.1s ease', maxWidth: TEXT_MAX_WIDTH,
@@ -461,6 +475,23 @@ const TabBar = () => {
                     })}
                   </AnimatePresence>
                 </div>
+
+                {showClearButton && (
+                  <div style={{ borderTop: '1px solid rgba(45, 64, 89, 0.1)', height: 3 }} />
+                )}
+                {showClearButton && (
+                  <button
+                    onClick={handleCloseAllTabs}
+                    style={{
+                      width: '100%', height: BTN_CLEAR, border: 'none', backgroundColor: 'transparent',
+                      cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500,
+                      color: '#2D4059', display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                      paddingTop: 13, lineHeight: '18px', outline: 'none', userSelect: 'none',
+                    }}
+                  >
+                    Очистить вкладки
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -495,7 +526,7 @@ const TabBar = () => {
                     style={{
                       position: 'absolute', left: 15, right: showCloseButton ? 31 : 15,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      color: textColor, fontSize: 15, fontWeight: 500, cursor: 'pointer',
+                      color: textColor, fontSize: 15, fontWeight: 500, fontFamily: 'Inter, sans-serif', cursor: 'pointer',
                       lineHeight: '35px', height: '100%',
                     }}>{tab.label}</div>
                   {showCloseButton && (
@@ -526,7 +557,7 @@ const TabBar = () => {
             style={{
               position: 'fixed', left: tooltipPosition.left, top: tooltipPosition.top, transform: 'translateX(-50%)',
               backgroundColor: '#FFFFFF', color: '#2D4059', padding: '6px 12px', borderRadius: 8,
-              fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', zIndex: 9999, pointerEvents: 'none',
+              fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', zIndex: 9999, pointerEvents: 'none',
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid #E5E7EB',
             }}>
             {tabs.find(t => t.id === hoveredTabId)?.label}

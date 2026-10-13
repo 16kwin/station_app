@@ -1,6 +1,5 @@
-// CountriesPage.tsx — ИСПРАВЛЕННЫЙ (добавлены печать, PDF, Excel, Word)
+// CountriesPage.tsx — ИСПРАВЛЕННЫЙ
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
@@ -8,7 +7,6 @@ import ConfigurationPopup from '../../elements/ConfigurationPopup';
 import HistoryTable from '../../elements/HistoryTable';
 import DataTable from '../../elements/DataTable';
 import TableToolbar from '../../elements/TableToolbar';
-import ContextMenu from '../../elements/ContextMenu';
 import type { ContextMenuItem } from '../../elements/ContextMenu';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
@@ -59,7 +57,6 @@ const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> =
 };
 
 const CountriesPage = () => {
-  const { activeTabId } = useTabs();
   const [responseData, setResponseData] = useState<CountryListResponse>({ columns: [], data: [], columnWidths: {}, requiredColumns: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -79,7 +76,6 @@ const CountriesPage = () => {
   const [accountingIndex, setAccountingIndex] = useState(-1);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; uid: string; name: string } | null>(null);
   const [isFirstInit, setIsFirstInit] = useState(false);
 
   const [showCreatePopup, setShowCreatePopup] = useState(false);
@@ -247,13 +243,6 @@ const CountriesPage = () => {
     if (!isLoading) saveSort(sortColumn, sortDirection);
   }, [sortColumn, sortDirection, isLoading, saveSort]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [contextMenu]);
-
   const toggleSelectItem = (uid: string) => {
     setSelectedIds(prev => { const next = new Set(prev); if (next.has(uid)) next.delete(uid); else next.add(uid); return next; });
   };
@@ -264,7 +253,6 @@ const CountriesPage = () => {
     const isAllSelected = responseData.data.length > 0 && responseData.data.every(item => selectedIds.has(item.uid));
     if (isAllSelected) setSelectedIds(new Set()); else setSelectedIds(new Set(responseData.data.map(item => item.uid)));
   };
-  const handleContextMenu = (e: React.MouseEvent, uid: string, name: string) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, uid, name }); };
   const handleDoubleClick = (uid: string, name: string) => {};
 
   const handleSaveColumns = (cols: Set<string>) => {
@@ -306,13 +294,6 @@ const CountriesPage = () => {
     } catch (error) { console.error('Ошибка создания:', error); } finally { setIsSaving(false); }
   };
 
-  const handleEditClick = () => {
-    if (!contextMenu) return;
-    const item = responseData.data.find(d => d.uid === contextMenu.uid);
-    if (item) { setEditItem(item); setFormName(item.name); setShowEditPopup(true); }
-    setContextMenu(null);
-  };
-
   const handleEditSubmit = async () => {
     if (!editItem || !formName.trim()) return;
     setIsSaving(true);
@@ -323,10 +304,18 @@ const CountriesPage = () => {
     } catch (error) { console.error('Ошибка редактирования:', error); } finally { setIsSaving(false); }
   };
 
-  const contextMenuItems: ContextMenuItem[] = [
-    { id: 'edit', label: 'Редактировать', icon: ContextMenuOpenIcon16, onClick: handleEditClick },
-    { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => { if (!contextMenu) return; setDeleteTargetUid(contextMenu.uid); setContextMenu(null); setTimeout(() => setShowDeleteConfirm(true), 50); } },
-  ];
+  const rowContextMenuItems = useCallback((uid: string, name: string): ContextMenuItem[] => {
+    return [
+      { id: 'edit', label: 'Редактировать', icon: ContextMenuOpenIcon16, onClick: () => {
+        const item = responseData.data.find(d => d.uid === uid);
+        if (item) { setEditItem(item); setFormName(item.name); setShowEditPopup(true); }
+      } },
+      { id: 'delete', label: 'Удалить', icon: ContextMenuDeleteIcon16, onClick: () => {
+        setDeleteTargetUid(uid);
+        setTimeout(() => setShowDeleteConfirm(true), 50);
+      } },
+    ];
+  }, [responseData.data]);
 
   const renderCell = (key: string, item: CountryRowData): string => {
     const val = item[key];
@@ -581,12 +570,12 @@ const CountriesPage = () => {
                 onCheckboxClick={handleCheckboxClick}
                 onSelectAll={handleSelectAll}
                 onRowClick={handleRowClick}
-                onContextMenu={handleContextMenu}
                 onDoubleClick={handleDoubleClick}
                 renderCell={renderCell}
                 highlightText={searchValue.trim() || undefined}
                 initialWidths={columnWidths}
                 onWidthsChange={handleColumnWidthsChange}
+                rowContextMenuItems={rowContextMenuItems}
                 requiredColumns={requiredColumns}
                 onResetToBase={handleResetToBase}
                 rowIcon={CountrieIcon14Black}
@@ -595,8 +584,6 @@ const CountriesPage = () => {
           )}
         </AnimatePresence>
       </div>
-
-      {contextMenu && <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} />}
 
       <ConfigurationPopup
         isOpen={showConfigurationPopup}
