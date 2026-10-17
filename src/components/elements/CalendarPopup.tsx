@@ -1,4 +1,4 @@
-// CalendarPopup.tsx — ПОЛНЫЙ ФАЙЛ (открывается на сегодня или выбранной дате)
+// CalendarPopup.tsx — ПОЛНЫЙ ФАЙЛ (открывается на сегодня или выбранной дате, с авто-позиционированием вверх/вниз)
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -38,10 +38,13 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
-  // При каждом открытии устанавливаем дату
+  const POPUP_W = 387;
+  const POPUP_H = 432;
+  const GAP = 8;
+
   useEffect(() => {
     if (isOpen) {
       if (selectedDate && selectedDate.includes('.')) {
@@ -68,15 +71,41 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
     }
   }, [isOpen, selectedDate]);
 
-  // Позиционирование под полем
+  // Позиционирование: под полем, если влезает; иначе — над полем
   useEffect(() => {
-    if (isOpen && anchorRef?.current) {
-      const rect = anchorRef.current.getBoundingClientRect();
-      const popupWidth = 387;
-      const left = rect.left + rect.width / 2 - popupWidth / 2;
-      const top = rect.bottom + 8;
+    if (!isOpen || !anchorRef?.current) return;
+
+    const compute = () => {
+      const rect = anchorRef.current!.getBoundingClientRect();
+      const left = Math.max(8, Math.min(rect.left + rect.width / 2 - POPUP_W / 2, window.innerWidth - POPUP_W - 8));
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      let top: number;
+      if (spaceBelow >= POPUP_H + GAP) {
+        top = rect.bottom + GAP;
+      } else if (spaceAbove >= POPUP_H + GAP) {
+        top = rect.top - POPUP_H - GAP;
+      } else {
+        // Если не влезает ни туда ни туда — прижимаем к тому краю, где больше места
+        if (spaceBelow >= spaceAbove) {
+          top = Math.max(8, window.innerHeight - POPUP_H - 8);
+        } else {
+          top = 8;
+        }
+      }
+
       setPosition({ top, left });
-    }
+    };
+
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+    };
   }, [isOpen, anchorRef]);
 
   const handlePrevMonth = () => {
@@ -103,12 +132,12 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
     const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1);
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysInPrevMonth = new Date(currentYear, currentMonth - 1, 0).getDate();
-    
+
     let firstWeekday = firstDayOfMonth.getDay() - 1;
     if (firstWeekday < 0) firstWeekday = 6;
-    
+
     const days: { day: number; month: number; year: number; isCurrentMonth: boolean }[] = [];
-    
+
     for (let i = firstWeekday - 1; i >= 0; i--) {
       days.push({
         day: daysInPrevMonth - i,
@@ -117,11 +146,11 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
         isCurrentMonth: false,
       });
     }
-    
+
     for (let i = 1; i <= daysInMonth; i++) {
       days.push({ day: i, month: currentMonth, year: currentYear, isCurrentMonth: true });
     }
-    
+
     const remainingDays = 35 - days.length;
     for (let i = 1; i <= remainingDays; i++) {
       days.push({
@@ -131,7 +160,7 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
         isCurrentMonth: false,
       });
     }
-    
+
     return days.slice(0, 35);
   }, [currentYear, currentMonth]);
 
@@ -182,8 +211,8 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
             position: 'fixed',
             top: position.top,
             left: position.left,
-            width: 387,
-            height: 432,
+            width: POPUP_W,
+            height: POPUP_H,
             backgroundColor: '#FFFFFF',
             borderRadius: 10,
             boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
@@ -207,7 +236,7 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
             }}>
               {MONTHS[currentMonth - 1]} {currentYear}
             </span>
-            
+
             <div style={{
               position: 'absolute',
               top: 24,
@@ -341,10 +370,10 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
                               fontFamily: 'Inter, sans-serif',
                               fontSize: 15,
                               fontWeight: 500,
-                              color: selected 
-                                ? '#FFFFFF' 
-                                : dayInfo.isCurrentMonth 
-                                  ? '#2D4059' 
+                              color: selected
+                                ? '#FFFFFF'
+                                : dayInfo.isCurrentMonth
+                                  ? '#2D4059'
                                   : 'rgba(45, 64, 89, 0.6)',
                               lineHeight: '18px',
                             }}>

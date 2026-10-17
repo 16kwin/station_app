@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен раздел Документы: Пополнение)
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты заказа на перемещение)
 import { useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -33,6 +33,7 @@ import HoldingsPage from './components/ReferencesPage/HoldingsPage/HoldingsPage'
 import EnterprisesPage from './components/ReferencesPage/EnterprisesPage/EnterprisesPage';
 import WorkshopsPage from './components/ReferencesPage/WorkshopsPage/WorkshopsPage';
 import SectionsPage from './components/ReferencesPage/SectionsPage/SectionsPage';
+import EmployeesPage from './components/ReferencesPage/EmployeesPage/EmployeesPage';
 import StationTypesPage from './components/ReferencesPage/StationTypesPage/StationTypesPage';
 import StationManufacturersPage from './components/ReferencesPage/StationManufacturersPage/StationManufacturersPage';
 import StationModelsPage from './components/ReferencesPage/StationModelsPage/StationModelsPage';
@@ -48,6 +49,8 @@ import StockLevelControlPage from './components/DocumentsPage/StockLevelControl/
 import StockLevelControlCreatePage from './components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
 import RefillPage from './components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from './components/DocumentsPage/Refill/RefillCreatePage';
+import MoveOrderPage from './components/DocumentsPage/MoveOrder/MoveOrderPage';
+import MoveOrderCreatePage from './components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
 import OrdersPage from './components/AnalyticsPage/OrdersPage';
@@ -98,7 +101,6 @@ const AppContent = () => {
           <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <Routes>
               <Route path="/login" element={<Navigate to="/main" replace />} />
-              {/* Отдельные вкладки браузера без меню приложения: второй экран и граф закупок */}
               <Route path="/screen/events" element={<PrivateRoute><EventsScreenPage /></PrivateRoute>} />
               <Route path="/screen/purchase-graph" element={<PrivateRoute><PurchaseGraphPage /></PrivateRoute>} />
               <Route path="/" element={<PrivateRoute><TabProvider><MainLayout /></TabProvider></PrivateRoute>}>
@@ -134,6 +136,7 @@ const AppContent = () => {
                 <Route path="references/enterprises" element={<EnterprisesPage />} />
                 <Route path="references/workshops" element={<WorkshopsPage />} />
                 <Route path="references/sections" element={<SectionsPage />} />
+                <Route path="references/employees" element={<EmployeesPage />} />
                 <Route path="references/station-types" element={<StationTypesPage />} />
                 <Route path="references/station-manufacturers" element={<StationManufacturersPage />} />
                 <Route path="references/station-models" element={<StationModelsPage />} />
@@ -153,6 +156,9 @@ const AppContent = () => {
                 <Route path="documents/refill" element={<RefillPage />} />
                 <Route path="documents/refill/create/:uid" element={<RefillCreatePage />} />
                 <Route path="documents/refill/edit/:uid" element={<RefillCreatePage />} />
+                <Route path="documents/move-orders" element={<MoveOrderPage />} />
+                <Route path="documents/move-orders/create/:uid" element={<MoveOrderCreatePage />} />
+                <Route path="documents/move-orders/edit/:uid" element={<MoveOrderCreatePage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="orders" element={<OrdersPage />} />

@@ -25,14 +25,14 @@ const DocumentsPage = () => {
         <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: '30px', fontWeight: 'bold', letterSpacing: '0', color: '#2D4059', margin: 0 }}>Документы</h1>
       </div>
       <div style={{ paddingLeft: '60px', paddingTop: '30px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-        <button onClick={() => openTab('/references/templates', 'Справочник: Шаблоны пополнения', null)} style={buttonStyle} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5559E0'; }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}>
-          <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Шаблоны пополнения</span>
-        </button>
         <button onClick={() => openTab('/documents/stock-level-control', 'Документ: Контроль уровня остатков', null)} style={buttonStyle} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5559E0'; }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}>
           <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Контроль уровня остатков</span>
         </button>
         <button onClick={() => openTab('/documents/refill', 'Документ: Пополнение', null)} style={buttonStyle} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5559E0'; }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}>
           <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Пополнение</span>
+        </button>
+        <button onClick={() => openTab('/documents/move-orders', 'Документ: Заказ на перемещение', null)} style={buttonStyle} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5559E0'; }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#666EFE'; }}>
+          <span style={{ color: '#FFFFFF', fontSize: '17px', fontWeight: '400', whiteSpace: 'nowrap' }}>Заказ на перемещение</span>
         </button>
       </div>
     </div>
