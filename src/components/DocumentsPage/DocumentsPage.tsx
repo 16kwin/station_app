@@ -1,12 +1,27 @@
 // DocumentsPage.tsx — ПОЛНЫЙ ФАЙЛ
 // Раздел «Документы»: кнопки документов и журналов. Кнопки раздела выключенной функции (видеоархив, ГПП) нет —
 // скрыто, а не затенено (раздел 8.3 проекта «Дискретное отключение функций»). Доступность — по пути вкладки (routes.ts).
-// Список кнопок — в documentButtons.ts: тот же список показывает выплывающее окно «Документы» нижнего меню.
 import React from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useFeatureSnapshot } from '../../services/features/featureStore';
 import { isPathAllowed } from '../../services/features/routes';
-import { DOCUMENT_BUTTONS } from './documentButtons';
+
+interface DocumentButton {
+  /** Путь вкладки */
+  path: string;
+  /** Подпись вкладки */
+  label: string;
+  /** Текст кнопки */
+  text: string;
+}
+
+const DOCUMENT_BUTTONS: readonly DocumentButton[] = [
+  { path: '/documents/stock-level-control', label: 'Документ: Контроль уровня остатков', text: 'Контроль уровня остатков' },
+  { path: '/documents/refill', label: 'Документ: Пополнение', text: 'Пополнение' },
+  { path: '/documents/move-orders', label: 'Документ: Заказ на перемещение', text: 'Заказ на перемещение' },
+  { path: '/documents/video-archive', label: 'Журнал событий: видеоархив', text: 'Журнал событий: видеоархив' },
+  { path: '/documents/gpp', label: 'Документ: ГПП', text: 'График подготовки производства' },
+];
 
 const DocumentsPage = () => {
   const { openTab } = useTabs();
