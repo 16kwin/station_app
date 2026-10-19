@@ -69,6 +69,8 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '127.0.0.1',
+          '109.69.22.155',
+    'dynamikaawms.ru',
     ]
   }
 })
