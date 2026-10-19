@@ -16,9 +16,9 @@ interface DocumentButton {
 }
 
 const DOCUMENT_BUTTONS: readonly DocumentButton[] = [
-  { path: '/references/templates', label: 'Справочник: Шаблоны пополнения', text: 'Шаблоны пополнения' },
   { path: '/documents/stock-level-control', label: 'Документ: Контроль уровня остатков', text: 'Контроль уровня остатков' },
   { path: '/documents/refill', label: 'Документ: Пополнение', text: 'Пополнение' },
+  { path: '/documents/move-orders', label: 'Документ: Заказ на перемещение', text: 'Заказ на перемещение' },
   { path: '/documents/video-archive', label: 'Журнал событий: видеоархив', text: 'Журнал событий: видеоархив' },
   { path: '/documents/gpp', label: 'Документ: ГПП', text: 'График подготовки производства' },
 ];

@@ -1,5 +1,4 @@
-// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (шрифты: шапка Inter SemiBold 16, ячейки Inter Regular 15)
-// Добавлен проп centerColumns для центрирования шапки и ячеек указанных колонок
+// DataTable.tsx — ПОЛНЫЙ ФАЙЛ (с пропсом rowBackground для подсветки всей строки)
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,8 +42,9 @@ interface DataTableProps {
   onResetToBase?: () => void;
   fitToWidth?: boolean;
   hideCheckbox?: boolean;
-  /** Ключи колонок, у которых шапка и ячейки центрируются по горизонтали */
   centerColumns?: string[];
+  /** Функция, возвращающая цвет фона для строки (или null — по умолчанию) */
+  rowBackground?: (item: any) => string | null;
 }
 
 const MAX_COLUMN_WIDTH = 1000;
@@ -56,7 +56,10 @@ const CHECKBOX_TO_ICON_GAP = 17;
 const ICON_TO_FIRST_TEXT = 17;
 const CHECKBOX_LEFT = 17;
 
-// Шрифты: шапка и ячейки
+const ROW_GAP = 2;
+const ROW_RADIUS = 3;
+const TABLE_RADIUS = 20;
+
 const HEADER_FONT_FAMILY = 'Inter, sans-serif';
 const HEADER_FONT_SIZE = 16;
 const HEADER_FONT_WEIGHT = 600;
@@ -103,36 +106,36 @@ const DataTable: React.FC<DataTableProps> = ({
   fitToWidth = false,
   hideCheckbox = false,
   centerColumns = [],
+  rowBackground,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const [customWidths, setCustomWidths] = useState<Record<string, number>>({});
   const prevColumnCountRef = useRef(0);
   const isInitializedRef = useRef(false);
-  const [resizing, setResizing] = useState<{ 
-    columnKey: string; 
-    startX: number; 
-    startWidth: number; 
+  const [resizing, setResizing] = useState<{
+    columnKey: string;
+    startX: number;
+    startWidth: number;
     allWidths: Record<string, number>;
     visibleColumns: ColumnItem[];
   } | null>(null);
-  
+
   const [headerContextMenu, setHeaderContextMenu] = useState<{ x: number; y: number; columnKey: string } | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; uid: string; name: string; items: ContextMenuItem[] } | null>(null);
 
-  // Множество центрируемых колонок для быстрого поиска
   const centeredSet = useMemo(() => new Set(centerColumns), [centerColumns]);
 
-  const tableHeight = rowHeight * visibleRows + headerHeight;
-  
-  const effectiveFirstColLeft = hideCheckbox 
+  const tableHeight = headerHeight + visibleRows * rowHeight + Math.max(0, visibleRows - 1) * ROW_GAP;
+
+  const effectiveFirstColLeft = hideCheckbox
     ? CHECKBOX_LEFT + (rowIcon ? ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT : 0)
     : CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP + ROW_ICON_BLOCK_WIDTH + ICON_TO_FIRST_TEXT;
-  
+
   const baseAvailableWidth = tableWidth - effectiveFirstColLeft - LAST_COLUMN_RIGHT_PADDING;
 
   const getMinWidth = useCallback((col: ColumnItem): number => {
@@ -141,7 +144,6 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const getContentWidth = useCallback((col: ColumnItem): number => {
     let maxWidth = getMinWidth(col);
-    
     data.forEach(item => {
       const cellText = renderCell(col.key, item);
       const textWidth = getTextWidth(cellText, CELL_FONT_SIZE, CELL_FONT_WEIGHT);
@@ -149,14 +151,12 @@ const DataTable: React.FC<DataTableProps> = ({
         maxWidth = textWidth + 1;
       }
     });
-    
     return Math.min(maxWidth, MAX_COLUMN_WIDTH);
   }, [data, renderCell, getMinWidth]);
 
   const handleColumnFitContent = useCallback((columnKey: string) => {
     const col = columns.find(c => c.key === columnKey);
     if (!col) return;
-    
     const newWidth = getContentWidth(col);
     setCustomWidths(prev => {
       const next = { ...prev, [columnKey]: newWidth };
@@ -168,11 +168,9 @@ const DataTable: React.FC<DataTableProps> = ({
   const handleAllColumnsFitContent = useCallback(() => {
     const visibleColumns = columns.filter(c => visibleKeys.includes(c.key));
     const newWidths: Record<string, number> = { ...customWidths };
-    
     visibleColumns.forEach(col => {
       newWidths[col.key] = getContentWidth(col);
     });
-    
     setCustomWidths(newWidths);
     if (onWidthsChange) onWidthsChange(newWidths);
   }, [columns, visibleKeys, customWidths, getContentWidth, onWidthsChange]);
@@ -188,15 +186,15 @@ const DataTable: React.FC<DataTableProps> = ({
   }, [onResetToBase]);
 
   const headerContextMenuItems: ContextMenuItem[] = [
-    { id: 'fit-column', label: 'Столбец по размеру содержимого', icon: ContextMenuOpenIcon16, onClick: () => { 
+    { id: 'fit-column', label: 'Столбец по размеру содержимого', icon: ContextMenuOpenIcon16, onClick: () => {
       if (headerContextMenu) handleColumnFitContent(headerContextMenu.columnKey);
       setHeaderContextMenu(null);
     } },
-    { id: 'fit-all', label: 'Все столбцы по размеру содержимого', icon: ContextMenuCopyIcon16, onClick: () => { 
+    { id: 'fit-all', label: 'Все столбцы по размеру содержимого', icon: ContextMenuCopyIcon16, onClick: () => {
       handleAllColumnsFitContent();
       setHeaderContextMenu(null);
     } },
-    { id: 'reset', label: 'Вид по умолчанию', icon: ContextMenuDeleteIcon16, onClick: () => { 
+    { id: 'reset', label: 'Вид по умолчанию', icon: ContextMenuDeleteIcon16, onClick: () => {
       handleResetToBase();
     } },
   ];
@@ -210,7 +208,7 @@ const DataTable: React.FC<DataTableProps> = ({
   const handleRowContextMenu = useCallback((e: React.MouseEvent, uid: string, name: string) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (rowContextMenuItems) {
       const items = rowContextMenuItems(uid, name);
       setRowContextMenu({ x: e.clientX, y: e.clientY, uid, name, items });
@@ -248,12 +246,10 @@ const DataTable: React.FC<DataTableProps> = ({
     if (visibleColumns.length === 0) return { layout: [] as ColumnLayout[], contentWidth: tableWidth, widths: {} as Record<string, number> };
 
     const widths: Record<string, number> = {};
-    
     const minWidths: Record<string, number> = {};
     visibleColumns.forEach(col => {
       minWidths[col.key] = getMinWidth(col);
     });
-    
     visibleColumns.forEach(col => {
       if (customWidths[col.key]) {
         widths[col.key] = Math.max(customWidths[col.key], minWidths[col.key]);
@@ -268,32 +264,29 @@ const DataTable: React.FC<DataTableProps> = ({
       layout.push({ key: col.key, label: col.label.charAt(0).toUpperCase() + col.label.slice(1), left: currentLeft, width: widths[col.key] });
       currentLeft += widths[col.key] + RESIZER_WIDTH;
     });
-    
+
     const realContentWidth = currentLeft - RESIZER_WIDTH + LAST_COLUMN_RIGHT_PADDING;
     const contentWidth = fitToWidth ? tableWidth : Math.max(tableWidth, realContentWidth);
-    
+
     return { layout, contentWidth, widths, minWidths };
   }, [columns, visibleKeys, tableWidth, effectiveFirstColLeft, customWidths, getMinWidth, fitToWidth]);
 
   useEffect(() => {
     const visibleColumns = columns.filter(c => visibleKeys.includes(c.key));
     const currentCount = visibleColumns.length;
-    
     if (currentCount === 0) return;
-    
+
     if (!isInitializedRef.current) {
       isInitializedRef.current = true;
       prevColumnCountRef.current = currentCount;
-      
+
       const minWidths: Record<string, number> = {};
-      visibleColumns.forEach(col => {
-        minWidths[col.key] = getMinWidth(col);
-      });
-      
+      visibleColumns.forEach(col => { minWidths[col.key] = getMinWidth(col); });
+
       const totalResizerWidth = RESIZER_WIDTH * (visibleColumns.length - 1);
       const totalMinWidth = visibleColumns.reduce((sum, col) => sum + minWidths[col.key], 0);
       const availableForColumns = baseAvailableWidth - totalResizerWidth;
-      
+
       if (initialWidths && Object.keys(initialWidths).length > 0) {
         const newWidths: Record<string, number> = {};
         visibleColumns.forEach(col => {
@@ -307,49 +300,40 @@ const DataTable: React.FC<DataTableProps> = ({
         setCustomWidths(newWidths);
         return;
       }
-      
+
       if (totalMinWidth <= availableForColumns) {
         const remaining = availableForColumns - totalMinWidth;
         const extraPerColumn = remaining / visibleColumns.length;
         const newWidths: Record<string, number> = {};
-        visibleColumns.forEach(col => {
-          newWidths[col.key] = minWidths[col.key] + extraPerColumn;
-        });
+        visibleColumns.forEach(col => { newWidths[col.key] = minWidths[col.key] + extraPerColumn; });
         setCustomWidths(newWidths);
         if (onWidthsChange) onWidthsChange(newWidths);
       } else {
         const newWidths: Record<string, number> = {};
-        visibleColumns.forEach(col => {
-          newWidths[col.key] = minWidths[col.key];
-        });
+        visibleColumns.forEach(col => { newWidths[col.key] = minWidths[col.key]; });
         setCustomWidths(newWidths);
         if (onWidthsChange) onWidthsChange(newWidths);
       }
       return;
     }
-    
+
     if (prevColumnCountRef.current !== currentCount) {
       prevColumnCountRef.current = currentCount;
-      
+
       const minWidths: Record<string, number> = {};
-      visibleColumns.forEach(col => {
-        minWidths[col.key] = getMinWidth(col);
-      });
-      
+      visibleColumns.forEach(col => { minWidths[col.key] = getMinWidth(col); });
+
       const totalResizerWidth = RESIZER_WIDTH * (visibleColumns.length - 1);
       const totalMinWidth = visibleColumns.reduce((sum, col) => sum + minWidths[col.key], 0);
       const availableForColumns = baseAvailableWidth - totalResizerWidth;
-      
+
       const allFit = totalMinWidth <= availableForColumns;
-      
       const newWidths: Record<string, number> = {};
-      
+
       if (allFit) {
         const remaining = availableForColumns - totalMinWidth;
         const extraPerColumn = remaining / visibleColumns.length;
-        visibleColumns.forEach(col => {
-          newWidths[col.key] = minWidths[col.key] + extraPerColumn;
-        });
+        visibleColumns.forEach(col => { newWidths[col.key] = minWidths[col.key] + extraPerColumn; });
       } else {
         visibleColumns.forEach(col => {
           if (customWidths[col.key] && customWidths[col.key] > 0) {
@@ -359,7 +343,7 @@ const DataTable: React.FC<DataTableProps> = ({
           }
         });
       }
-      
+
       setCustomWidths(newWidths);
       if (onWidthsChange) onWidthsChange(newWidths);
     }
@@ -368,16 +352,14 @@ const DataTable: React.FC<DataTableProps> = ({
   const handleResizeStart = useCallback((e: React.MouseEvent, columnKey: string) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const visibleColumns = columns.filter(c => visibleKeys.includes(c.key));
     const widths: Record<string, number> = {};
-    visibleColumns.forEach(col => {
-      widths[col.key] = columnLayout.widths[col.key] || getMinWidth(col);
-    });
-    
-    setResizing({ 
-      columnKey, 
-      startX: e.clientX, 
+    visibleColumns.forEach(col => { widths[col.key] = columnLayout.widths[col.key] || getMinWidth(col); });
+
+    setResizing({
+      columnKey,
+      startX: e.clientX,
       startWidth: widths[columnKey] || getMinWidth(visibleColumns.find(c => c.key === columnKey)!),
       allWidths: widths,
       visibleColumns,
@@ -387,7 +369,6 @@ const DataTable: React.FC<DataTableProps> = ({
   const checkScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    
     setHasVerticalScroll(container.scrollHeight > container.clientHeight + 1);
     setHasHorizontalScroll(container.scrollWidth > container.clientWidth);
   }, []);
@@ -398,21 +379,17 @@ const DataTable: React.FC<DataTableProps> = ({
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - resizing.startX;
       const { columnKey, startWidth, allWidths, visibleColumns } = resizing;
-      
       const colIndex = visibleColumns.findIndex(c => c.key === columnKey);
       if (colIndex === -1) return;
-      
+
       const newWidths: Record<string, number> = { ...allWidths };
-      
       const minWidth = getMinWidth(visibleColumns[colIndex]);
-      
+
       if (fitToWidth) {
         if (delta > 0) {
           const maxGrow = MAX_COLUMN_WIDTH - startWidth;
           if (maxGrow <= 0) return;
-          
           let actualGrow = Math.min(delta, maxGrow);
-          
           let remainingToShrink = actualGrow;
           for (let i = colIndex + 1; i < visibleColumns.length && remainingToShrink > 0; i++) {
             const key = visibleColumns[i].key;
@@ -422,22 +399,16 @@ const DataTable: React.FC<DataTableProps> = ({
             newWidths[key] -= shrink;
             remainingToShrink -= shrink;
           }
-          
           actualGrow -= remainingToShrink;
-          
           newWidths[columnKey] = startWidth + actualGrow;
-          
         } else if (delta < 0) {
           const absDelta = Math.abs(delta);
-          
           let remainingDelta = absDelta;
           let leftNewWidth = startWidth;
-          
           const maxShrink = startWidth - minWidth;
           const actualShrink = Math.min(remainingDelta, maxShrink);
           leftNewWidth = startWidth - actualShrink;
           remainingDelta -= actualShrink;
-          
           const totalShrink = absDelta - remainingDelta;
           const rightKey = visibleColumns[colIndex + 1]?.key;
           if (rightKey && totalShrink > 0) {
@@ -445,16 +416,13 @@ const DataTable: React.FC<DataTableProps> = ({
             const growRight = Math.min(totalShrink, maxGrowRight);
             newWidths[rightKey] += growRight;
           }
-          
           newWidths[columnKey] = leftNewWidth;
         }
       } else {
         if (delta > 0) {
           const maxGrow = MAX_COLUMN_WIDTH - startWidth;
           if (maxGrow <= 0) return;
-          
           const actualGrow = Math.min(delta, maxGrow);
-          
           let remainingToShrink = actualGrow;
           for (let i = colIndex + 1; i < visibleColumns.length && remainingToShrink > 0; i++) {
             const key = visibleColumns[i].key;
@@ -464,20 +432,15 @@ const DataTable: React.FC<DataTableProps> = ({
             newWidths[key] -= shrink;
             remainingToShrink -= shrink;
           }
-          
           newWidths[columnKey] = startWidth + actualGrow;
-          
         } else if (delta < 0) {
           const absDelta = Math.abs(delta);
-          
           let remainingDelta = absDelta;
           let leftNewWidth = startWidth;
-          
           const maxShrink = startWidth - minWidth;
           const actualShrink = Math.min(remainingDelta, maxShrink);
           leftNewWidth = startWidth - actualShrink;
           remainingDelta -= actualShrink;
-          
           for (let i = colIndex - 1; i >= 0 && remainingDelta > 0; i--) {
             const key = visibleColumns[i].key;
             const leftMin = getMinWidth(visibleColumns[i]);
@@ -486,7 +449,6 @@ const DataTable: React.FC<DataTableProps> = ({
             newWidths[key] -= shrink;
             remainingDelta -= shrink;
           }
-          
           const totalShrink = absDelta - remainingDelta;
           const rightKey = visibleColumns[colIndex + 1]?.key;
           if (rightKey && totalShrink > 0) {
@@ -494,11 +456,10 @@ const DataTable: React.FC<DataTableProps> = ({
             const growRight = Math.min(totalShrink, maxGrowRight);
             newWidths[rightKey] += growRight;
           }
-          
           newWidths[columnKey] = leftNewWidth;
         }
       }
-      
+
       setCustomWidths(newWidths);
       if (onWidthsChange) onWidthsChange(newWidths);
     };
@@ -530,12 +491,12 @@ const DataTable: React.FC<DataTableProps> = ({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    
+
     checkScroll();
     container.addEventListener('scroll', checkScroll);
     const ro = new ResizeObserver(checkScroll);
     ro.observe(container);
-    
+
     return () => {
       container.removeEventListener('scroll', checkScroll);
       ro.disconnect();
@@ -560,14 +521,14 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const isAllSelected = data.length > 0 && data.every(item => selectedIds.has(item.uid));
   const emptyRows = Math.max(0, visibleRows - data.length);
-  const rowIconLeft = hideCheckbox 
-    ? CHECKBOX_LEFT 
+  const rowIconLeft = hideCheckbox
+    ? CHECKBOX_LEFT
     : CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP;
 
   return (
-    <div style={{ width: tableWidth, height: tableHeight, backgroundColor: '#F5F6FA', borderRadius: 10, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: fitToWidth ? 'hidden' : 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', borderRadius: 10 }}>
-        <div style={{ height: headerHeight, backgroundColor: headerColor, display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 2, minWidth: columnLayout.contentWidth, borderRadius: '10px 10px 0 0' }}>
+    <div style={{ width: tableWidth, height: tableHeight, backgroundColor: 'transparent', borderRadius: TABLE_RADIUS, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: fitToWidth ? 'hidden' : 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', borderRadius: TABLE_RADIUS, backgroundColor: 'transparent' }}>
+        <div style={{ height: headerHeight, backgroundColor: headerColor, display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 2, minWidth: columnLayout.contentWidth, borderRadius: `${TABLE_RADIUS}px ${TABLE_RADIUS}px ${ROW_RADIUS}px ${ROW_RADIUS}px` }}>
           {!hideCheckbox && (
             <div style={{ position: 'absolute', left: CHECKBOX_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, width: CHECKBOX_BLOCK_WIDTH, height: '100%' }}>
               <motion.div onClick={onSelectAll} style={{ width: 18, height: 18, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
@@ -576,30 +537,30 @@ const DataTable: React.FC<DataTableProps> = ({
               </motion.div>
             </div>
           )}
-          
+
           {columnLayout.layout.map(col => {
             const isCentered = centeredSet.has(col.key);
             return (
-              <div key={col.key} 
+              <div key={col.key}
                 onContextMenu={(e) => handleHeaderContextMenu(e, col.key)}
-                style={{ 
-                  position: 'absolute', 
-                  left: col.left, 
-                  top: 0, 
-                  height: headerHeight, 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                style={{
+                  position: 'absolute',
+                  left: col.left,
+                  top: 0,
+                  height: headerHeight,
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: isCentered ? 'center' : 'flex-start',
                   textAlign: isCentered ? 'center' : 'left',
                   fontFamily: HEADER_FONT_FAMILY,
                   fontSize: HEADER_FONT_SIZE,
                   fontWeight: HEADER_FONT_WEIGHT,
-                  color: '#FFFFFF', 
-                  overflow: 'hidden', 
-                  whiteSpace: 'nowrap', 
-                  width: col.width, 
-                  boxSizing: 'border-box', 
-                  margin: 0, 
+                  color: '#FFFFFF',
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  width: col.width,
+                  boxSizing: 'border-box',
+                  margin: 0,
                   cursor: 'context-menu'
                 }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: isCentered ? 'center' : 'left' }}>
@@ -608,7 +569,7 @@ const DataTable: React.FC<DataTableProps> = ({
               </div>
             );
           })}
-          
+
           {columnLayout.layout.map((col, idx) => {
             if (idx === columnLayout.layout.length - 1) return null;
             const resizerLeft = col.left + col.width;
@@ -640,12 +601,33 @@ const DataTable: React.FC<DataTableProps> = ({
           })}
         </div>
 
-        {data.map((item, idx) => {
+        {/* Строки */}
+        {data.map((item) => {
           const isSelected = selectedIds.has(item.uid);
-          const isFirst = idx === 0;
+          const customBg = rowBackground ? rowBackground(item) : null;
+          const bg = isSelected ? selectedColor : (customBg || '#FFFFFF');
+
           return (
-            <div key={item.uid} style={{ height: rowHeight, display: 'flex', alignItems: 'center', backgroundColor: isSelected ? selectedColor : '#FFFFFF', cursor: 'pointer', position: 'relative', borderTop: isFirst ? 'none' : `1px solid ${borderColor}`, minWidth: columnLayout.contentWidth, boxSizing: 'border-box', userSelect: 'none' }}
-              onContextMenu={(e) => handleRowContextMenu(e, item.uid, item.name)} onDoubleClick={() => onDoubleClick(item.uid, item.name)} onClick={(e) => onRowClick(item.uid, e)}>
+            <div
+              key={item.uid}
+              style={{
+                height: rowHeight,
+                marginTop: ROW_GAP,
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: bg,
+                cursor: 'pointer',
+                position: 'relative',
+                minWidth: columnLayout.contentWidth,
+                boxSizing: 'border-box',
+                userSelect: 'none',
+                borderRadius: ROW_RADIUS,
+                overflow: 'hidden',
+              }}
+              onContextMenu={(e) => handleRowContextMenu(e, item.uid, item.name)}
+              onDoubleClick={() => onDoubleClick(item.uid, item.name)}
+              onClick={(e) => onRowClick(item.uid, e)}
+            >
               {!hideCheckbox && (
                 <div style={{ position: 'absolute', left: CHECKBOX_LEFT, display: 'flex', alignItems: 'center', justifyContent: 'center', width: CHECKBOX_BLOCK_WIDTH, height: '100%' }}>
                   <motion.div onClick={(e) => onCheckboxClick(item.uid, e)} style={{ width: 18, height: 18, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
@@ -654,35 +636,34 @@ const DataTable: React.FC<DataTableProps> = ({
                   </motion.div>
                 </div>
               )}
-              
+
               {rowIcon && (
                 <div style={{ position: 'absolute', left: rowIconLeft, display: 'flex', alignItems: 'center', justifyContent: 'center', width: ROW_ICON_BLOCK_WIDTH, height: '100%' }}>
                   <img src={rowIcon} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
                 </div>
               )}
-              
+
               {columnLayout.layout.map(col => {
                 const cellText = renderCell(col.key, item);
-                const noWrap = noWrapColumns.includes(col.key);
                 const isCentered = centeredSet.has(col.key);
-                
+
                 let cellContent: React.ReactNode = null;
                 if (renderCellNode) {
                   cellContent = renderCellNode(col.key, item);
                 }
-                
+
                 if (cellContent === null || cellContent === undefined) {
                   cellContent = (
-                    <span 
+                    <span
                       style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', width: '100%', textAlign: isCentered ? 'center' : 'left' }}
-                      onMouseEnter={(e) => handleMouseEnter(e, cellText)} 
+                      onMouseEnter={(e) => handleMouseEnter(e, cellText)}
                       onMouseLeave={handleMouseLeave}
                     >
                       {highlightText ? <HighlightedText text={cellText} highlight={highlightText} /> : cellText}
                     </span>
                   );
                 }
-                
+
                 return (
                   <span key={col.key} style={{ position: 'absolute', left: col.left, top: 0, height: rowHeight, display: 'flex', alignItems: 'center', justifyContent: isCentered ? 'center' : 'flex-start', textAlign: isCentered ? 'center' : 'left', fontFamily: CELL_FONT_FAMILY, fontSize: CELL_FONT_SIZE, fontWeight: CELL_FONT_WEIGHT, color: (isGrayColumn ? isGrayColumn(col.key) : false) ? '#6B7280' : '#2D4059', overflow: 'hidden', whiteSpace: 'nowrap', width: col.width, boxSizing: 'border-box', margin: 0 }}>
                     {cellContent}
@@ -693,18 +674,29 @@ const DataTable: React.FC<DataTableProps> = ({
           );
         })}
 
-        {Array.from({ length: emptyRows }).map((_, i) => {
-          const isFirstEmpty = data.length === 0 && i === 0;
-          return (
-            <div key={`empty-${i}`} style={{ height: rowHeight, backgroundColor: '#FFFFFF', boxSizing: 'border-box', display: 'flex', alignItems: 'center', paddingLeft: hideCheckbox ? (rowIcon ? rowIconLeft + ROW_ICON_BLOCK_WIDTH : CHECKBOX_LEFT) : CHECKBOX_LEFT, borderTop: isFirstEmpty ? 'none' : `1px solid ${borderColor}`, minWidth: columnLayout.contentWidth }}>
-              {!hideCheckbox && (
-                <div style={{ width: CHECKBOX_BLOCK_WIDTH, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ width: 18, height: 18, position: 'relative', flexShrink: 0 }}><img src={CheckboxIcon18OffGray} alt="" style={{ width: 18, height: 18 }} /></div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {/* Пустые строки */}
+        {Array.from({ length: emptyRows }).map((_, i) => (
+          <div
+            key={`empty-${i}`}
+            style={{
+              height: rowHeight,
+              marginTop: ROW_GAP,
+              backgroundColor: '#FFFFFF',
+              boxSizing: 'border-box',
+              display: 'flex',
+              alignItems: 'center',
+              paddingLeft: hideCheckbox ? (rowIcon ? rowIconLeft + ROW_ICON_BLOCK_WIDTH : CHECKBOX_LEFT) : CHECKBOX_LEFT,
+              minWidth: columnLayout.contentWidth,
+              borderRadius: ROW_RADIUS,
+            }}
+          >
+            {!hideCheckbox && (
+              <div style={{ width: CHECKBOX_BLOCK_WIDTH, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 18, height: 18, position: 'relative', flexShrink: 0 }}><img src={CheckboxIcon18OffGray} alt="" style={{ width: 18, height: 18 }} /></div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {hasVerticalScroll && <div style={{ position: 'absolute', left: tableWidth + scrollOffset, top: headerHeight, height: tableHeight - headerHeight, width: 10, zIndex: 10 }}><CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={tableHeight - headerHeight} /></div>}
@@ -724,13 +716,10 @@ const DataTable: React.FC<DataTableProps> = ({
 
       {createPortal(
         headerContextMenu && (
-          <ContextMenu 
-            x={headerContextMenu.x} 
-            y={headerContextMenu.y} 
+          <ContextMenu
+            x={headerContextMenu.x}
+            y={headerContextMenu.y}
             items={headerContextMenuItems}
-            width={280}
-            itemHeight={22}
-            gapBetween={18}
           />
         ),
         document.body
@@ -738,9 +727,9 @@ const DataTable: React.FC<DataTableProps> = ({
 
       {createPortal(
         rowContextMenu && (
-          <ContextMenu 
-            x={rowContextMenu.x} 
-            y={rowContextMenu.y} 
+          <ContextMenu
+            x={rowContextMenu.x}
+            y={rowContextMenu.y}
             items={rowContextMenu.items.map(item => ({
               ...item,
               onClick: () => {

@@ -1,4 +1,4 @@
-// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты пополнения)
+// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты заказа на перемещение)
 // Каркас приложения: панель вкладок, содержимое вкладок, плавающее меню. Вкладку рисует компонент её раздела
 // или карточки (списки путей — tabRoutes.ts). Раздел выключенной функции показывает «Раздел недоступен»
 // (раздел 8 проекта «Дискретное отключение функций»); модули, которые вариант поставки может исключить,
@@ -21,6 +21,8 @@ import GppPage from '../components/DocumentsPage/Gpp/GppPage';
 import StockLevelControlCreatePage from '../components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
 import RefillPage from '../components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from '../components/DocumentsPage/Refill/RefillCreatePage';
+import MoveOrderPage from '../components/DocumentsPage/MoveOrder/MoveOrderPage';
+import MoveOrderCreatePage from '../components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
 import NomenclaturePage from '../components/ReferencesPage/NomenclaturePage/NomenclaturePage';
 import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage';
 import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
@@ -44,6 +46,7 @@ import HoldingsPage from '../components/ReferencesPage/HoldingsPage/HoldingsPage
 import EnterprisesPage from '../components/ReferencesPage/EnterprisesPage/EnterprisesPage';
 import WorkshopsPage from '../components/ReferencesPage/WorkshopsPage/WorkshopsPage';
 import SectionsPage from '../components/ReferencesPage/SectionsPage/SectionsPage';
+import EmployeesPage from '../components/ReferencesPage/EmployeesPage/EmployeesPage';
 import StationTypesPage from '../components/ReferencesPage/StationTypesPage/StationTypesPage';
 import StationManufacturersPage from '../components/ReferencesPage/StationManufacturersPage/StationManufacturersPage';
 import StationModelsPage from '../components/ReferencesPage/StationModelsPage/StationModelsPage';
@@ -116,12 +119,15 @@ const staticComponents: Record<TabSection, ReactNode> = {
   '/references/countries': <CountriesPage />,
   '/references/holdings': <HoldingsPage />,
   '/references/enterprises': <EnterprisesPage />, '/references/workshops': <WorkshopsPage />,
-  '/references/sections': <SectionsPage />, '/references/station-types': <StationTypesPage />,
+  '/references/sections': <SectionsPage />,
+  '/references/employees': <EmployeesPage />,
+  '/references/station-types': <StationTypesPage />,
   '/references/station-manufacturers': <StationManufacturersPage />, '/references/station-models': <StationModelsPage />,
   '/references/station-configurations': <StationConfigurationsPage />, '/references/stations': <StationsCrudPage />,
   '/references/locations': <LocationsPage />,
   '/documents/stock-level-control': <StockLevelControlPage />,
   '/documents/refill': <RefillPage />,
+  '/documents/move-orders': <MoveOrderPage />,
   '/documents/video-archive': <VideoArchivePage />,
   '/documents/gpp': <GppPage />,
 };
@@ -146,6 +152,8 @@ const childComponents: Record<TabChildPrefix, ReactNode> = {
   '/documents/stock-level-control/edit/': <StockLevelControlCreatePage />,
   '/documents/refill/create/': <RefillCreatePage />,
   '/documents/refill/edit/': <RefillCreatePage />,
+  '/documents/move-orders/create/': <MoveOrderCreatePage />,
+  '/documents/move-orders/edit/': <MoveOrderCreatePage />,
 };
 
 /** Заказ и ТКП по uid */
@@ -200,11 +208,13 @@ const getLabelByPath = (path: string): string => {
     '/references/countries': 'Справочник: Страны',
     '/references/holdings': 'Справочник: Холдинги', '/references/enterprises': 'Справочник: Предприятия',
     '/references/workshops': 'Справочник: Цеха', '/references/sections': 'Справочник: Участки',
+    '/references/employees': 'Справочник: Сотрудники',
     '/references/station-types': 'Справочник: Типы станций', '/references/station-manufacturers': 'Справочник: Производители станций',
     '/references/station-models': 'Справочник: Модели станций', '/references/station-configurations': 'Справочник: Конфигурации станций',
     '/references/stations': 'Справочник: Станции', '/references/locations': 'Справочник: Расположения',
     '/documents/stock-level-control': 'Документ: Контроль уровня остатков',
     '/documents/refill': 'Документ: Пополнение',
+    '/documents/move-orders': 'Документ: Заказ на перемещение',
     '/documents/video-archive': 'Журнал событий: видеоархив',
     '/documents/gpp': 'Документ: ГПП',
   };
@@ -228,6 +238,8 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/documents/stock-level-control/edit/')) { return 'Контроль уровня остатков'; }
   if (path.startsWith('/documents/refill/create/')) { return 'Пополнение (новый)'; }
   if (path.startsWith('/documents/refill/edit/')) { return 'Пополнение'; }
+  if (path.startsWith('/documents/move-orders/create/')) { return 'Заказ на перемещение (новый)'; }
+  if (path.startsWith('/documents/move-orders/edit/')) { return 'Заказ на перемещение'; }
   if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };

@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен раздел Документы: Пополнение)
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты заказа на перемещение)
 // Маршруты приложения. Профиль функций установки (FeatureProvider) загружается сразу после входа, до вкладок:
 // восстановление вкладок и меню читают уже полученный профиль. Модули, которые вариант поставки может исключить
 // из сборки, подключаются только через lazyModules (раздел 8 проекта «Дискретное отключение функций»).
@@ -35,6 +35,7 @@ import HoldingsPage from './components/ReferencesPage/HoldingsPage/HoldingsPage'
 import EnterprisesPage from './components/ReferencesPage/EnterprisesPage/EnterprisesPage';
 import WorkshopsPage from './components/ReferencesPage/WorkshopsPage/WorkshopsPage';
 import SectionsPage from './components/ReferencesPage/SectionsPage/SectionsPage';
+import EmployeesPage from './components/ReferencesPage/EmployeesPage/EmployeesPage';
 import StationTypesPage from './components/ReferencesPage/StationTypesPage/StationTypesPage';
 import StationManufacturersPage from './components/ReferencesPage/StationManufacturersPage/StationManufacturersPage';
 import StationModelsPage from './components/ReferencesPage/StationModelsPage/StationModelsPage';
@@ -51,6 +52,8 @@ import GppPage from './components/DocumentsPage/Gpp/GppPage';
 import StockLevelControlCreatePage from './components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
 import RefillPage from './components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from './components/DocumentsPage/Refill/RefillCreatePage';
+import MoveOrderPage from './components/DocumentsPage/MoveOrder/MoveOrderPage';
+import MoveOrderCreatePage from './components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
@@ -150,6 +153,7 @@ const AppContent = () => {
                     <Route path="references/enterprises" element={<EnterprisesPage />} />
                     <Route path="references/workshops" element={<WorkshopsPage />} />
                     <Route path="references/sections" element={<SectionsPage />} />
+                    <Route path="references/employees" element={<EmployeesPage />} />
                     <Route path="references/station-types" element={<StationTypesPage />} />
                     <Route path="references/station-manufacturers" element={<StationManufacturersPage />} />
                     <Route path="references/station-models" element={<StationModelsPage />} />
@@ -171,6 +175,9 @@ const AppContent = () => {
                     <Route path="documents/refill" element={<RefillPage />} />
                     <Route path="documents/refill/create/:uid" element={<RefillCreatePage />} />
                     <Route path="documents/refill/edit/:uid" element={<RefillCreatePage />} />
+                    <Route path="documents/move-orders" element={<MoveOrderPage />} />
+                    <Route path="documents/move-orders/create/:uid" element={<MoveOrderCreatePage />} />
+                    <Route path="documents/move-orders/edit/:uid" element={<MoveOrderCreatePage />} />
                     <Route path="reports" element={<ReportsPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route path="orders" element={<OrdersPage />} />

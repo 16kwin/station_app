@@ -1,4 +1,4 @@
-// FormField.tsx — ПОЛНЫЙ ФАЙЛ (тип "expand": сохраняет перекрытие соседей во время анимации закрытия)
+// FormField.tsx — ПОЛНЫЙ ФАЙЛ (добавлен type: 'comment')
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -16,12 +16,13 @@ export interface FormFieldProps {
   width: number;
   height: number;
   label?: string;
+  labelPosition?: 'top' | 'inside';
   icon?: string;
   iconActive?: string;
   value: string;
   placeholder?: string;
   active?: boolean;
-  type: 'input' | 'select' | 'display' | 'calendar' | 'expand';
+  type: 'input' | 'select' | 'display' | 'calendar' | 'expand' | 'comment';
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClear?: () => void;
   onClick?: () => void;
@@ -40,6 +41,9 @@ export interface FormFieldProps {
   hasError?: boolean;
   labelMarginBottom?: number;
   expandOptions?: { uid: string; name: string }[];
+  /** Иконка справа для type='comment' */
+  commentIcon?: string;
+  commentIconActive?: string;
 }
 
 const DROPDOWN_OFFSET = 8;
@@ -51,6 +55,10 @@ const DROPDOWN_BTN_HEIGHT = 34;
 const DROPDOWN_HORIZONTAL_PADDING = 40;
 const DROPDOWN_MAX_WIDTH = 500;
 const MAX_VISIBLE_ITEMS = 5;
+
+const INSIDE_RADIUS = 30;
+const INSIDE_LEGEND_LEFT = 24;
+const INSIDE_LEGEND_PAD_X = 2;
 
 // EXPAND
 const EXPAND_LINE_INSET = 35;
@@ -77,6 +85,7 @@ const FormField: React.FC<FormFieldProps> = ({
   width,
   height,
   label,
+  labelPosition = 'top',
   icon,
   iconActive,
   value,
@@ -101,6 +110,8 @@ const FormField: React.FC<FormFieldProps> = ({
   hasError = false,
   labelMarginBottom = 4,
   expandOptions = [],
+  commentIcon,
+  commentIconActive,
 }) => {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -108,7 +119,6 @@ const FormField: React.FC<FormFieldProps> = ({
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  // Отдельный флаг «раскрыто визуально» — держим перекрытие до конца анимации закрытия.
   const [isExpandVisible, setIsExpandVisible] = useState(false);
 
   const outerRef = useRef<HTMLDivElement>(null);
@@ -116,10 +126,7 @@ const FormField: React.FC<FormFieldProps> = ({
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (isExpanded) {
-      setIsExpandVisible(true);
-    }
-    // при закрытии isExpandVisible сбросим после exit (onExitComplete у AnimatePresence)
+    if (isExpanded) setIsExpandVisible(true);
   }, [isExpanded]);
 
   const isActive = active ?? (value.length > 0 || isSearchMode);
@@ -153,7 +160,6 @@ const FormField: React.FC<FormFieldProps> = ({
 
   const getDropdownWidth = useCallback((): number => {
     const minWidth = width;
-
     if (filteredOptions.length === 0) return minWidth;
 
     const canvas = document.createElement('canvas');
@@ -175,10 +181,8 @@ const FormField: React.FC<FormFieldProps> = ({
     if (!fieldRef.current) return;
     const rect = fieldRef.current.getBoundingClientRect();
     const dropdownWidth = getDropdownWidth();
-
     const left = rect.left + rect.width / 2 - dropdownWidth / 2;
     const top = rect.bottom + DROPDOWN_OFFSET;
-
     setDropdownPosition({ top, left, width: dropdownWidth });
   }, [getDropdownWidth]);
 
@@ -195,12 +199,8 @@ const FormField: React.FC<FormFieldProps> = ({
   }, [showDropdown, updateDropdownPosition, visibleOptions]);
 
   useEffect(() => {
-    if (isSearchMode) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    if (isSearchMode) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isSearchMode, filteredOptions]);
 
   const handleClickOutside = (e: MouseEvent) => {
@@ -217,15 +217,16 @@ const FormField: React.FC<FormFieldProps> = ({
       setIsSearchMode(true);
       setSearchValue('');
       setShowDropdown(false);
+    } else if (type === 'comment') {
+      onClick?.();
     }
   };
 
   const handleRightIconClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled) return;
-    if (type === 'select' && onOpenFullList) {
-      onOpenFullList();
-    }
+    if (type === 'select' && onOpenFullList) onOpenFullList();
+    if (type === 'comment') onClick?.();
   };
 
   const handleExpandArrowClick = (e: React.MouseEvent) => {
@@ -236,11 +237,8 @@ const FormField: React.FC<FormFieldProps> = ({
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchValue(e.target.value);
-    if (e.target.value.trim()) {
-      setShowDropdown(true);
-    } else {
-      setShowDropdown(false);
-    }
+    if (e.target.value.trim()) setShowDropdown(true);
+    else setShowDropdown(false);
   };
 
   const handleOptionClick = (uid: string, name: string) => {
@@ -283,27 +281,16 @@ const FormField: React.FC<FormFieldProps> = ({
     ? '#666EFE'
     : '#A0A3BD';
 
-  const fieldStyle: React.CSSProperties = {
-    width,
-    height,
-    borderRadius: 10,
-    display: 'flex',
-    alignItems: 'center',
-    paddingLeft: 13,
-    paddingRight: 14,
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 500,
-    outline: 'none',
-    backgroundColor: '#FFFFFF',
-    position: 'relative',
-    boxSizing: 'border-box',
-    border: `1px solid ${resolvedBorderColor}`,
-    cursor: disabled ? 'not-allowed' : type === 'select' ? 'pointer' : type === 'calendar' ? 'text' : type === 'expand' ? 'pointer' : 'default',
-  };
-
   const textColor = disabled
     ? disabledTextColor
+    : isActive
+    ? '#666EFE'
+    : '#A0A3BD';
+
+  const legendColor = hasError
+    ? '#EF4444'
+    : disabled
+    ? disabledBorderColor
     : isActive
     ? '#666EFE'
     : '#A0A3BD';
@@ -323,16 +310,9 @@ const FormField: React.FC<FormFieldProps> = ({
             type="text"
             autoFocus
             style={{
-              flex: 1,
-              height: '100%',
-              border: 'none',
-              outline: 'none',
-              fontFamily: 'Inter, sans-serif',
-              fontSize: 14,
-              fontWeight: 500,
-              color: '#666EFE',
-              backgroundColor: 'transparent',
-              minWidth: 0,
+              flex: 1, height: '100%', border: 'none', outline: 'none',
+              fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+              color: '#666EFE', backgroundColor: 'transparent', minWidth: 0,
             }}
             value={searchValue}
             onChange={handleSearchChange}
@@ -358,14 +338,7 @@ const FormField: React.FC<FormFieldProps> = ({
           )}
         </div>
         <span
-          style={{
-            color: textColor,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-            minWidth: 0,
-          }}
+          style={{ color: textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}
           onMouseEnter={(e) => handleTooltipEnter(e, value)}
           onMouseLeave={handleTooltipLeave}
         >
@@ -392,14 +365,7 @@ const FormField: React.FC<FormFieldProps> = ({
           )}
         </div>
         <span
-          style={{
-            color: textColor,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-            minWidth: 0,
-          }}
+          style={{ color: textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}
           onMouseEnter={(e) => handleTooltipEnter(e, value)}
           onMouseLeave={handleTooltipLeave}
         >
@@ -408,15 +374,8 @@ const FormField: React.FC<FormFieldProps> = ({
         <div
           onClick={handleExpandArrowClick}
           style={{
-            position: 'absolute',
-            right: 14,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: 18,
-            height: 18,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+            width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >
@@ -424,15 +383,50 @@ const FormField: React.FC<FormFieldProps> = ({
             src={(isActive && !disabled) ? ArrowIcon10Blue : ArrowIcon10Gray}
             alt=""
             style={{
-              width: 10,
-              height: 6,
-              display: 'block',
+              width: 10, height: 6, display: 'block',
               transform: isExpanded ? 'rotate(0deg)' : 'rotate(180deg)',
               transition: 'transform 0.2s ease',
               opacity: disabled ? disabledIconOpacity : 1,
             }}
           />
         </div>
+      </>
+    );
+  };
+
+  const renderCommentContent = () => {
+    const src = isActive && commentIconActive ? commentIconActive : commentIcon;
+    return (
+      <>
+        <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 10 }}>
+          {iconSrc ? (
+            <img src={iconSrc} alt="" style={{ width: iconWidth, height: iconHeight, opacity: disabled ? disabledIconOpacity : 1 }} />
+          ) : (
+            <div style={{ width: iconWidth, height: iconHeight, backgroundColor: 'red', borderRadius: 2, opacity: disabled ? disabledIconOpacity : 1 }} />
+          )}
+        </div>
+        <span
+          style={{
+            color: textColor,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            flex: 1, minWidth: 0,
+          }}
+          onMouseEnter={(e) => handleTooltipEnter(e, value)}
+          onMouseLeave={handleTooltipLeave}
+        >
+          {value || placeholder || ''}
+        </span>
+        {src && (
+          <div
+            style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}
+          >
+            <img
+              src={src}
+              alt=""
+              style={{ width: 14, height: 14, opacity: disabled ? disabledIconOpacity : 1 }}
+            />
+          </div>
+        )}
       </>
     );
   };
@@ -459,16 +453,9 @@ const FormField: React.FC<FormFieldProps> = ({
             <input
               type={inputType}
               style={{
-                flex: 1,
-                height: '100%',
-                border: 'none',
-                outline: 'none',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 14,
-                fontWeight: 500,
-                color: textColor,
-                backgroundColor: 'transparent',
-                minWidth: 0,
+                flex: 1, height: '100%', border: 'none', outline: 'none',
+                fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+                color: textColor, backgroundColor: 'transparent', minWidth: 0,
                 cursor: disabled ? 'not-allowed' : 'default',
               }}
               value={value}
@@ -499,16 +486,9 @@ const FormField: React.FC<FormFieldProps> = ({
             <input
               type="text"
               style={{
-                flex: 1,
-                height: '100%',
-                border: 'none',
-                outline: 'none',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 14,
-                fontWeight: 500,
-                color: textColor,
-                backgroundColor: 'transparent',
-                minWidth: 0,
+                flex: 1, height: '100%', border: 'none', outline: 'none',
+                fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+                color: textColor, backgroundColor: 'transparent', minWidth: 0,
                 cursor: disabled ? 'not-allowed' : 'text',
               }}
               value={value}
@@ -519,22 +499,11 @@ const FormField: React.FC<FormFieldProps> = ({
             />
             <div
               style={{
-                width: 18,
-                height: 18,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                marginLeft: 8,
-                cursor: disabled ? 'not-allowed' : 'pointer',
+                width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, marginLeft: 8, cursor: disabled ? 'not-allowed' : 'pointer',
                 opacity: disabled ? disabledIconOpacity : 1,
               }}
-              onClick={(e) => {
-                if (!disabled) {
-                  e.stopPropagation();
-                  onCalendarClick?.();
-                }
-              }}
+              onClick={(e) => { if (!disabled) { e.stopPropagation(); onCalendarClick?.(); } }}
             >
               <img src={isActive && !disabled ? CalendarIcon14Blue : CalendarIcon14Gray} alt="" style={{ width: 14, height: 16 }} />
             </div>
@@ -546,10 +515,13 @@ const FormField: React.FC<FormFieldProps> = ({
 
       case 'expand':
         return renderExpandContent();
+
+      case 'comment':
+        return renderCommentContent();
     }
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelTopStyle: React.CSSProperties = {
     fontFamily: 'Inter, sans-serif',
     fontSize: 14,
     fontWeight: 600,
@@ -559,112 +531,132 @@ const FormField: React.FC<FormFieldProps> = ({
     lineHeight: '17px',
   };
 
+  const labelInsideStyle: React.CSSProperties = {
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 14,
+    fontWeight: 400,
+    color: legendColor,
+    lineHeight: '20px',
+    height: 20,
+    padding: `0 ${INSIDE_LEGEND_PAD_X}px`,
+    marginLeft: INSIDE_LEGEND_LEFT,
+    backgroundColor: '#FFFFFF',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    transform: 'translateY(-50%)',
+    transition: 'color 0.15s ease',
+  };
+
   const expandLineColor = (isActive && !disabled)
     ? 'rgba(102, 110, 254, 0.45)'
     : 'rgba(160, 163, 189, 0.45)';
 
-  // z-index держим высоким, пока идёт анимация (isExpandVisible), а не только пока isExpanded
   const wrapperZIndex = type === 'expand' && isExpandVisible ? 100 : 'auto';
 
-  // === type === 'expand': один растягивающийся контейнер ===
+  const isInside = labelPosition === 'inside';
+
+  // === type === 'expand' ===
   if (type === 'expand') {
+    const fieldsetRadius = isInside ? INSIDE_RADIUS : 10;
+
     return (
       <div ref={outerRef}>
-        {label && <span style={labelStyle}>{label}</span>}
+        {!isInside && label && <span style={labelTopStyle}>{label}</span>}
         <div style={{ position: 'relative', zIndex: wrapperZIndex as any }}>
-          <div
-            ref={fieldRef}
+          <fieldset
+            ref={fieldRef as any}
             style={{
               width,
               border: `1px solid ${resolvedBorderColor}`,
-              borderRadius: 10,
+              borderRadius: fieldsetRadius,
               backgroundColor: '#FFFFFF',
               boxSizing: 'border-box',
-              overflow: 'hidden',
+              overflow: 'visible',
               cursor: disabled ? 'not-allowed' : 'pointer',
               position: 'relative',
+              margin: 0,
+              padding: 0,
+              minInlineSize: 'auto',
             }}
           >
-            {/* Строка-значение */}
-            <div
-              style={{
-                width: '100%',
-                height,
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: 13,
-                paddingRight: 14,
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 14,
-                fontWeight: 500,
-                boxSizing: 'border-box',
-                position: 'relative',
-              }}
-            >
-              {renderExpandContent()}
+            {isInside && label && <legend style={labelInsideStyle}>{label}</legend>}
+            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: fieldsetRadius }}>
+              <div
+                style={{
+                  width: '100%',
+                  height,
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingLeft: 13,
+                  paddingRight: 14,
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  boxSizing: 'border-box',
+                  position: 'relative',
+                }}
+              >
+                {renderExpandContent()}
+              </div>
+
+              <AnimatePresence
+                initial={false}
+                onExitComplete={() => setIsExpandVisible(false)}
+              >
+                {isExpanded && (
+                  <motion.div
+                    key="expand-content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    style={{ overflow: 'hidden', boxSizing: 'border-box' }}
+                  >
+                    <div style={{
+                      height: 1,
+                      marginLeft: EXPAND_LINE_INSET,
+                      marginRight: EXPAND_LINE_INSET,
+                      backgroundColor: expandLineColor,
+                    }} />
+
+                    <div style={{
+                      paddingTop: EXPAND_LINE_TO_FIRST_TEXT,
+                      paddingBottom: EXPAND_BOTTOM_PADDING,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: EXPAND_TEXT_GAP,
+                    }}>
+                      {expandOptions.map((opt) => (
+                        <div
+                          key={opt.uid}
+                          onClick={(e) => { e.stopPropagation(); handleExpandOptionClick(opt.uid, opt.name); }}
+                          style={{
+                            height: EXPAND_TEXT_HEIGHT,
+                            lineHeight: `${EXPAND_TEXT_HEIGHT}px`,
+                            paddingLeft: EXPAND_TEXT_LEFT_PADDING,
+                            paddingRight: 20,
+                            fontFamily: 'Inter, sans-serif',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: '#2D4059',
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#666EFE'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = '#2D4059'; }}
+                        >
+                          {opt.name}
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-
-            {/* Раскрывающаяся часть. onExitComplete сбрасывает isExpandVisible —
-                z-index остаётся высоким до конца анимации закрытия. */}
-            <AnimatePresence
-              initial={false}
-              onExitComplete={() => setIsExpandVisible(false)}
-            >
-              {isExpanded && (
-                <motion.div
-                  key="expand-content"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: 'easeInOut' }}
-                  style={{
-                    overflow: 'hidden',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <div style={{
-                    height: 1,
-                    marginLeft: EXPAND_LINE_INSET,
-                    marginRight: EXPAND_LINE_INSET,
-                    backgroundColor: expandLineColor,
-                  }} />
-
-                  <div style={{
-                    paddingTop: EXPAND_LINE_TO_FIRST_TEXT,
-                    paddingBottom: EXPAND_BOTTOM_PADDING,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: EXPAND_TEXT_GAP,
-                  }}>
-                    {expandOptions.map((opt) => (
-                      <div
-                        key={opt.uid}
-                        onClick={(e) => { e.stopPropagation(); handleExpandOptionClick(opt.uid, opt.name); }}
-                        style={{
-                          height: EXPAND_TEXT_HEIGHT,
-                          lineHeight: `${EXPAND_TEXT_HEIGHT}px`,
-                          paddingLeft: EXPAND_TEXT_LEFT_PADDING,
-                          paddingRight: 20,
-                          fontFamily: 'Inter, sans-serif',
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: '#2D4059',
-                          cursor: 'pointer',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = '#666EFE'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = '#2D4059'; }}
-                      >
-                        {opt.name}
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          </fieldset>
         </div>
 
         {createPortal(
@@ -727,16 +719,9 @@ const FormField: React.FC<FormFieldProps> = ({
                         setSearchValue('');
                       }}
                       style={{
-                        width: 126,
-                        height: DROPDOWN_BTN_HEIGHT,
-                        borderRadius: 8,
-                        backgroundColor: '#666EFE',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#FFFFFF',
+                        width: 126, height: DROPDOWN_BTN_HEIGHT, borderRadius: 8,
+                        backgroundColor: '#666EFE', border: 'none', cursor: 'pointer',
+                        fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF',
                       }}
                     >
                       Весь список
@@ -758,21 +743,10 @@ const FormField: React.FC<FormFieldProps> = ({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.15 }}
                 style={{
-                  position: 'fixed',
-                  left: tooltip.x,
-                  top: tooltip.y,
-                  transform: 'translateX(-50%)',
-                  backgroundColor: '#2D4059',
-                  color: '#FFFFFF',
-                  padding: '6px 12px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  fontFamily: 'Inter, sans-serif',
-                  whiteSpace: 'nowrap',
-                  zIndex: 10002,
-                  pointerEvents: 'none',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  position: 'fixed', left: tooltip.x, top: tooltip.y, transform: 'translateX(-50%)',
+                  backgroundColor: '#2D4059', color: '#FFFFFF', padding: '6px 12px', borderRadius: 8,
+                  fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
+                  zIndex: 10002, pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
                 }}
               >
                 {tooltip.text}
@@ -785,17 +759,57 @@ const FormField: React.FC<FormFieldProps> = ({
     );
   }
 
+  // === Обычные типы (input/select/display/calendar/comment) ===
+  const fieldsetRadius = isInside ? INSIDE_RADIUS : 10;
+
   return (
     <div ref={outerRef}>
-      {label && <span style={labelStyle}>{label}</span>}
+      {!isInside && label && <span style={labelTopStyle}>{label}</span>}
       <div style={{ position: 'relative' }}>
-        <div
-          ref={fieldRef}
-          style={fieldStyle}
-          onClick={type === 'select' && !disabled ? handleFieldClick : undefined}
+        <fieldset
+          ref={fieldRef as any}
+          style={{
+            width,
+            height,
+            borderRadius: fieldsetRadius,
+            display: 'flex',
+            alignItems: 'center',
+            padding: 0,
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 14,
+            fontWeight: 500,
+            outline: 'none',
+            backgroundColor: '#FFFFFF',
+            position: 'relative',
+            boxSizing: 'border-box',
+            border: `1px solid ${resolvedBorderColor}`,
+            cursor:
+              disabled ? 'not-allowed'
+              : type === 'select' || type === 'comment' ? 'pointer'
+              : type === 'calendar' ? 'text'
+              : 'default',
+            margin: 0,
+            minInlineSize: 'auto',
+          }}
+          onClick={
+            type === 'select' && !disabled ? handleFieldClick
+            : type === 'comment' && !disabled ? handleFieldClick
+            : undefined
+          }
         >
-          {renderContent()}
-        </div>
+          {isInside && label && <legend style={labelInsideStyle}>{label}</legend>}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            height: '100%',
+            paddingLeft: 13,
+            paddingRight: 14,
+            boxSizing: 'border-box',
+          }}>
+            {renderContent()}
+          </div>
+        </fieldset>
       </div>
 
       {createPortal(
@@ -858,16 +872,9 @@ const FormField: React.FC<FormFieldProps> = ({
                       setSearchValue('');
                     }}
                     style={{
-                      width: 126,
-                      height: DROPDOWN_BTN_HEIGHT,
-                      borderRadius: 8,
-                      backgroundColor: '#666EFE',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 14,
-                      fontWeight: 500,
-                      color: '#FFFFFF',
+                      width: 126, height: DROPDOWN_BTN_HEIGHT, borderRadius: 8,
+                      backgroundColor: '#666EFE', border: 'none', cursor: 'pointer',
+                      fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF',
                     }}
                   >
                     Весь список
@@ -889,21 +896,10 @@ const FormField: React.FC<FormFieldProps> = ({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               style={{
-                position: 'fixed',
-                left: tooltip.x,
-                top: tooltip.y,
-                transform: 'translateX(-50%)',
-                backgroundColor: '#2D4059',
-                color: '#FFFFFF',
-                padding: '6px 12px',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 500,
-                fontFamily: 'Inter, sans-serif',
-                whiteSpace: 'nowrap',
-                zIndex: 10002,
-                pointerEvents: 'none',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                position: 'fixed', left: tooltip.x, top: tooltip.y, transform: 'translateX(-50%)',
+                backgroundColor: '#2D4059', color: '#FFFFFF', padding: '6px 12px', borderRadius: 8,
+                fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
+                zIndex: 10002, pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
               }}
             >
               {tooltip.text}

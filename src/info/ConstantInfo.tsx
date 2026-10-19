@@ -575,6 +575,34 @@ const ConstantInfo = {
     restApiRefillStockReservationsByMaterial: (materialUid: string, stockUid?: string) =>
     `/api/documents/refill/stock/reservations?materialUid=${encodeURIComponent(materialUid)}` +
     (stockUid ? `&stockUid=${encodeURIComponent(stockUid)}` : ''),
+      // Сотрудники — события и настройки
+  restApiEmployees: (userId: number) => `/api/employees?userId=${userId}`,
+  restApiEmployee: (uid: string) => `/api/employees/${uid}`,
+  restApiEmployeeEvents: '/api/employees/events',
+  restApiEmployeeEventsByUid: (uid: string) => `/api/employees/${uid}/events`,
+  restApiEmployeeColumnsSettings: (userId: number) => `/api/employees/columns-settings?userId=${userId}`,
+  restApiEmployeeColumnsSettingsSave: (userId: number) => `/api/employees/columns-settings?userId=${userId}`,
+  restApiEmployeeFiltersSettings: (userId: number) => `/api/employees/filters-settings?userId=${userId}`,
+  restApiEmployeeFiltersSettingsSave: (userId: number) => `/api/employees/filters-settings?userId=${userId}`,
+  restApiEmployeeSortSettings: (userId: number) => `/api/employees/sort-settings?userId=${userId}`,
+  restApiEmployeeSortSettingsSave: (userId: number) => `/api/employees/sort-settings?userId=${userId}`,
+  restApiEmployeeAllSettings: (userId: number) => `/api/employees/settings?userId=${userId}`,
+    // === Документы: Заказ на перемещение ===
+  restApiMoveOrderCrud: (userId: number) => `/api/move-orders?userId=${userId}`,
+  restApiMoveOrderGenerateCode: '/api/move-orders/generate-code',
+  restApiMoveOrder: (uid: string) => `/api/move-orders/${uid}`,
+  restApiMoveOrderAccept: (uid: string) => `/api/move-orders/${uid}/accept`,
+  restApiMoveOrderPost: (uid: string) => `/api/move-orders/${uid}/post`,
+  restApiMoveOrderEvents: '/api/move-orders/events',
+  restApiMoveOrderEventsByUid: (uid: string) => `/api/move-orders/${uid}/events`,
+  restApiMoveOrderAllSettings: (userId: number) => `/api/move-orders/settings?userId=${userId}`,
+  restApiMoveOrderColumnsSettings: (userId: number) => `/api/move-orders/columns-settings?userId=${userId}`,
+  restApiMoveOrderColumnsSettingsSave: (userId: number) => `/api/move-orders/columns-settings?userId=${userId}`,
+  restApiMoveOrderFiltersSettings: (userId: number) => `/api/move-orders/filters-settings?userId=${userId}`,
+  restApiMoveOrderFiltersSettingsSave: (userId: number) => `/api/move-orders/filters-settings?userId=${userId}`,
+  restApiMoveOrderSortSettings: (userId: number) => `/api/move-orders/sort-settings?userId=${userId}`,
+  restApiMoveOrderSortSettingsSave: (userId: number) => `/api/move-orders/sort-settings?userId=${userId}`,
+
 };
 
 export default ConstantInfo;

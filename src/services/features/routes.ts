@@ -54,6 +54,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/references/enterprises',
   '/references/workshops',
   '/references/sections',
+  '/references/employees',
   '/references/station-types',
   '/references/station-manufacturers',
   '/references/station-models',
@@ -62,6 +63,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/references/locations',
   '/documents/stock-level-control',
   '/documents/refill',
+  '/documents/move-orders',
 ];
 
 /** Карточки и документы ядра: путь и все его подпути (как isChildPath в MainLayout, без заказов и ТКП) */
@@ -83,6 +85,8 @@ export const CORE_CHILD_ROUTES: readonly string[] = [
   '/documents/stock-level-control/edit',
   '/documents/refill/create',
   '/documents/refill/edit',
+  '/documents/move-orders/create',
+  '/documents/move-orders/edit',
 ];
 
 /** Путь без адреса сервера, параметров, якоря и завершающей косой черты */
