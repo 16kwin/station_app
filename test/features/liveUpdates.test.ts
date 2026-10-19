@@ -1,5 +1,6 @@
 // liveUpdates.test.ts — клиент живых обновлений следует за функцией websocket (разделы 4.2 и 8.1 проекта):
-// открывается, когда функция включилась (в том числе после сбоя профиля), и закрывается, когда выключилась.
+// открывается, когда функция включилась (в том числе когда профиль не получен — как до выключателей),
+// и закрывается, когда выключилась.
 // Библиотеки STOMP и SockJS подменены заглушками (test/stubs), сети нет.
 import { afterEach, beforeEach, describe, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,28 +31,30 @@ afterEach(() => {
 });
 
 describe('живые обновления и функция websocket', () => {
-  test('профиль не получен — соединения нет; пришёл после «Повторить» — открывается без нового монтирования', async () => {
-    connectFeatureHttp(stubHttp(new Error('нет связи'), profile('r1', { websocket: true })));
-    await loadFeatures();
+  test('профиль не получен — работает как до выключателей: соединение открыто; профиль выключил websocket — закрыто без нового монтирования', async () => {
+    connectFeatureHttp(stubHttp(new Error('нет связи'), profile('r1', { websocket: false })));
+    assert.equal(await loadFeatures(), false);
     const received: unknown[] = [];
     const connection = connectLiveUpdates({ name: 'тест', topics: { '/topic/orders/refresh': data => received.push(data) } });
-    await settle();
-    assert.equal(stompClients.length, 0, 'в закрытом режиме соединения нет');
+    try {
+      await waitFor(() => stompClients.length === 1 && stompClients[0].active);
+      const client = stompClients[0];
+      assert.ok(client.socket instanceof SockJS);
+      assert.equal(client.socket.url, 'http://awms.local:8084/ws-stations');
 
-    assert.equal(await loadFeatures(), true);
-    await waitFor(() => stompClients.length === 1 && stompClients[0].active);
-    const client = stompClients[0];
-    assert.ok(client.socket instanceof SockJS);
-    assert.equal(client.socket.url, 'http://awms.local:8084/ws-stations');
+      // Подписка на темы — после соединения; тело сообщения разбирается как JSON
+      client.config.onConnect?.();
+      client.subscriptions.get('/topic/orders/refresh')?.({ body: '{"uid":"a1"}' });
+      assert.deepEqual(received, [{ uid: 'a1' }]);
 
-    // Подписка на темы — после соединения; тело сообщения разбирается как JSON
-    client.config.onConnect?.();
-    client.subscriptions.get('/topic/orders/refresh')?.({ body: '{"uid":"a1"}' });
-    assert.deepEqual(received, [{ uid: 'a1' }]);
-
-    connection.close();
-    connection.close();
-    assert.equal(client.active, false);
+      assert.equal(await loadFeatures(), true);
+      assert.equal(client.active, false, 'профиль пришёл и выключил websocket — соединение закрыто');
+      await settle();
+      assert.equal(stompClients.length, 1, 'нового соединения нет');
+    } finally {
+      connection.close();
+      connection.close();
+    }
   });
 
   test('функцию выключили — соединение закрыто; включили снова — открыто', async () => {

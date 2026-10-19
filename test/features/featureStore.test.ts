@@ -21,6 +21,7 @@ import {
   type FeatureHttp,
 } from '../../src/services/features/featureStore';
 import { buildModuleOf } from '../../src/services/features/buildFlags';
+import { FEATURE_KEYS } from '../../src/services/features/catalog';
 import { isPathAllowed } from '../../src/services/features/routes';
 import { connectLiveUpdates } from '../../src/services/liveUpdatesClient';
 import { deferred, profile, stubHttp, waitFor } from './helpers';
@@ -48,22 +49,31 @@ describe('закрытые правила', () => {
     assert.equal([...getFeatureSnapshot().on].includes('bogus' as never), false, 'неизвестный ключ никуда не попадает');
   });
 
-  test('ошибка загрузки — закрытый режим: видно только ядро', async () => {
+  test('профиль не получен — работает как до выключателей: включены все функции сборки', async () => {
+    // Сервер без /api/features (прежняя версия бэкенда) функций не выключает: закрывают их только ворота сервера
     connectFeatureHttp(stubHttp(new Error('404')));
     assert.equal(await loadFeatures(), false);
     const snapshot = getFeatureSnapshot();
-    assert.equal(snapshot.status, 'error');
-    assert.equal(snapshot.on.size, 0);
+    assert.equal(snapshot.status, 'ready');
+    assert.equal(snapshot.pending, false);
+    assert.equal(snapshot.profile, null, 'профиля нет — состав берётся из сборки');
+    assert.equal(featuresRevision(), null);
+    // В тестах все модули есть в сборке (флаги сборки в run-tests.mjs — true)
+    assert.deepEqual([...snapshot.on], [...FEATURE_KEYS]);
     assert.equal(isPathAllowed('/stations'), true);
     assert.equal(isPathAllowed('/references/nomenclature'), true);
-    assert.equal(isPathAllowed('/analytics'), false);
-    assert.equal(isPathAllowed('/documents/video-archive'), false);
+    assert.equal(isPathAllowed('/analytics'), true);
+    assert.equal(isPathAllowed('/documents/video-archive'), true);
+    assert.equal(isFeatureKnownOff('video.archive'), false);
   });
 
-  test('ответ без объекта features (старый сервер, страница вместо JSON) — ошибка', async () => {
+  test('ответ без объекта features (старый сервер, страница вместо JSON) — профиль не получен: все функции сборки', async () => {
     connectFeatureHttp(stubHttp('<!doctype html><html></html>'));
     assert.equal(await loadFeatures(), false);
-    assert.equal(getFeatureSnapshot().status, 'error');
+    const snapshot = getFeatureSnapshot();
+    assert.equal(snapshot.status, 'ready');
+    assert.equal(snapshot.profile, null, 'страница вместо JSON профилем не считается');
+    assert.deepEqual([...snapshot.on], [...FEATURE_KEYS]);
     assert.throws(() => parseFeatureProfile({ revision: 'r1' }));
     assert.throws(() => parseFeatureProfile(null));
     assert.throws(() => parseFeatureProfile({ features: [] }));
@@ -173,17 +183,19 @@ describe('загрузка и обновление', () => {
     assert.equal(isFeatureOn('video'), true);
   });
 
-  test('повтор после ошибки не возвращает прелоадер', async () => {
+  test('повтор после сбоя не возвращает прелоадер', async () => {
     const reply = deferred();
     connectFeatureHttp(stubHttp(new Error('нет связи'), reply));
     await loadFeatures();
     const retry = loadFeatures();
-    assert.equal(getFeatureSnapshot().status, 'error', 'приложение не прячется за прелоадер');
+    assert.equal(getFeatureSnapshot().status, 'ready', 'приложение не прячется за прелоадер');
     assert.equal(getFeatureSnapshot().pending, true);
     reply.resolve(profile('r1', { orders: true }));
     assert.equal(await retry, true);
     assert.equal(getFeatureSnapshot().status, 'ready');
+    assert.equal(featuresRevision(), 'r1', 'применён полученный профиль');
     assert.equal(isPathAllowed('/analytics'), true);
+    assert.equal(isPathAllowed('/documents/video-archive'), false, 'ключа нет в профиле — раздел закрыт');
   });
 
   test('заголовок ревизии на ответе самого /api/features — один запрос, а не два', async () => {
@@ -222,19 +234,24 @@ describe('загрузка и обновление', () => {
     assert.equal(isFeatureOn('video'), false);
   });
 
-  test('профиль после сбоя загрузки — новый набор on: по нему вкладки перепроверяются в обе стороны', async () => {
+  test('профиль не получен — все функции сборки; пришёл профиль — новый набор on: по нему вкладки перепроверяются', async () => {
     connectFeatureHttp(stubHttp(new Error('нет связи'), profile('r1', { orders: true })));
     await loadFeatures();
     const failed = getFeatureSnapshot();
-    assert.equal(failed.status, 'error');
-    assert.equal(isFeatureKnownOff('orders'), false, 'профиля нет — функция не выключена, а неизвестна');
-    assert.equal(isFeatureOn('orders'), false, 'но и не показывается');
+    assert.equal(failed.status, 'ready');
+    assert.equal(failed.profile, null);
+    assert.equal(isFeatureKnownOff('orders'), false, 'профиля нет — функция не выключена');
+    assert.equal(isFeatureOn('orders'), true, 'и показывается, как до выключателей');
+    assert.equal(isFeatureKnownOff('video'), false);
+    assert.equal(isFeatureOn('video'), true);
     await loadFeatures();
     const ready = getFeatureSnapshot();
     assert.notEqual(ready.on, failed.on, 'объект on сменился, хотя changes не вырос');
     assert.equal(ready.changes, 0);
     assert.equal(isFeatureKnownOff('orders'), false);
+    assert.equal(isFeatureOn('orders'), true);
     assert.equal(isFeatureKnownOff('video'), true, 'профиль получен — ключа нет, значит выключено');
+    assert.equal(isFeatureOn('video'), false);
   });
 
   test('просмотренные уведомления хранятся в хранилище и сбрасываются при выходе', async () => {

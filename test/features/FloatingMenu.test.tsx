@@ -50,15 +50,18 @@ describe('пункты меню', () => {
     assert.deepEqual(menuLabels(), ['Главная', 'Станции', 'Справочники', 'Документы', 'Аналитика', 'Аккаунт', 'Спящий режим']);
   });
 
-  test('isolated (функций нет) и профиль не получен — только ядро', async () => {
+  test('isolated (функций нет) — только ядро', async () => {
     connectFeatureHttp(stubHttp(profile('r1', {}, { preset: 'isolated' })));
     await loadFeatures();
     assert.deepEqual(menuLabels(), CORE);
-    resetFeatures();
+  });
+
+  test('профиль не получен — работает как до выключателей: все пункты меню', async () => {
     connectFeatureHttp(stubHttp(new Error('сеть')));
     await loadFeatures();
-    assert.equal(getFeatureSnapshot().status, 'error');
-    assert.deepEqual(menuLabels(), CORE);
+    assert.equal(getFeatureSnapshot().status, 'ready');
+    // «Безопасности» нет: canViewSecurity приходит только в профиле
+    assert.deepEqual(menuLabels(), ALL);
   });
 
   test('«Безопасность» — по canViewSecurity, а не по набору функций', async () => {
