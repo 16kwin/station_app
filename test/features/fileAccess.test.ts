@@ -35,10 +35,10 @@ describe('режим «только просмотр» (uploads)', () => {
     assert.equal(canUploadNow(), false);
   });
 
-  test('профиль не получен — только просмотр', async () => {
+  test('профиль не получен — работает как до выключателей: загрузка разрешена', async () => {
     connectFeatureHttp(stubHttp(new Error('503')));
     assert.equal(await loadFeatures(), false);
-    assert.equal(canUploadNow(), false);
+    assert.equal(canUploadNow(), true);
   });
 });
 

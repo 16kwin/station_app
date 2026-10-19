@@ -61,12 +61,9 @@ describe('без функции model3d запроса нет', () => {
     assert.deepEqual(http.calls, []);
   });
 
-  test('профиль не загружен или не получен — закрытый режим, запроса нет', async () => {
+  test('профиль ещё не загружен — запроса нет', () => {
     const http = modelsHttp([]);
     assert.equal(requestModelCount(UID, () => {}, http), null, 'профиль ещё не запрашивали');
-    connectFeatureHttp(stubHttp(new Error('сбой')));
-    assert.equal(await loadFeatures(), false);
-    assert.equal(requestModelCount(UID, () => {}, http), null, 'профиль не получен');
     assert.deepEqual(http.calls, []);
   });
 
@@ -89,6 +86,17 @@ describe('с функцией model3d', () => {
     assert.deepEqual(http.calls, [`/api/nomenclature/${UID}/models`]);
     assert.deepEqual(counts, [2]);
     assert.ok(http.signals[0] instanceof AbortSignal, 'запрос отменяемый');
+  });
+
+  test('профиль не получен — работает как до выключателей: запрос списка моделей идёт', async () => {
+    connectFeatureHttp(stubHttp(new Error('сбой')));
+    assert.equal(await loadFeatures(), false);
+    const http = modelsHttp([{ uid: 'm1' }]);
+    const counts: number[] = [];
+    assert.equal(typeof requestModelCount(UID, count => counts.push(count), http), 'function');
+    await waitFor(() => counts.length > 0);
+    assert.deepEqual(http.calls, [`/api/nomenclature/${UID}/models`]);
+    assert.deepEqual(counts, [1]);
   });
 
   test('загрузка моделей (model3d.upload) счётчику не нужна', async () => {

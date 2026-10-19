@@ -78,12 +78,16 @@ describe('живые обновления заказов и ТКП', () => {
     assert.equal(stompClients[0].active, false);
   });
 
-  test('профиль не получен — соединения нет', async () => {
+  test('профиль не получен — работает как до выключателей: соединение открыто', async () => {
     connectFeatureHttp(stubHttp(new Error('нет связи')));
-    await loadFeatures();
+    assert.equal(await loadFeatures(), false);
     const connection = connectOrdersLive('Заказы', () => {});
-    await settle();
-    assert.equal(stompClients.length, 0);
-    connection.close();
+    try {
+      await waitFor(() => stompClients.length === 1 && stompClients[0].active);
+      assert.equal((stompClients[0].socket as { url: string }).url, 'http://awms.local/ws-stations');
+    } finally {
+      connection.close();
+    }
+    assert.equal(stompClients[0].active, false);
   });
 });

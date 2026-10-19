@@ -4,7 +4,9 @@
 //  • ключа нет в ответе или его значение не true — функция выключена;
 //  • модуля нет в сборке — выключена, даже если сервер её разрешает;
 //  • выключен родитель или зависимость — выключена;
-//  • профиль не получен — видно только ядро (status = 'error').
+//  • профиль не получен (сервер без выключателей — /api/features нет, или сбой) — интерфейс работает как до
+//    выключателей: видны все модули сборки. Закрывает функции только сервер (ворота отвечают 404), так что
+//    со старым бэкендом на сервере приложение работает как раньше.
 // Хранилище живёт вне React (useSyncExternalStore), поэтому его читают и компоненты, и перехватчики Axios.
 import { useSyncExternalStore } from 'react';
 import AxiosService from '../AxiosService';
@@ -230,8 +232,13 @@ const request = (): Promise<boolean> => {
     } catch (error) {
       if (started !== generation) return false;
       console.warn('Профиль функций не получен', error);
-      // Профиль уже был — сервер его не отзывал, оставляем; не было — закрытый режим: только ядро
-      setSnapshot({ ...snapshot, status: snapshot.profile ? 'ready' : 'error', pending: false, attemptedAt: Date.now() });
+      // Профиль уже был — сервер его не отзывал, оставляем. Не было — работаем как до выключателей: все модули
+      // сборки видны (сервер без /api/features — прежняя версия бэкенда — функций не выключает)
+      if (snapshot.profile) {
+        setSnapshot({ ...snapshot, status: 'ready', pending: false, attemptedAt: Date.now() });
+      } else {
+        setSnapshot({ ...snapshot, status: 'ready', on: everythingInBuild(), pending: false, attemptedAt: Date.now() });
+      }
       return false;
     }
   };
@@ -346,6 +353,12 @@ export const isFeatureOn = (key: FeatureKey): boolean => snapshot.on.has(key);
 /** Функции, которые есть в сборке вместе с родителями и зависимостями (вычисляется при первом обращении) */
 let buildable: ReadonlySet<FeatureKey> | null = null;
 
+/** Все функции, которые есть в сборке: так интерфейс работает, когда сервер профиль функций не отдал */
+function everythingInBuild(): ReadonlySet<FeatureKey> {
+  if (buildable === null) buildable = resolveEnabledFeatures(Object.fromEntries(FEATURE_KEYS.map(k => [k, true])));
+  return buildable;
+}
+
 /**
  * Функция точно выключена: профиль получен и в нём она выключена, или её (родителя, зависимости) нет в сборке.
  * Пока профиля нет (не загружен или не получен из-за сбоя), состояние неизвестно — false. Различие важно там,
@@ -354,8 +367,7 @@ let buildable: ReadonlySet<FeatureKey> | null = null;
  */
 export const isFeatureKnownOff = (key: FeatureKey): boolean => {
   if (snapshot.profile !== null) return !snapshot.on.has(key);
-  if (buildable === null) buildable = resolveEnabledFeatures(Object.fromEntries(FEATURE_KEYS.map(k => [k, true])));
-  return !buildable.has(key);
+  return !everythingInBuild().has(key);
 };
 
 /** Ревизия текущего профиля; null — профиля нет */

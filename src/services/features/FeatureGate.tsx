@@ -125,8 +125,10 @@ const FeatureNotices: React.FC<{ snapshot: FeatureSnapshot }> = ({ snapshot }) =
     return () => clearTimeout(timer);
   }, [changeVisible, changes]);
 
-  // Файла потолка нет — сервер работает в изолированном минимуме; видят те, кому доступна страница «Безопасность»
-  const presetVisible = !presetNoticeHidden && profile?.presetSource === 'default' && profile.canViewSecurity;
+  // Файла потолка нет и сервер работает в изолированном минимуме; видят те, кому доступна страница «Безопасность».
+  // Без файла сервер по умолчанию работает с полным набором функций — тогда плашка не нужна
+  const presetVisible = !presetNoticeHidden && profile?.presetSource === 'default' && profile.preset === 'isolated'
+    && profile.canViewSecurity;
 
   if (status !== 'error' && !changeVisible && !presetVisible) return null;
   return (

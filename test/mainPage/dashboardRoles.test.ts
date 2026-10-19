@@ -55,7 +55,7 @@ describe('роли главной по составу функций', () => {
     );
   });
 
-  test('isolated и профиль не получен: панелей нет — стартовая страница ядра', () => {
+  test('isolated и ничего не включено (профиль ещё не загружен): панелей нет — стартовая страница ядра', () => {
     assert.deepEqual(availableRoles(enabledBy(PRESET.isolated)), []);
     assert.deepEqual(availableRoles(() => false), []);
   });

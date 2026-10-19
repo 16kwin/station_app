@@ -77,19 +77,20 @@ describe('разделы интерфейса', () => {
     assert.equal(isPathAllowed('/documents/gpp', only('orders')), false);
   });
 
-  test('сохранённую вкладку отбрасывает только точно выключенная функция, а не сбой профиля', async () => {
+  test('профиль не получен — работает как до выключателей: разделы открыты; вкладку отбрасывает только точно выключенная функция', async () => {
     mock.method(console, 'warn', () => {});
     connectFeatureHttp(stubHttp(new Error('нет связи'), profile('r1', { orders: true, video: true, 'video.archive': false })));
     await loadFeatures();
-    assert.equal(getFeatureSnapshot().status, 'error');
+    assert.equal(getFeatureSnapshot().status, 'ready');
     for (const path of ['/orders/1', '/documents/video-archive', '/documents/gpp', '/stations']) {
       assert.equal(isPathKnownOff(path), false, `${path}: профиль не получен — вкладку не отбрасываем`);
+      assert.equal(isPathAllowed(path), true, `${path}: профиль не получен — раздел открыт, как до выключателей`);
     }
-    assert.equal(isPathAllowed('/orders/1'), false, 'но и раздел не показываем');
 
     await loadFeatures();
     assert.equal(isPathKnownOff('/orders/1'), false);
-    assert.equal(isPathAllowed('/orders/1'), true, 'профиль пришёл — вкладка получает свой раздел');
+    assert.equal(isPathAllowed('/orders/1'), true, 'профиль пришёл — включённый раздел остаётся открытым');
+    assert.equal(isPathAllowed('/documents/video-archive'), false, 'выключенный — закрыт');
     assert.equal(isPathKnownOff('/documents/video-archive'), true, 'выключено явно');
     assert.equal(isPathKnownOff('/documents/gpp'), true, 'ключа нет в ответе — выключено');
     assert.equal(isPathKnownOff('/stations'), false, 'ядро');

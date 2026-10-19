@@ -99,11 +99,13 @@ describe('восстановление сохранённых вкладок', (
     });
   });
 
-  test('профиль не получен (сбой связи) — вкладки остаются: раздел неизвестен, а не выключен', async () => {
+  test('профиль не получен — работает как до выключателей: вкладки восстанавливаются, разделы открыты', async () => {
     connectFeatureHttp(stubHttp(new Error('сеть')));
     await loadFeatures();
-    assert.equal(getFeatureSnapshot().status, 'error');
-    assert.equal(isPathAllowed('/documents/video-archive'), false, 'показывать раздел нельзя');
+    assert.equal(getFeatureSnapshot().status, 'ready');
+    assert.equal(isPathAllowed('/documents/video-archive'), true, 'раздел открыт, как до выключателей');
+    const section = <Section name="video" />;
+    assert.equal(guardTabComponent('/documents/video-archive', section), section, 'без заглушки');
     const restored = restoreTabs(saved([{ id: 'm', path: '/main' }, { id: 'v', path: '/documents/video-archive' }], 'v'));
     assert.deepEqual(
       restored?.tabs.map(t => t.id),
@@ -206,15 +208,23 @@ describe('перепроверка открытых вкладок', () => {
     assert.equal(next[0], tabs[0]);
   });
 
-  test('профиль пришёл после сбоя загрузки — вкладки с заглушкой получают свой раздел', async () => {
-    connectFeatureHttp(stubHttp(new Error('сеть'), profile('r1', FULL)));
-    await loadFeatures();
-    assert.equal(getFeatureSnapshot().status, 'error');
-    const tabs = revalidateTabList([tab('g', '/documents/gpp', <Section name="gpp" />)]);
-    assert.equal(isUnavailableTab(tabs[0].component), true, 'пока профиля нет — заглушка');
+  test('профиль не получен — заглушки вкладок сменяются разделами; пришёл профиль — выключенный раздел закрыт', async () => {
+    connectFeatureHttp(stubHttp(new Error('сеть'), profile('r1', { ...FULL, gpp: false })));
+    const waiting = revalidateTabList([tab('g', '/documents/gpp', <Section name="gpp" />)]);
+    assert.equal(isUnavailableTab(waiting[0].component), true, 'пока профиль не запрашивали — заглушка');
     await loadFeatures();
     assert.equal(getFeatureSnapshot().status, 'ready');
-    assert.equal(revalidateTabList(tabs)[0].component, null);
+    const opened = revalidateTabList(waiting);
+    assert.equal(opened[0].component, null, 'как до выключателей: MainLayout создаёт раздел заново');
+
+    const tabs = [tab('g', '/documents/gpp', <Section name="gpp" />), tab('v', '/documents/video-archive', <Section name="video" />)];
+    assert.equal(revalidateTabList(tabs), tabs, 'профиля нет — открытые разделы не трогаются');
+    await loadFeatures();
+    assert.equal(getFeatureSnapshot().profile?.revision, 'r1');
+    const next = revalidateTabList(tabs);
+    assert.equal(isUnavailableTab(next[0].component), true, 'профиль выключил ГПП — заглушка');
+    assert.equal(featureOf(next[0].component), 'gpp');
+    assert.equal(next[1], tabs[1], 'включённый раздел не трогается');
   });
 
   test('сравнение — по пути раздела без параметров и якоря', async () => {

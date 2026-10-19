@@ -129,10 +129,11 @@ describe('FormData при выключенных uploads', () => {
     assert.equal(sent.length, 1);
   });
 
-  test('профиль не получен (сбой связи) — решает сервер: файл уходит', async () => {
+  test('профиль не получен — работает как до выключателей: файл уходит, решает сервер', async () => {
     connectFeatureHttp(stubHttp(new Error('сеть')));
     await loadFeatures();
-    assert.equal(getFeatureSnapshot().status, 'error');
+    assert.equal(getFeatureSnapshot().status, 'ready');
+    assert.equal(getFeatureSnapshot().on.has('uploads'), true);
     const { client, sent } = makeClient();
     await client.post('/api/nomenclature/uid/documents', fileForm());
     assert.equal(sent.length, 1);
