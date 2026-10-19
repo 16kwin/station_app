@@ -3,13 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../context/TabContext';
 import AxiosService from '../../services/AxiosService';
-import ConstantInfo from '../../info/ConstantInfo';
+import { ORDERS_API } from './api';
 import CatalogSelectPopup from '../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import CustomScrollbar from '../elements/CustomScrollbar';
 import Icon7 from '../../assets/References/NomenclatureCreatePage/Icon7.svg';
 import Icon31 from '../../assets/References/NomenclatureCreatePage/Icon31.svg';
-import Icon32 from '../../assets/References/NomenclatureCreatePage/Icon32.svg';
 
 interface OrderProduct {
   localId: string;
@@ -80,7 +79,7 @@ const OrderCreatePage = () => {
   const loadOrderData = async (orderUid: string) => {
     setIsLoading(true);
     try {
-      const res = await AxiosService.get(ConstantInfo.restApiOrderGet(orderUid));
+      const res = await AxiosService.get(ORDERS_API.order(orderUid));
       const data = res.data;
       setOrderData(data);
 
@@ -158,7 +157,7 @@ const OrderCreatePage = () => {
         })),
         orderNumber: `ORD-${Date.now()}`,
       };
-      await AxiosService.post(ConstantInfo.restApiOrderCreate(uid!), body);
+      await AxiosService.post(ORDERS_API.order(uid!), body);
 
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
       setIsSent(true);
@@ -173,7 +172,7 @@ const OrderCreatePage = () => {
     if (!uid) return;
     setIsCancelling(true);
     try {
-      await AxiosService.post(`${ConstantInfo.restApiOrderCreate(uid)}/cancel`);
+      await AxiosService.post(`${ORDERS_API.order(uid)}/cancel`);
       setIsSent(true);
       setIsCancellable(false);
     } catch (e) {

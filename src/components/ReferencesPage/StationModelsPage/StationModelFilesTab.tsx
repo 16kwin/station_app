@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { fetchUploadedFile, useCanUpload } from '../../../services/features/fileAccess';
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
 import SortingIcon20Black from '../../../assets/Icons/SortingIcons/SortingIcon20Black.svg';
@@ -82,6 +83,9 @@ const StationModelFilesTab: React.FC<StationModelFilesTabProps> = ({
   documentChanges = [],
   setDocumentChanges,
 }) => {
+  // Загрузка файлов выключена (функция uploads) — только просмотр: документы открываются и скачиваются,
+  // добавить, переименовать и удалить нельзя
+  const canUpload = useCanUpload();
   const [serverDocuments, setServerDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -212,8 +216,7 @@ const StationModelFilesTab: React.FC<StationModelFilesTabProps> = ({
     if (doc.url) {
       try {
         const fullUrl = getFullUrl(doc.url);
-        const response = await fetch(fullUrl);
-        const blob = await response.blob();
+        const blob = await fetchUploadedFile(fullUrl);
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
@@ -489,8 +492,8 @@ const StationModelFilesTab: React.FC<StationModelFilesTabProps> = ({
         </motion.div>
 
         <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
-          <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>
-          <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          {canUpload && <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>}
+          {canUpload && <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed' }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>}
           <button 
             style={{ ...smallButtonStyle, opacity: canDownloadSelected ? 1 : 0.5, cursor: canDownloadSelected ? 'pointer' : 'not-allowed' }} 
             onClick={canDownloadSelected ? handleDownloadSelected : undefined}
@@ -533,18 +536,22 @@ const StationModelFilesTab: React.FC<StationModelFilesTabProps> = ({
             <img src={DownloadIcon18Black} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
             Скачать
           </button>
-          <button onClick={handleEditClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
-            <img src={ContextMenuOpenIcon16} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
-            Редактировать
-          </button>
-          <button onClick={() => { setSelectedIds(new Set([contextMenu.uid])); setContextMenu(null); setTimeout(() => setShowDeleteConfirm(true), 50); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
-            <img src={ContextMenuDeleteIcon16} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
-            Удалить
-          </button>
+          {canUpload && (
+            <>
+              <button onClick={handleEditClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+                <img src={ContextMenuOpenIcon16} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
+                Редактировать
+              </button>
+              <button onClick={() => { setSelectedIds(new Set([contextMenu.uid])); setContextMenu(null); setTimeout(() => setShowDeleteConfirm(true), 50); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
+                <img src={ContextMenuDeleteIcon16} alt="" style={{ width: 18, height: 18, marginRight: 16 }} />
+                Удалить
+              </button>
+            </>
+          )}
         </div>
       )}
 
-      {showAddPopup && (
+      {canUpload && showAddPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление документа</h3>
@@ -572,7 +579,7 @@ const StationModelFilesTab: React.FC<StationModelFilesTabProps> = ({
         </div>
       )}
 
-      {showEditPopup && (
+      {canUpload && showEditPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование документа</h3>
@@ -588,7 +595,7 @@ const StationModelFilesTab: React.FC<StationModelFilesTabProps> = ({
         </div>
       )}
 
-      {showDeleteConfirm && (
+      {canUpload && showDeleteConfirm && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>

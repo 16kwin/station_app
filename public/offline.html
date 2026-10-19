@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#FAFBFC" />
+  <title>Нет связи — AWMS:Динамика</title>
+  <!-- Страница самодостаточна: её отдаёт service worker без связи, внешних ресурсов нет -->
+  <style>
+    * { box-sizing: border-box; }
+    html { height: 100%; }
+    body {
+      /* margin: auto у карточки вместо align-items: center — на низком экране верх не обрезается */
+      min-height: 100%;
+      margin: 0;
+      display: flex;
+      padding: 16px;
+      background: #FAFBFC;
+      color: #2D4059;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .card {
+      margin: auto;
+      width: 100%;
+      max-width: 460px;
+      padding: 40px 32px 32px;
+      background: #FFFFFF;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(226, 236, 249, 0.9);
+      text-align: center;
+      animation: appear 0.3s ease-out both;
+    }
+    @keyframes appear {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .brand svg { width: 40px; height: 36px; flex-shrink: 0; }
+    .brand span { font-size: 15px; font-weight: 600; letter-spacing: 2.2px; }
+    .icon {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      background: #F0F1FF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 { margin: 0 0 10px; font-size: 22px; line-height: 28px; font-weight: 700; }
+    p { margin: 0; font-size: 15px; line-height: 22px; color: #7B91B0; }
+    button {
+      margin-top: 28px;
+      width: 100%;
+      height: 50px;
+      border: none;
+      border-radius: 10px;
+      background: #666EFE;
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(102, 110, 254, 0.3);
+      transition: background-color 0.18s, transform 0.18s;
+    }
+    button:hover { background: #5A61F0; }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.6; cursor: progress; }
+    .status {
+      margin-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #7B91B0;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #FEB26F; animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+    /* Телефон в альбомной ориентации */
+    @media (max-height: 520px) {
+      .card { padding: 24px 24px 20px; }
+      .brand { margin-bottom: 16px; }
+      .icon { width: 56px; height: 56px; margin-bottom: 12px; }
+      button { margin-top: 18px; height: 46px; }
+      .status { margin-top: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card, .dot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="alert" aria-live="polite">
+    <div class="brand">
+      <svg viewBox="0 0 322 322" aria-hidden="true">
+        <path fill-rule="evenodd" clip-rule="evenodd" fill="#E61E40" d="M3.26933 299.605H1.75761C0.986056 299.605 0.504785 298.768 0.893351 298.102L29.7879 248.531C29.9671 248.224 30.2964 248.035 30.6521 248.035H33.0428L3.26933 299.605ZM9.29179 299.605H5.5789L35.3523 248.035H39.0662L9.29179 299.605ZM321.145 298.103C321.532 298.77 321.051 299.605 320.28 299.605H240.971C240.614 299.605 240.284 299.415 240.105 299.106L161.882 164.018C161.497 163.353 160.537 163.353 160.151 164.017L120.052 233.072C119.873 233.38 119.543 233.57 119.186 233.57H49.7273L166.378 31.5244L321.145 298.103ZM192.526 248.035C192.89 248.035 193.225 248.233 193.401 248.551L220.851 298.121C221.22 298.788 220.738 299.605 219.976 299.605H11.6023L41.3758 248.035H192.526ZM159.406 22.5019C159.789 21.8344 160.752 21.8323 161.138 22.498L162.2 24.3271L41.3943 233.57H39.9705C39.2018 233.57 38.7206 232.739 39.1033 232.072L159.406 22.5019ZM165.22 29.5292L47.4178 233.57H43.7039L163.358 26.3222L165.22 29.5292Z" />
+        <path d="M158.483 165.622L234.798 298.262C234.923 298.479 235.154 298.613 235.405 298.613L243.5 298.613" stroke="#E61E40" stroke-width="2" stroke-linecap="square" fill="none" />
+      </svg>
+      <span>ДИНАМИКА:AWMS</span>
+    </div>
+
+    <div class="icon" aria-hidden="true">
+      <!-- Облако с разрывом связи -->
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#666EFE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7.5 18.5H17a4 4 0 0 0 .9-7.9A6 6 0 0 0 6.6 9.1 4.75 4.75 0 0 0 7.5 18.5Z" />
+        <path d="M3 3l18 18" />
+      </svg>
+    </div>
+
+    <h1>Нет связи с сервером AWMS</h1>
+    <p>Проверьте подключение к сети предприятия. Страница откроется сама, как только связь восстановится.</p>
+
+    <button type="button" id="retry">Повторить</button>
+    <div class="status" id="status"><span class="dot"></span><span id="status-text">Ожидаем связь…</span></div>
+  </main>
+
+  <script>
+    (function () {
+      var CHECK_EVERY_MS = 10000;
+      var button = document.getElementById('retry');
+      var statusText = document.getElementById('status-text');
+      var checking = false;
+
+      // Возврат на страницу, которую открывали (offline.html подставлена вместо неё);
+      // если открыли саму offline.html — на главную
+      function reopen() {
+        if (location.pathname === '/offline.html') location.replace('/');
+        else location.reload();
+      }
+
+      // Сервер отвечает (любой статус, кроме ошибок шлюза) — значит, связь есть
+      function check(manual) {
+        if (checking) return;
+        checking = true;
+        button.disabled = manual;
+        statusText.textContent = 'Проверяем связь…';
+        fetch('/', { method: 'GET', cache: 'no-store', credentials: 'same-origin' })
+          .then(function (res) {
+            if (res.status >= 502 && res.status <= 504) throw new Error('gateway');
+            statusText.textContent = 'Связь есть, открываем…';
+            reopen();
+          })
+          .catch(function () {
+            checking = false;
+            button.disabled = false;
+            statusText.textContent = navigator.onLine ? 'Сервер недоступен, повторим через 10 с' : 'Нет сети, ожидаем подключения…';
+          });
+      }
+
+      button.addEventListener('click', function () { check(true); });
+      window.addEventListener('online', function () { check(false); });
+      setInterval(function () {
+        if (document.visibilityState === 'visible') check(false);
+      }, CHECK_EVERY_MS);
+    })();
+  </script>
+</body>
+</html>

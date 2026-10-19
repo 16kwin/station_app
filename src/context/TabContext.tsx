@@ -1,7 +1,13 @@
 // TabContext.tsx
+// Вкладки учитывают состав функций установки (раздел 8.3 проекта «Дискретное отключение функций», правила —
+// в tabFeatures.ts): сохранённые вкладки выключенных разделов не восстанавливаются, раздел выключенной функции
+// (закладка, прямая ссылка) открывается заглушкой «Раздел недоступен», при смене состава функций открытые
+// вкладки перепроверяются.
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getFeatureSnapshot, subscribeFeatures, useFeatureStatus } from '../services/features/featureStore';
+import { guardTabComponent, restoreTabs, revalidateTabList } from './tabFeatures';
 
 export interface Tab {
   id: string;
@@ -27,9 +33,19 @@ interface TabContextType {
   registerTabCloseGuard: (id: string, handler: () => void) => void;
   unregisterTabCloseGuard: (id: string) => void;
   triggerTabCloseGuard: (id: string) => boolean;
+  /** Перепроверить открытые вкладки по составу функций (вызывается и сама при смене состава) */
+  revalidateTabs: () => void;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
+
+/**
+ * Сколько вкладки ждут профиль функций перед восстановлением. Обычно профиль уже получен: его загружает
+ * AuthContext после проверки входа (а после пакета F2b — FeatureProvider выше TabProvider). Если сервер
+ * отвечает дольше, вкладки восстанавливаются без него: отбрасываются только разделы модулей, которых нет
+ * в сборке, остальные закрытые разделы показывают заглушку до прихода профиля
+ */
+const PROFILE_WAIT_MS = 5000;
 
 const getLabelWithNumber = (path: string, baseLabel: string, existingTabs: Tab[]): string => {
   const samePathTabs = existingTabs.filter(tab => tab.path === path);
@@ -53,7 +69,7 @@ const saveTabsToStorage = (tabs: Tab[], activeId: string | null) => {
   localStorage.setItem('tabs_state', JSON.stringify(toSave));
 };
 
-const loadTabsFromStorage = (): { tabs: Omit<Tab, 'component'>[]; activeTabId: string | null } | null => {
+const loadTabsFromStorage = (): unknown => {
   const saved = localStorage.getItem('tabs_state');
   if (saved) {
     try {
@@ -73,9 +89,21 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   const closeGuardsRef = React.useRef<Map<string, () => void>>(new Map());
   const navigate = useNavigate();
 
+  // Вкладки восстанавливаются, когда профиль функций получен (или не получен из-за сбоя)
+  const featureStatus = useFeatureStatus();
+  const profileSettled = featureStatus === 'ready' || featureStatus === 'error';
+  const [profileWaitExpired, setProfileWaitExpired] = useState(false);
+
   useEffect(() => {
-    const saved = loadTabsFromStorage();
-    if (saved && saved.tabs.length > 0) {
+    if (isRestored || profileSettled) return;
+    const timer = setTimeout(() => setProfileWaitExpired(true), PROFILE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [isRestored, profileSettled]);
+
+  useEffect(() => {
+    if (isRestored || !(profileSettled || profileWaitExpired)) return;
+    const saved = restoreTabs(loadTabsFromStorage());
+    if (saved) {
       const restoredTabs: Tab[] = saved.tabs.map(tab => ({
         ...tab,
         component: null,
@@ -83,12 +111,8 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       setTabs(restoredTabs);
       setActiveTabId(saved.activeTabId);
 
-      const activeTab = restoredTabs.find(t => t.id === saved.activeTabId);
-      if (activeTab) {
-        navigate(activeTab.path);
-      } else if (restoredTabs.length > 0) {
-        navigate(restoredTabs[0].path);
-      }
+      const activeTab = restoredTabs.find(t => t.id === saved.activeTabId) ?? restoredTabs[0];
+      navigate(activeTab.path);
     } else {
       const mainTab: Tab = {
         id: Date.now().toString(),
@@ -101,7 +125,28 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       navigate('/main');
     }
     setIsRestored(true);
+  }, [isRestored, profileSettled, profileWaitExpired, navigate]);
+
+  const revalidateTabs = useCallback(() => {
+    setTabs(prevTabs => revalidateTabList(prevTabs));
   }, []);
+
+  // Состав функций изменился (новая ревизия, первый профиль после сбоя) — перепроверяем открытые вкладки.
+  // До подписки вкладки уже сверены: восстановление и заполнение разделов (updateTabComponent) читают текущий
+  // профиль. Объект on меняется, только когда меняется состав, поэтому обновление профиля с тем же составом
+  // вкладки не трогает. Пока профиля нет совсем (выход, смена пользователя: status idle или loading), вкладки
+  // тоже не трогаем: при выходе их состояние не должно снова попасть в tabs_state
+  useEffect(() => {
+    if (!isRestored) return;
+    let { on: lastOn, status: lastStatus } = getFeatureSnapshot();
+    return subscribeFeatures(() => {
+      const { on, status } = getFeatureSnapshot();
+      if (on === lastOn && status === lastStatus) return;
+      lastOn = on;
+      lastStatus = status;
+      if (status === 'ready' || status === 'error') setTabs(prevTabs => revalidateTabList(prevTabs));
+    });
+  }, [isRestored]);
 
   useEffect(() => {
     if (isRestored && tabs.length > 0) {
@@ -125,7 +170,8 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       id: newId,
       path,
       label,
-      component,
+      // Раздел выключенной функции открывается заглушкой «Раздел недоступен», а не самим разделом
+      component: guardTabComponent(path, component),
       parentTabId,
     };
 
@@ -138,7 +184,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   const replaceTab = useCallback((id: string, path: string, label: string, component: ReactNode) => {
     setTabs(prevTabs =>
       prevTabs.map(tab =>
-        tab.id === id ? { ...tab, path, label, component } : tab
+        tab.id === id ? { ...tab, path, label, component: guardTabComponent(path, component) } : tab
       )
     );
     navigate(path, { replace: true });
@@ -215,10 +261,11 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
     openTab('/main', 'Главная', null);
   }, [openTab]);
 
+  // MainLayout подставляет сюда раздел по пути вкладки: закрытый раздел получает заглушку
   const updateTabComponent = useCallback((id: string, component: ReactNode) => {
     setTabs(prevTabs =>
       prevTabs.map(tab =>
-        tab.id === id ? { ...tab, component } : tab
+        tab.id === id ? { ...tab, component: guardTabComponent(tab.path, component) } : tab
       )
     );
   }, []);
@@ -281,6 +328,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       registerTabCloseGuard,
       unregisterTabCloseGuard,
       triggerTabCloseGuard,
+      revalidateTabs,
     }}>
       {children}
     </TabContext.Provider>

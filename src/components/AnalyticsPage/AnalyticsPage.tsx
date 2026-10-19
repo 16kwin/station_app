@@ -1,6 +1,9 @@
 // AnalyticsPage.tsx — ПОЛНЫЙ ФАЙЛ
+// Раздел функции orders (заказы и ТКП): без неё раздел закрыт целиком, а кнопки «Заказы» и «ТКП» ещё и
+// скрыты — точки входа выключенной функции нет (раздел 8.2 проекта «Дискретное отключение функций»)
 import React from 'react';
 import { useTabs } from '../../context/TabContext';
+import { Feature } from '../../services/features/FeatureGate';
 
 const AnalyticsPage = () => {
   const { openTab } = useTabs();
@@ -35,26 +38,28 @@ const AnalyticsPage = () => {
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ display: 'flex', gap: 40 }}>
-        <button onClick={handleOrdersClick} style={buttonStyle}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#666EFE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-          Заказы
-        </button>
-        <button onClick={handleTkpClick} style={buttonStyle}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#666EFE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-          ТКП
-        </button>
+        <Feature when="orders">
+          <button onClick={handleOrdersClick} style={buttonStyle}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#666EFE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            Заказы
+          </button>
+          <button onClick={handleTkpClick} style={buttonStyle}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#666EFE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            ТКП
+          </button>
+        </Feature>
       </div>
     </div>
   );

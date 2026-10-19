@@ -1,9 +1,12 @@
 // NomenclatureCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (с поддержкой открытия сразу на нужной вкладке)
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
+import { isFeatureOn, useFeature } from '../../../services/features/featureStore';
+// Вкладка «Интеграция» — через lazyModules: в сборке без интеграций (вариант поставки) её кода нет
+import { IntegrationTab } from '../../../services/features/lazyModules';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from './CatalogSelectPopup';
 import ProgressBar from './ProgressBar';
@@ -15,7 +18,6 @@ import SuppliersTab from './SuppliersTab';
 import PriceHistoryTab from './PriceHistoryTab';
 import AnalogsTab from './AnalogsTab';
 import RatingTab from './RatingTab';
-import IntegrationTab from './IntegrationTab';
 import EventLogTab from './EventLogTab';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
@@ -94,6 +96,9 @@ export interface CommonProps {
 
 const REQUIRED_ATTRIBUTES = ['Длина', 'Ширина', 'Высота', 'Масса'];
 
+// Черновик карточки (localStorage nomenclature_draft_*, файлы — в IndexedDB) — функция drafts. Без неё черновики
+// не пишутся и не читаются, а оставшиеся от прежнего состава функций удаляет storagePurge при загрузке профиля.
+// Соединение с базой закрывается после каждой операции: открытое соединение не дало бы удалить базу
 const DB_NAME = 'nomenclature_drafts_db';
 const DB_VERSION = 1;
 const STORE_NAME = 'draft_files';
@@ -114,29 +119,30 @@ const openDB = (): Promise<IDBDatabase> => {
 
 const saveFileToIndexedDB = async (key: string, file: File): Promise<void> => {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     store.put(file, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
-  });
+    tx.onabort = () => reject(tx.error);
+  }).finally(() => db.close());
 };
 
 const getFileFromIndexedDB = async (key: string): Promise<File | null> => {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise<File | null>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     const request = store.get(key);
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
-  });
+  }).finally(() => db.close());
 };
 
 const clearAllFilesForDraft = async (uid: string, tabInstanceId: string): Promise<void> => {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const request = store.openCursor();
@@ -151,7 +157,8 @@ const clearAllFilesForDraft = async (uid: string, tabInstanceId: string): Promis
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
-  });
+    tx.onabort = () => reject(tx.error);
+  }).finally(() => db.close());
 };
 
 const getDraftKey = (uid: string, tabInstanceId: string) => `nomenclature_draft_${uid}_${tabInstanceId}`;
@@ -199,6 +206,7 @@ interface DraftData {
 }
 
 const saveDraftToStorage = (uid: string, tabInstanceId: string, data: DraftData) => {
+  if (!isFeatureOn('drafts')) return;
   try {
     localStorage.setItem(getDraftKey(uid, tabInstanceId), JSON.stringify(data));
   } catch (e) {
@@ -207,6 +215,8 @@ const saveDraftToStorage = (uid: string, tabInstanceId: string, data: DraftData)
 };
 
 const loadDraftFromStorage = (uid: string, tabInstanceId: string): DraftData | null => {
+  // Без черновиков карточка открывается с сервера
+  if (!isFeatureOn('drafts')) return null;
   try {
     const raw = localStorage.getItem(getDraftKey(uid, tabInstanceId));
     if (!raw) return null;
@@ -224,7 +234,8 @@ const loadDraftFromStorage = (uid: string, tabInstanceId: string): DraftData | n
 
 const clearDraftStorage = async (uid: string, tabInstanceId: string) => {
   localStorage.removeItem(getDraftKey(uid, tabInstanceId));
-  await clearAllFilesForDraft(uid, tabInstanceId);
+  // Без черновиков базы нет (её удаляет storagePurge), а открыть её значило бы создать заново
+  if (isFeatureOn('drafts')) await clearAllFilesForDraft(uid, tabInstanceId);
 };
 
 const normalizeCharacteristics = (chars: LocalCharacteristic[]) => {
@@ -253,7 +264,6 @@ const resolveInitialActiveTab = (uid: string | undefined): number => {
 
 const NomenclatureCreatePage = () => {
   const { uid, code } = useParams<{ uid: string; code: string }>();
-  const navigate = useNavigate();
   const location = useLocation();
   const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
@@ -263,7 +273,8 @@ const NomenclatureCreatePage = () => {
     currentTab?.id || `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   ).current;
 
-  const [activeTab, setActiveTab] = useState(() => resolveInitialActiveTab(uid));
+  // Выбранная вкладка; показывается activeTab (ниже): выбранная, если она доступна при текущем составе функций
+  const [selectedTab, setActiveTab] = useState(() => resolveInitialActiveTab(uid));
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -289,7 +300,7 @@ const NomenclatureCreatePage = () => {
   const [selectedCountry, setSelectedCountry] = useState(''); const [selectedCountryId, setSelectedCountryId] = useState('');
   const [localCharacteristics, setLocalCharacteristics] = useState<LocalCharacteristic[]>([]);
   const [initialCharacteristics, setInitialCharacteristics] = useState<LocalCharacteristic[]>([]);
-  const [typeAttributesMap, setTypeAttributesMap] = useState<Map<string, string>>(new Map());
+  const [, setTypeAttributesMap] = useState<Map<string, string>>(new Map());
   const [localDocuments, setLocalDocuments] = useState<LocalDocument[]>([]);
   const [localSupplies, setLocalSupplies] = useState<LocalSupply[]>([]);
   const [localImages, setLocalImages] = useState<LocalImageItem[]>([]);
@@ -339,19 +350,25 @@ const NomenclatureCreatePage = () => {
 
   const isFinishedProduct = selectedAccountingGroup === 'Готовая деталь';
 
-  const allTabs = ['Основное', 'Характеристики', 'Документы', 'Остатки', 'Поставщики', 'История цен', 'Аналоги', 'Рейтинг', 'Интеграция'];
-  
-  const tabs_list = isFinishedProduct 
-    ? ['Основное', 'Характеристики', 'Документы', 'На складе', 'Интеграция']
-    : allTabs;
+  // Вкладка «Интеграция» — функция integrations. Номера вкладок от состава функций не зависят: «Интеграция» —
+  // последняя, журнал изменений — за ней. Без функции кнопки «Интеграция» нет, а её номер остаётся за ней, поэтому
+  // журнал и переходы по номеру (событие navigateToTab) не сдвигаются
+  const integrationsOn = useFeature('integrations');
+  const baseTabs = isFinishedProduct
+    ? ['Основное', 'Характеристики', 'Документы', 'На складе']
+    : ['Основное', 'Характеристики', 'Документы', 'Остатки', 'Поставщики', 'История цен', 'Аналоги', 'Рейтинг'];
+  const INTEGRATION_TAB = baseTabs.length;
+  const tabs_list = integrationsOn ? [...baseTabs, 'Интеграция'] : baseTabs;
 
-  const EVENT_LOG_TAB = tabs_list.length;
+  const EVENT_LOG_TAB = INTEGRATION_TAB + 1;
+  // Интеграции выключили, пока была открыта их вкладка, — показываем «Основное»
+  const activeTab = !integrationsOn && selectedTab === INTEGRATION_TAB ? 0 : selectedTab;
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   const saveDraftToLocalStorage = useCallback(async () => {
-    if (!uid || !isDataLoaded) return;
-    
+    if (!uid || !isDataLoaded || !isFeatureOn('drafts')) return;
+
     for (const img of localImages) {
       const key = `${uid}_${tabInstanceId}_img_${img.url}`;
       await saveFileToIndexedDB(key, img.file);
@@ -733,14 +750,14 @@ const NomenclatureCreatePage = () => {
     } 
   }, [uid, isEdit, localCharacteristics.length]);
   
-  useEffect(() => { if (isFinishedProduct && activeTab >= tabs_list.length) { setActiveTab(0); } }, [isFinishedProduct]);
+  useEffect(() => { if (isFinishedProduct && activeTab >= EVENT_LOG_TAB) { setActiveTab(0); } }, [isFinishedProduct]);
 
   const fetchSuppliers = async () => { try { setSuppliers((await AxiosService.get(ConstantInfo.restApiNomenclatureSuppliers)).data || []); } catch (e) { console.error(e); } };
   const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiNomenclatureImages(uid)); const imgs = (res.data || []).map((img: any) => ({ uid: img.uid, url: img.url ? ConstantInfo.fileDir + img.url.replace(/^\//, '') : '', originalName: img.originalName || '' })); setImages(imgs); setInitialImagesCount(imgs.length); } catch (e) { console.error(e); } };
   const fetchBlueprints = async () => { if (!uid) return; try { const bps = ((await AxiosService.get(ConstantInfo.restApiNomenclatureBlueprints(uid))).data || []).map((bp: any) => ({ uid: bp.uid, url: bp.url ? ConstantInfo.fileDir + bp.url.replace(/^\//, '') : '', originalName: bp.originalName || '' })); setBlueprints(bps); setInitialBlueprintsCount(bps.length); } catch (e) { console.error(e); } };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
+  const handleImageUpload = () => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
-  const handleBlueprintUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
+  const handleBlueprintUpload = () => {};
   const handleDeleteBlueprint = async (bpUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiNomenclatureDeleteBlueprint(bpUid)); await fetchBlueprints(); } catch (er) { console.error(er); } };
   const fetchDocuments = async () => { if (!uid) return; try { setDocuments(((await AxiosService.get(ConstantInfo.restApiNomenclatureDocuments(uid))).data || []).map((doc: any) => ({ ...doc, url: doc.url ? ConstantInfo.fileDir + doc.url.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
   const handleDocumentUpload = (documentName: string, file: File) => { setLocalDocuments(prev => [...prev, { localId: generateLocalId(), documentName, file }]); };
@@ -976,36 +993,49 @@ const NomenclatureCreatePage = () => {
         countryUid: selectedCountryId || null, 
         author: 'Оператор' 
       }); 
-      await saveCharacteristics(); 
-      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); } 
-      for (const bp of localBlueprints) { const fd = new FormData(); fd.append('file', bp.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); } 
-      for (const bc of localBarcodes) { 
-        const fd = new FormData(); 
-        fd.append('codeType', bc.codeType); 
-        fd.append('codeValue', bc.codeValue); 
-        fd.append('codeKind', 'BARCODE'); 
-        fd.append('author', 'Оператор'); 
-        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); 
-      } 
-      for (const qr of localQrCodes) { 
-        const fd = new FormData(); 
-        fd.append('codeType', qr.codeType); 
-        fd.append('codeValue', qr.codeValue); 
-        fd.append('codeKind', 'QR'); 
-        fd.append('author', 'Оператор'); 
-        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); 
-      } 
-      for (const sku of localSkus) { 
-        const fd = new FormData(); 
-        fd.append('codeType', sku.codeType); 
-        fd.append('codeValue', sku.codeValue); 
-        fd.append('codeKind', 'SKU'); 
-        fd.append('author', 'Оператор'); 
-        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), fd); 
-      } 
-      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); } 
-      for (const supply of localSupplies) { const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supply.supplyDate) fd.append('supplyDate', supply.supplyDate + ':00'); if (supply.documentName.trim()) fd.append('documentName', supply.documentName.trim()); if (supply.file) fd.append('file', supply.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd); } 
-      setLocalImages([]); 
+      await saveCharacteristics();
+      // Файлы уходят на сервер, только если включены загрузки файлов (функция uploads). Без неё поля выбора файлов
+      // скрыты, а сервер файл не примет: здесь файлы могли остаться только из черновика или от прежнего состава
+      // функций. Их не отправляем, остальное записываем и говорим, сколько файлов не ушло
+      const uploadsOn = isFeatureOn('uploads');
+      let skippedFiles = 0;
+      if (uploadsOn) {
+        for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureImages(uid), fd); }
+        for (const bp of localBlueprints) { const fd = new FormData(); fd.append('file', bp.file); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureBlueprints(uid), fd); }
+      } else {
+        skippedFiles += localImages.length + localBlueprints.length;
+      }
+      // Штрихкоды, QR и SKU файла не несут — уходят JSON: так они записываются и на установке без загрузок файлов,
+      // где сервер multipart не принимает. Автора сервер берёт из входа
+      const codes = [
+        ...localBarcodes.map(bc => ({ codeType: bc.codeType, codeValue: bc.codeValue, codeKind: 'BARCODE' })),
+        ...localQrCodes.map(qr => ({ codeType: qr.codeType, codeValue: qr.codeValue, codeKind: 'QR' })),
+        ...localSkus.map(sku => ({ codeType: sku.codeType, codeValue: sku.codeValue, codeKind: 'SKU' })),
+      ];
+      for (const body of codes) {
+        await AxiosService.post(ConstantInfo.restApiNomenclatureCodes(uid), body);
+      }
+      if (uploadsOn) {
+        for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); fd.append('author', 'Оператор'); await AxiosService.post(ConstantInfo.restApiNomenclatureDocuments(uid), fd); }
+      } else {
+        skippedFiles += localDocuments.length;
+      }
+      // Поставка с файлом — multipart (только при загрузках), без файла — JSON
+      for (const supply of localSupplies) {
+        const supplyDate = supply.supplyDate ? supply.supplyDate + ':00' : null;
+        const documentName = supply.documentName.trim() || null;
+        if (supply.file && uploadsOn) {
+          const fd = new FormData(); fd.append('supplierUid', supply.supplierUid); if (supplyDate) fd.append('supplyDate', supplyDate); if (documentName) fd.append('documentName', documentName); fd.append('file', supply.file);
+          await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), fd);
+        } else {
+          if (supply.file) skippedFiles += 1;
+          await AxiosService.post(ConstantInfo.restApiNomenclatureSupply(uid), { supplierUid: supply.supplierUid, supplyDate, documentName });
+        }
+      }
+      if (skippedFiles > 0) {
+        alert(`Карточка записана, но файлы на сервер не отправлены (${skippedFiles}): загрузка файлов на этой установке выключена.`);
+      }
+      setLocalImages([]);
       setLocalBlueprints([]); 
       setLocalBarcodes([]); 
       setLocalQrCodes([]); 
@@ -1122,6 +1152,9 @@ const NomenclatureCreatePage = () => {
 
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
+  // «Печать», «Скачать PDF», «Скачать Word» — функция export: без неё в меню только «Журнал изменений»
+  const exportOn = useFeature('export');
+  const actionsHeight = exportOn ? 210 : 58;
 
   useEffect(() => {
     if (!actionsOpen) return;
@@ -1137,7 +1170,6 @@ const NomenclatureCreatePage = () => {
   const buttonStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : isDisabled ? '#BCC8FF' : '#2D4059', transition: 'all 0.3s ease', overflow: 'hidden', opacity: isDisabled ? 0.5 : 1 });
   const mainButtonStyle = (isActive: boolean): React.CSSProperties => ({ width: 151, height: 40, borderRadius: 10, backgroundColor: isActive ? '#666EFE' : '#FFFFFF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: isActive ? '#FFFFFF' : '#2D4059', transition: 'all 0.3s ease', position: 'relative', paddingLeft: 21 });
   const bottomButtonStyle: React.CSSProperties = { height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
-  const rightButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
 
   const commonProps: CommonProps = { uid, tabInstanceId, code, name, article, description, isEdit, isSaving, isUploading, isUploadingBlueprint, images, blueprints, documents, prices, suppliers, selectedImageIndex, selectedBlueprintIndex, selectedCatalog, selectedCatalogId, selectedAccountingGroup, selectedAccountingGroupId, accountingGroupOpen, selectedNomenclatureGroup, selectedNomenclatureGroupId, selectedNomenclatureType, selectedNomenclatureTypeId, selectedRelease, selectedReleaseId, selectedUnit, selectedUnitId, selectedManufacturer, selectedManufacturerId, selectedBrand, selectedBrandId, selectedModel, selectedModelId, selectedCountry, selectedCountryId, usage, wasteMaterial, recycleMaterial, nameFocused, articleFocused, descriptionFocused, showAddPricePopup, newPrice, newPriceDate, newPriceSupplierUid, fullscreenImage, fullscreenBlueprint, isLoading, isLoadingPrices: false, typeMaterials, fileInputRef: fileInputRef as React.RefObject<HTMLInputElement>, blueprintInputRef: blueprintInputRef as React.RefObject<HTMLInputElement>, documentInputRef: documentInputRef as React.RefObject<HTMLInputElement>, localCharacteristics, setLocalCharacteristics, localDocuments, setLocalDocuments, localSupplies, setLocalSupplies, localImages, setLocalImages, localBlueprints, setLocalBlueprints, localBarcodes, setLocalBarcodes, localSkus, setLocalSkus, localQrCodes, setLocalQrCodes, serverBarcodes, serverSkus, setName, setArticle, setDescription, setNameFocused, setArticleFocused, setDescriptionFocused, toggleUsage, toggleWasteMaterial, toggleRecycleMaterial, setSelectedCatalog, setSelectedCatalogId, setSelectedAccountingGroup, setSelectedAccountingGroupId, setAccountingGroupOpen, setSelectedNomenclatureGroup, setSelectedNomenclatureGroupId, setSelectedNomenclatureType, setSelectedNomenclatureTypeId, setSelectedRelease, setSelectedReleaseId, setSelectedUnit, setSelectedUnitId, setSelectedManufacturer, setSelectedManufacturerId, setSelectedBrand, setSelectedBrandId, setSelectedModel, setSelectedModelId, setSelectedCountry, setSelectedCountryId, setImages, setSelectedImageIndex, setIsUploading, setFullscreenImage, setBlueprints, setSelectedBlueprintIndex, setIsUploadingBlueprint, setFullscreenBlueprint, setDocuments, setPrices, setShowAddPricePopup, setNewPrice, setNewPriceDate, setNewPriceSupplierUid, setSuppliers, handleImageUpload, handleDeleteImage, handleBlueprintUpload, handleDeleteBlueprint, handleDocumentUpload, handleDeleteDocument, fetchPrices, handleAddPrice, handleDeletePrice, fetchSuppliers, openPopup, handleAccountingGroupSelect, isDataSaved, validationErrors, setValidationErrors, isFinishedProduct };
 
@@ -1232,7 +1264,7 @@ const NomenclatureCreatePage = () => {
               }}
               animate={{ 
                 width: actionsOpen ? 215 : 40, 
-                height: actionsOpen ? 210 : 40 
+                height: actionsOpen ? actionsHeight : 40  
               }}
               transition={{ width: { type: 'tween', duration: 0.2 }, height: { type: 'tween', duration: 0.2 } }}
             >
@@ -1269,7 +1301,7 @@ const NomenclatureCreatePage = () => {
                       top: 0,
                       left: 0,
                       width: 175,
-                      height: 210,
+                      height: actionsHeight,
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'center',
@@ -1277,6 +1309,7 @@ const NomenclatureCreatePage = () => {
                       paddingRight: 20,
                     }}
                   >
+                    {exportOn && (<>
                     <div onClick={() => { setActionsOpen(false); }} style={{ height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: 20 }}>
                       <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18, marginRight: 12 }} />
                       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Печать</span>
@@ -1294,6 +1327,7 @@ const NomenclatureCreatePage = () => {
                       </svg>
                       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Скачать Word</span>
                     </div>
+                    </>)}
                     <div onClick={() => { setActionsOpen(false); handleEventLogClick(); }} style={{ height: 18, display: 'flex', alignItems: 'center', cursor: 'pointer', backgroundColor: isEventLogActive ? '#F0F1FF' : 'transparent' }}>
                       <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, marginRight: 12 }} />
                       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Журнал изменений</span>

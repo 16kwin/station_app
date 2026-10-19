@@ -1,5 +1,6 @@
 // CharacteristicsTab.tsx — ПОЛНЫЙ ФАЙЛ с синхронизацией характеристик с черновиком
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import LogoUploader from '../../elements/LogoUploader';
 import FormField from '../../elements/FormField';
@@ -21,7 +22,12 @@ import Button5 from '../../../assets/References/NomenclatureCreatePage/button5.s
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from './CatalogSelectPopup';
+import { useModelCount } from './model3dCount';
 import type { CommonProps, LocalCharacteristic, LocalImageItem } from './NomenclatureCreatePage';
+import { isFeatureOn, useFeature } from '../../../services/features/featureStore';
+// Модуль 3D — через lazyModules: в сборке без него (вариант поставки) кода 3D нет. Окно «3D-модель» и three.js
+// грузятся только при первом открытии
+import { Model3DButton, Model3DLoadBoundary, Model3DPopup } from '../../../services/features/lazyModules';
 
 interface MeasureOption { uid: string; name: string; groupUid?: string; }
 interface TypeAttributeOption { uid: string; name: string; designation: string; groupUid?: string; }
@@ -36,17 +42,16 @@ const getDataArray = (respData: any): any[] => {
 
 const CharacteristicsTab: React.FC<CommonProps> = (props) => {
   const { 
-    uid, tabInstanceId, isEdit, blueprints, 
-    selectedUnit, selectedUnitId, 
-    selectedManufacturer, selectedManufacturerId, 
-    selectedBrand, selectedBrandId, 
-    selectedModel, selectedModelId, 
-    selectedCountry, selectedCountryId, 
-    fullscreenBlueprint, 
-    localCharacteristics = [], setLocalCharacteristics, 
-    localBlueprints, setLocalBlueprints, 
-    setFullscreenBlueprint, 
-    handleDeleteBlueprint,
+    uid, tabInstanceId, isEdit, isDataSaved, name, blueprints,
+    selectedUnit,
+    selectedManufacturer, selectedManufacturerId,
+    selectedBrand, selectedBrandId,
+    selectedModel,
+    selectedCountry,
+    fullscreenBlueprint,
+    localCharacteristics = [], setLocalCharacteristics,
+    localBlueprints, setLocalBlueprints,
+    setFullscreenBlueprint,
     validationErrors, setValidationErrors,
     setSelectedUnit, setSelectedUnitId,
     setSelectedManufacturer, setSelectedManufacturerId,
@@ -94,13 +99,20 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
   
   const [deletedBlueprintUids, setDeletedBlueprintUids] = useState<Set<string>>(new Set());
 
+  // 3D-модели привязаны к записанной номенклатуре: до первой записи строки в справочнике ещё нет.
+  // Без функции model3d кнопки «3D» и окна нет (скрыто, а не затенено), счётчик не запрашивается
+  const model3dOn = useFeature('model3d');
+  const [show3D, setShow3D] = useState(false);
+  const modelMaterialUid = uid && (isEdit || isDataSaved) ? uid : null;
+  const [modelCount, setModelCount] = useModelCount(modelMaterialUid);
+  const open3D = show3D && model3dOn && !!modelMaterialUid;
+
   const TABLE_WIDTH = 1070; const TABLE_HEIGHT = 324; const ROW_HEIGHT = 54; const HEADER_HEIGHT = 54; const VISIBLE_ROWS = 5;
   const COL_CHAR = 50; const COL_DESIGNATION = 390; const COL_MEASURE = 644; const COL_VALUE = 844;
 
   const FIELD_WIDTH = 300;
   const FIELD_HEIGHT = 44;
 
-  const labelStyle: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059' };
   const blockStyle: React.CSSProperties = { backgroundColor: '#FFFFFF', borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)' };
   const smallButtonStyle: React.CSSProperties = { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 };
   const createButtonStyle: React.CSSProperties = { width: 122, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 };
@@ -115,9 +127,9 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
     ...(localBlueprints || []).map(bp => ({ uid: bp.url, url: bp.url, originalName: bp.file.name, isLocal: true })),
   ];
 
-  // Синхронизация характеристик с черновиком
+  // Синхронизация характеристик с черновиком (без функции drafts черновиков в браузере нет)
   useEffect(() => {
-    if (!uid || !tabInstanceId) return;
+    if (!uid || !tabInstanceId || !isFeatureOn('drafts')) return;
     const draftKey = `nomenclature_draft_${uid}_${tabInstanceId}`;
     try {
       const raw = localStorage.getItem(draftKey);
@@ -169,10 +181,10 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
           customName: c.customName, value: c.value || '', measureUid: c.measureUid, measureName: c.measureName, 
           isCustom: c.isCustom, isRequired: c.attributeName && REQUIRED_ATTRIBUTES.includes(c.attributeName) 
         })); 
-        try { 
+        try {
           const draftKey = `nomenclature_draft_${uid}_${tabInstanceId}`;
-          const raw = localStorage.getItem(draftKey); 
-          if (raw) { 
+          const raw = isFeatureOn('drafts') ? localStorage.getItem(draftKey) : null;
+          if (raw) {
             const draft = JSON.parse(raw); 
             if (draft.localCharacteristics && Array.isArray(draft.localCharacteristics) && draft.localCharacteristics.length > 0) { 
               setLocalCharacteristics(draft.localCharacteristics); 
@@ -312,7 +324,7 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
                 return newLocalBlueprints;
               });
             }}
-            onDelete={(uid, index) => {
+            onDelete={(_uid, index) => {
               const targetImage = displayBlueprints[index];
               if (targetImage?.isLocal) {
                 const localIndex = index - (blueprints || []).filter(bp => !deletedBlueprintUids.has(bp.uid)).length;
@@ -338,6 +350,8 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
             }}
             width={548}
             height={348}
+            topLeftSlot={model3dOn ? <Model3DButton count={modelCount} disabled={!modelMaterialUid} onClick={() => setShow3D(true)} /> : undefined}
+            disableKeyboardNavigation={open3D}
           />
         </div>
 
@@ -387,6 +401,19 @@ const CharacteristicsTab: React.FC<CommonProps> = (props) => {
       <CatalogSelectPopup isOpen={showMeasurePopup} onClose={() => setShowMeasurePopup(false)} onSelect={(id, name) => { setNewCharMeasureUid(id); setNewCharMeasureName(name); setShowMeasurePopup(false); }} popupType="unit" filterParam={newCharGroupUid || undefined} />
       <CatalogSelectPopup isOpen={showEditAttributeTypePopup} onClose={() => setShowEditAttributeTypePopup(false)} onSelect={(id, name, item) => { setEditCharAttributeTypeUid(id); setEditCharAttributeTypeName(name); setEditCharGroupUid(item?.groupUid || ''); setEditCharMeasureUid(''); setEditCharMeasureName(''); setShowEditAttributeTypePopup(false); }} popupType="attributeType" />
       <CatalogSelectPopup isOpen={showEditMeasurePopup} onClose={() => setShowEditMeasurePopup(false)} onSelect={(id, name) => { setEditCharMeasureUid(id); setEditCharMeasureName(name); setShowEditMeasurePopup(false); }} popupType="unit" filterParam={editCharGroupUid || undefined} />
+
+      {/* Окно не загрузилось (новая сборка на сервере, обрыв сети) — сообщение и «Обновить», а не белый экран */}
+      {model3dOn && (
+        <Model3DLoadBoundary variant="modal" open={open3D} onClose={() => setShow3D(false)}>
+          <Suspense fallback={null}>
+            <AnimatePresence>
+              {open3D && modelMaterialUid && (
+                <Model3DPopup key="model3d" materialUid={modelMaterialUid} title={name} onClose={() => setShow3D(false)} onCountChange={setModelCount} />
+              )}
+            </AnimatePresence>
+          </Suspense>
+        </Model3DLoadBoundary>
+      )}
     </div>
   );
 };

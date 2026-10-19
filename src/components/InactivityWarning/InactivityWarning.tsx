@@ -1,7 +1,7 @@
 // components/InactivityWarning/InactivityWarning.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import ConstantInfo from '../../info/ConstantInfo';
+import { useInactivityTimeouts } from '../hooks/useInactivityLock';
 
 interface InactivityWarningProps {
   show: boolean;
@@ -9,7 +9,9 @@ interface InactivityWarningProps {
 }
 
 const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) => {
-  const [countdown, setCountdown] = useState(() => Math.ceil(ConstantInfo.warningTimeout / 1000));
+  // Срок предупреждения — из профиля установки, как у таймеров useInactivityLock
+  const { warningMs } = useInactivityTimeouts();
+  const [countdown, setCountdown] = useState(() => Math.ceil(warningMs / 1000));
   const channelRef = useRef<BroadcastChannel | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -24,13 +26,13 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
 
   useEffect(() => {
     if (!show) {
-      setCountdown(Math.ceil(ConstantInfo.warningTimeout / 1000));
+      setCountdown(Math.ceil(warningMs / 1000));
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       return;
     }
 
-    setCountdown(Math.ceil(ConstantInfo.warningTimeout / 1000));
+    setCountdown(Math.ceil(warningMs / 1000));
 
     intervalRef.current = setInterval(() => {
       setCountdown(prev => {
@@ -44,13 +46,13 @@ const InactivityWarning: React.FC<InactivityWarningProps> = ({ show, onClose }) 
 
     timeoutRef.current = setTimeout(() => {
       channelRef.current?.postMessage({ type: 'lock' });
-    }, ConstantInfo.warningTimeout);
+    }, warningMs);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [show]);
+  }, [show, warningMs]);
 
   const handleContinue = () => {
     channelRef.current?.postMessage({ type: 'cancel_warning' });

@@ -1,13 +1,15 @@
 // App.tsx — ПОЛНЫЙ ФАЙЛ (добавлен раздел Документы: Пополнение)
-import { useEffect, useState } from 'react';
+// Маршруты приложения. Профиль функций установки (FeatureProvider) загружается сразу после входа, до вкладок:
+// восстановление вкладок и меню читают уже полученный профиль. Модули, которые вариант поставки может исключить
+// из сборки, подключаются только через lazyModules (раздел 8 проекта «Дискретное отключение функций»).
+import { Suspense, useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import PrivateRoute from './services/PrivateRoute';
 import MainLayout from './layouts/MainLayout';
+import SecurityTab from './layouts/SecurityTab';
 import LoginPage from './components/loginPage/LoginPage';
 import MainPage from './components/mainPage/MainPage';
-import EventsScreenPage from './components/mainPage/eventsScreen/EventsScreenPage';
-import PurchaseGraphPage from './components/mainPage/purchaseGraph/PurchaseGraphPage';
 import StationsPage from './components/StationsPage/StationsPage';
 import ReferencesPage from './components/ReferencesPage/ReferencesPage';
 import NomenclaturePage from './components/ReferencesPage/NomenclaturePage/NomenclaturePage';
@@ -45,15 +47,11 @@ import LocationsPage from './components/ReferencesPage/LocationsPage/LocationsPa
 import CountriesPage from './components/ReferencesPage/CountriesPage/CountriesPage';
 import DocumentsPage from './components/DocumentsPage/DocumentsPage';
 import StockLevelControlPage from './components/DocumentsPage/StockLevelControl/StockLevelControlPage';
+import GppPage from './components/DocumentsPage/Gpp/GppPage';
 import StockLevelControlCreatePage from './components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
 import RefillPage from './components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from './components/DocumentsPage/Refill/RefillCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
-import AnalyticsPage from './components/AnalyticsPage/AnalyticsPage';
-import OrdersPage from './components/AnalyticsPage/OrdersPage';
-import OrderCreatePage from './components/AnalyticsPage/OrderCreatePage';
-import TkpPage from './components/AnalyticsPage/TkpPage';
-import TkpViewPage from './components/AnalyticsPage/TkpViewPage';
 import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
 import SchablonPage from './components/DocumentsPage/Schablon/SchablonPage';
@@ -66,6 +64,17 @@ import InactivityWarning from './components/InactivityWarning/InactivityWarning'
 import { useInactivityLock } from './components/hooks/useInactivityLock';
 import AnimatedGradientBackground from './effects/AnimatedGradientBackground';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  AnalyticsPage,
+  EventsScreenPage,
+  OrderCreatePage,
+  OrdersPage,
+  PurchaseGraphPage,
+  TkpPage,
+  TkpViewPage,
+  VideoArchivePage,
+} from './services/features/lazyModules';
+import { FeatureProvider, FeatureRoute } from './services/features/FeatureGate';
 
 const AppContent = () => {
   const [needPreloader, setNeedPreloader] = useState(true);
@@ -96,75 +105,87 @@ const AppContent = () => {
           </motion.div>
         ) : isAuth ? (
           <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-            <Routes>
-              <Route path="/login" element={<Navigate to="/main" replace />} />
-              {/* Отдельные вкладки браузера без меню приложения: второй экран и граф закупок */}
-              <Route path="/screen/events" element={<PrivateRoute><EventsScreenPage /></PrivateRoute>} />
-              <Route path="/screen/purchase-graph" element={<PrivateRoute><PurchaseGraphPage /></PrivateRoute>} />
-              <Route path="/" element={<PrivateRoute><TabProvider><MainLayout /></TabProvider></PrivateRoute>}>
-                <Route index element={<MainPage />} />
-                <Route path="main" element={<MainPage />} />
-                <Route path="stations" element={<StationsPage />} />
-                <Route path="references" element={<ReferencesPage />} />
-                <Route path="references/locations" element={<LocationsPage />} />
-                <Route path="references/holdings" element={<HoldingsPage />} />
-                <Route path="references/nomenclature" element={<NomenclaturePage />} />
-                <Route path="references/nomenclature/create/:uid/:code" element={<NomenclatureCreatePage />} />
-                <Route path="references/nomenclature/edit/:uid/:code" element={<NomenclatureCreatePage />} />
-                <Route path="references/accounting-groups" element={<AccountingGroupsPage />} />
-                <Route path="references/nomenclature-groups" element={<NomenclatureGroupsPage />} />
-                <Route path="references/nomenclature-types" element={<NomenclatureTypesPage />} />
-                <Route path="references/attribute-groups" element={<AttributeGroupsPage />} />
-                <Route path="references/attribute-types" element={<AttributeTypesPage />} />
-                <Route path="references/units" element={<UnitsPage />} />
-                <Route path="references/nomenclature-units" element={<NomenclatureUnitsPage />} />
-                <Route path="references/production-directions" element={<ProductionDirectionsPage />} />
-                <Route path="references/manufacturers" element={<ManufacturersPage />} />
-                <Route path="references/manufacturers/create/:uid/:code" element={<ManufacturerCreatePage />} />
-                <Route path="references/manufacturers/edit/:uid/:code" element={<ManufacturerCreatePage />} />
-                <Route path="references/brands" element={<BrandsPage />} />
-                <Route path="references/models" element={<ModelsPage />} />
-                <Route path="references/countries" element={<CountriesPage />} />
-                <Route path="references/supplier-directions" element={<SupplierDirectionsPage />} />
-                <Route path="references/supplier-brands" element={<SupplierBrandsPage />} />
-                <Route path="references/suppliers" element={<SuppliersPage />} />
-                <Route path="references/suppliers/create/:uid/:code" element={<SupplierCreatePage />} />
-                <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />
-                <Route path="references/templates" element={<TemplatesPage />} />
-                <Route path="references/enterprises" element={<EnterprisesPage />} />
-                <Route path="references/workshops" element={<WorkshopsPage />} />
-                <Route path="references/sections" element={<SectionsPage />} />
-                <Route path="references/station-types" element={<StationTypesPage />} />
-                <Route path="references/station-manufacturers" element={<StationManufacturersPage />} />
-                <Route path="references/station-models" element={<StationModelsPage />} />
-                <Route path="references/station-models/create/:uid" element={<StationModelCreatePage />} />
-                <Route path="references/station-models/edit/:uid" element={<StationModelCreatePage />} />
-                <Route path="references/station-configurations" element={<StationConfigurationsPage />} />
-                <Route path="references/station-configurations/create/:uid" element={<StationConfigurationCreatePage />} />
-                <Route path="references/station-configurations/edit/:uid" element={<StationConfigurationCreatePage />} />
-                <Route path="references/stations" element={<StationsCrudPage />} />
-                <Route path="references/stations/create/:uid" element={<StationCreatePage />} />
-                <Route path="references/stations/edit/:uid" element={<StationCreatePage />} />
-                <Route path="documents" element={<DocumentsPage />} />
-                <Route path="documents/schablon/:uid" element={<SchablonPage />} />
-                <Route path="documents/stock-level-control" element={<StockLevelControlPage />} />
-                <Route path="documents/stock-level-control/create/:uid" element={<StockLevelControlCreatePage />} />
-                <Route path="documents/stock-level-control/edit/:uid" element={<StockLevelControlCreatePage />} />
-                <Route path="documents/refill" element={<RefillPage />} />
-                <Route path="documents/refill/create/:uid" element={<RefillCreatePage />} />
-                <Route path="documents/refill/edit/:uid" element={<RefillCreatePage />} />
-                <Route path="reports" element={<ReportsPage />} />
-                <Route path="analytics" element={<AnalyticsPage />} />
-                <Route path="orders" element={<OrdersPage />} />
-                <Route path="orders/create/:uid" element={<OrderCreatePage />} />
-                <Route path="orders/:uid" element={<OrderCreatePage />} />
-                <Route path="tkp" element={<TkpPage />} />
-                <Route path="tkp/:uid" element={<TkpViewPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="account" element={<AccountPage />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/main" replace />} />
-            </Routes>
+            {/* До ответа /api/features — прелоадер; профиль не получен — только ядро и плашка с кнопкой «Повторить» */}
+            <FeatureProvider>
+              {/* Страховка для ленивых модулей: у каждого из lazyModules своё ожидание, это — на случай без него */}
+              <Suspense fallback={<FullScreenPreloader />}>
+                <Routes>
+                  <Route path="/login" element={<Navigate to="/main" replace />} />
+                  {/* Отдельные вкладки браузера без меню приложения: второй экран и граф закупок. Функция выключена —
+                      «Раздел недоступен» во весь экран, без опроса */}
+                  <Route path="/screen/events" element={<PrivateRoute><FeatureRoute when="dashboards.screen"><EventsScreenPage /></FeatureRoute></PrivateRoute>} />
+                  <Route path="/screen/purchase-graph" element={<PrivateRoute><FeatureRoute when="dashboards.graph"><PurchaseGraphPage /></FeatureRoute></PrivateRoute>} />
+                  {/* Вкладки рисует MainLayout (по своему списку путей, без Outlet): вложенные маршруты ниже нужны, чтобы
+                      адрес вкладки сопоставился, а не ушёл по «*» на /main. Защита разделов функций — в MainLayout */}
+                  <Route path="/" element={<PrivateRoute><TabProvider><MainLayout /></TabProvider></PrivateRoute>}>
+                    <Route index element={<MainPage />} />
+                    <Route path="main" element={<MainPage />} />
+                    <Route path="stations" element={<StationsPage />} />
+                    <Route path="references" element={<ReferencesPage />} />
+                    <Route path="references/locations" element={<LocationsPage />} />
+                    <Route path="references/holdings" element={<HoldingsPage />} />
+                    <Route path="references/nomenclature" element={<NomenclaturePage />} />
+                    <Route path="references/nomenclature/create/:uid/:code" element={<NomenclatureCreatePage />} />
+                    <Route path="references/nomenclature/edit/:uid/:code" element={<NomenclatureCreatePage />} />
+                    <Route path="references/accounting-groups" element={<AccountingGroupsPage />} />
+                    <Route path="references/nomenclature-groups" element={<NomenclatureGroupsPage />} />
+                    <Route path="references/nomenclature-types" element={<NomenclatureTypesPage />} />
+                    <Route path="references/attribute-groups" element={<AttributeGroupsPage />} />
+                    <Route path="references/attribute-types" element={<AttributeTypesPage />} />
+                    <Route path="references/units" element={<UnitsPage />} />
+                    <Route path="references/nomenclature-units" element={<NomenclatureUnitsPage />} />
+                    <Route path="references/production-directions" element={<ProductionDirectionsPage />} />
+                    <Route path="references/manufacturers" element={<ManufacturersPage />} />
+                    <Route path="references/manufacturers/create/:uid/:code" element={<ManufacturerCreatePage />} />
+                    <Route path="references/manufacturers/edit/:uid/:code" element={<ManufacturerCreatePage />} />
+                    <Route path="references/brands" element={<BrandsPage />} />
+                    <Route path="references/models" element={<ModelsPage />} />
+                    <Route path="references/countries" element={<CountriesPage />} />
+                    <Route path="references/supplier-directions" element={<SupplierDirectionsPage />} />
+                    <Route path="references/supplier-brands" element={<SupplierBrandsPage />} />
+                    <Route path="references/suppliers" element={<SuppliersPage />} />
+                    <Route path="references/suppliers/create/:uid/:code" element={<SupplierCreatePage />} />
+                    <Route path="references/suppliers/edit/:uid" element={<SupplierCreatePage />} />
+                    <Route path="references/templates" element={<TemplatesPage />} />
+                    <Route path="references/enterprises" element={<EnterprisesPage />} />
+                    <Route path="references/workshops" element={<WorkshopsPage />} />
+                    <Route path="references/sections" element={<SectionsPage />} />
+                    <Route path="references/station-types" element={<StationTypesPage />} />
+                    <Route path="references/station-manufacturers" element={<StationManufacturersPage />} />
+                    <Route path="references/station-models" element={<StationModelsPage />} />
+                    <Route path="references/station-models/create/:uid" element={<StationModelCreatePage />} />
+                    <Route path="references/station-models/edit/:uid" element={<StationModelCreatePage />} />
+                    <Route path="references/station-configurations" element={<StationConfigurationsPage />} />
+                    <Route path="references/station-configurations/create/:uid" element={<StationConfigurationCreatePage />} />
+                    <Route path="references/station-configurations/edit/:uid" element={<StationConfigurationCreatePage />} />
+                    <Route path="references/stations" element={<StationsCrudPage />} />
+                    <Route path="references/stations/create/:uid" element={<StationCreatePage />} />
+                    <Route path="references/stations/edit/:uid" element={<StationCreatePage />} />
+                    <Route path="documents" element={<DocumentsPage />} />
+                    <Route path="documents/schablon/:uid" element={<SchablonPage />} />
+                    <Route path="documents/stock-level-control" element={<StockLevelControlPage />} />
+                    <Route path="documents/video-archive" element={<VideoArchivePage />} />
+                    <Route path="documents/gpp" element={<GppPage />} />
+                    <Route path="documents/stock-level-control/create/:uid" element={<StockLevelControlCreatePage />} />
+                    <Route path="documents/stock-level-control/edit/:uid" element={<StockLevelControlCreatePage />} />
+                    <Route path="documents/refill" element={<RefillPage />} />
+                    <Route path="documents/refill/create/:uid" element={<RefillCreatePage />} />
+                    <Route path="documents/refill/edit/:uid" element={<RefillCreatePage />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="analytics" element={<AnalyticsPage />} />
+                    <Route path="orders" element={<OrdersPage />} />
+                    <Route path="orders/create/:uid" element={<OrderCreatePage />} />
+                    <Route path="orders/:uid" element={<OrderCreatePage />} />
+                    <Route path="tkp" element={<TkpPage />} />
+                    <Route path="tkp/:uid" element={<TkpViewPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="account" element={<AccountPage />} />
+                    <Route path="security" element={<SecurityTab />} />
+                  </Route>
+                  <Route path="*" element={<Navigate to="/main" replace />} />
+                </Routes>
+              </Suspense>
+            </FeatureProvider>
             <InactivityWarning show={showWarning} onClose={() => setShowWarning(false)} />
           </motion.div>
         ) : (

@@ -25,6 +25,7 @@ import ArrowIcon6Black from '../../assets/Icons/ArrowIcons/ArrowIcon6Black.svg';
 import ArrowIcon6Blue from '../../assets/Icons/ArrowIcons/ArrowIcon6Blue.svg';
 import CheckboxIcon18OffBlack from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OffBlack.svg';
 import CheckboxIcon18OnBlue from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OnBlue.svg';
+import { useToolbarExport } from './toolbarExport';
 
 interface SortField { key: string; label: string; iconType?: '19' | '20' | null; isAccounting?: boolean; }
 interface FilterField { key: string; label: string; hasSubmenu?: boolean; options?: { uid: string; name: string }[]; }
@@ -210,6 +211,8 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  // Выгрузка PDF/Excel/Word и печать — только при функции export (toolbarExport.ts): одно место на все справочники
+  const exportActions = useToolbarExport({ onPrint, onDownloadPdf, onDownloadExcel, onDownloadWord });
 
   useImperativeHandle(ref, () => ({
     focusBarcodeSearch: () => {
@@ -725,6 +728,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
       {/* Правые кнопки */}
       <div style={{ position: 'absolute', right: 0, top: 0, display: 'flex', gap: 15 }}>
         {/* Кнопка скачивания */}
+        {exportActions.downloadMenu && (
         <motion.div 
           style={{ position: 'relative', borderRadius: 10, backgroundColor: '#FFFFFF', border: downloadOpen ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', boxShadow: downloadOpen ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'hidden', zIndex: downloadOpen ? 20 : 1 }}
           animate={{ width: downloadOpen ? DOWNLOAD_MENU_WIDTH : BTN_COLLAPSED, height: downloadOpen ? BTN_HEADER + DOWNLOAD_MENU_HEIGHT : BTN_COLLAPSED }}
@@ -743,13 +747,13 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
                 style={{ position: 'absolute', top: BTN_HEADER, left: 0, right: 0, height: DOWNLOAD_MENU_HEIGHT, overflow: 'hidden' }}
               >
                 <div style={{ paddingTop: TOP_PAD, paddingBottom: BOTTOM_PAD }}>
-                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadPdf?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { exportActions.onDownloadPdf?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать PDF</span>
                   </div>
-                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadExcel?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { exportActions.onDownloadExcel?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', marginBottom: ITEM_GAP, paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать Excel</span>
                   </div>
-                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { onDownloadWord?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', paddingLeft: LEFT_OFFSET, position: 'relative' }}>
+                  <div onMouseDown={(e) => e.preventDefault()} onClick={() => { exportActions.onDownloadWord?.(); setDownloadOpen(false); }} style={{ ...btnBaseStyle, height: TEXT_HEIGHT, display: 'flex', alignItems: 'center', cursor: 'pointer', paddingLeft: LEFT_OFFSET, position: 'relative' }}>
                     <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: `${TEXT_HEIGHT}px` }}>Скачать Word</span>
                   </div>
                 </div>
@@ -757,8 +761,9 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
             )}
           </AnimatePresence>
         </motion.div>
-        {onPrint && (
-          <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={onPrint}>
+        )}
+        {exportActions.onPrint && (
+          <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={exportActions.onPrint}>
             <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
           </button>
         )}

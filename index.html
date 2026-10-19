@@ -1,15 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="yandex" content="no-image-search" />
+    <meta name="description" content="Система управления автоматическими складами" />
     <title>AWMS:Динамика</title>
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
-    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <!-- PWA: манифест и теги установки «как приложение» вставляет bootstrapPwa (src/components/Pwa/bootstrapPwa.ts),
+         только если установка разрешает pwa. Здесь — то, что нужно и обычной странице -->
+    <meta name="theme-color" content="#FAFBFC" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
     <link rel="preload" as="image" href="/src/assets/Login.svg" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

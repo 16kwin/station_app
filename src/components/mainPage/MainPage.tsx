@@ -1,14 +1,18 @@
 // MainPage.tsx — главная страница: шапка с выбором роли и блока, период и активная информационная
 // панель в белом блоке 1800×840.
-import React, { useState } from 'react';
+// Роли и блоки — только те, данные которых доступны пользователю (shared/roles.ts). Панелей нет (функция
+// dashboards выключена на установке или для роли пользователя) — нейтральная стартовая страница ядра.
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
+import { getFeatureSnapshot, subscribeFeatures } from '../../services/features/featureStore';
 import DashboardHeader from './shared/DashboardHeader';
 import DateRangePopup from './shared/DateRangePopup';
 import type { AnchorRect } from './shared/DateRangePopup';
 import RoleSwitchPopup from './shared/RoleSwitchPopup';
-import { DEFAULT_ROLE, findRole } from './shared/roles';
-import type { BlockKey, RoleKey } from './shared/roles';
+import { DEFAULT_ROLE, availableRoles, pickRole } from './shared/roles';
+import type { BlockKey, DashboardRole, RoleKey } from './shared/roles';
 import { CANVAS, DEFAULT_RANGE } from './shared/layout';
 import type { DateRange } from './shared/types';
+import CoreStartPage from './CoreStartPage';
 import EconomicDashboard from './economic/EconomicDashboard';
 import QualityDashboard from './quality/QualityDashboard';
 import OperatorDashboard from './operator/OperatorDashboard';
@@ -20,15 +24,27 @@ import ShopHeadDashboard from './shopHead/ShopHeadDashboard';
 /** Высота полосы шапки над карточками панели */
 const HEADER_HEIGHT = 107;
 
-const MainPage: React.FC = () => {
+/**
+ * Включённые функции пользователя. Хранилище отдаёт тот же набор, пока состав не изменился, — главная
+ * не перерисовывается от служебных изменений снимка (идёт запрос профиля и т. п.)
+ */
+const useEnabledFeatures = () => useSyncExternalStore(subscribeFeatures, () => getFeatureSnapshot().on);
+
+interface DashboardsProps {
+  /** Доступные роли, не пустой список */
+  roles: readonly DashboardRole[];
+}
+
+const Dashboards: React.FC<DashboardsProps> = ({ roles }) => {
   const [roleKey, setRoleKey] = useState<RoleKey>(DEFAULT_ROLE);
-  const [blockKey, setBlockKey] = useState<BlockKey>(findRole(DEFAULT_ROLE).blocks[0].key);
+  const [blockKey, setBlockKey] = useState<BlockKey | null>(null);
   const [range, setRange] = useState<DateRange>({ ...DEFAULT_RANGE });
   const [roleOpen, setRoleOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [dateAnchor, setDateAnchor] = useState<AnchorRect | null>(null);
 
-  const role = findRole(roleKey);
+  // Выбранная роль могла стать недоступной (сервер выключил её данные) — показываем первую доступную
+  const role = pickRole(roles, roleKey) ?? roles[0];
   // Показанный блок всегда принадлежит текущей роли: если сохранённый ключ роли не подходит,
   // берём её первый блок. Так заголовок и содержимое панели не могут разойтись.
   const blockIndex = Math.max(
@@ -40,7 +56,7 @@ const MainPage: React.FC = () => {
   // Смена роли начинает показ с первого блока роли и закрывает выбор периода
   const handleRoleSelect = (next: RoleKey) => {
     setRoleKey(next);
-    setBlockKey(findRole(next).blocks[0].key);
+    setBlockKey(null);
     setDateOpen(false);
   };
 
@@ -93,9 +109,21 @@ const MainPage: React.FC = () => {
         onConfirm={setRange}
       />
 
-      <RoleSwitchPopup isOpen={roleOpen} value={roleKey} onSelect={handleRoleSelect} onClose={() => setRoleOpen(false)} />
+      <RoleSwitchPopup
+        isOpen={roleOpen}
+        roles={roles}
+        value={role.key}
+        onSelect={handleRoleSelect}
+        onClose={() => setRoleOpen(false)}
+      />
     </div>
   );
+};
+
+const MainPage: React.FC = () => {
+  const enabled = useEnabledFeatures();
+  const roles = useMemo(() => availableRoles(key => enabled.has(key)), [enabled]);
+  return roles.length > 0 ? <Dashboards roles={roles} /> : <CoreStartPage />;
 };
 
 export default MainPage;

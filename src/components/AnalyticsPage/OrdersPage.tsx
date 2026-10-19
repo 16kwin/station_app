@@ -1,12 +1,10 @@
 // OrdersPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 import CustomScrollbar from '../elements/CustomScrollbar';
 import AxiosService from '../../services/AxiosService';
-import ConstantInfo from '../../info/ConstantInfo';
+import { useFeature } from '../../services/features/featureStore';
 import { useTabs } from '../../context/TabContext';
+import { connectOrdersLive, ordersListUrl } from './api';
 import Icon4 from '../../assets/References/Icon4.svg';
 import Icon7 from '../../assets/References/Icon7.svg';
 import Icon8 from '../../assets/References/Icon8.svg';
@@ -34,11 +32,9 @@ interface ContextMenuState {
 }
 
 const OrdersPage = () => {
-  const navigate = useNavigate();
   const { activeTabId, openTab } = useTabs();
   const tabIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const stompClientRef = useRef<any>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
 
@@ -56,8 +52,6 @@ const OrdersPage = () => {
   const HEADER_HEIGHT = 58;
   const VISIBLE_ROWS = 10;
 
-  const COL_CHECKBOX = 20;
-  const COL_UID = 340;
   const COL_CUSTOMER = 580;
   const COL_NUMBER = 840;
   const COL_DATETIME = 1060;
@@ -103,8 +97,7 @@ const OrdersPage = () => {
 
   const fetchOrders = async () => {
     try {
-      const url = activeListTab === 'active' ? ConstantInfo.restApiOrdersActive : ConstantInfo.restApiOrdersClosed;
-      const response = await AxiosService.get(url);
+      const response = await AxiosService.get(ordersListUrl(activeListTab));
       setOrders(response.data || []);
     } catch (error) {
       console.error('Ошибка загрузки заказов:', error);
@@ -130,39 +123,22 @@ const OrdersPage = () => {
     fetchOrders();
   }, [activeListTab]);
 
+  // Живые обновления — только при функции websocket (раздел 4.2 проекта «Дискретное отключение функций»):
+  // выключили — соединения нет, включили — эффект подключается заново. Адрес сервера — из window.config
+  const liveUpdatesOn = useFeature('websocket');
   useEffect(() => {
-    const client = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8085/ws-stations'),
-      onConnect: () => {
-        console.log('AWMS OrdersPage WebSocket connected')
-        
-        const refresh = () => {
-          const tab = activeListTabRef.current;
-          const url = tab === 'active' ? ConstantInfo.restApiOrdersActive : ConstantInfo.restApiOrdersClosed;
-          AxiosService.get(url).then(res => {
-            setOrders(res.data || []);
-          }).catch(err => {
-            console.error('Ошибка загрузки заказов:', err);
-          }).finally(() => {
-            setIsLoading(false);
-          });
-        };
-        
-        client.subscribe('/topic/tkp/new', refresh);
-        client.subscribe('/topic/tkp/status', refresh);
-        client.subscribe('/topic/orders/refresh', refresh);
-      },
-      onDisconnect: () => console.log('AWMS OrdersPage WebSocket disconnected'),
-      onStompError: (frame) => console.error('STOMP error:', frame)
-    })
-
-    client.activate()
-    stompClientRef.current = client
-
-    return () => {
-      client.deactivate()
-    }
-  }, [])
+    if (!liveUpdatesOn) return;
+    const refresh = () => {
+      AxiosService.get(ordersListUrl(activeListTabRef.current)).then(res => {
+        setOrders(res.data || []);
+      }).catch(err => {
+        console.error('Ошибка загрузки заказов:', err);
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    };
+    return connectOrdersLive('Заказы', refresh).close;
+  }, [liveUpdatesOn]);
 
   const toggleSelectAll = () => {
     if (orders.length === 0) return;

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import DataTable from '../../elements/DataTable';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { useCanUpload } from '../../../services/features/fileAccess';
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
 import SortingIcon20Black from '../../../assets/Icons/SortingIcons/SortingIcon20Black.svg';
@@ -82,6 +83,9 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
   documentChanges = [],
   setDocumentChanges,
 }) => {
+  // Загрузка файлов выключена (функция uploads) — только просмотр: файлы открываются двойным щелчком,
+  // добавить, переименовать и удалить нельзя (в меню строки других пунктов нет — меню не открывается)
+  const canUpload = useCanUpload();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -196,6 +200,7 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
   const handleRowClick = (uid: string, e: React.MouseEvent) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; }); };
   
   const handleContextMenu = (e: React.MouseEvent, uid: string) => {
+    if (!canUpload) return;
     e.preventDefault();
     e.stopPropagation();
     const doc = allDocuments.find(d => d.uid === uid);
@@ -398,11 +403,11 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
         </motion.div>
 
         <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
-          <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>
-          <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5 }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+          {canUpload && <button style={smallButtonStyle} onClick={handleAddClick}><img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14 }} /></button>}
+          {canUpload && <button style={{ ...smallButtonStyle, opacity: selectedIds.size > 0 ? 1 : 0.5 }} onClick={handleDeleteSelected}><img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>}
         </motion.div>
       </div>
-      <input ref={fileLocalRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+      {canUpload && <input ref={fileLocalRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />}
       <div style={{ position: 'absolute', top: 52, left: 0 }}>
         <DataTable
           columns={FILE_COLUMNS}
@@ -428,7 +433,7 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
         />
       </div>
       
-      {contextMenu && (
+      {canUpload && contextMenu && (
         <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 174, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
           <button onClick={handleEditClick} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
             <img src={ContextMenuOpenIcon16} alt="" style={{ width: 16, height: 16, marginRight: 17 }} />
@@ -441,7 +446,7 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
         </div>
       )}
 
-      {showAddPopup && (
+      {canUpload && showAddPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAddPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Добавление документа</h3>
@@ -469,7 +474,7 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
         </div>
       )}
 
-      {showEditPopup && (
+      {canUpload && showEditPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEditPopup(false)}>
           <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Редактирование документа</h3>
@@ -485,7 +490,7 @@ const StationFilesTab: React.FC<StationFilesTabProps> = ({
         </div>
       )}
 
-      {showDeleteConfirm && (
+      {canUpload && showDeleteConfirm && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowDeleteConfirm(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Подтверждение удаления</h3>

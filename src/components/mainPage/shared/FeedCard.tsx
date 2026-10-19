@@ -2,7 +2,9 @@
 // «Выпуск продукции» на панели «Показатели», «Заказы на поставку» и «Экран событий» у оператора,
 // ленты панелей ролей (контролер, начальник цеха, служба закупа, аудитор).
 // Все новые возможности включаются необязательными пропсами; без них лента выглядит как раньше.
+// Кнопка «второй экран» есть, только если функция dashboards.screen включена: одно место на все панели.
 import React, { useMemo, useRef, useState } from 'react';
+import { useFeature } from '../../../services/features/featureStore';
 import CustomScrollbar from '../../elements/CustomScrollbar';
 import { COLORS, FONT } from './layout';
 import type { CardRect } from './layout';
@@ -48,7 +50,7 @@ export interface FeedCardProps {
    * 'title' — заголовок по центру, под ним лупа (открывает поле «Поиск») и кнопка «второй экран»
    */
   header?: 'search' | 'title';
-  /** Если задан — в шапке кнопка «второй экран»; без него кнопки нет */
+  /** Если задан — в шапке кнопка «второй экран»; без него (или без функции dashboards.screen) кнопки нет */
   onSecondScreen?: () => void;
   /** Если задан — строки кликабельны */
   onItemClick?: (id: number | string) => void;
@@ -143,6 +145,9 @@ const FeedCard: React.FC<FeedCardProps> = ({
   onItemClick,
   tabAccent = COLORS.accent,
 }) => {
+  // «Второй экран» (/screen/events) — функция dashboards.screen: выключена — кнопки нет
+  const secondScreenOn = useFeature('dashboards.screen');
+  const openSecondScreen = secondScreenOn ? onSecondScreen : undefined;
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [hoverId, setHoverId] = useState<number | string | null>(null);
@@ -318,7 +323,7 @@ const FeedCard: React.FC<FeedCardProps> = ({
                 <SearchIcon size={18} color={COLORS.text} />
               </button>
             )}
-            {onSecondScreen && <SecondScreenButton onClick={onSecondScreen} size={TOOL_BUTTON} />}
+            {openSecondScreen && <SecondScreenButton onClick={openSecondScreen} size={TOOL_BUTTON} />}
           </div>
         </>
       ) : (
@@ -355,7 +360,7 @@ const FeedCard: React.FC<FeedCardProps> = ({
             }}
           />
           {/* Без действия кнопки нет: прежняя «Развернуть» ничего не делала */}
-          {onSecondScreen && <SecondScreenButton onClick={onSecondScreen} />}
+          {openSecondScreen && <SecondScreenButton onClick={openSecondScreen} />}
         </div>
       )}
 

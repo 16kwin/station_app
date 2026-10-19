@@ -4,6 +4,7 @@ import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import FormField from '../../elements/FormField';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { useCanUpload } from '../../../services/features/fileAccess';
 import CloseIcon18Blue from '../../../assets/Icons/CloseIcons/CloseIcon18Blue.svg';
 import CodeIcon20LightBlue from '../../../assets/Icons/CodeIcons/CodeIcon20LightBlue.svg';
 import ArticleIcon18Gray from '../../../assets/Icons/ArticleIcons/ArticleIcon18Gray.svg';
@@ -75,6 +76,8 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   openPopup, uid,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Загрузка файлов выключена (функция uploads) — изображение только просматривается: кнопки «Добавить» / «Удалить» нет
+  const canUpload = useCanUpload();
 
   const [stationTypeOptions, setStationTypeOptions] = useState<{ uid: string; name: string }[]>([]);
   const [stationManufacturerOptions, setStationManufacturerOptions] = useState<{ uid: string; name: string }[]>([]);
@@ -223,12 +226,16 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
       <div style={{ position: 'absolute', top: START_TOP, left: col3Left }}>
         <span style={labelStyle}>Изображение:</span>
         <div style={{ width: col3Width, height: col3Height, borderRadius: 10, border: hasImage ? '1px solid #666EFE' : '1px solid #A0A3BD', backgroundColor: hasImage ? '#FFFFFF' : '#F5F6FA', overflow: 'hidden', position: 'relative' }}>
-          <button
-            onClick={() => hasImage ? (localImage ? handleLocalImageDelete() : handleServerImageDelete()) : fileInputRef.current?.click()}
-            style={{ position: 'absolute', top: 20, left: 20, zIndex: 2, width: 32, height: 32, borderRadius: '50%', border: `2px solid ${hasImage ? '#666EFE' : '#A0A3BD'}`, backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-            <img src={hasImage ? DeleteIcon16Blue : CreateIcon14Gray} alt="" style={{ width: hasImage ? 16 : 14, height: hasImage ? 16 : 14 }} />
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLocalImageUpload} />
+          {canUpload && (
+            <>
+              <button
+                onClick={() => hasImage ? (localImage ? handleLocalImageDelete() : handleServerImageDelete()) : fileInputRef.current?.click()}
+                style={{ position: 'absolute', top: 20, left: 20, zIndex: 2, width: 32, height: 32, borderRadius: '50%', border: `2px solid ${hasImage ? '#666EFE' : '#A0A3BD'}`, backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                <img src={hasImage ? DeleteIcon16Blue : CreateIcon14Gray} alt="" style={{ width: hasImage ? 16 : 14, height: hasImage ? 16 : 14 }} />
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLocalImageUpload} />
+            </>
+          )}
           {displayImageUrl ? (
             <img src={displayImageUrl} alt="Модель" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '30px 100px' }} />
           ) : (

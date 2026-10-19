@@ -27,7 +27,11 @@ import OstatokIcon from '../../assets/Station/KRIT.svg';
 import AxiosService from '../../services/AxiosService';
 import ConstantInfo from '../../info/ConstantInfo';
 import { useTabs } from '../../context/TabContext';
+import { useFeature } from '../../services/features/featureStore';
 import NoTemplatePopup from './NoTemplatePopup';
+
+/** Пункты меню «Управление» без работающего раздела: видны только при функции stubs */
+const STUB_ACTIONS: readonly string[] = ['map', 'writeoff'];
 
 const glassPulseTop = `
 @keyframes glassPulseTop {
@@ -65,6 +69,9 @@ interface StationCellProps {
   maxReadyParts?: number;
   readyPartsCount?: number;
   onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
+  /** Окно «Видео» станции; пункт меню есть только у ролей с доступом к видео */
+  onOpenVideoPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
+  canViewVideo?: boolean;
   isFlipped?: boolean;
   flippedSide?: 'back1' | 'back2' | null;
   onFlip?: (uid: string, side: 'back1' | 'back2') => void;
@@ -79,7 +86,6 @@ const StationCell: React.FC<StationCellProps> = ({
   workshop,
   section,
   status,
-  stationType,
   parentUid,
   hasError = false,
   isTmc,
@@ -92,9 +98,10 @@ const StationCell: React.FC<StationCellProps> = ({
   filledCells = 0,
   templateNomenclatureCount = 0,
   remainingNomenclatureCount = 0,
-  maxReadyParts = 0,
   readyPartsCount = 0,
   onOpenSchablonPopup,
+  onOpenVideoPopup,
+  canViewVideo = false,
   isFlipped = false,
   flippedSide = null,
   onFlip,
@@ -102,6 +109,7 @@ const StationCell: React.FC<StationCellProps> = ({
 }) => {
   const navigate = useNavigate();
   const { openTab } = useTabs();
+  const stubsOn = useFeature('stubs');
   const [displaySide, setDisplaySide] = useState<CardSide>('front');
   const [isAnimating, setIsAnimating] = useState(false);
   const [showNameTooltip, setShowNameTooltip] = useState(false);
@@ -291,6 +299,11 @@ const StationCell: React.FC<StationCellProps> = ({
     if (onOpenSchablonPopup) {
       onOpenSchablonPopup({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' });
     }
+  };
+
+  const handleVideoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onOpenVideoPopup?.({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' });
   };
 
   const getContainerTransform = () => {
@@ -525,13 +538,14 @@ const StationCell: React.FC<StationCellProps> = ({
   const back2MenuGap = 21;
   const back2MenuHeight = 18;
 
+  // «Карта загрузки» и «Списание» — заглушки (функция stubs), «Видео» — по политике видео страницы
   const menuItems = [
     { label: 'Шаблоны загрузки', icon: Config1, action: 'schablon' },
     { label: 'Карта загрузки', icon: Config2, action: 'map' },
     { label: 'Списание', icon: Config3, action: 'writeoff' },
     { label: 'Видео', icon: Config4, action: 'video' },
     { label: 'Настройки станции', icon: Config5, action: 'settings' },
-  ];
+  ].filter(item => (item.action !== 'video' || canViewVideo) && (!STUB_ACTIONS.includes(item.action) || stubsOn));
 
   const renderBack2 = () => (
     <>
@@ -558,7 +572,7 @@ const StationCell: React.FC<StationCellProps> = ({
 
         return (
           <div key={item.label} style={{ position: 'absolute', top: `${back2MenuFirstTop + index * (back2MenuHeight + back2MenuGap)}px`, left: `${back2MenuLeft}px`, height: `${back2MenuHeight}px`, display: 'flex', alignItems: 'center', cursor: 'pointer', transform: `scale(${scale})`, transformOrigin: 'left center', transition: 'transform 0.12s ease' }}
-            onClick={(e) => { e.stopPropagation(); if (item.action === 'schablon') handleSchablonClick(e); else if (item.action === 'settings') handleSettingsClick(e); else console.log(item.action); }}
+            onClick={(e) => { e.stopPropagation(); if (item.action === 'schablon') handleSchablonClick(e); else if (item.action === 'settings') handleSettingsClick(e); else if (item.action === 'video') handleVideoClick(e); else console.log(item.action); }}
             onMouseEnter={() => setMenuHovered(index)} onMouseLeave={() => { setMenuHovered(null); setMenuPressed(null); }} onMouseDown={() => setMenuPressed(index)} onMouseUp={() => setTimeout(() => setMenuPressed(null), 100)}>
             <img src={item.icon} alt="" style={{ width: '18px', height: '18px' }} />
             <span style={{ marginLeft: '12px', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '14px', lineHeight: '18px', color: '#FFFFFF', whiteSpace: 'nowrap', ...textSmoothing }}>{item.label}</span>

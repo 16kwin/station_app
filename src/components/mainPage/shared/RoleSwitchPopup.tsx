@@ -1,16 +1,18 @@
 // RoleSwitchPopup.tsx — выбор роли главной страницы: фон затемняется и размывается,
-// поверх появляется окно со списком доступных информационных панелей.
+// поверх появляется окно со списком доступных информационных панелей. Список ролей передаёт главная:
+// только роли, данные которых доступны пользователю (roles.ts, availableRoles).
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CloseIcon24Black from '../../../assets/Icons/CloseIcons/CloseIcon24Black.svg';
 import CheckboxOff from '../../../assets/Icons/СheckboxIcons/СheckboxIcon18OffBlack.svg';
 import CheckboxOn from '../../../assets/Icons/СheckboxIcons/СheckboxIcon18OnBlue.svg';
 import { COLORS, FONT, SHADOWS } from './layout';
-import { ROLES } from './roles';
-import type { RoleKey } from './roles';
+import type { DashboardRole, RoleKey } from './roles';
 
 interface RoleSwitchPopupProps {
   isOpen: boolean;
+  /** Доступные роли */
+  roles: readonly DashboardRole[];
   /** Текущая роль — её строка отмечена */
   value: RoleKey;
   onSelect: (role: RoleKey) => void;
@@ -21,15 +23,20 @@ const ROW_HEIGHT = 84;
 const ROW_GAP = 14;
 const CONTENT_TOP = 104;
 const SIDE = 32;
-/** Больше четырёх ролей не помещаются столбцом по высоте — раскладываем в две колонки */
-const COLUMNS = ROLES.length > 4 ? 2 : 1;
 const COLUMN_GAP = 16;
-const WINDOW_WIDTH = COLUMNS === 2 ? 880 : 560;
-const ROW_WIDTH = (WINDOW_WIDTH - SIDE * 2 - COLUMN_GAP * (COLUMNS - 1)) / COLUMNS;
-const ROW_COUNT = Math.ceil(ROLES.length / COLUMNS);
-const WINDOW_HEIGHT = CONTENT_TOP + ROW_COUNT * ROW_HEIGHT + (ROW_COUNT - 1) * ROW_GAP + SIDE;
 
-const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value, onSelect, onClose }) => {
+/** Раскладка окна по числу ролей: больше четырёх не помещаются столбцом по высоте — две колонки */
+const windowLayout = (count: number) => {
+  const columns = count > 4 ? 2 : 1;
+  const width = columns === 2 ? 880 : 560;
+  const rowWidth = (width - SIDE * 2 - COLUMN_GAP * (columns - 1)) / columns;
+  const rowCount = Math.ceil(count / columns);
+  const height = CONTENT_TOP + rowCount * ROW_HEIGHT + (rowCount - 1) * ROW_GAP + SIDE;
+  return { columns, width, rowWidth, height };
+};
+
+const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ roles, value, onSelect, onClose }) => {
+  const { columns, width, rowWidth, height } = windowLayout(roles.length);
 
   const handleSelect = (role: RoleKey) => {
     if (role !== value) onSelect(role);
@@ -63,8 +70,8 @@ const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value,
         exit={{ scale: 0.9, opacity: 0 }}
         transition={{ duration: 0.2 }}
         style={{
-          width: WINDOW_WIDTH,
-          height: WINDOW_HEIGHT,
+          width,
+          height,
           backgroundColor: COLORS.white,
           borderRadius: 15,
           boxShadow: SHADOWS.modal,
@@ -121,7 +128,7 @@ const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value,
           Выберите рабочее место — от него зависит состав панелей
         </div>
 
-        {ROLES.map((role, index) => {
+        {roles.map((role, index) => {
           const active = role.key === value;
           return (
             <button
@@ -130,9 +137,9 @@ const RoleSwitchBody: React.FC<Omit<RoleSwitchPopupProps, 'isOpen'>> = ({ value,
               onClick={() => handleSelect(role.key)}
               style={{
                 position: 'absolute',
-                left: SIDE + (index % COLUMNS) * (ROW_WIDTH + COLUMN_GAP),
-                top: CONTENT_TOP + Math.floor(index / COLUMNS) * (ROW_HEIGHT + ROW_GAP),
-                width: ROW_WIDTH,
+                left: SIDE + (index % columns) * (rowWidth + COLUMN_GAP),
+                top: CONTENT_TOP + Math.floor(index / columns) * (ROW_HEIGHT + ROW_GAP),
+                width: rowWidth,
                 height: ROW_HEIGHT,
                 padding: '0 20px',
                 borderRadius: 12,

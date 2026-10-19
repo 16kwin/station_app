@@ -1,23 +1,23 @@
 // MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты пополнения)
+// Каркас приложения: панель вкладок, содержимое вкладок, плавающее меню. Вкладку рисует компонент её раздела
+// или карточки (списки путей — tabRoutes.ts). Раздел выключенной функции показывает «Раздел недоступен»
+// (раздел 8 проекта «Дискретное отключение функций»); модули, которые вариант поставки может исключить,
+// подключаются только через lazyModules.
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
 import { useTabs } from '../context/TabContext';
-import { useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, type ReactNode } from 'react';
 import MainPage from '../components/mainPage/MainPage';
 import StationsPage from '../components/StationsPage/StationsPage';
 import ReferencesPage from '../components/ReferencesPage/ReferencesPage';
 import DocumentsPage from '../components/DocumentsPage/DocumentsPage';
 import ReportsPage from '../components/ReportsPage/ReportsPage';
-import AnalyticsPage from '../components/AnalyticsPage/AnalyticsPage';
-import OrdersPage from '../components/AnalyticsPage/OrdersPage';
-import OrderCreatePage from '../components/AnalyticsPage/OrderCreatePage';
-import TkpPage from '../components/AnalyticsPage/TkpPage';
-import TkpViewPage from '../components/AnalyticsPage/TkpViewPage';
 import SettingsPage from '../components/SettingsPage/SettingsPage';
 import AccountPage from '../components/AccountPage/AccountPage';
 import SchablonPage from '../components/DocumentsPage/Schablon/SchablonPage';
 import StockLevelControlPage from '../components/DocumentsPage/StockLevelControl/StockLevelControlPage';
+import GppPage from '../components/DocumentsPage/Gpp/GppPage';
 import StockLevelControlCreatePage from '../components/DocumentsPage/StockLevelControl/StockLevelControlCreatePage';
 import RefillPage from '../components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from '../components/DocumentsPage/Refill/RefillCreatePage';
@@ -56,6 +56,22 @@ import LocationsPage from '../components/ReferencesPage/LocationsPage/LocationsP
 import CountriesPage from '../components/ReferencesPage/CountriesPage/CountriesPage';
 import AxiosService from '../services/AxiosService';
 import ConstantInfo from '../info/ConstantInfo';
+import { AnalyticsPage, OrderCreatePage, OrdersPage, TkpPage, TkpViewPage, VideoArchivePage } from '../services/features/lazyModules';
+import FeatureUnavailablePage from '../services/features/FeatureUnavailablePage';
+import { useFeature } from '../services/features/featureStore';
+import { featureForPath } from '../services/features/routes';
+import type { FeatureKey } from '../services/features/catalog';
+import SecurityTab from './SecurityTab';
+import {
+  childTabPrefixOf,
+  isChildTabPath,
+  isTabSection,
+  tabPathname,
+  uidTabSectionOf,
+  type TabChildPrefix,
+  type TabSection,
+  type TabUidSection,
+} from './tabRoutes';
 
 const templateInfoCache: Map<string, string> = new Map();
 const nomenclatureInfoCache: Map<string, string> = new Map();
@@ -79,11 +95,13 @@ const fetchSupplierName = async (uid: string): Promise<string> => {
   catch { supplierInfoCache.set(uid, uid); return uid; }
 };
 
-const staticComponents: Record<string, React.ReactNode> = {
+// Разделы и карточки — по спискам tabRoutes.ts: тип Record требует компонент для каждого пути и не пускает лишних
+const staticComponents: Record<TabSection, ReactNode> = {
   '/main': <MainPage />, '/stations': <StationsPage />, '/references': <ReferencesPage />,
   '/documents': <DocumentsPage />, '/reports': <ReportsPage />, '/analytics': <AnalyticsPage />,
   '/orders': <OrdersPage />, '/tkp': <TkpPage />,
   '/settings': <SettingsPage />, '/account': <AccountPage />,
+  '/security': <SecurityTab />,
   '/references/nomenclature': <NomenclaturePage />, '/references/templates': <TemplatesPage />,
   '/references/accounting-groups': <AccountingGroupsPage />, '/references/nomenclature-groups': <NomenclatureGroupsPage />,
   '/references/nomenclature-types': <NomenclatureTypesPage />, '/references/attribute-groups': <AttributeGroupsPage />,
@@ -104,62 +122,69 @@ const staticComponents: Record<string, React.ReactNode> = {
   '/references/locations': <LocationsPage />,
   '/documents/stock-level-control': <StockLevelControlPage />,
   '/documents/refill': <RefillPage />,
+  '/documents/video-archive': <VideoArchivePage />,
+  '/documents/gpp': <GppPage />,
 };
 
-const isChildPath = (path: string): boolean => {
-  return path.startsWith('/references/nomenclature/create/') ||
-    path.startsWith('/references/nomenclature/edit/') ||
-    path.startsWith('/references/suppliers/create/') ||
-    path.startsWith('/references/suppliers/edit/') ||
-    path.startsWith('/references/manufacturers/create/') ||
-    path.startsWith('/references/manufacturers/edit/') ||
-    path.startsWith('/references/station-models/create/') ||
-    path.startsWith('/references/station-models/edit/') ||
-    path.startsWith('/references/station-configurations/create/') ||
-    path.startsWith('/references/station-configurations/edit/') ||
-    path.startsWith('/references/stations/create/') ||
-    path.startsWith('/references/stations/edit/') ||
-    path.startsWith('/orders/create/') ||
-    path.match(/^\/orders\/[^/]+$/) !== null ||
-    path.match(/^\/tkp\/[^/]+$/) !== null ||
-    path.startsWith('/documents/schablon/') ||
-    path.startsWith('/documents/stock-level-control/create/') ||
-    path.startsWith('/documents/stock-level-control/edit/') ||
-    path.startsWith('/documents/refill/create/') ||
-    path.startsWith('/documents/refill/edit/');
+/** Карточки и документы: путь начинается с префикса */
+const childComponents: Record<TabChildPrefix, ReactNode> = {
+  '/references/nomenclature/create/': <NomenclatureCreatePage />,
+  '/references/nomenclature/edit/': <NomenclatureCreatePage />,
+  '/references/suppliers/create/': <SupplierCreatePage />,
+  '/references/suppliers/edit/': <SupplierCreatePage />,
+  '/references/manufacturers/create/': <ManufacturerCreatePage />,
+  '/references/manufacturers/edit/': <ManufacturerCreatePage />,
+  '/references/station-models/create/': <StationModelCreatePage />,
+  '/references/station-models/edit/': <StationModelCreatePage />,
+  '/references/station-configurations/create/': <StationConfigurationCreatePage />,
+  '/references/station-configurations/edit/': <StationConfigurationCreatePage />,
+  '/references/stations/create/': <StationCreatePage />,
+  '/references/stations/edit/': <StationCreatePage />,
+  '/orders/create/': <OrderCreatePage />,
+  '/documents/schablon/': <SchablonPage />,
+  '/documents/stock-level-control/create/': <StockLevelControlCreatePage />,
+  '/documents/stock-level-control/edit/': <StockLevelControlCreatePage />,
+  '/documents/refill/create/': <RefillCreatePage />,
+  '/documents/refill/edit/': <RefillCreatePage />,
 };
 
-const getComponentByPath = (path: string): React.ReactNode => {
-  if (staticComponents[path] !== undefined) return staticComponents[path];
-  if (path.startsWith('/references/nomenclature/create/')) return <NomenclatureCreatePage />;
-  if (path.startsWith('/references/nomenclature/edit/')) return <NomenclatureCreatePage />;
-  if (path.startsWith('/references/suppliers/create/')) return <SupplierCreatePage />;
-  if (path.startsWith('/references/suppliers/edit/')) return <SupplierCreatePage />;
-  if (path.startsWith('/references/manufacturers/create/')) return <ManufacturerCreatePage />;
-  if (path.startsWith('/references/manufacturers/edit/')) return <ManufacturerCreatePage />;
-  if (path.startsWith('/references/station-models/create/')) return <StationModelCreatePage />;
-  if (path.startsWith('/references/station-models/edit/')) return <StationModelCreatePage />;
-  if (path.startsWith('/references/station-configurations/create/')) return <StationConfigurationCreatePage />;
-  if (path.startsWith('/references/station-configurations/edit/')) return <StationConfigurationCreatePage />;
-  if (path.startsWith('/references/stations/create/')) return <StationCreatePage />;
-  if (path.startsWith('/references/stations/edit/')) return <StationCreatePage />;
-  if (path.startsWith('/orders/create/')) return <OrderCreatePage />;
-  if (path.match(/^\/orders\/[^/]+$/)) return <OrderCreatePage />;
-  if (path.match(/^\/tkp\/[^/]+$/)) return <TkpViewPage />;
-  if (path.startsWith('/documents/stock-level-control/create/')) return <StockLevelControlCreatePage />;
-  if (path.startsWith('/documents/stock-level-control/edit/')) return <StockLevelControlCreatePage />;
-  if (path.startsWith('/documents/refill/create/')) return <RefillCreatePage />;
-  if (path.startsWith('/documents/refill/edit/')) return <RefillCreatePage />;
-  const schablonMatch = path.match(/^\/documents\/schablon\/(.+)$/);
-  if (schablonMatch) return <SchablonPage />;
+/** Заказ и ТКП по uid */
+const uidComponents: Record<TabUidSection, ReactNode> = {
+  '/orders': <OrderCreatePage />,
+  '/tkp': <TkpViewPage />,
+};
+
+const getComponentByPath = (fullPath: string): ReactNode => {
+  // Восстановленная вкладка хранит путь вместе с параметрами (?…): раздел определяется без них
+  const path = tabPathname(fullPath);
+  if (isTabSection(path)) return staticComponents[path];
+  const prefix = childTabPrefixOf(path);
+  if (prefix !== null) return childComponents[prefix];
+  const uidSection = uidTabSectionOf(path);
+  if (uidSection !== null) return uidComponents[uidSection];
   return null;
 };
 
+/**
+ * Вкладка раздела функции. Функция выключена — «Раздел недоступен»: модуль размонтируется, его опросы
+ * и соединения останавливаются. Решение живое: вкладка следит за профилем функций, поэтому после смены состава
+ * (новая ревизия, профиль пришёл после сбоя связи) раздел закрывается или возвращается без перезагрузки
+ */
+const FeatureTab = ({ feature, children }: { feature: FeatureKey; children: ReactNode }) =>
+  useFeature(feature) ? <>{children}</> : <FeatureUnavailablePage feature={feature} />;
+
+/** Компонент вкладки с защитой раздела функции (раздел 8.1 проекта) — единственный способ получить компонент вкладки */
+const getGuardedComponent = (path: string): ReactNode => {
+  const component = getComponentByPath(path);
+  const feature = featureForPath(path);
+  return component !== null && feature !== null ? <FeatureTab feature={feature}>{component}</FeatureTab> : component;
+};
+
 const getLabelByPath = (path: string): string => {
-  const staticLabels: Record<string, string> = {
+  const staticLabels: Record<TabSection, string> = {
     '/main': 'Главная', '/stations': 'Станции', '/references': 'Справочники', '/documents': 'Документы',
     '/reports': 'Отчеты', '/analytics': 'Аналитика', '/orders': 'Заказы', '/tkp': 'ТКП',
-    '/settings': 'Настройки', '/account': 'Аккаунт',
+    '/settings': 'Настройки', '/account': 'Аккаунт', '/security': 'Безопасность',
     '/references/nomenclature': 'Справочник: Номенклатура', '/references/templates': 'Справочник: Шаблоны пополнения',
     '/references/accounting-groups': 'Справочник: Группы учета', '/references/nomenclature-groups': 'Справочник: Группы номенклатуры',
     '/references/nomenclature-types': 'Справочник: Виды номенклатуры', '/references/attribute-groups': 'Справочник: Группы характеристик',
@@ -180,8 +205,10 @@ const getLabelByPath = (path: string): string => {
     '/references/stations': 'Справочник: Станции', '/references/locations': 'Справочник: Расположения',
     '/documents/stock-level-control': 'Документ: Контроль уровня остатков',
     '/documents/refill': 'Документ: Пополнение',
+    '/documents/video-archive': 'Журнал событий: видеоархив',
+    '/documents/gpp': 'Документ: ГПП',
   };
-  if (staticLabels[path]) return staticLabels[path];
+  if (isTabSection(path)) return staticLabels[path];
   if (path.startsWith('/references/nomenclature/create/')) { const code = path.split('/').pop(); return `Номенклатура: ${code}`; }
   if (path.startsWith('/references/nomenclature/edit/')) { const uid = path.split('/').slice(-2, -1)[0]; return nomenclatureInfoCache.get(uid) || 'Номенклатура'; }
   if (path.startsWith('/references/suppliers/create/')) { const code = path.split('/').pop(); return `Поставщик: ${code}`; }
@@ -189,11 +216,11 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/references/manufacturers/create/')) { const code = path.split('/').pop(); return `Производитель: ${code}`; }
   if (path.startsWith('/references/manufacturers/edit/')) { return 'Производитель'; }
   if (path.startsWith('/references/station-models/create/')) { const code = path.split('/').pop(); return `Модель станции: ${code}`; }
-  if (path.startsWith('/references/station-models/edit/')) { const uid = path.split('/').pop(); return 'Модель станции'; }
+  if (path.startsWith('/references/station-models/edit/')) { return 'Модель станции'; }
   if (path.startsWith('/references/station-configurations/create/')) { const code = path.split('/').pop(); return `Конфигурация: ${code}`; }
-  if (path.startsWith('/references/station-configurations/edit/')) { const uid = path.split('/').pop(); return 'Конфигурация станции'; }
+  if (path.startsWith('/references/station-configurations/edit/')) { return 'Конфигурация станции'; }
   if (path.startsWith('/references/stations/create/')) { const code = path.split('/').pop(); return `Станция: ${code}`; }
-  if (path.startsWith('/references/stations/edit/')) { const uid = path.split('/').pop(); return 'Станция'; }
+  if (path.startsWith('/references/stations/edit/')) { return 'Станция'; }
   if (path.startsWith('/orders/create/')) { return 'Заказ (новый)'; }
   if (path.match(/^\/orders\/[^/]+$/)) { const uid = path.split('/').pop(); return `Заказ ${uid?.slice(0, 8)}`; }
   if (path.match(/^\/tkp\/[^/]+$/)) { const uid = path.split('/').pop(); return `ТКП ${uid?.slice(0, 8)}`; }
@@ -258,7 +285,7 @@ const MainLayout = () => {
     
     tabs.forEach(tab => {
       if (tab.component === null) {
-        const component = getComponentByPath(tab.path);
+        const component = getGuardedComponent(tab.path);
         if (component) {
           updateTabComponent(tab.id, component);
         }
@@ -276,16 +303,16 @@ const MainLayout = () => {
     if (existingTab) {
       if (activeTabId !== existingTab.id) switchTab(existingTab.id);
       if (existingTab.component === null) {
-        const component = getComponentByPath(location.pathname);
+        const component = getGuardedComponent(location.pathname);
         if (component) updateTabComponent(existingTab.id, component);
       }
       return;
     }
     
     const label = getLabelByPath(fullPath);
-    const component = getComponentByPath(location.pathname);
-    
-    const parentTabId = isChildPath(location.pathname) ? (activeTabId ?? undefined) : undefined;
+    const component = getGuardedComponent(location.pathname);
+
+    const parentTabId = isChildTabPath(location.pathname) ? (activeTabId ?? undefined) : undefined;
     const newTabId = openTab(fullPath, label, component, parentTabId);
     
     if (location.pathname.startsWith('/documents/schablon/')) { const uid = location.pathname.replace('/documents/schablon/', ''); fetchTemplateName(uid).then(name => updateTabLabel(newTabId, `Шаблон - ${name}`)); }
@@ -343,7 +370,8 @@ const MainLayout = () => {
           >
             {tabs.map(tab => (
               <div key={tab.id} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-                {tab.component}
+                {/* Ленивый раздел ждёт загрузки своего куска внутри своей вкладки: соседние вкладки не прячутся */}
+                <Suspense fallback={null}>{tab.component}</Suspense>
               </div>
             ))}
           </div>

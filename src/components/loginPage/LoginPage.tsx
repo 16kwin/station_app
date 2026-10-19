@@ -14,11 +14,29 @@ import EyeIconSvg from '../../assets/Eye.svg';
 import EyeOffIconSvg from '../../assets/EyeOff.svg';
 import EyeRedIconSvg from '../../assets/EyeRed.svg';
 import EyeOffRedIconSvg from '../../assets/EyeOffRed.svg';
+import { loadPublicFeatures } from '../../services/features/publicFeatures';
+import ChangePasswordForm from './ChangePasswordForm';
+import { offerToSavePassword } from './browserCredentials';
+import { parseLoginResponse } from './passwordChange';
 
 interface CircleData {
   id: number;
   bornAt: number;
 }
+
+/** Через сколько бездействия форма входа возвращается к заставке */
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
+
+/** Смена пароля после входа: логин и пароль, с которым вошли (второй раз его не спрашиваем) */
+interface PendingPasswordChange {
+  login: string;
+  password: string;
+}
+
+/** Закрыть на сервере сессию, открытую входом, если пароль так и не сменили: ответ не важен */
+const logoutQuietly = () => {
+  void AxiosService.post(ConstantInfo.restApiLogout).catch(() => undefined);
+};
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -36,6 +54,9 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [focusedField, setFocusedField] = useState<'username' | 'password' | null>(null);
+  // Сервер ответил на вход mustChangePassword (B10): вместо приложения — форма смены пароля
+  const [passwordChange, setPasswordChange] = useState<PendingPasswordChange | null>(null);
+  const passwordChangeRef = useRef(false);
 
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 960 });
   const [isLoaded, setIsLoaded] = useState(false);
@@ -48,7 +69,6 @@ const LoginPage = () => {
   const formRef = useRef<HTMLFormElement>(null);
 
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
 
   const MIN_WIDTH = 1920; const MIN_HEIGHT = 900; const MAX_WIDTH = 1920; const MAX_HEIGHT = 960;
 
@@ -69,12 +89,21 @@ const LoginPage = () => {
   }, [showForm]);
 
   useEffect(() => {
+    passwordChangeRef.current = passwordChange !== null;
+  }, [passwordChange]);
+
+  useEffect(() => {
     const resetInactivityTimer = () => {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
       if (showForm) {
         inactivityTimerRef.current = setTimeout(() => {
+          // Ушли со смены пароля — сессию входа не оставляем открытой
+          if (passwordChangeRef.current) {
+            logoutQuietly();
+            setPasswordChange(null);
+          }
           setShowForm(false);
         }, INACTIVITY_TIMEOUT);
       }
@@ -180,38 +209,31 @@ const LoginPage = () => {
     };
   };
 
-  const savePasswordToBrowser = (user: string, pass: string) => {
-    setTimeout(() => {
-      try {
-        if ((window as any).PasswordCredential && navigator.credentials) {
-          const cred = new (window as any).PasswordCredential({ id: user, password: pass, name: user });
-          navigator.credentials.store(cred).catch(() => {});
-        }
-      } catch (e) {}
-    }, 500);
+  // Предложить браузеру сохранить пароль — только если установка разрешает passwords (флаг из того же запроса,
+  // что у bootstrapPwa; при сбое он выключен). Вход ответа не ждёт: флаг к этому времени почти всегда получен
+  const offerToSave = (user: string, pass: string) => {
+    void loadPublicFeatures().then(flags => offerToSavePassword(user, pass, flags.passwords));
+  };
 
-    setTimeout(() => {
-      try {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-        const iframeDoc = iframe.contentWindow?.document;
-        if (iframeDoc) {
-          iframeDoc.write(`<!DOCTYPE html><html><body><form method="post" action="/login" style="display:none"><input type="text" name="username" value="${user.replace(/"/g, '&quot;')}" autocomplete="username"><input type="password" name="password" value="${pass.replace(/"/g, '&quot;')}" autocomplete="current-password"><button type="submit">Submit</button></form><script>setTimeout(function(){document.querySelector('form').submit();},100);</script></body></html>`);
-          iframeDoc.close();
-          setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 2000);
-        }
-      } catch (e) {}
-    }, 300);
+  const finishLogin = async (user: string, pass: string) => {
+    offerToSave(user, pass);
+    try {
+      localStorage.setItem('app_login_event', Date.now().toString());
+    } catch {
+      // другие вкладки узнают о входе при своей проверке сессии
+    }
+    await refreshAuth();
+    setLocked(false);
+    navigate('/main');
+  };
 
-    setTimeout(() => {
-      try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/login', false);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.send(`username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`);
-      } catch (e) {}
-    }, 800);
+  // «Выйти» со смены пароля или сеанс истёк: сессию входа закрываем, возвращаемся к форме входа
+  const cancelPasswordChange = (notice?: string) => {
+    logoutQuietly();
+    setPasswordChange(null);
+    setPassword('');
+    setMessage(notice ?? '');
+    setHasError(Boolean(notice));
   };
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -233,22 +255,20 @@ const LoginPage = () => {
       });
 
       if (response.status === 200) {
-        savePasswordToBrowser(username, password);
-        
-        try {
-          localStorage.setItem('app_login_event', Date.now().toString());
-        } catch (e) {}
-        
-        await refreshAuth();
-        setLocked(false);
-        navigate('/main');
+        if (parseLoginResponse(response.data).mustChangePassword) {
+          // Пароль выдан администратором: пока он не сменён, остальные API отвечают 403 — приложение не открываем
+          setPasswordChange({ login: username, password });
+          return;
+        }
+        await finishLogin(username, password);
       } else {
         setMessage('Не удалось войти: неверный логин или пароль!');
         setHasError(true);
       }
     } catch (error) {
       const typeError = error as AxiosError;
-      console.log(typeError);
+      // Не сам объект ошибки: в нём тело запроса с паролем
+      console.warn('Вход не выполнен:', typeError.response?.status ?? typeError.code);
       if (typeError.response?.status === 401) {
         setMessage('Не удалось войти: неверный логин или пароль!');
         setHasError(true);
@@ -333,50 +353,61 @@ const LoginPage = () => {
                     <div style={{ height: '21px', display: 'flex', alignItems: 'center', marginTop: '7px' }}>
                       <p style={{ fontSize: '17px', fontWeight: 600, letterSpacing: '0.17px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ</p>
                     </div>
-                    <div style={{ marginTop: '75px', width: '100%', paddingLeft: '113px' }}>
-                      <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
-                        <h2 style={{ fontSize: '29px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>Авторизация</h2>
-                      </div>
-                      <div style={{ height: '24px', display: 'flex', alignItems: 'center', marginTop: '8px' }}>
-                        <p style={{ fontSize: '16px', fontWeight: 500, letterSpacing: '0.16px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0, opacity: 0.5 }}>Войдите в учетную запись для продолжения работы</p>
-                      </div>
-                    </div>
-                    <form ref={formRef} onSubmit={handleSubmit} style={{ marginTop: '36px', width: '399px' }}>
-                      <div style={{ marginBottom: '30px', position: 'relative' }}>
-                        <fieldset style={{ width: '399px', height: '59px', borderColor: getBorderColor('username'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
-                          onFocus={() => { setFocusedField('username'); setHasError(false); }} onBlur={() => setFocusedField(null)}>
-                          <legend style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'Inter, sans-serif', width: '48px', height: '21px', lineHeight: '21px', color: getLegendColor('username'), padding: '0 4px', marginLeft: '12px', position: 'absolute', top: 0, left: 0, transform: 'translateY(-50%)', backgroundColor: '#FFFFFF' }}>Логин</legend>
-                          <input style={{ ...autofillInputStyle, paddingLeft: '16px', paddingRight: '16px', width: '100%', height: '100%', borderRadius: '8px' }}
-                            name="username" autoComplete="username" placeholder="Введите логин" type="text" value={username}
-                            onChange={(e) => { setUsername(e.target.value); setHasError(false); }} disabled={isLoading} />
-                        </fieldset>
-                      </div>
-                      <div style={{ marginBottom: '20px', position: 'relative' }}>
-                        <fieldset style={{ width: '399px', height: '59px', borderColor: getBorderColor('password'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
-                          onFocus={() => { setFocusedField('password'); setHasError(false); }} onBlur={() => setFocusedField(null)}>
-                          <legend style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'Inter, sans-serif', width: '57px', height: '21px', lineHeight: '21px', color: getLegendColor('password'), padding: '0 4px', marginLeft: '12px', position: 'absolute', top: 0, left: 0, transform: 'translateY(-50%)', backgroundColor: '#FFFFFF' }}>Пароль</legend>
-                          <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
-                            <input style={{ ...autofillInputStyle, paddingLeft: '16px', paddingRight: '8px', flex: 1, height: '100%', borderRadius: '8px' }}
-                              name="password" autoComplete="current-password" placeholder="Введите пароль" type={showPassword ? 'text' : 'password'} value={password}
-                              onChange={(e) => { setPassword(e.target.value); setHasError(false); }} disabled={isLoading} />
-                            <motion.button type="button" onClick={() => setShowPassword(!showPassword)} whileTap={{ scale: 0.9 }} transition={{ duration: 0.15 }}
-                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: '16px' }}>
-                              <motion.img key={showPassword ? 'eye' : 'eyeoff'} src={getEyeIcon()} alt="" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}
-                                style={{ width: '24px', height: '24px', position: 'absolute' }} />
-                            </motion.button>
+                    {passwordChange ? (
+                      <ChangePasswordForm
+                        login={passwordChange.login}
+                        currentPassword={passwordChange.password}
+                        onChanged={newPassword => void finishLogin(passwordChange.login, newPassword)}
+                        onCancel={cancelPasswordChange}
+                      />
+                    ) : (
+                      <>
+                        <div style={{ marginTop: '75px', width: '100%', paddingLeft: '113px' }}>
+                          <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '29px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>Авторизация</h2>
                           </div>
-                        </fieldset>
-                      </div>
-                      <div style={{ height: '18px', display: 'flex', alignItems: 'center', marginBottom: '47px' }}>
-                        <Checkbox checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} size={18} borderWidth={1.5} borderColor="#2D4059" activeBorderColor="#666EFE" activeBgColor="#666EFE" borderRadius={3} />
-                        <span style={{ marginLeft: '8px', fontSize: '16px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: '#2D4059' }}>Запомнить учетную запись</span>
-                      </div>
-                      <button type="submit" disabled={!isButtonActive || isLoading}
-                        style={{ width: '399px', height: '59px', borderRadius: '10px', border: 'none', backgroundColor: '#666EFE', opacity: isButtonActive ? 1 : 0.5, cursor: isButtonActive ? 'pointer' : 'not-allowed', fontSize: '17px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#FFFFFF' }}>
-                        {isLoading ? 'Вход...' : 'Войти'}
-                      </button>
-                      {message && <p style={{ fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: '#FF3052', marginTop: '8px', textAlign: 'center' }}>{message}</p>}
-                    </form>
+                          <div style={{ height: '24px', display: 'flex', alignItems: 'center', marginTop: '8px' }}>
+                            <p style={{ fontSize: '16px', fontWeight: 500, letterSpacing: '0.16px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0, opacity: 0.5 }}>Войдите в учетную запись для продолжения работы</p>
+                          </div>
+                        </div>
+                        <form ref={formRef} onSubmit={handleSubmit} style={{ marginTop: '36px', width: '399px' }}>
+                          <div style={{ marginBottom: '30px', position: 'relative' }}>
+                            <fieldset style={{ width: '399px', height: '59px', borderColor: getBorderColor('username'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
+                              onFocus={() => { setFocusedField('username'); setHasError(false); }} onBlur={() => setFocusedField(null)}>
+                              <legend style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'Inter, sans-serif', width: '48px', height: '21px', lineHeight: '21px', color: getLegendColor('username'), padding: '0 4px', marginLeft: '12px', position: 'absolute', top: 0, left: 0, transform: 'translateY(-50%)', backgroundColor: '#FFFFFF' }}>Логин</legend>
+                              <input style={{ ...autofillInputStyle, paddingLeft: '16px', paddingRight: '16px', width: '100%', height: '100%', borderRadius: '8px' }}
+                                name="username" autoComplete="username" placeholder="Введите логин" type="text" value={username}
+                                onChange={(e) => { setUsername(e.target.value); setHasError(false); }} disabled={isLoading} />
+                            </fieldset>
+                          </div>
+                          <div style={{ marginBottom: '20px', position: 'relative' }}>
+                            <fieldset style={{ width: '399px', height: '59px', borderColor: getBorderColor('password'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
+                              onFocus={() => { setFocusedField('password'); setHasError(false); }} onBlur={() => setFocusedField(null)}>
+                              <legend style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'Inter, sans-serif', width: '57px', height: '21px', lineHeight: '21px', color: getLegendColor('password'), padding: '0 4px', marginLeft: '12px', position: 'absolute', top: 0, left: 0, transform: 'translateY(-50%)', backgroundColor: '#FFFFFF' }}>Пароль</legend>
+                              <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+                                <input style={{ ...autofillInputStyle, paddingLeft: '16px', paddingRight: '8px', flex: 1, height: '100%', borderRadius: '8px' }}
+                                  name="password" autoComplete="current-password" placeholder="Введите пароль" type={showPassword ? 'text' : 'password'} value={password}
+                                  onChange={(e) => { setPassword(e.target.value); setHasError(false); }} disabled={isLoading} />
+                                <motion.button type="button" onClick={() => setShowPassword(!showPassword)} whileTap={{ scale: 0.9 }} transition={{ duration: 0.15 }}
+                                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: '16px' }}>
+                                  <motion.img key={showPassword ? 'eye' : 'eyeoff'} src={getEyeIcon()} alt="" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}
+                                    style={{ width: '24px', height: '24px', position: 'absolute' }} />
+                                </motion.button>
+                              </div>
+                            </fieldset>
+                          </div>
+                          <div style={{ height: '18px', display: 'flex', alignItems: 'center', marginBottom: '47px' }}>
+                            <Checkbox checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} size={18} />
+                            <span style={{ marginLeft: '8px', fontSize: '16px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: '#2D4059' }}>Запомнить учетную запись</span>
+                          </div>
+                          <button type="submit" disabled={!isButtonActive || isLoading}
+                            style={{ width: '399px', height: '59px', borderRadius: '10px', border: 'none', backgroundColor: '#666EFE', opacity: isButtonActive ? 1 : 0.5, cursor: isButtonActive ? 'pointer' : 'not-allowed', fontSize: '17px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#FFFFFF' }}>
+                            {isLoading ? 'Вход...' : 'Войти'}
+                          </button>
+                          {message && <p style={{ fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: '#FF3052', marginTop: '8px', textAlign: 'center' }}>{message}</p>}
+                        </form>
+                      </>
+                    )}
                   </div>
                   <div style={{ width: '625px', height: '800px', overflow: 'hidden' }}>
                     <video
