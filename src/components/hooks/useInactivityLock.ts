@@ -1,12 +1,46 @@
 // hooks/useInactivityLock.ts
-import { useEffect, useRef, useState, useCallback } from 'react';
+// Таймауты автоблокировки задаёт профиль установки (awms.ui.inactivity-minutes, awms.ui.warning-minutes в файле
+// потолка, ответ /api/features → ui). Пока профиля нет или сервер их не прислал — значения ConstantInfo.
+import { useEffect, useRef, useState, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useAuth } from '../../services/AuthContext';
 import ConstantInfo from '../../info/ConstantInfo';
+import { getFeatureSnapshot, subscribeFeatures } from '../../services/features/featureStore';
 
 const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'wheel'];
 
+const MINUTE_MS = 60 * 1000;
+
+export interface InactivityTimeouts {
+  /** Через сколько миллисекунд бездействия экран блокируется */
+  inactivityMs: number;
+  /** За сколько миллисекунд до блокировки показывается предупреждение */
+  warningMs: number;
+}
+
+/**
+ * Таймауты из профиля установки (минуты; null — не заданы). Предупреждение не дольше половины срока
+ * блокировки: иначе оно появлялось бы сразу после любого действия пользователя
+ */
+export const inactivityTimeouts = (inactivityMinutes: number | null, warningMinutes: number | null): InactivityTimeouts => {
+  const inactivityMs = inactivityMinutes !== null ? inactivityMinutes * MINUTE_MS : ConstantInfo.inactivityTimeout;
+  const warningMs = warningMinutes !== null ? warningMinutes * MINUTE_MS : ConstantInfo.warningTimeout;
+  return { inactivityMs, warningMs: Math.min(warningMs, Math.floor(inactivityMs / 2)) };
+};
+
+// Числа, а не объект ui: обновление профиля с теми же таймаутами не перезапускает таймеры
+const getInactivityMinutes = () => getFeatureSnapshot().profile?.ui.inactivityMinutes ?? null;
+const getWarningMinutes = () => getFeatureSnapshot().profile?.ui.warningMinutes ?? null;
+
+/** Хук: таймауты автоблокировки из профиля установки */
+export const useInactivityTimeouts = (): InactivityTimeouts => {
+  const inactivityMinutes = useSyncExternalStore(subscribeFeatures, getInactivityMinutes);
+  const warningMinutes = useSyncExternalStore(subscribeFeatures, getWarningMinutes);
+  return useMemo(() => inactivityTimeouts(inactivityMinutes, warningMinutes), [inactivityMinutes, warningMinutes]);
+};
+
 export const useInactivityLock = () => {
   const { isAuth, isLocked, setLocked } = useAuth();
+  const { inactivityMs, warningMs } = useInactivityTimeouts();
   const [showWarning, setShowWarning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -37,7 +71,7 @@ export const useInactivityLock = () => {
         // Отправляем событие в другие вкладки
         channelRef.current?.postMessage({ type: 'warning' });
       }
-    }, ConstantInfo.inactivityTimeout - ConstantInfo.warningTimeout);
+    }, inactivityMs - warningMs);
 
     // Таймер до блокировки
     timerRef.current = setTimeout(() => {
@@ -48,8 +82,8 @@ export const useInactivityLock = () => {
         // Отправляем событие в другие вкладки
         channelRef.current?.postMessage({ type: 'lock' });
       }
-    }, ConstantInfo.inactivityTimeout);
-  }, [isAuth, isLocked, setLocked, clearTimers]);
+    }, inactivityMs);
+  }, [isAuth, isLocked, setLocked, clearTimers, inactivityMs, warningMs]);
 
   const resetTimers = useCallback(() => {
     if (!isAuth || isLocked) return;

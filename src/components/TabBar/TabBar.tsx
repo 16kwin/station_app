@@ -7,7 +7,7 @@ import Arrow from '../../assets/Menu/Arrow.svg';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TabBar = () => {
-  const { tabs, activeTabId, closeTab, closeAllTabs, switchTab } = useTabs();
+  const { tabs, activeTabId, closeTab, closeAllTabs, switchTab, triggerTabCloseGuard } = useTabs();
   const [showDropdown, setShowDropdown] = useState(false);
   const [visibleTabs, setVisibleTabs] = useState<Tab[]>([]);
   const [tabWidths, setTabWidths] = useState<number[]>([]);
@@ -299,6 +299,10 @@ const TabBar = () => {
     if (tooltipTimeoutRef.current) { clearTimeout(tooltipTimeoutRef.current); tooltipTimeoutRef.current = null; }
     setHoveredTabId(null);
 
+    // Страница с несохранёнными правками может зарегистрировать защиту закрытия (registerTabCloseGuard):
+    // тогда вкладка не закрывается, а страница сама задаёт вопрос. Вкладки без защиты закрываются как раньше
+    if (triggerTabCloseGuard(tabId)) return;
+
     const currentIndex = tabs.findIndex(t => t.id === tabId);
 
     if (activeTabId === tabId) {
@@ -324,8 +328,11 @@ const TabBar = () => {
     if (tooltipTimeoutRef.current) { clearTimeout(tooltipTimeoutRef.current); tooltipTimeoutRef.current = null; }
     setHoveredTabId(null);
 
-    closeAllTabs();
+    // Есть вкладка с защитой закрытия — сначала её вопрос; «Закрыть все» можно повторить после ответа
     setShowDropdown(false);
+    if (tabs.some(t => triggerTabCloseGuard(t.id))) return;
+
+    closeAllTabs();
   };
 
   const checkTextOverflow = (tabId: string) => {

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../context/TabContext';
 import AxiosService from '../../services/AxiosService';
-import ConstantInfo from '../../info/ConstantInfo';
+import { TKP_API } from './api';
 import CustomScrollbar from '../elements/CustomScrollbar';
 import Icon7 from '../../assets/References/NomenclatureCreatePage/Icon7.svg';
 
@@ -45,7 +45,7 @@ const TkpViewPage = () => {
   const [tkpData, setTkpData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [, setIsConfirmed] = useState(false);
   const [showClosePopup, setShowClosePopup] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<TkpProduct | null>(null);
 
@@ -63,7 +63,7 @@ const TkpViewPage = () => {
   const loadTkpData = async (tkpUid: string) => {
     setIsLoading(true);
     try {
-      const res = await AxiosService.get(ConstantInfo.restApiTkpGet(tkpUid));
+      const res = await AxiosService.get(TKP_API.tkp(tkpUid));
       setTkpData(res.data);
     } catch (e) {
       console.error('Ошибка загрузки ТКП:', e);
@@ -87,7 +87,7 @@ const TkpViewPage = () => {
     if (!uid) return;
     setIsConfirming(true);
     try {
-      await AxiosService.post(`${ConstantInfo.restApiTkpGet(uid)}/confirm`, { status: 'Подтверждён' });
+      await AxiosService.post(`${TKP_API.tkp(uid)}/confirm`, { status: 'Подтверждён' });
       setIsConfirmed(true);
       loadTkpData(uid);
     } catch (e) {
@@ -101,7 +101,7 @@ const TkpViewPage = () => {
     if (!uid) return;
     setIsConfirming(true);
     try {
-      await AxiosService.post(`${ConstantInfo.restApiTkpGet(uid)}/cancel`);
+      await AxiosService.post(`${TKP_API.tkp(uid)}/cancel`);
       setIsConfirmed(true);
       loadTkpData(uid);
     } catch (e) {
@@ -334,7 +334,7 @@ const TkpViewPage = () => {
               <DetailRow label="Стоимость" value={`${selectedProduct.cost?.toLocaleString()} ₽`} />
               {selectedProduct.description && <DetailRow label="Описание" value={selectedProduct.description} />}
             </Section>
-            {selectedProduct.specifications?.length > 0 && (
+            {!!selectedProduct.specifications?.length && (
               <Section title="Характеристики">
                 {selectedProduct.specifications.map((spec, i) => (
                   <DetailRow key={i} label={spec.characteristic} value={`${spec.value} ${spec.unit || ''}`} />
@@ -353,21 +353,21 @@ const TkpViewPage = () => {
                 {selectedProduct.sku.image && <img src={`data:image/png;base64,${selectedProduct.sku.image}`} alt="SKU" style={{ maxWidth: 150, marginTop: 8 }} />}
               </Section>
             )}
-            {selectedProduct.images?.length > 0 && (
+            {!!selectedProduct.images?.length && (
               <Section title="Изображения">
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {selectedProduct.images.map((img, i) => <img key={i} src={`data:image/png;base64,${img}`} alt="" style={{ width: 150, height: 150, objectFit: 'contain', borderRadius: 8, border: '1px solid rgba(102,110,254,0.15)' }} />)}
                 </div>
               </Section>
             )}
-            {selectedProduct.draws?.length > 0 && (
+            {!!selectedProduct.draws?.length && (
               <Section title="Чертежи">
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {selectedProduct.draws.map((draw, i) => <img key={i} src={`data:image/png;base64,${draw}`} alt="" style={{ width: 200, height: 150, objectFit: 'contain', borderRadius: 8, border: '1px solid rgba(102,110,254,0.15)' }} />)}
                 </div>
               </Section>
             )}
-            {selectedProduct.analogues?.length > 0 && (
+            {!!selectedProduct.analogues?.length && (
               <Section title="Аналоги">
                 {selectedProduct.analogues.map((analog, i) => (
                   <div key={i} style={{ display: 'flex', gap: 20, padding: '8px 0' }}>

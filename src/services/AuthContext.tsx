@@ -1,7 +1,10 @@
 // services/AuthContext.tsx
-import React, { useContext, useEffect, useState, type ReactNode } from 'react';
+// После проверки входа загружается профиль функций установки (features/featureStore.ts): флаги зависят от роли
+// пользователя. При выходе и при смене пользователя профиль сбрасывается.
+import React, { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import ConstantInfo from '../info/ConstantInfo';
 import AxiosService from './AxiosService';
+import { loadFeatures, resetFeatures } from './features/featureStore';
 
 interface ModalProps {
   children?: ReactNode;
@@ -132,6 +135,8 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const [userInfo, setUserInfo] = useState<UserInfo>(emptyUserInfo);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
+  // Для кого загружен профиль функций: «id:роль»; другой пользователь (вход в соседней вкладке) — профиль заново
+  const featuresUserRef = useRef<string | null>(null);
 
   const setLocked = (locked: boolean) => {
     setIsLockedState(locked);
@@ -153,6 +158,17 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
     } catch (e) {
       console.error('Failed to clear auth state:', e);
     }
+    // Флаги функций зависят от роли: следующий вход загрузит профиль заново
+    featuresUserRef.current = null;
+    resetFeatures();
+  };
+
+  /** Профиль функций после проверки входа: тот же пользователь — обновить, другой — сбросить и загрузить */
+  const loadFeaturesFor = (user: string) => {
+    if (featuresUserRef.current !== null && featuresUserRef.current !== user) resetFeatures();
+    featuresUserRef.current = user;
+    // Ошибку обрабатывает хранилище: без профиля видно только ядро, плашка предлагает повторить
+    void loadFeatures();
   };
 
   const checkAuth = async (): Promise<boolean> => {
@@ -171,6 +187,7 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
       });
       setIsAdmin(response.data.role === 'ROLE_ADMIN');
       setIsOperator(response.data.role === 'ROLE_OPERATOR');
+      loadFeaturesFor(`${response.data.id}:${response.data.role}`);
       return true;
     } catch {
       resetAuthState();

@@ -1,7 +1,11 @@
 // AxiosService.ts
+// Ответы API сверяются с составом функций установки (features/httpFeatures.ts): новая ревизия профиля
+// в заголовке X-AWMS-Features и 404 на адрес функции перезапрашивают профиль, файл при выключенной загрузке
+// файлов не отправляется.
 import axios from 'axios';
 import ConstantInfo from '../info/ConstantInfo';
 import { navigateTo } from './navigate';
+import { installFeatureInterceptors } from './features/httpFeatures';
 
 declare global {
   interface Window {
@@ -27,10 +31,10 @@ let csrfInitialized = false;
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
-  reject: (reason?: any) => void;
+  reject: (reason?: unknown) => void;
 }> = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
       prom.reject(error);
@@ -135,5 +139,8 @@ AxiosService.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// После перехватчиков выше: проверка файла идёт до запроса CSRF, сверка ревизии — после обновления токена
+installFeatureInterceptors(AxiosService);
 
 export default AxiosService;

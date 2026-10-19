@@ -5,6 +5,7 @@ import CreateIcon14Blue from '../../assets/Icons/СreateIcons/СreateIcon14Blue.
 import DeleteIcon16Blue from '../../assets/Icons/DeleteIcons/DeleteIcon16Blue.svg';
 import ArrowIcon18Up from '../../assets/Icons/ArrowIcons/ArrowIcon18Up.svg';
 import ArrowIcon18Down from '../../assets/Icons/ArrowIcons/ArrowIcon18Down.svg';
+import { useCanUpload } from '../../services/features/fileAccess';
 
 interface LogoUploaderProps {
   images: { uid: string; url: string; originalName: string }[];
@@ -14,6 +15,10 @@ interface LogoUploaderProps {
   onDelete?: (uid: string, index: number) => void;
   width?: number;
   height?: number;
+  /** Элемент в левом верхнем углу (кнопка «3D» в карточке номенклатуры) */
+  topLeftSlot?: React.ReactNode;
+  /** Не листать изображения стрелками ↑/↓ — например, пока поверх открыто окно */
+  disableKeyboardNavigation?: boolean;
 }
 
 const LogoUploader: React.FC<LogoUploaderProps> = ({
@@ -24,12 +29,17 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   onDelete,
   width = 410,
   height = 283,
+  topLeftSlot,
+  disableKeyboardNavigation = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fullscreenImage, setFullscreenImage] = useState(false);
   const [startIndex, setStartIndex] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const scrollAnimationRef = useRef<number | null>(null);
+  // Загрузка файлов выключена (функция uploads) — режим «только просмотр»: изображения листаются и открываются,
+  // кнопок «Добавить» и «Удалить», выбора файла и меню «Удалить» нет
+  const canUpload = useCanUpload();
 
   const hasImage = images.length > 0;
   const currentImage = images[selectedIndex];
@@ -130,6 +140,7 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   };
 
   const handleContextMenu = (e: React.MouseEvent, index: number) => {
+    if (!canUpload) return;
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, index });
@@ -169,6 +180,7 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   };
 
   useEffect(() => {
+    if (disableKeyboardNavigation) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (images.length <= 1) return;
       
@@ -187,7 +199,7 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
     
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [images.length, safeIndex, navigateTo]);
+  }, [images.length, safeIndex, navigateTo, disableKeyboardNavigation]);
 
   const getThumbSize = (position: number): { width: number; height: number } => {
     if (isLargeVariant) {
@@ -236,6 +248,8 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
   const gap = isLargeVariant ? GAP_5 : (isManyImages ? GAP_4 : GAP_3);
   const topPadding = isLargeVariant ? TOP_PADDING_5 : (isManyImages ? TOP_PADDING_4 : TOP_PADDING_3);
   const thumbAreaHeight = height - topPadding - 8;
+  // Без кнопок «Добавить» и «Удалить» мини-превью начинаются сверху панели
+  const thumbsTop = !canUpload ? 0 : (hasImage ? 107 : 77);
 
   return (
     <div style={{ width, height, borderRadius: 10, border: hasImage ? '1px solid #666EFE' : '1px solid #A0A3BD', overflow: 'hidden', display: 'flex', position: 'relative' }}>
@@ -295,6 +309,10 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
               }} 
             />
           </div>
+        ) : !canUpload ? (
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#A0A3BD', userSelect: 'none' }}>
+            Нет изображения
+          </span>
         ) : (
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -322,15 +340,17 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
       {/* ПРАВАЯ ПАНЕЛЬ 56 */}
       <div style={{ width: 56, height: height, backgroundColor: 'rgba(102, 110, 254, 0.08)', flexShrink: 0, position: 'relative' }}>
         {/* Кнопка Добавить */}
+        {canUpload && (
         <button 
           onClick={() => fileInputRef.current?.click()}
           style={{ position: 'absolute', top: 17, left: '50%', transform: 'translateX(-50%)', width: 30, height: 30, borderRadius: '50%', border: `2px solid ${hasImage ? '#666EFE' : '#A0A3BD'}`, backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 2 }}
         >
           <img src={hasImage ? CreateIcon14Blue : CreateIcon14Gray} alt="" style={{ width: 14, height: 14 }} />
         </button>
+        )}
 
         {/* Кнопка Удалить */}
-        {hasImage && (
+        {canUpload && hasImage && (
           <button 
             onClick={() => onDelete && onDelete(currentImage?.uid, safeIndex)}
             style={{ position: 'absolute', top: 59, left: '50%', transform: 'translateX(-50%)', width: 30, height: 30, borderRadius: '50%', border: '2px solid #666EFE', backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 2 }}
@@ -340,14 +360,14 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
         )}
 
         {/* Черта */}
-        <div style={{ position: 'absolute', top: hasImage ? 106 : 76, left: '50%', transform: 'translateX(-50%)', width: 34, height: 1, backgroundColor: 'rgba(102, 110, 254, 0.3)' }} />
+        {canUpload && <div style={{ position: 'absolute', top: hasImage ? 106 : 76, left: '50%', transform: 'translateX(-50%)', width: 34, height: 1, backgroundColor: 'rgba(102, 110, 254, 0.3)' }} />}
 
         {/* Мини-превью */}
         <div 
           onWheel={handleWheel}
           style={{ 
             position: 'absolute', 
-            top: hasImage ? 107 : 77, 
+            top: thumbsTop, 
             left: 0, 
             width: 56, 
             height: thumbAreaHeight,
@@ -447,10 +467,13 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
         </div>
       </div>
 
-      <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />
+      {canUpload && <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />}
+
+      {/* Левый верхний угол — свободен, туда встраивается кнопка из родителя */}
+      {topLeftSlot && <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 3 }}>{topLeftSlot}</div>}
 
       {/* Контекстное меню */}
-      {contextMenu && (
+      {canUpload && contextMenu && (
         <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, width: 150, backgroundColor: '#FFFFFF', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 10001, display: 'flex', flexDirection: 'column', padding: '8px 0' }} onClick={e => e.stopPropagation()}>
           <button onClick={() => { if (onDelete) onDelete(images[contextMenu.index]?.uid, contextMenu.index); setContextMenu(null); }} style={{ width: '100%', height: 40, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', paddingLeft: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
             Удалить

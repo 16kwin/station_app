@@ -4,6 +4,9 @@ import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
+import { isFeatureOn, useFeature } from '../../../services/features/featureStore';
+// Вкладка «Интеграции» — через lazyModules: в сборке без интеграций (вариант поставки) её кода нет
+import { SupplierIntegrationTab } from '../../../services/features/lazyModules';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
@@ -14,7 +17,6 @@ import SupplierBrandsTab from './SupplierBrandsTab';
 import SupplierDeliveriesTab from './SupplierDeliveriesTab';
 import SupplierAssortmentTab from './SupplierAssortmentTab';
 import SupplierRatingTab from './SupplierRatingTab';
-import SupplierIntegrationTab from './SupplierIntegrationTab';
 import SupplierEventLogTab from './SupplierEventLogTab';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
@@ -72,6 +74,9 @@ export interface CommonSupplierProps {
 }
 
 // ==================== IndexedDB хелпер ====================
+// Черновик карточки (localStorage supplier_draft_*, файлы — в IndexedDB) — функция drafts. Без неё черновики
+// не пишутся и не читаются, а оставшиеся от прежнего состава функций удаляет storagePurge при загрузке профиля.
+// Соединение с базой закрывается после каждой операции: открытое соединение не дало бы удалить базу
 
 const DB_NAME = 'supplier_drafts_db';
 const DB_VERSION = 1;
@@ -93,29 +98,30 @@ const openDB = (): Promise<IDBDatabase> => {
 
 const saveFileToIndexedDB = async (key: string, file: File): Promise<void> => {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     store.put(file, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
-  });
+    tx.onabort = () => reject(tx.error);
+  }).finally(() => db.close());
 };
 
 const getFileFromIndexedDB = async (key: string): Promise<File | null> => {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise<File | null>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     const request = store.get(key);
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
-  });
+  }).finally(() => db.close());
 };
 
 const clearAllFilesForDraft = async (uid: string): Promise<void> => {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const request = store.openCursor();
@@ -130,7 +136,8 @@ const clearAllFilesForDraft = async (uid: string): Promise<void> => {
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
-  });
+    tx.onabort = () => reject(tx.error);
+  }).finally(() => db.close());
 };
 
 // ==================== localStorage для метаданных ====================
@@ -172,11 +179,14 @@ interface DraftData {
 }
 
 const saveDraftToStorage = (uid: string, data: DraftData) => {
+  if (!isFeatureOn('drafts')) return;
   try { localStorage.setItem(getDraftKey(uid), JSON.stringify(data)); }
   catch (e) { console.error('Ошибка сохранения черновика поставщика:', e); }
 };
 
 const loadDraftFromStorage = (uid: string): DraftData | null => {
+  // Без черновиков карточка открывается с сервера
+  if (!isFeatureOn('drafts')) return null;
   try {
     const raw = localStorage.getItem(getDraftKey(uid));
     if (!raw) return null;
@@ -196,7 +206,8 @@ const loadDraftFromStorage = (uid: string): DraftData | null => {
 
 const clearDraftStorage = async (uid: string) => {
   localStorage.removeItem(getDraftKey(uid));
-  await clearAllFilesForDraft(uid);
+  // Без черновиков базы нет (её удаляет storagePurge), а открыть её значило бы создать заново
+  if (isFeatureOn('drafts')) await clearAllFilesForDraft(uid);
 };
 
 // ==================== Интерфейс исходного состояния ====================
@@ -230,7 +241,8 @@ const SupplierCreatePage = () => {
   const { uid, code: codeParam } = useParams<{ uid: string; code: string }>();
   const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
-  const [activeTab, setActiveTab] = useState(0);
+  // Выбранная вкладка; показывается activeTab (ниже): выбранная, если она доступна при текущем составе функций
+  const [selectedTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -274,13 +286,23 @@ const SupplierCreatePage = () => {
   const [initialState, setInitialState] = useState<InitialSupplierState | null>(null);
   const [initialImagesCount, setInitialImagesCount] = useState(0);
 
-  const tabs_list = ['Основное', 'Реквизиты', 'Документы', 'Бренды', 'Поставки', 'Ассортимент', 'Рейтинг', 'Интеграции'];
-  const EVENT_LOG_TAB = tabs_list.length;
+  // Вкладка «Интеграции» — функция integrations. Номера вкладок от состава функций не зависят: «Интеграции» —
+  // последняя, журнал изменений — за ней. Без функции кнопки нет, а номер остаётся за ней: журнал и переходы
+  // по номеру (событие navigateToTab) не сдвигаются
+  const integrationsOn = useFeature('integrations');
+  // Кнопки «Печать» и «Скачать PDF» — функция export
+  const exportOn = useFeature('export');
+  const baseTabs = ['Основное', 'Реквизиты', 'Документы', 'Бренды', 'Поставки', 'Ассортимент', 'Рейтинг'];
+  const INTEGRATION_TAB = baseTabs.length;
+  const tabs_list = integrationsOn ? [...baseTabs, 'Интеграции'] : baseTabs;
+  const EVENT_LOG_TAB = INTEGRATION_TAB + 1;
+  // Интеграции выключили, пока была открыта их вкладка, — показываем «Основное»
+  const activeTab = !integrationsOn && selectedTab === INTEGRATION_TAB ? 0 : selectedTab;
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   const saveDraftToLocalStorage = useCallback(async () => {
-    if (!uid || !isDataLoaded) return;
+    if (!uid || !isDataLoaded || !isFeatureOn('drafts')) return;
     
     for (const img of localImages) {
       const key = `${uid}_img_${img.url}`;
@@ -563,7 +585,7 @@ const SupplierCreatePage = () => {
   const fetchAverageRating = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierRatingsAverage(uid)); setAverageRating(Math.round((res.data || 0) * 10) / 10); } catch (e) { console.error(e); } };
   const fetchImages = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierImages(uid)); const imgs = (res.data || []).map((img: any) => ({ uid: img.uid, url: img.fileUrl ? ConstantInfo.fileDir + img.fileUrl.replace(/^\//, '') : '', originalName: img.originalName || '' })); setImages(imgs); setInitialImagesCount(imgs.length); } catch (e) { console.error(e); } };
   const fetchDocuments = async () => { if (!uid) return; try { const res = await AxiosService.get(ConstantInfo.restApiSupplierDocuments(uid)); setDocuments((res.data || []).map((doc: any) => ({ ...doc, url: doc.fileUrl ? ConstantInfo.fileDir + doc.fileUrl.replace(/^\//, '') : '' }))); } catch (e) { console.error(e); } };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {};
+  const handleImageUpload = () => {};
   const handleDeleteImage = async (imageUid: string) => { try { await AxiosService.delete(ConstantInfo.restApiSupplierDeleteImage(imageUid)); await fetchImages(); } catch (er) { console.error(er); } };
   const handleDocumentUpload = (documentName: string, file: File) => { setLocalDocuments(prev => [...prev, { localId: generateLocalId(), documentName, file }]); };
   const handleDeleteDocument = (uid: string) => { setLocalDocuments(prev => prev.filter(d => d.localId !== uid)); if (uid && !uid.startsWith('local_')) { setDocumentChanges(prev => [...prev.filter(c => c.uid !== uid), { uid, action: 'delete' }]); } };
@@ -597,10 +619,19 @@ const SupplierCreatePage = () => {
     try {
       await AxiosService.post(ConstantInfo.restApiSupplierDraft, { uid, code, name, countryUid: selectedCountryId || null, address: address || null, shortDescriptionUid: selectedShortDescriptionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null, inn: inn || null, ogrn: ogrn || null, kpp: kpp || null, contactPerson: contactPerson || null, contactPosition: contactPosition || null, contactPhone: contactPhone || null, director: director || null, directorPosition: directorPosition || null, bankName: bankName || null, bik: bik || null, correspondentAccount: correspondentAccount || null, settlementAccount: settlementAccount || null, author: 'Оператор' });
       
-      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); }
+      // Файлы уходят на сервер, только если включены загрузки файлов (функция uploads). Без неё поля выбора файлов
+      // скрыты, а сервер файл не примет: здесь файлы могли остаться только из черновика или от прежнего состава
+      // функций. Их не отправляем, остальное записываем и говорим, сколько файлов не ушло
+      const uploadsOn = isFeatureOn('uploads');
+      const skippedFiles = uploadsOn ? 0 : localImages.length + localDocuments.length;
+      if (uploadsOn) {
+        for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(ConstantInfo.restApiSupplierImages(uid), fd); }
+      }
       setLocalImages([]);
-      
-      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); }
+
+      if (uploadsOn) {
+        for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(ConstantInfo.restApiSupplierDocuments(uid), fd); }
+      }
       setLocalDocuments([]);
       
       for (const change of documentChanges.filter(c => c.action === 'rename')) {
@@ -624,7 +655,10 @@ const SupplierCreatePage = () => {
         await AxiosService.delete(ConstantInfo.restApiSupplierDeleteRating(change.uid));
       }
       setRatingChanges([]);
-      
+      if (skippedFiles > 0) {
+        alert(`Карточка записана, но файлы на сервер не отправлены (${skippedFiles}): загрузка файлов на этой установке выключена.`);
+      }
+
       await fetchImages(); await fetchDocuments(); await fetchAverageRating();
       window.dispatchEvent(new CustomEvent('refreshSupplierDocuments'));
       window.dispatchEvent(new CustomEvent('refreshSupplierRatings'));
@@ -716,8 +750,8 @@ const SupplierCreatePage = () => {
           </AnimatePresence>
         </div>
         <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          {exportOn && <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>}
+          {exportOn && <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>}
           <button onClick={handleEventLogClick} style={{ ...smallButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
             <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: isEventLogActive ? 'brightness(0) invert(1)' : 'none' }} />
           </button>

@@ -5,6 +5,7 @@ import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { canUploadNow, useCanExport } from '../../../services/features/fileAccess';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import StationModelMainTab from './StationModelMainTab';
@@ -107,6 +108,8 @@ const StationModelCreatePage = () => {
 
   const [initialState, setInitialState] = useState<InitialState | null>(null);
   const [isDataSaved, setIsDataSaved] = useState(false);
+  // Печать и PDF карточки — под функцией export
+  const canExport = useCanExport();
 
   const cellsLoadedRef = useRef(false);
 
@@ -322,13 +325,18 @@ const StationModelCreatePage = () => {
       if (isEdit) await AxiosService.patch(`${ConstantInfo.restApiStationModels}/${uid}`, body);
       else await AxiosService.post(ConstantInfo.restApiStationModels, body);
 
-      for (const doc of localDocuments) {
-        if (doc.isNew) {
-          const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName);
-          await AxiosService.post(ConstantInfo.restApiStationModelDocuments(uid), fd);
+      // Файлы уходят, только пока включена загрузка (функция uploads): её могли выключить, пока карточка открыта.
+      // Тогда новые файлы остаются в карточке несохранёнными, а всё остальное записывается
+      const uploadsOn = canUploadNow();
+      if (uploadsOn) {
+        for (const doc of localDocuments) {
+          if (doc.isNew) {
+            const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName);
+            await AxiosService.post(ConstantInfo.restApiStationModelDocuments(uid), fd);
+          }
         }
+        setLocalDocuments([]);
       }
-      setLocalDocuments([]);
 
       for (const change of documentChanges.filter(c => c.action === 'rename' && c.serverUid)) {
         await AxiosService.patch(`${ConstantInfo.restApiStationModels}/documents/${change.serverUid}/rename?documentName=${encodeURIComponent(change.documentName || '')}`);
@@ -339,7 +347,7 @@ const StationModelCreatePage = () => {
       }
       setDocumentChanges([]);
 
-      if (localImage?.isNew) {
+      if (uploadsOn && localImage?.isNew) {
         const fd = new FormData(); fd.append('file', localImage.file);
         await AxiosService.post(ConstantInfo.restApiStationModelImages(uid), fd);
         
@@ -359,7 +367,7 @@ const StationModelCreatePage = () => {
         setDeletedImageUid(null);
         setModelImageUrl('');
       }
-      setLocalImage(null);
+      if (uploadsOn) setLocalImage(null);
 
       setInitialState({
         name: name.trim(),
@@ -561,8 +569,12 @@ const StationModelCreatePage = () => {
           </AnimatePresence>
         </div>
         <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          {canExport && (
+            <>
+              <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+              <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+            </>
+          )}
           <button style={{ ...smallButtonStyle, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF' }} onClick={handleHistoryClick}>
             <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: showHistory ? 'brightness(0) invert(1)' : 'none' }} />
           </button>

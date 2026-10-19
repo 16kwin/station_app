@@ -5,6 +5,7 @@ import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { canUploadNow, fetchUploadedFile, useCanExport } from '../../../services/features/fileAccess';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import StationMainTab from './StationMainTab';
@@ -94,6 +95,8 @@ const StationCreatePage = () => {
   const [sectionName, setSectionName] = useState('');
 
   const [localDocuments, setLocalDocuments] = useState<StationLocalDocumentItem[]>([]);
+  // Печать и PDF карточки — под функцией export
+  const canExport = useCanExport();
   const [documentChanges, setDocumentChanges] = useState<StationDocumentChange[]>([]);
 
   const [isEdit, setIsEdit] = useState(false);
@@ -188,8 +191,7 @@ const StationCreatePage = () => {
   const downloadFile = async (url: string): Promise<File | null> => {
     try {
       const fullUrl = url.startsWith('http') ? url : ConstantInfo.fileDir + url.replace(/^\//, '');
-      const response = await fetch(fullUrl);
-      const blob = await response.blob();
+      const blob = await fetchUploadedFile(fullUrl);
       return new File([blob], '', { type: blob.type });
     } catch (e) {
       console.error('Ошибка скачивания файла:', e);
@@ -233,7 +235,8 @@ const StationCreatePage = () => {
     if (d.workshopId) { setWorkshopId(d.workshopId); setWorkshopName(d.workshopName || ''); }
     if (d.sectionId) { setSectionId(d.sectionId); setSectionName(d.sectionName || ''); }
 
-    if (d.documents && Array.isArray(d.documents)) {
+    // Документы копии загружаются на сервер заново — только при функции uploads; без неё копия создаётся без документов
+    if (d.documents && Array.isArray(d.documents) && canUploadNow()) {
       const newLocalDocs: StationLocalDocumentItem[] = [];
       for (const doc of d.documents) {
         const fileUrl = doc.url || doc.filePath || doc.fileUrl;
@@ -463,15 +466,19 @@ const StationCreatePage = () => {
         await AxiosService.post(ConstantInfo.restApiStationsCrud(USER_ID).split('?')[0], body);
       }
 
-      for (const doc of localDocuments) {
-        if (doc.isNew) {
-          const fd = new FormData();
-          fd.append('file', doc.file);
-          fd.append('documentName', doc.documentName);
-          await AxiosService.post(ConstantInfo.restApiStationDocuments(uid), fd);
+      // Файлы уходят, только пока включена загрузка (функция uploads): её могли выключить, пока карточка открыта.
+      // Тогда новые файлы остаются в карточке несохранёнными, а всё остальное записывается
+      if (canUploadNow()) {
+        for (const doc of localDocuments) {
+          if (doc.isNew) {
+            const fd = new FormData();
+            fd.append('file', doc.file);
+            fd.append('documentName', doc.documentName);
+            await AxiosService.post(ConstantInfo.restApiStationDocuments(uid), fd);
+          }
         }
+        setLocalDocuments([]);
       }
-      setLocalDocuments([]);
 
       for (const change of documentChanges.filter(c => c.action === 'rename' && c.serverUid)) {
         await AxiosService.patch(`${ConstantInfo.restApiStationDocuments(uid)}/${change.serverUid}/rename?documentName=${encodeURIComponent(change.documentName || '')}`);
@@ -715,8 +722,12 @@ const StationCreatePage = () => {
           </AnimatePresence>
         </div>
         <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          {canExport && (
+            <>
+              <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
+              <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+            </>
+          )}
           <button style={{ ...smallButtonStyle, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF' }} onClick={handleHistoryClick}>
             <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: showHistory ? 'brightness(0) invert(1)' : 'none' }} />
           </button>

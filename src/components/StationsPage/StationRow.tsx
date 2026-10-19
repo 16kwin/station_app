@@ -26,7 +26,11 @@ import Config5 from '../../assets/Station/Config5.svg';
 import AxiosService from '../../services/AxiosService';
 import ConstantInfo from '../../info/ConstantInfo';
 import { useTabs } from '../../context/TabContext';
+import { useFeature } from '../../services/features/featureStore';
 import NoTemplatePopup from './NoTemplatePopup';
+
+/** Кнопки «Управление» без работающего раздела: видны только при функции stubs */
+const STUB_ACTIONS: readonly string[] = ['map', 'writeoff'];
 
 const glassPulse = `@keyframes glassPulse { 0%, 100% { opacity: 0.67; transform: translateX(0); } 50% { opacity: 1; transform: translateX(6px); } }`;
 const glassPulseRight = `@keyframes glassPulseRight { 0%, 100% { opacity: 0.67; transform: translateX(0); } 50% { opacity: 1; transform: translateX(-6px); } }`;
@@ -39,21 +43,26 @@ interface StationRowProps {
   totalCells?: number; filledCells?: number; templateNomenclatureCount?: number; remainingNomenclatureCount?: number;
   maxReadyParts?: number; readyPartsCount?: number;
   onOpenSchablonPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
+  /** Окно «Видео» станции; кнопка есть только у ролей с доступом к видео */
+  onOpenVideoPopup?: (station: { uid: string; name: string; workshop: string; section: string; status: string }) => void;
+  canViewVideo?: boolean;
   isConfigMode?: boolean;
   onConfigToggle?: (uid: string) => void;
 }
 
 const StationRow: React.FC<StationRowProps> = ({
-  uid, name, workshop, section, status, stationType, parentUid,
+  uid, name, workshop, section, status, parentUid,
   hasError = false, isTmc, isSgd, isOk,
   filledCellsPercent = 0, remainingNomenclaturePercent = 0, readyPartsPercent = 0,
   totalCells = 0, filledCells = 0, templateNomenclatureCount = 0, remainingNomenclatureCount = 0,
   readyPartsCount = 0, onOpenSchablonPopup,
+  onOpenVideoPopup, canViewVideo = false,
   isConfigMode = false,
   onConfigToggle,
 }) => {
   const navigate = useNavigate();
   const { openTab } = useTabs();
+  const stubsOn = useFeature('stubs');
   const [showNameTooltip, setShowNameTooltip] = useState(false);
   const [showWorkshopTooltip, setShowWorkshopTooltip] = useState(false);
   const [animatedFilled, setAnimatedFilled] = useState(0);
@@ -132,6 +141,7 @@ const StationRow: React.FC<StationRowProps> = ({
   const handleRightButtonClick = (e: React.MouseEvent) => { e.stopPropagation(); onConfigToggle?.(uid || ''); };
   const handleSchablonClick = (e: React.MouseEvent) => { e.stopPropagation(); if (onOpenSchablonPopup) onOpenSchablonPopup({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' }); };
   const handleSettingsClick = (e: React.MouseEvent) => { e.stopPropagation(); if (uid) navigate(`/references/stations/edit/${uid}`); };
+  const handleVideoClick = (e: React.MouseEvent) => { e.stopPropagation(); onOpenVideoPopup?.({ uid: uid || '', name: name || '', workshop: workshop || '', section: section || '', status: status || '' }); };
 
   // === Пополнить ===
   const handleRefillClick = async (e: React.MouseEvent) => {
@@ -199,13 +209,14 @@ const StationRow: React.FC<StationRowProps> = ({
   const configFirstBtnLeft = 522;
   const configBtnHeight = 42;
   const configBtnGap = 58;
+  // «Карта загрузки» и «Списание» — заглушки (функция stubs), «Видео» — по политике видео страницы
   const configBtns = [
     { label: 'Шаблоны загрузки', icon: Config1, width: 197, action: 'schablon' },
     { label: 'Карта загрузки', icon: Config2, width: 170, action: 'map' },
     { label: 'Списание', icon: Config3, width: 130, action: 'writeoff' },
     { label: 'Видео', icon: Config4, width: 104, action: 'video' },
     { label: 'Настройки станции', icon: Config5, width: 203, action: 'settings' },
-  ];
+  ].filter(btn => (btn.action !== 'video' || canViewVideo) && (!STUB_ACTIONS.includes(btn.action) || stubsOn));
 
   const renderStatusIcons = () => {
     if (allIcons.length === 0) return null;
@@ -325,7 +336,7 @@ const StationRow: React.FC<StationRowProps> = ({
                 const isPressed = configPressed === index;
                 return (
                   <button key={btn.label}
-                    onClick={(e) => { e.stopPropagation(); if (btn.action === 'schablon') handleSchablonClick(e); else if (btn.action === 'settings') handleSettingsClick(e); else console.log(btn.action, uid); }}
+                    onClick={(e) => { e.stopPropagation(); if (btn.action === 'schablon') handleSchablonClick(e); else if (btn.action === 'settings') handleSettingsClick(e); else if (btn.action === 'video') handleVideoClick(e); else console.log(btn.action, uid); }}
                     onMouseEnter={() => setConfigHovered(index)} onMouseLeave={() => { setConfigHovered(null); setConfigPressed(null); }}
                     onMouseDown={() => setConfigPressed(index)} onMouseUp={() => setTimeout(() => setConfigPressed(null), 100)}
                     style={{ ...getGlassBtnStyle(isHovered, isPressed, btn.width, configBtnHeight, '42px'), left: `${btnLeft}px`, top: '50%', justifyContent: 'flex-start', paddingLeft: '15px', gap: '9px' }}>

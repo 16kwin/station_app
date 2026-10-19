@@ -4,6 +4,9 @@ import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
+import { isFeatureOn, useFeature } from '../../../services/features/featureStore';
+// Вкладка «Интеграции» — через lazyModules: в сборке без интеграций (вариант поставки) её кода нет
+import { ManufacturerIntegrationTab } from '../../../services/features/lazyModules';
 import ConstantInfo from '../../../info/ConstantInfo';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
@@ -12,7 +15,6 @@ import ManufacturerDocumentsTab from './ManufacturerDocumentsTab';
 import ManufacturerBrandsTab from './ManufacturerBrandsTab';
 import ManufacturerAssortmentTab from './ManufacturerAssortmentTab';
 import ManufacturerSuppliersTab from './ManufacturerSuppliersTab';
-import ManufacturerIntegrationTab from './ManufacturerIntegrationTab';
 import ManufacturerEventLogTab from './ManufacturerEventLogTab';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
 import IconArrow2 from '../../../assets/References/NomenclatureCreatePage/IconArrow2.svg';
@@ -55,6 +57,8 @@ export interface CommonManufacturerProps {
   setValidationErrors: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
+// Черновик карточки (localStorage manufacturer_draft_*) — функция drafts. Без неё черновик не пишется и не читается,
+// а оставшийся от прежнего состава функций удаляет storagePurge при загрузке профиля
 const getDraftKey = (uid: string) => `manufacturer_draft_${uid}`;
 
 interface DraftData {
@@ -76,11 +80,14 @@ interface DraftData {
 }
 
 const saveDraftToStorage = (uid: string, data: DraftData) => {
+  if (!isFeatureOn('drafts')) return;
   try { localStorage.setItem(getDraftKey(uid), JSON.stringify(data)); }
   catch (e) { console.error('Ошибка сохранения черновика производителя:', e); }
 };
 
 const loadDraftFromStorage = (uid: string): DraftData | null => {
+  // Без черновиков карточка открывается с сервера
+  if (!isFeatureOn('drafts')) return null;
   try {
     const raw = localStorage.getItem(getDraftKey(uid));
     if (!raw) return null;
@@ -109,7 +116,8 @@ const ManufacturerCreatePage = () => {
   const { uid, code: codeParam } = useParams<{ uid: string; code: string }>();
   const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
-  const [activeTab, setActiveTab] = useState(0);
+  // Выбранная вкладка; показывается activeTab (ниже): выбранная, если она доступна при текущем составе функций
+  const [selectedTab, setActiveTab] = useState(0);
   const [tabsCollapsed, setTabsCollapsed] = useState(false);
   const documentInputRef = useRef<HTMLInputElement>(null);
 
@@ -140,13 +148,23 @@ const ManufacturerCreatePage = () => {
 
   const [initialState, setInitialState] = useState<InitialManufacturerState | null>(null);
 
-  const tabs_list = ['Основное', 'Документы', 'Бренды', 'Ассортимент', 'Поставщики', 'Интеграции'];
-  const EVENT_LOG_TAB = tabs_list.length;
+  // Вкладка «Интеграции» — функция integrations. Номера вкладок от состава функций не зависят: «Интеграции» —
+  // последняя, журнал изменений — за ней. Без функции кнопки нет, а номер остаётся за ней: журнал и переходы
+  // по номеру (событие navigateToTab) не сдвигаются
+  const integrationsOn = useFeature('integrations');
+  // Кнопки «Печать» и «Скачать PDF» — функция export
+  const exportOn = useFeature('export');
+  const baseTabs = ['Основное', 'Документы', 'Бренды', 'Ассортимент', 'Поставщики'];
+  const INTEGRATION_TAB = baseTabs.length;
+  const tabs_list = integrationsOn ? [...baseTabs, 'Интеграции'] : baseTabs;
+  const EVENT_LOG_TAB = INTEGRATION_TAB + 1;
+  // Интеграции выключили, пока была открыта их вкладка, — показываем «Основное»
+  const activeTab = !integrationsOn && selectedTab === INTEGRATION_TAB ? 0 : selectedTab;
 
   const generateLocalId = () => `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   const saveDraftToLocalStorage = useCallback(() => {
-    if (!uid || !isDataLoaded) return;
+    if (!uid || !isDataLoaded || !isFeatureOn('drafts')) return;
     const draft: DraftData = { uid, code, name, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, documentChanges, isEdit, timestamp: Date.now() };
     saveDraftToStorage(uid, draft);
   }, [uid, code, name, isEdit, isDataLoaded, selectedCountry, selectedCountryId, address, selectedDirection, selectedDirectionId, description, email, website, phone, documentChanges]);
@@ -287,7 +305,14 @@ const ManufacturerCreatePage = () => {
     try {
       await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud`, { uid, name, countryUid: selectedCountryId || null, address: address || null, directionUid: selectedDirectionId || null, description: description || null, email: email || null, website: website || null, phone: phone || null });
       
-      for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/documents`, fd); }
+      // Файлы уходят на сервер, только если включены загрузки файлов (функция uploads). Без неё поля выбора файлов
+      // скрыты, а сервер файл не примет: здесь файлы могли остаться только от прежнего состава функций.
+      // Их не отправляем, остальное записываем и говорим, сколько файлов не ушло
+      const uploadsOn = isFeatureOn('uploads');
+      const skippedFiles = uploadsOn ? 0 : localDocuments.length + localImages.length;
+      if (uploadsOn) {
+        for (const doc of localDocuments) { const fd = new FormData(); fd.append('file', doc.file); fd.append('documentName', doc.documentName); await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/documents`, fd); }
+      }
       setLocalDocuments([]);
       
       for (const change of documentChanges.filter(c => c.action === 'delete')) {
@@ -295,8 +320,13 @@ const ManufacturerCreatePage = () => {
       }
       setDocumentChanges([]);
       
-      for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/images`, fd); }
+      if (uploadsOn) {
+        for (const img of localImages) { const fd = new FormData(); fd.append('file', img.file); await AxiosService.post(`${ConstantInfo.apiBaseUrl}/api/manufacturers-crud/${uid}/images`, fd); }
+      }
       setLocalImages([]);
+      if (skippedFiles > 0) {
+        alert(`Карточка записана, но файлы на сервер не отправлены (${skippedFiles}): загрузка файлов на этой установке выключена.`);
+      }
       
       await fetchDocuments(); await fetchImages();
       window.dispatchEvent(new CustomEvent('refreshManufacturerDocuments'));
@@ -381,8 +411,8 @@ const ManufacturerCreatePage = () => {
           </AnimatePresence>
         </div>
         <div style={{ position: 'absolute', right: 0, display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>
+          {exportOn && <button style={smallButtonStyle}><img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} /></button>}
+          {exportOn && <button style={smallButtonStyle}><img src={PrintPDFIcon14Black} alt="" style={{ width: 14, height: 18 }} /></button>}
           <button onClick={handleEventLogClick} style={{ ...smallButtonStyle, backgroundColor: isEventLogActive ? '#666EFE' : '#FFFFFF' }}>
             <img src={HistoryIcon18Black} alt="" style={{ width: 18, height: 16, filter: isEventLogActive ? 'brightness(0) invert(1)' : 'none' }} />
           </button>

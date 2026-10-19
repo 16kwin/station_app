@@ -5,6 +5,7 @@ import DataTable from '../../elements/DataTable';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { optionalFileBody } from '../../../services/features/fileAccess';
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
 import SortingIcon20Black from '../../../assets/Icons/SortingIcons/SortingIcon20Black.svg';
@@ -163,10 +164,9 @@ const SupplierAssortmentTab: React.FC<CommonSupplierProps> = (props) => {
   const handleAddMaterial = async (materialUid: string, _materialName: string) => {
     if (!uid) return;
     try {
-      const fd = new FormData();
-      fd.append('materialUid', materialUid);
-      fd.append('supplyDate', new Date().toISOString().slice(0, 16) + ':00');
-      await AxiosService.post(ConstantInfo.restApiSupplierDeliveries(uid), fd);
+      // Позиция ассортимента — поставка без файла: уходит JSON и работает без загрузок файлов
+      const body = optionalFileBody({ materialUid, supplyDate: new Date().toISOString().slice(0, 16) + ':00' });
+      await AxiosService.post(ConstantInfo.restApiSupplierDeliveries(uid), body);
       await fetchAssortment();
       setShowAddPopup(false);
       window.dispatchEvent(new CustomEvent('refreshSupplierAssortment'));

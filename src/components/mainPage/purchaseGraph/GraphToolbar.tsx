@@ -361,7 +361,8 @@ interface GraphToolbarProps {
   range: DateRange;
   onDateClick: (anchor: AnchorRect) => void;
   onDateReset: () => void;
-  onPrint: () => void;
+  /** Печатная форма; не задана (функция export выключена) — кнопки нет */
+  onPrint?: () => void;
   settingsOpen: boolean;
   onToggleSettings: () => void;
 }
@@ -514,10 +515,12 @@ const GraphToolbar: React.FC<GraphToolbarProps> = ({
         </button>
       </div>
 
-      <button type="button" className="pg-tool" onClick={onPrint} style={{ ...toolButton, padding: '0 16px' }}>
-        <PrintIcon size={17} />
-        Печатная форма
-      </button>
+      {onPrint && (
+        <button type="button" className="pg-tool" onClick={onPrint} style={{ ...toolButton, padding: '0 16px' }}>
+          <PrintIcon size={17} />
+          Печатная форма
+        </button>
+      )}
 
       <button
         type="button"

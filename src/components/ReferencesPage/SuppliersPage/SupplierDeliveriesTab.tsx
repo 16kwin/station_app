@@ -5,6 +5,7 @@ import DataTable from '../../elements/DataTable';
 import CatalogSelectPopup from '../NomenclaturePage/CatalogSelectPopup';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
+import { optionalFileBody, useCanUpload } from '../../../services/features/fileAccess';
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
 import SortingIcon20Black from '../../../assets/Icons/SortingIcons/SortingIcon20Black.svg';
@@ -62,6 +63,8 @@ const ICON_RIGHT_PAD = 4;
 
 const SupplierDeliveriesTab: React.FC<CommonSupplierProps> = (props) => {
   const { uid, isEdit } = props;
+  // Загрузка файлов выключена (функция uploads) — поставка добавляется без файла документа
+  const canUpload = useCanUpload();
 
   const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -207,12 +210,13 @@ const SupplierDeliveriesTab: React.FC<CommonSupplierProps> = (props) => {
     if (!uid || !newMaterialUid) return;
     setIsAdding(true);
     try {
-      const fd = new FormData();
-      fd.append('materialUid', newMaterialUid);
-      if (newSupplyDate) fd.append('supplyDate', newSupplyDate + ':00');
-      if (newDocumentName.trim()) fd.append('documentName', newDocumentName.trim());
-      if (selectedFile) fd.append('file', selectedFile);
-      await AxiosService.post(ConstantInfo.restApiSupplierDeliveries(uid), fd);
+      // Без файла — JSON (работает и без загрузок), с файлом — multipart
+      const body = optionalFileBody({
+        materialUid: newMaterialUid,
+        supplyDate: newSupplyDate ? newSupplyDate + ':00' : null,
+        documentName: newDocumentName.trim(),
+      }, canUpload ? selectedFile : null);
+      await AxiosService.post(ConstantInfo.restApiSupplierDeliveries(uid), body);
       await fetchDeliveries();
       setShowAddPopup(false);
       window.dispatchEvent(new CustomEvent('refreshSupplierDeliveries'));
@@ -379,7 +383,10 @@ const SupplierDeliveriesTab: React.FC<CommonSupplierProps> = (props) => {
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Номенклатура</label><div onClick={() => setShowMaterialPopup(true)} style={{ ...popupFieldStyle, color: newMaterialName ? '#666EFE' : '#9CA3AF' }}><span>{newMaterialName || 'Выберите номенклатуру'}</span></div></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Дата поставки</label><input type="datetime-local" value={newSupplyDate} onChange={e => setNewSupplyDate(e.target.value)} style={inputStyle} /></div>
             <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Название документа</label><input type="text" value={newDocumentName} onChange={e => setNewDocumentName(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setShowAddPopup(false); }} placeholder="Введите название документа" style={inputStyle} /></div>
-            <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Файл документа</label><div onClick={() => fileInputRef.current?.click()} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px dashed rgba(102, 110, 254, 0.3)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 10 }}><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/></svg><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedFile ? '#666EFE' : '#9CA3AF' }}>{selectedFile ? selectedFile.name : 'Выберите файл'}</span></div><input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }} /></div>
+            {/* Файл документа — только при функции uploads; без файла поставка уходит JSON */}
+            {canUpload && (
+              <div><label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Файл документа</label><div onClick={() => fileInputRef.current?.click()} style={{ width: '100%', height: 44, borderRadius: 10, border: '1px dashed rgba(102, 110, 254, 0.3)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 10 }}><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="9" y1="3" x2="9" y2="15" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/></svg><span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: selectedFile ? '#666EFE' : '#9CA3AF' }}>{selectedFile ? selectedFile.name : 'Выберите файл'}</span></div><input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }} /></div>
+            )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
               <button onClick={() => setShowAddPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
               <button onClick={handleAddSubmit} disabled={!newMaterialUid || isAdding} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: newMaterialUid && !isAdding ? '#666EFE' : '#BCC8FF', cursor: newMaterialUid && !isAdding ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>{isAdding ? 'Добавление...' : 'Добавить'}</button>

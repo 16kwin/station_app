@@ -4,6 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import StationCell from './StationCell';
 import StationRow from './StationRow';
 import SchablonPopup from './SchablonPopup';
+// Видео и карта — модули, которые вариант поставки может исключить: компоненты — из lazyModules, отсюда — только типы
+import type { StationVideoTarget } from '../DocumentsPage/VideoArchive/StationVideoPopup';
+import type { StationMapHandle } from './StationMap/StationMapView';
+import type { MapStation } from './StationMap/types';
+import { StationMapView, StationVideoPopup } from '../../services/features/lazyModules';
+import { useCanViewLive } from '../../services/features/videoAccess';
+import { isFeatureOn, useFeature } from '../../services/features/featureStore';
+import { connectLiveUpdates } from '../../services/liveUpdatesClient';
+import { VIEW_MODE_BUTTONS, isViewButton, toViewMode, viewButtonIndexes, viewModeOfButton } from './viewMode';
+import type { ViewMode } from './viewMode';
 import ConstantInfo from '../../info/ConstantInfo';
 import AxiosService from '../../services/AxiosService';
 import CustomScrollbar from '../elements/CustomScrollbar';
@@ -20,6 +30,7 @@ import Icon9 from '../../assets/Station/9.svg';
 import Icon10 from '../../assets/Station/10.svg';
 import Icon11 from '../../assets/Station/11.svg';
 import Icon12 from '../../assets/Station/12.svg';
+import Icon13 from '../../assets/Station/13.svg';
 import type { JSX } from 'react/jsx-runtime';
 
 interface Holding {
@@ -72,6 +83,7 @@ interface StationStatic {
   isSgd: boolean;
   isOk: boolean;
   configurationUid?: string;
+  modelName?: string | null;
 }
 
 interface StationDynamic {
@@ -107,7 +119,26 @@ interface UserFilterDTO {
   viewMode: string;
 }
 
-type ViewMode = 'grid' | 'list';
+/** Ряд кнопок панели: холст 1800 минус отступы ряда по 70 */
+const CONTROLS_ROW_WIDTH = 1800 - 140;
+/** Кнопки режима справа: по 54 и промежутки по 20 (без карты кнопок две) */
+const viewGroupWidth = (count: number): number => count * 54 + (count - 1) * 20;
+
+/**
+ * Живые обновления станций (функция websocket). После изменения станции сервер рассылает полный состав без
+ * фильтров страницы: по составу список перезапрашивается с фильтрами (пачка изменений — один запрос),
+ * показатели заполненности и остатков применяются сразу
+ */
+const STATION_TOPICS = { static: '/topic/stations/static', dynamic: '/topic/stations/dynamic' } as const;
+const LIVE_REFETCH_MS = 1000;
+
+/** Станция для окна «Шаблоны загрузки»: плитка и строка списка передают основные поля, карта — запись целиком */
+type SchablonTarget = Pick<StationStatic, 'uid' | 'name' | 'workshop' | 'section' | 'status'> & { configurationUid?: string };
+/**
+ * Левая часть ряда без большой распорки: поиск/сортировка/фильтр (202), расположение (276),
+ * распорки по 90, СГД/ТМЦ (128), остаток (54) и шесть промежутков по 20
+ */
+const LEFT_GROUPS_WIDTH = 202 + 276 + 90 + 128 + 90 + 54 + 6 * 20;
 type FilterSubmenuType = 'placement' | 'status' | 'type' | 'overissue' | 'error' | null;
 
 interface FilterCascadeState {
@@ -197,7 +228,13 @@ const StationsPage = () => {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
 
-  const [viewMode, setViewMode] = useState<ViewMode>(savedState?.viewMode || 'grid');
+  // Режим «Карта» — только при функции map. Выключили на ходу — показывается плитка, и плитка же запоминается
+  // (localStorage и фильтры пользователя на сервере); включили снова — выбранный режим вернётся
+  const mapOn = useFeature('map');
+  const [selectedViewMode, setViewMode] = useState<ViewMode>(() => toViewMode(savedState?.viewMode, isFeatureOn('map')));
+  const viewMode: ViewMode = selectedViewMode === 'map' && !mapOn ? 'grid' : selectedViewMode;
+  const viewButtons = viewButtonIndexes(mapOn);
+  const mapRef = useRef<StationMapHandle | null>(null);
   const [sortOption, setSortOption] = useState<string>(savedState?.sortOption || '');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -248,6 +285,15 @@ const StationsPage = () => {
     status?: string;
     configurationUid?: string;
   }>({ isOpen: false });
+
+  // Окно «Видео» станции — живое видео: администратору и директору, если на установке включён живой просмотр
+  const canViewVideo = useCanViewLive();
+  const [videoStation, setVideoStation] = useState<StationVideoTarget | null>(null);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const handleOpenVideoPopup = (station: StationVideoTarget) => {
+    setVideoStation(station);
+    setVideoOpen(true);
+  };
 
   // Состояния для управления переворотами карточек и конфигом строк
   const [flippedCellUid, setFlippedCellUid] = useState<string | null>(null);
@@ -325,7 +371,7 @@ const StationsPage = () => {
     debounceTimeoutRef.current = setTimeout(() => { fetchFilteredStations(); }, 300);
   }, [fetchFilteredStations]);
 
-  const handleOpenSchablonPopup = (station: StationStatic) => {
+  const handleOpenSchablonPopup = (station: SchablonTarget) => {
     setSchablonPopupData({
       isOpen: true,
       uid: station.uid,
@@ -426,8 +472,9 @@ const StationsPage = () => {
           setHasSortSelection(!!frontSort);
         }
         if (filters.viewMode) {
-          setViewMode(filters.viewMode as ViewMode);
-          setActiveButtons(prev => { const filtered = prev.filter(i => i !== 9 && i !== 10); return [...filtered, filters.viewMode === 'grid' ? 9 : 10]; });
+          const mode = toViewMode(filters.viewMode, isFeatureOn('map'));
+          setViewMode(mode);
+          setActiveButtons(prev => [...prev.filter(i => !isViewButton(i)), VIEW_MODE_BUTTONS[mode]]);
         }
         if (filters.searchQuery) { setSearchQuery(filters.searchQuery); setHasSearchQuery(true); }
       } catch (error) {
@@ -526,12 +573,7 @@ const StationsPage = () => {
   }, []);
 
   useEffect(() => {
-    const gridButton = 9;
-    const listButton = 10;
-    setActiveButtons(prev => {
-      const withoutViewButtons = prev.filter(i => i !== gridButton && i !== listButton);
-      return [...withoutViewButtons, viewMode === 'grid' ? gridButton : listButton];
-    });
+    setActiveButtons(prev => [...prev.filter(i => !isViewButton(i)), VIEW_MODE_BUTTONS[viewMode]]);
   }, [viewMode]);
 
   useEffect(() => {
@@ -610,37 +652,40 @@ const StationsPage = () => {
     return () => { resizeObserver.disconnect(); window.removeEventListener('resize', calculateAdaptiveGaps); };
   }, []);
 
+  // Живые обновления — только при функции websocket и через общий клиент (STOMP поверх SockJS, адрес из
+  // window.config.ip_api). Раньше здесь был голый WebSocket на адрес с портом undefined: он не соединялся
+  // никогда, а STOMP-кадры не разбирал. Выключили функцию — соединение закрывается, переподключений нет
+  const liveUpdatesOn = useFeature('websocket');
+  const refetchStationsRef = useRef(fetchFilteredStations);
   useEffect(() => {
-    if (!window.config || !window.config.ip_api) return;
-    const host = window.config.ip_api.replace('http://', '').replace('https://', '');
-    const wsUrl = `ws://${host}:${ConstantInfo.serverPort}/ws-stations`;
-    let socket: WebSocket | null = null;
-    try {
-      socket = new WebSocket(wsUrl);
-      socket.onopen = () => console.log('WebSocket connected');
-      socket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (Array.isArray(data) && data.length > 0 && 'name' in data[0]) setStationsStatic(data);
-          if (Array.isArray(data) && data.length > 0 && 'filledCellsPercent' in data[0]) {
-            const dynamicMap = new Map();
-            data.forEach((d: StationDynamic) => dynamicMap.set(d.uid, d));
-            setStationsDynamic(dynamicMap);
-          }
-          if (data?.uid && 'filledCellsPercent' in data) setStationsDynamic(prev => new Map(prev).set(data.uid, data));
-          if (data?.uid && 'name' in data) {
-            setStationsStatic(prev => {
-              const index = prev.findIndex(s => s.uid === data.uid);
-              if (index !== -1) { const ns = [...prev]; ns[index] = data; return ns; }
-              return [...prev, data];
-            });
-          }
-        } catch (e) { console.error('WebSocket parse error:', e); }
-      };
-      socket.onerror = (error) => console.error('WebSocket error:', error);
-    } catch (error) { console.error('WebSocket connection error:', error); }
-    return () => { if (socket?.readyState === WebSocket.OPEN) socket.close(); };
-  }, []);
+    refetchStationsRef.current = fetchFilteredStations;
+  }, [fetchFilteredStations]);
+  useEffect(() => {
+    if (!liveUpdatesOn) return;
+    let refetchTimer: ReturnType<typeof setTimeout> | undefined;
+    const connection = connectLiveUpdates({
+      name: 'Станции',
+      topics: {
+        // Состав станций изменился: список страницы — с её фильтрами, поэтому перезапрос, а не замена
+        [STATION_TOPICS.static]: () => {
+          clearTimeout(refetchTimer);
+          refetchTimer = setTimeout(() => void refetchStationsRef.current(), LIVE_REFETCH_MS);
+        },
+        [STATION_TOPICS.dynamic]: payload => {
+          if (!Array.isArray(payload)) return;
+          setStationsDynamic(prev => {
+            const next = new Map(prev);
+            for (const item of payload as StationDynamic[]) if (typeof item?.uid === 'string') next.set(item.uid, item);
+            return next;
+          });
+        },
+      },
+    });
+    return () => {
+      clearTimeout(refetchTimer);
+      connection.close();
+    };
+  }, [liveUpdatesOn]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -753,9 +798,12 @@ const StationsPage = () => {
     else setActiveButtons(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
   };
 
-  const handleViewModeToggle = (index: number) => {
+  const handleViewModeToggle = async (index: number) => {
     if (isScaleTooLarge) return;
-    setViewMode(index === 9 ? 'grid' : 'list');
+    const next = viewModeOfButton(index, mapOn);
+    // Уход из режима карты с несохранённой расстановкой — подтверждение
+    if (viewMode === 'map' && next !== 'map' && mapRef.current && !(await mapRef.current.confirmLeave())) return;
+    setViewMode(next);
   };
 
   const closeExpanded = () => {
@@ -790,7 +838,7 @@ const StationsPage = () => {
       scaleWarningTimerRef.current = setTimeout(() => setShowScaleWarning(false), 2000);
       return;
     }
-    if (index === 9 || index === 10) { handleViewModeToggle(index); return; }
+    if (isViewButton(index)) { void handleViewModeToggle(index); return; }
     if (index === 6 || index === 7) { toggleButton(index); return; }
     if (expandedButton === index) closeExpanded();
     else { if (expandedButton !== null) closeExpanded(); openButton(index); }
@@ -936,6 +984,7 @@ const StationsPage = () => {
     { icon: Icon10, label: '' },
     { icon: Icon11, label: '' },
     { icon: Icon12, label: 'Холдинг' },
+    { icon: Icon13, label: 'Карта' },
   ];
 
   const isPlacementActive = selectedHoldings.length > 0 || selectedEnterprises.length > 0 || selectedWorkshops.length > 0 || selectedSections.length > 0;
@@ -948,11 +997,15 @@ const StationsPage = () => {
 
   const calculateGapWidth = () => {
     if (expandedButton === null) return 342;
+    const grow = getExpandedWidth(expandedButton) - 54;
     if (expandedButton <= 2) {
-      const expandedWidth = getExpandedWidth(expandedButton);
-      return Math.max(0, 342 - (expandedWidth - 54));
+      return Math.max(0, 342 - grow);
     }
-    return 342;
+    // Кнопки правее распорки раскрываются по месту. С тремя кнопками режима ряду не хватает ширины,
+    // и без поправки он переносится — раскрытое окно уезжает на строку ниже, к левому краю.
+    // Распорка уступает ровно недостающее место (с запасом в 4 px на дробные пиксели)
+    const free = CONTROLS_ROW_WIDTH - viewGroupWidth(viewButtons.length) - LEFT_GROUPS_WIDTH - grow - 4;
+    return Math.max(0, Math.min(342, free));
   };
 
   const renderFilterCascadeWindows = () => {
@@ -1141,7 +1194,7 @@ const StationsPage = () => {
   const renderButton = (button: typeof buttons[0], globalIdx: number) => {
     const isActive = activeButtons.includes(globalIdx);
     const isExpanded = expandedButton === globalIdx;
-    const isRightTwo = globalIdx === 9 || globalIdx === 10;
+    const isRightTwo = isViewButton(globalIdx);
     const isSearchButton = globalIdx === 0;
     const isSortButton = globalIdx === 1;
     const isFilterButton = globalIdx === 2;
@@ -1450,6 +1503,8 @@ const StationsPage = () => {
             maxReadyParts={dynamic?.maxReadyParts}
             readyPartsCount={dynamic?.readyPartsCount}
             onOpenSchablonPopup={handleOpenSchablonPopup}
+            onOpenVideoPopup={handleOpenVideoPopup}
+            canViewVideo={canViewVideo}
             isFlipped={flippedCellUid === station.uid}
             flippedSide={flippedCellUid === station.uid ? flippedCellSide : null}
             onFlip={handleCellFlip}
@@ -1489,6 +1544,8 @@ const StationsPage = () => {
             maxReadyParts={dynamic?.maxReadyParts}
             readyPartsCount={dynamic?.readyPartsCount}
             onOpenSchablonPopup={handleOpenSchablonPopup}
+            onOpenVideoPopup={handleOpenVideoPopup}
+            canViewVideo={canViewVideo}
             isConfigMode={configRowUid === station.uid}
             onConfigToggle={handleRowConfigToggle}
           />
@@ -1496,6 +1553,17 @@ const StationsPage = () => {
       })}
     </motion.div>
   );
+
+  // Быстрые действия карточки станции на карте — те же, что у плитки и строки списка
+  const mapActions = {
+    onOpenTemplates: (station: MapStation) => {
+      const full = stationsStatic.find(s => s.uid === station.uid);
+      if (full) handleOpenSchablonPopup(full);
+    },
+    onOpenVideo: (station: MapStation) =>
+      handleOpenVideoPopup({ uid: station.uid, name: station.name, workshop: station.workshop ?? undefined, section: station.section ?? undefined, status: station.status }),
+    canViewVideo,
+  };
 
   const gapWidth = calculateGapWidth();
   const scrollAreaTop = adaptiveGaps.topPadding + HEADER_HEIGHT + adaptiveGaps.controlsMarginTop + CONTROLS_HEIGHT + adaptiveGaps.scrollMarginTop;
@@ -1513,6 +1581,9 @@ const StationsPage = () => {
         configurationUid={schablonPopupData.configurationUid}
         onTemplateAssigned={() => fetchFilteredStations()}
       />
+
+      {/* Модуль видео грузится при первом открытии окна; без живого просмотра окна нет совсем (потоки закрываются) */}
+      {canViewVideo && videoStation && <StationVideoPopup station={videoStation} isOpen={videoOpen} onClose={() => setVideoOpen(false)} />}
 
       <AnimatePresence>
         {showScaleWarning && (
@@ -1542,27 +1613,43 @@ const StationsPage = () => {
           <div style={{ width: '90px' }} />
           <div style={{ display: 'flex', gap: '20px' }}>{buttons.slice(8, 9).map((button, idx) => renderButton(button, idx + 8))}</div>
         </div>
-        <div style={{ display: 'flex', gap: '20px' }}>{buttons.slice(9, 11).map((button, idx) => renderButton(button, idx + 9))}</div>
+        <div style={{ display: 'flex', gap: '20px' }}>{viewButtons.map(idx => renderButton(buttons[idx], idx))}</div>
       </div>
 
-      <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '0', right: '0', height: `${SCROLL_AREA_HEIGHT}px`, zIndex: 1 }}>
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-          <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {loading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Загрузка станций...</div>
-            ) : stationsError ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#F44336' }}>{stationsError}</div>
-            ) : stationsStatic.length === 0 ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Нет данных о станциях</div>
-            ) : (
-              <AnimatePresence mode="wait">{viewMode === 'grid' ? renderStationsGrid() : renderStationsList()}</AnimatePresence>
-            )}
-          </div>
-          <div style={{ position: 'absolute', right: '15px', top: 0 }}>
-            <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={SCROLL_AREA_HEIGHT} />
+      {viewMode === 'map' ? (
+        // Режим карты: без прокрутки страницы — карта сама масштабируется и двигается. Модуль карты грузится
+        // отдельным куском при первом открытии; в сборке без карты режима нет (viewMode не бывает 'map')
+        <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '40px', right: '40px', height: `${SCROLL_AREA_HEIGHT}px`, zIndex: 1 }}>
+          <StationMapView
+            stations={stationsStatic}
+            dynamics={stationsDynamic}
+            hierarchy={hierarchy}
+            loading={loading}
+            error={stationsError}
+            actions={mapActions}
+            handleRef={mapRef}
+          />
+        </div>
+      ) : (
+        <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '0', right: '0', height: `${SCROLL_AREA_HEIGHT}px`, zIndex: 1 }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Загрузка станций...</div>
+              ) : stationsError ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#F44336' }}>{stationsError}</div>
+              ) : stationsStatic.length === 0 ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>Нет данных о станциях</div>
+              ) : (
+                <AnimatePresence mode="wait">{viewMode === 'grid' ? renderStationsGrid() : renderStationsList()}</AnimatePresence>
+              )}
+            </div>
+            <div style={{ position: 'absolute', right: '15px', top: 0 }}>
+              <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={SCROLL_AREA_HEIGHT} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

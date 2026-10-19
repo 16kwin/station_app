@@ -1,7 +1,11 @@
 // FloatingMenu.tsx — ПОЛНЫЙ ФАЙЛ (убраны выплывающие окна)
-import React, { useState, useRef, useEffect } from 'react';
+// Пункты меню и их функции — в menuItems.ts: пункт выключенной функции не показывается (раздел 8.2 проекта
+// «Дискретное отключение функций»), «Безопасность» — только при canViewSecurity.
+import { useState, useRef, useEffect } from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useAuth } from '../../services/AuthContext';
+import { useFeatureSnapshot } from '../../services/features/featureStore';
+import { visibleMenuItems, type MenuIcon, type MenuItem } from './menuItems';
 
 import Icon1 from '../../assets/Menu/1.svg';
 import Icon2 from '../../assets/Menu/2.svg';
@@ -13,29 +17,22 @@ import Icon7 from '../../assets/Menu/7.svg';
 import Icon8 from '../../assets/Menu/8.svg';
 import Icon9 from '../../assets/Menu/9.svg';
 import LockIcon from '../../assets/Menu/10.svg';
+import SecurityIcon from '../../assets/Menu/11.svg';
 import ArrowIcon from '../../assets/Menu/Arrow2.svg';
 
-interface MenuItem {
-  path: string;
-  label: string;
-  icon: string;
-  isSleep?: boolean;
-  iconWidth: number;
-  iconHeight: number;
-}
-
-const menuItems: MenuItem[] = [
-  { path: '/main', label: 'Главная', icon: Icon1, iconWidth: 24, iconHeight: 24 },
-  { path: '/stations', label: 'Станции', icon: Icon2, iconWidth: 24, iconHeight: 24 },
-  { path: '/references', label: 'Справочники', icon: Icon3, iconWidth: 22, iconHeight: 24 },
-  { path: '/documents', label: 'Документы', icon: Icon4, iconWidth: 20, iconHeight: 24 },
-  { path: '/reports', label: 'Отчеты', icon: Icon5, iconWidth: 21, iconHeight: 24 },
-  { path: '/analytics', label: 'Аналитика', icon: Icon6, iconWidth: 23, iconHeight: 24 },
-  { path: '/settings', label: 'Настройки', icon: Icon7, iconWidth: 25, iconHeight: 24 },
-  { path: '/notifications', label: 'Уведомления', icon: Icon8, iconWidth: 23, iconHeight: 24 },
-  { path: '/account', label: 'Аккаунт', icon: Icon9, iconWidth: 24, iconHeight: 24 },
-  { path: '', label: 'Спящий режим', icon: LockIcon, isSleep: true, iconWidth: 21, iconHeight: 24 },
-];
+const MENU_ICONS: Record<MenuIcon, { src: string; width: number; height: number }> = {
+  main: { src: Icon1, width: 24, height: 24 },
+  stations: { src: Icon2, width: 24, height: 24 },
+  references: { src: Icon3, width: 22, height: 24 },
+  documents: { src: Icon4, width: 20, height: 24 },
+  reports: { src: Icon5, width: 21, height: 24 },
+  analytics: { src: Icon6, width: 23, height: 24 },
+  settings: { src: Icon7, width: 25, height: 24 },
+  notifications: { src: Icon8, width: 23, height: 24 },
+  security: { src: SecurityIcon, width: 22, height: 24 },
+  account: { src: Icon9, width: 24, height: 24 },
+  sleep: { src: LockIcon, width: 21, height: 24 },
+};
 
 const FloatingMenu = () => {
   const [isHovered, setIsHovered] = useState(false);
@@ -44,6 +41,8 @@ const FloatingMenu = () => {
   const [canHoverItems, setCanHoverItems] = useState(false);
   const { openTab } = useTabs();
   const { setLocked } = useAuth();
+  const { on, profile } = useFeatureSnapshot();
+  const menuItems = visibleMenuItems(key => on.has(key), profile?.canViewSecurity === true);
   const itemLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverEnableTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,11 +133,12 @@ const FloatingMenu = () => {
     };
   }, []);
 
-  const handleNavigate = (path: string, label: string, isSleep?: boolean) => {
-    if (isSleep) {
+  const handleNavigate = (item: MenuItem) => {
+    if (item.isSleep) {
       setLocked(true);
     } else {
-      openTab(path, label, null);
+      const target = item.opens ?? item;
+      openTab(target.path, target.label, null);
     }
     setHoveredItem(null);
     collapseMenu();
@@ -183,13 +183,14 @@ const FloatingMenu = () => {
           {isHovered && (
             <div className="flex items-center animate-fadeIn">
               {menuItems.map((item, index) => {
+                const icon = MENU_ICONS[item.icon];
                 const isItemHovered = hoveredItem === index;
                 const isFirst = index === 0;
                 const isLast = index === menuItems.length - 1;
 
                 return (
                   <div
-                    key={index}
+                    key={item.path || item.label}
                     className="flex items-center justify-center transition-all duration-700 ease-out"
                     style={{
                       paddingLeft: isFirst ? '20px' : '15px',
@@ -197,7 +198,7 @@ const FloatingMenu = () => {
                     }}
                     onMouseEnter={() => handleItemMouseEnter(index)}
                     onMouseLeave={handleItemMouseLeave}
-                    onClick={() => handleNavigate(item.path, item.label, item.isSleep)}
+                    onClick={() => handleNavigate(item)}
                   >
                     <div
                       className="relative flex items-center justify-center cursor-pointer transition-all duration-700 ease-out"
@@ -220,12 +221,12 @@ const FloatingMenu = () => {
                         {item.label}
                       </span>
                       <img
-                        src={item.icon}
+                        src={icon.src}
                         alt={item.label}
                         className="transition-all duration-700 ease-out"
                         style={{
-                          width: `${item.iconWidth}px`,
-                          height: `${item.iconHeight}px`,
+                          width: `${icon.width}px`,
+                          height: `${icon.height}px`,
                           opacity: isItemHovered && canHoverItems ? 0 : 1,
                           transform: isItemHovered && canHoverItems ? 'scale(0)' : 'scale(1)',
                         }}

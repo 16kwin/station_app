@@ -1,8 +1,11 @@
 // PurchaseGraphPage.tsx — страница «Граф закупок» (/screen/purchase-graph?focus&from&to), открывается
 // в отдельной вкладке без меню приложения: сверху фильтры и период, слева дерево номенклатуры
 // и легенда, справа настройки как в Obsidian, в центре — граф с физикой d3-force.
+// Страница — функция dashboards.graph (маршрут закрывает App.tsx). Печатная форма — функция export:
+// без неё нет ни кнопки, ни печатной шапки и таблицы закупок, Ctrl+P печатает экран как есть (уровень L1).
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useFeature } from '../../../services/features/featureStore';
 import DateRangePopup from '../shared/DateRangePopup';
 import type { AnchorRect } from '../shared/DateRangePopup';
 import { COLORS, DEFAULT_RANGE, FONT, SHADOWS } from '../shared/layout';
@@ -76,6 +79,7 @@ interface PurchaseGraphPageProps {
 
 const PurchaseGraphPage: React.FC<PurchaseGraphPageProps> = ({ initialData = null }) => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const printOn = useFeature('export');
   const [range, setRange] = useState<DateRange>(() => rangeFromParams(searchParams));
   const [focusKey, setFocusKey] = useState<string | null>(() => searchParams.get('focus') || null);
   const [nomSelection, setNomSelection] = useState<string[] | null>(null);
@@ -260,14 +264,16 @@ const PurchaseGraphPage: React.FC<PurchaseGraphPageProps> = ({ initialData = nul
         userSelect: 'none',
       }}
     >
-      <style>{PAGE_CSS}</style>
+      {printOn && <style>{PAGE_CSS}</style>}
       <div className="pg-inner" style={{ position: 'relative', width: '100%', height: '100%', minWidth: 1280, minHeight: 720 }}>
         {/* Период печати — тот, за который загружены данные, а не только что выбранный */}
-        <GraphPrintHeader
-          range={data ? { from: data.from, to: data.to } : range}
-          limitPercent={limitPercent}
-          filtersNote={filtersNote}
-        />
+        {printOn && (
+          <GraphPrintHeader
+            range={data ? { from: data.from, to: data.to } : range}
+            limitPercent={limitPercent}
+            filtersNote={filtersNote}
+          />
+        )}
 
         <GraphToolbar
           data={data}
@@ -280,7 +286,7 @@ const PurchaseGraphPage: React.FC<PurchaseGraphPageProps> = ({ initialData = nul
           range={range}
           onDateClick={handleDateClick}
           onDateReset={handleDateReset}
-          onPrint={() => window.print()}
+          onPrint={printOn ? () => window.print() : undefined}
           settingsOpen={settingsOpen}
           onToggleSettings={() => setSettingsOpen(open => !open)}
         />
@@ -495,7 +501,7 @@ const PurchaseGraphPage: React.FC<PurchaseGraphPageProps> = ({ initialData = nul
           </div>
         )}
 
-        <GraphPrintTable model={model} />
+        {printOn && <GraphPrintTable model={model} />}
       </div>
 
       <DateRangePopup

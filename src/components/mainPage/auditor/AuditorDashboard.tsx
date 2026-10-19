@@ -1,7 +1,12 @@
 // AuditorDashboard.tsx — панель «Аудитор» (8.png): затраты на приобретение и расход объема по цеху, инциденты
 // и выдачи сверх нормы, средний уровень брака, мини-граф закупок и лента закупок с завышенной ценой.
 // Всё — за период из пилюли дат главной страницы (проп range); три эндпоинта запрашиваются параллельно.
+// Граф закупок — отдельная функция dashboards.graph (модуль, который вариант поставки может исключить):
+// карточка грузится через lazyModules, без функции её нет, а расход объема занимает её место; строки ленты
+// не открывают граф. Панель видна, только если доступны economic, quality и audit (shared/roles.ts).
 import React, { useEffect, useMemo, useState } from 'react';
+import { useFeature } from '../../../services/features/featureStore';
+import { PurchaseGraphCard } from '../../../services/features/lazyModules';
 import { CANVAS, CARD_RECTS, COLORS, FONT, SHADOWS } from './layout';
 import { fetchAuditorDashboard } from './api';
 import type { AuditorDashboardData, OverpricedPurchase } from './types';
@@ -15,7 +20,6 @@ import DualMetricCard from '../shared/DualMetricCard';
 import type { DualMetric } from '../shared/DualMetricCard';
 import FeedCard from '../shared/FeedCard';
 import type { FeedItem } from '../shared/FeedCard';
-import PurchaseGraphCard from '../purchaseGraph/PurchaseGraphCard';
 
 const FETCH_ERROR_TEXT = 'Не удалось загрузить данные панели';
 
@@ -37,12 +41,29 @@ const periodKey = (from: string, to: string): string => `${from}|${to}`;
 /** «Второй экран»: экран событий текущего дня по закупкам с завышенной ценой в новой вкладке */
 const openEventsScreen = () => window.open('/screen/events?source=overpriced', '_blank', 'noopener');
 
+/** Расход объема без графа закупок: до правого края его карточки */
+const PRODUCTION_WIDE = {
+  ...CARD_RECTS.production,
+  w: CARD_RECTS.graph.x + CARD_RECTS.graph.w - CARD_RECTS.production.x,
+};
+
+/** Граф закупок — в своей области: сообщение о сбое загрузки модуля (lazyModules) не выходит за карточку */
+const GRAPH_AREA: React.CSSProperties = {
+  position: 'absolute',
+  left: CARD_RECTS.graph.x,
+  top: CARD_RECTS.graph.y,
+  width: CARD_RECTS.graph.w,
+  height: CARD_RECTS.graph.h,
+};
+const GRAPH_RECT = { x: 0, y: 0, w: CARD_RECTS.graph.w, h: CARD_RECTS.graph.h };
+
 interface AuditorDashboardProps {
   range: DateRange;
 }
 
 const AuditorDashboard: React.FC<AuditorDashboardProps> = ({ range }) => {
   const { from, to } = range;
+  const graphOn = useFeature('dashboards.graph');
   const [data, setData] = useState<AuditorDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Ключ периода последнего завершённого запроса: «загрузка» выводится из него, в теле эффекта состояние не меняется
@@ -138,7 +159,7 @@ const AuditorDashboard: React.FC<AuditorDashboardProps> = ({ range }) => {
         animationKey={animationKey}
       />
       <ProductionChart
-        rect={CARD_RECTS.production}
+        rect={graphOn ? CARD_RECTS.production : PRODUCTION_WIDE}
         title={PRODUCTION_TITLE}
         legend="header"
         palette={PRODUCTION_PALETTE}
@@ -148,7 +169,11 @@ const AuditorDashboard: React.FC<AuditorDashboardProps> = ({ range }) => {
         animationKey={animationKey}
       />
       {/* Мини-граф запрашивает свои данные сам — ему нужен только период */}
-      <PurchaseGraphCard rect={CARD_RECTS.graph} range={period} />
+      {graphOn && (
+        <div style={GRAPH_AREA}>
+          <PurchaseGraphCard rect={GRAPH_RECT} range={period} />
+        </div>
+      )}
       <FeedCard
         rect={CARD_RECTS.overpriced}
         title={OVERPRICED_TITLE}
@@ -156,7 +181,7 @@ const AuditorDashboard: React.FC<AuditorDashboardProps> = ({ range }) => {
         items={overpricedItems}
         icon="cube"
         accentColor={COLORS.accent}
-        onItemClick={openPurchaseGraph}
+        onItemClick={graphOn ? openPurchaseGraph : undefined}
         onSecondScreen={openEventsScreen}
       />
 

@@ -6,9 +6,6 @@ const ConstantInfo = {
 
   // API базовый URL
   apiBaseUrl: `${window.config.ip_api}`,
-  
-  // WebSocket базовый URL
-  wsBaseUrl: `ws://${window.config.ip_api.replace('http://', '').replace('https://', '')}`,
 
   // Авторизация и т.п.
   restApiLogin: '/api/auth/login',
@@ -28,11 +25,8 @@ const ConstantInfo = {
   restApiStationStatic: (uid: string) => `/api/stations/static/${uid}`,
   restApiStationDynamic: (uid: string) => `/api/stations/dynamic/${uid}`,
   
-  // WebSocket
-  wsStationsStatic: '/topic/stations/static',
-  wsStationsDynamic: '/topic/stations/dynamic',
-  wsStationsPath: '/ws-stations',
-  
+  // Живые обновления (функция websocket): адрес точки — в services/liveUpdatesClient.ts, темы — у страниц
+
   // Иерархия размещения
   restApiLocationHierarchy: '/api/locations/hierarchy',
   
@@ -226,16 +220,9 @@ const ConstantInfo = {
   restApiHoldings: '/api/holdings',
   restApiHoldingAllSettings: (userId: number) => `/api/holdings/settings?userId=${userId}`,
 
-  // Заказы
-  restApiOrdersActive: '/api/orders/active',
-  restApiOrdersClosed: '/api/orders/closed',
-  restApiOrderCreate: (orderUid: string) => `/api/orders/${orderUid}`,
-  restApiOrderGet: (orderUid: string) => `/api/orders/${orderUid}`,
+  // Адреса заказов и ТКП (функция orders) — в components/AnalyticsPage/api.ts
 
-  // ТКП
-  restApiTkpActive: '/api/tkp/active',
-  restApiTkpClosed: '/api/tkp/closed',
-  restApiTkpGet: (tkpUid: string) => `/api/tkp/${tkpUid}`,
+  // Станции: журнал событий, документы моделей
   restApiStationEvents: '/api/stations/crud/events',
   restApiStationModelDocuments: (modelUid: string) => `/api/station-models/${modelUid}/documents`,
   restApiStationModelDeleteDocument: (documentUid: string) => `/api/station-models/documents/${documentUid}`,
