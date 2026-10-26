@@ -6,6 +6,7 @@ import { useTabs } from '../../context/TabContext';
 import { useAuth } from '../../services/AuthContext';
 import { useFeatureSnapshot } from '../../services/features/featureStore';
 import { visibleMenuItems, type MenuIcon, type MenuItem } from './menuItems';
+import { COMPACT_MENU_HEIGHT, useCompact } from '../hooks/useViewport';
 
 import Icon1 from '../../assets/Menu/1.svg';
 import Icon2 from '../../assets/Menu/2.svg';
@@ -39,7 +40,9 @@ const FloatingMenu = () => {
   const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const [canHoverItems, setCanHoverItems] = useState(false);
-  const { openTab } = useTabs();
+  const { openTab, tabs, activeTabId } = useTabs();
+  // Телефон и планшет: наведения нет — постоянная полоса значков по нажатию (компьютерный вид не меняется)
+  const compact = useCompact();
   const { setLocked } = useAuth();
   const { on, profile } = useFeatureSnapshot();
   const menuItems = visibleMenuItems(key => on.has(key), profile?.canViewSecurity === true);
@@ -143,6 +146,65 @@ const FloatingMenu = () => {
     setHoveredItem(null);
     collapseMenu();
   };
+
+  if (compact) {
+    const activePath = tabs.find(tab => tab.id === activeTabId)?.path ?? '';
+    const isActive = (item: MenuItem) => {
+      // По своему пути пункта: «Уведомления» открывают «Главную», но подсвечиваться должна только она
+      const path = item.path;
+      return Boolean(path) && (activePath === path || activePath.startsWith(path + '/'));
+    };
+    return (
+      <nav
+        aria-label="Меню"
+        className="fixed z-50"
+        style={{
+          left: 8,
+          right: 8,
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
+          height: COMPACT_MENU_HEIGHT,
+          backgroundColor: '#3F3E3F',
+          borderRadius: 20,
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+        }}
+      >
+        {/* Значки не помещаются — полоса прокручивается пальцем; помещаются — стоят по центру */}
+        <div className="h-full flex items-center" style={{ overflowX: 'auto', overflowY: 'hidden', padding: '0 6px', scrollbarWidth: 'none' }}>
+          <div className="flex items-center" style={{ margin: '0 auto', gap: 2 }}>
+            {menuItems.map(item => {
+              const icon = MENU_ICONS[item.icon];
+              const active = isActive(item);
+              return (
+                <button
+                  key={item.path || item.label}
+                  type="button"
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => handleNavigate(item)}
+                  style={{
+                    flexShrink: 0,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: active ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                  }}
+                >
+                  <img src={icon.src} alt="" draggable={false} style={{ width: icon.width, height: icon.height, pointerEvents: 'none' }} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   if (!isVisible) return null;
 

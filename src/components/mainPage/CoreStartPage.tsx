@@ -50,7 +50,7 @@ const SECTIONS: readonly StartLink[] = [
     path: '/documents',
     tabLabel: 'Документы',
     title: 'Документы',
-    text: 'Пополнение и контроль уровня остатков',
+    text: 'Пополнение, контроль уровня остатков и заказы на перемещение',
     icon: DocumentsIcon,
     iconWidth: 20,
     iconHeight: 24,

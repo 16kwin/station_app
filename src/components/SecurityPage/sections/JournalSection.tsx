@@ -3,8 +3,13 @@
 // и стирание паролей камер выделены.
 import React from 'react';
 import type { SecurityReport } from '../api';
-import { ALERT_EVENTS, JOURNAL_EVENT_TITLES, formatDateTime } from './format';
+import { ALERT_EVENTS, JOURNAL_EVENT_TITLES, formatDateTime, shortHash } from './format';
 import { Missing, Mono, Pairs, ReportSection, Table, type Pair } from './ui';
+
+/** Отпечаток или хэш (32+ шестнадцатеричных знака) — первые 16 знаков: полный отпечаток есть в шапке каждой страницы */
+const HASH = /^[0-9a-f]{32,}$/i;
+
+const journalValue = (value: string | null): string => (value === null ? '—' : HASH.test(value) ? shortHash(value, 16) : value);
 
 const JournalSection: React.FC<{ report: SecurityReport; anchor?: string }> = ({ report, anchor }) => {
   const journal = report.journal;
@@ -78,7 +83,7 @@ const JournalSection: React.FC<{ report: SecurityReport; anchor?: string }> = ({
             formatDateTime(e.occurredAt),
             JOURNAL_EVENT_TITLES[e.type] ?? e.type,
             e.featureKey ? <Mono>{e.featureKey}</Mono> : '—',
-            e.oldValue || e.newValue ? `${e.oldValue ?? '—'} → ${e.newValue ?? '—'}` : '—',
+            e.oldValue || e.newValue ? `${journalValue(e.oldValue)} → ${journalValue(e.newValue)}` : '—',
             e.actor ?? '—',
             [e.ticket, e.reason].filter(Boolean).join(' · ') || '—',
           ])}

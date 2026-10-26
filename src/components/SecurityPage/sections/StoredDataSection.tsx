@@ -4,7 +4,7 @@
 // кнопка на экране (в печать не попадает), дальше пароль и запись PURGE в журнал профиля.
 import React from 'react';
 import type { FeatureRow, SecurityReport, StoredDataRow } from '../api';
-import { canPurgeRow, formatBytes, formatCount, formatDate } from './format';
+import { FILES_FORMS, canPurgeRow, countOf, formatBytes, formatCount, formatDate } from './format';
 import { Missing, Mono, ReportSection, Table } from './ui';
 
 interface StoredDataSectionProps {
@@ -66,7 +66,7 @@ const StoredDataSection: React.FC<StoredDataSectionProps> = ({ report, viewerCan
               <ul className="sp-plain">
                 {r.dirs.map(d => (
                   <li key={d.path}>
-                    <Mono wrap>{d.path}</Mono>: {d.files === null ? '' : `${formatCount(d.files)} файлов, `}
+                    <Mono wrap>{d.path}</Mono>: {d.files === null ? '' : `${countOf(d.files, FILES_FORMS)}, `}
                     {formatBytes(d.bytes)}
                   </li>
                 ))}

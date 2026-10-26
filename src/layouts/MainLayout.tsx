@@ -75,6 +75,9 @@ import {
   type TabSection,
   type TabUidSection,
 } from './tabRoutes';
+import { COMPACT_MENU_SPACE, useCompact } from '../components/hooks/useViewport';
+import ReadOnlyGuard from '../components/ReadOnly/ReadOnlyGuard';
+import './compact.css';
 
 const templateInfoCache: Map<string, string> = new Map();
 const nomenclatureInfoCache: Map<string, string> = new Map();
@@ -251,6 +254,8 @@ const MainLayout = () => {
   const { tabs, activeTabId, openTab, updateTabComponent, updateTabLabel, switchTab } = useTabs();
   const location = useLocation();
   const prevPathRef = useRef('');
+  // Телефон и планшет: рамка по экрану вместо холста 1920 (компьютерный вид ниже не меняется)
+  const compact = useCompact();
 
   const MIN_WIDTH = 1920; 
   const MIN_HEIGHT = 920; 
@@ -308,7 +313,9 @@ const MainLayout = () => {
   useEffect(() => {
     if (!isLoaded) return;
     const fullPath = location.pathname + location.search;
-    if (prevPathRef.current === fullPath) return;
+    // Тот же путь пропускаем, только если его вкладка есть: после восстановления вкладок (TabContext) прямая
+    // ссылка приходит тем же путём, а её вкладки в восстановленном списке ещё нет
+    if (prevPathRef.current === fullPath && tabs.some(tab => tab.path === fullPath)) return;
     prevPathRef.current = fullPath;
     
     const existingTab = tabs.find(tab => tab.path === fullPath);
@@ -330,7 +337,7 @@ const MainLayout = () => {
     if (location.pathname.startsWith('/documents/schablon/')) { const uid = location.pathname.replace('/documents/schablon/', ''); fetchTemplateName(uid).then(name => updateTabLabel(newTabId, `Шаблон - ${name}`)); }
     if (location.pathname.startsWith('/references/nomenclature/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
     if (location.pathname.startsWith('/references/suppliers/edit/')) { const uid = location.pathname.split('/').pop() || ''; if (uid) { fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); } }
-  }, [location.pathname, location.search, isLoaded]);
+  }, [location.pathname, location.search, location.key, isLoaded]);
 
   useEffect(() => { 
     const fullPath = location.pathname + location.search; 
@@ -357,6 +364,37 @@ const MainLayout = () => {
 
   if (!isLoaded) return null;
 
+  const tabPanes = tabs.map(tab => (
+    <div key={tab.id} className={compact ? (isChildTabPath(tabPathname(tab.path)) ? 'awms-compact-pane awms-compact-card' : 'awms-compact-pane') : undefined} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+      {/* Ленивый раздел ждёт загрузки своего куска внутри своей вкладки: соседние вкладки не прячутся */}
+      <Suspense fallback={null}>{tab.component}</Suspense>
+    </div>
+  ));
+
+  if (compact) {
+    // Вкладки сверху, рабочая область — весь экран между ними и меню. Страницы, свёрстанные под 1800 px,
+    // прокручиваются внутри области в обе стороны, пока для них нет своей раскладки
+    return (
+      <div className="w-full h-dvh flex flex-col" style={{ overflow: 'hidden' }}>
+        <div style={{ flexShrink: 0, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', paddingBottom: 6 }}><TabBar /></div>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            margin: `0 8px ${COMPACT_MENU_SPACE}`,
+            backgroundColor: '#FAFBFC',
+            borderRadius: 16,
+          }}
+          className="shadow overflow-hidden white-block relative"
+        >
+          {tabPanes}
+        </div>
+        <FloatingMenu />
+        <ReadOnlyGuard />
+      </div>
+    );
+  }
+
   const whiteBlockTop = (windowSize.height - WHITE_BLOCK_HEIGHT) / 2;
   const tabBarTop = whiteBlockTop - TAB_BAR_HEIGHT - TAB_BAR_GAP;
 
@@ -380,16 +418,13 @@ const MainLayout = () => {
             }} 
             className="rounded-[20px] shadow overflow-auto white-block relative"
           >
-            {tabs.map(tab => (
-              <div key={tab.id} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-                {/* Ленивый раздел ждёт загрузки своего куска внутри своей вкладки: соседние вкладки не прячутся */}
-                <Suspense fallback={null}>{tab.component}</Suspense>
-              </div>
-            ))}
+            {tabPanes}
           </div>
         </div>
       </div>
       <FloatingMenu />
+      {/* Планшет в альбомной ориентации (от 1024 px) — компьютерная раскладка, но режим просмотра остаётся */}
+      <ReadOnlyGuard />
     </div>
   );
 };

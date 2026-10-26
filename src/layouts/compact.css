@@ -1,0 +1,149 @@
+/* compact.css — телефон и планшет (MainLayout, класс awms-compact-pane только в раскладке по экрану).
+   Разделы свёрстаны под рабочую область 1800×840: корневой блок с абсолютно расположенными частями (заголовок,
+   панель инструментов, таблица). Здесь эти части идут сверху вниз во всю ширину экрана; таблицы на телефоне —
+   карточками (DataTableCards). На компьютере эти правила не действуют. */
+
+.awms-compact-pane > div:first-child {
+  height: auto !important;
+  min-height: 100%;
+  overflow: visible !important;
+  padding-bottom: 12px;
+}
+
+.awms-compact-pane > div:first-child > div[style*="position: absolute"] {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  margin: 12px 12px 0 !important;
+}
+
+/* Блок таблицы обрезал содержимое по своей высоте (inset сверху и снизу) — теперь высота по содержимому */
+.awms-compact-pane > div:first-child > div[style*="position: absolute"][style*="overflow: hidden"] {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+/* Внутри блока — обёртка смены вида (таблица / история), тоже прижатая абсолютно */
+.awms-compact-pane > div:first-child > div[style*="position: absolute"] > div[style*="position: absolute"][style*="top: 0px"],
+.awms-compact-pane > div:first-child > div[style*="position: absolute"] > div[style*="position: absolute"][style*="inset: 0px"] {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  inset: auto !important;
+}
+
+/* Заголовок раздела: 16 px, не длиннее двух строк */
+.awms-compact-pane > div:first-child > div[style*="position: absolute"] h1 {
+  font-size: 16px !important;
+  line-height: 20px !important;
+  white-space: normal !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===== Карточки и документы (вкладки create/edit — класс awms-compact-card) ===== */
+
+/* Шапка: название и статус — плотнее, статус меньше */
+.awms-compact-card > div:first-child > div:first-child {
+  gap: 8px !important;
+  align-items: flex-start !important;
+}
+.awms-compact-card > div:first-child > div:first-child > :not(h1) {
+  zoom: 0.8;
+  flex-shrink: 0;
+}
+
+/* Лента вкладок карточки — мельче и листается вбок */
+.awms-compact-card > div:first-child > div:nth-child(2) {
+  zoom: 0.85;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* Полоса заполнения карточки на телефоне не нужна: изменять с телефона нельзя */
+.awms-compact-card > div:first-child > div[style*="bottom: 25px"] {
+  display: none !important;
+}
+
+/* Панели с полями (на компьютере 790 и 420 px, поля стоят по координатам): по ширине экрана, поля — столбиком */
+.awms-compact-card > div:first-child > div[style*="position: absolute"] > div > div[style*="inset: 0px"] > div {
+  width: auto !important;
+  height: auto !important;
+  padding: 12px !important;
+  box-sizing: border-box;
+}
+.awms-compact-card > div:first-child > div[style*="position: absolute"] > div > div[style*="inset: 0px"] > div > div[style*="position: absolute"] {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  margin-bottom: 12px;
+}
+.awms-compact-card > div:first-child > div[style*="position: absolute"] > div > div[style*="inset: 0px"] > div * {
+  max-width: 100%;
+}
+
+/* Карточки и документы: содержимое вкладки карточки (панели с полями) — тоже прижато inset: 0 и прокручивалось
+   внутри; на телефоне панели идут друг под другом, широкая панель листается вбок (и масштабируется пальцами) */
+.awms-compact-pane > div:first-child > div[style*="position: absolute"] > div > div[style*="position: absolute"][style*="inset: 0px"] {
+  position: relative !important;
+  inset: auto !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  overflow: visible !important;
+}
+
+/* Заглушки разделов («Отчёты», «Настройки»: Tailwind h-full без отступов) — поля и заголовок как у оглавлений */
+.awms-compact-pane > div.h-full:first-child {
+  padding: 14px 12px !important;
+}
+.awms-compact-pane > div.h-full:first-child > h1 {
+  font-size: 18px !important;
+  line-height: 22px !important;
+  margin: 0 4px 12px !important;
+}
+
+/* Режим просмотра (ReadOnlyGuard): кнопки записи скрыты */
+[data-awms-ro-hidden] {
+  display: none !important;
+}
+
+/* Главная: панель (холст 1800×840 с карточками по координатам) — карточки друг под другом, DashboardCard */
+.awms-dashboard-compact > div {
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 12px 12px;
+}
+
+/* «Безопасность»: шапка столбиком, кнопки 32 px с переносом, оглавление — лентой над отчётом, факты в одну колонку,
+   широкие таблицы листаются внутри своего блока */
+.awms-compact-pane .sp-page { padding: 0 12px 16px; }
+.awms-compact-pane .sp-topbar { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 0 10px; }
+.awms-compact-pane .sp-title { font-size: 18px; line-height: 22px; }
+.awms-compact-pane .sp-subtitle { font-size: 12px; line-height: 16px; }
+.awms-compact-pane .sp-toolbar { gap: 6px; }
+.awms-compact-pane .sp-btn { height: 32px; padding: 0 12px; border-radius: 10px; font-size: 12px; }
+.awms-compact-pane .sp-banners { gap: 6px; }
+.awms-compact-pane .sp-layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.awms-compact-pane .sp-toc { position: static; flex-direction: row; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.awms-compact-pane .sp-toc-item { flex-shrink: 0; white-space: nowrap; padding: 6px 10px; border: 1px solid rgba(102, 110, 254, 0.15); background: #FFFFFF; font-size: 12px; }
+.awms-compact-pane .sp-section { padding: 12px 12px 14px; border-radius: 12px; scroll-margin-top: 12px; }
+.awms-compact-pane .sp-h2 { font-size: 15px; line-height: 20px; }
+.awms-compact-pane .sp-lead { font-size: 12px; line-height: 16px; }
+.awms-compact-pane .sp-facts { grid-template-columns: minmax(0, 1fr); }
+.awms-compact-pane .sp-fact { grid-template-columns: minmax(0, 42%) minmax(0, 1fr); gap: 8px; padding: 6px 0; font-size: 12px; line-height: 16px; }
+.awms-compact-pane .sp-table-wrap { overflow-x: auto; }
+.awms-compact-pane .sp-table { min-width: 560px; font-size: 12px; line-height: 16px; }

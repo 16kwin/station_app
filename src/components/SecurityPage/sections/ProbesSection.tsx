@@ -55,7 +55,9 @@ const ProbesSection: React.FC<ProbesSectionProps> = ({ targets, run, progress, o
           {run ? (
             <p className="sp-summary">
               {run.failed === 0 ? (
-                <Badge tone="ok">Все {run.total} запросов ответили 404</Badge>
+                <Badge tone="ok">
+                  Все ответили 404: {run.total} из {run.total}
+                </Badge>
               ) : (
                 <Badge tone="bad">
                   Не 404: {run.failed} из {run.total}

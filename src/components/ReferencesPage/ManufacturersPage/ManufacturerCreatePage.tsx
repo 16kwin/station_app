@@ -394,9 +394,10 @@ const ManufacturerCreatePage = () => {
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
           <button onClick={() => handleTabChange(0)} style={mainButtonStyle(activeTab === 0 && !isEventLogActive)}>
             <span>Основное</span>
-            <button onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Стрелка «свернуть вкладки» — span, а не button: кнопка внутри кнопки — недопустимый HTML (ошибка в консоли); tabIndex и Enter/Пробел — чтобы до стрелки, как раньше, доходили с клавиатуры */}
+            <span role="button" tabIndex={0} aria-label="Свернуть или развернуть вкладки" onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); handleToggleCollapse(); } }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
-            </button>
+            </span>
           </button>
           <AnimatePresence>
             {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => {

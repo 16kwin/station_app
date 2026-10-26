@@ -13,7 +13,7 @@ import { useFeature } from '../../../services/features/featureStore';
 import type { VideoCamera, VideoEventPhase, VideoEventType, VideoRecord, VideoStatus } from './types';
 import { errorText, fetchCameras, fetchRecords, fetchStatus, sendEvent } from './api';
 import { COLORS, FONT, STATUS_POLL_MS } from './theme';
-import { formatClock, formatRecordNumber } from './format';
+import { formatClock, formatRecordNumber, formatShortDuration, formatTableDate } from './format';
 import CameraSettingsCard from './CameraSettingsCard';
 import RecordsTable from './RecordsTable';
 import LivePreview from './LivePreview';
@@ -22,6 +22,7 @@ import type { BusyKey } from './EventPanel';
 import VideoPlayerPopup from './VideoPlayerPopup';
 import StreamPopup from './StreamPopup';
 import { useVideoAccess } from './access';
+import { useCompact } from '../../hooks/useViewport';
 
 /** Путь раздела во вкладках приложения */
 const ARCHIVE_PATH = '/documents/video-archive';
@@ -41,6 +42,9 @@ const NOTICE_MS = 6000;
 const VideoArchivePage: React.FC = () => {
   const { tabs, activeTabId, closeTab } = useTabs();
   const access = useVideoAccess();
+  // Телефон и планшет: списки камер и записей вместо холста; кнопок событий (они запускают запись) и живых
+  // превью нет — поток открывается по «Смотреть», запись — в плеере
+  const compact = useCompact();
   // Карточка камер — чтобы смотреть поток или править адреса; без них на её месте журнал
   const showCameras = access.viewLive || access.setupCameras;
   const liveOn = useFeature('video.live');
@@ -221,6 +225,75 @@ const VideoArchivePage: React.FC = () => {
   const streamCameraLive = streamCamera
     ? camerasWithState.find(camera => camera.id === streamCamera.id) ?? streamCamera
     : null;
+
+  if (compact) {
+    const caption: React.CSSProperties = { fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: COLORS.muted, margin: '0 4px 6px' };
+    const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', minHeight: 44, borderRadius: 10, border: `1px solid ${COLORS.rowBorder}`, backgroundColor: '#FFFFFF', boxSizing: 'border-box' };
+    const sub: React.CSSProperties = { fontSize: 12, lineHeight: '16px', color: COLORS.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+    return (
+      <div style={{ padding: '14px 12px 16px', fontFamily: FONT, color: COLORS.text, backgroundColor: COLORS.pageBg }}>
+        <h1 style={{ fontSize: 16, fontWeight: 600, lineHeight: '20px', margin: '0 4px 12px' }}>Журнал событий: видеоархив</h1>
+        {loadError ? (
+          <div style={{ padding: '12px 14px', borderRadius: 10, backgroundColor: COLORS.errorSoft, color: COLORS.rec, fontSize: 13 }}>{loadError}</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {access.viewLive && camerasWithState.length > 0 && (
+              <section>
+                <div style={caption}>Камеры</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {camerasWithState.map(camera => (
+                    <div key={camera.id} style={row}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, lineHeight: '18px' }}>
+                          {camera.recording && <span title="Идёт запись" style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: COLORS.rec, flexShrink: 0 }} />}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera.name}</span>
+                        </div>
+                        <div style={sub}>{[camera.cameraTypeTitle, camera.stationName].filter(Boolean).join(' · ')}</div>
+                      </div>
+                      <button type="button" onClick={() => openStream(camera)}
+                        style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${COLORS.accent}`, backgroundColor: '#FFFFFF', color: COLORS.accent, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                        Смотреть
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            {archiveOn && (
+              <section>
+                <div style={caption}>Записи</div>
+                {loading && records.length === 0 ? (
+                  <div style={{ padding: '16px 4px', fontSize: 13, color: COLORS.muted }}>Загрузка…</div>
+                ) : records.length === 0 ? (
+                  <div style={{ padding: '16px 4px', fontSize: 13, color: COLORS.muted }}>Записей нет</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {records.map(record => (
+                      <div key={record.id} role="button" tabIndex={0} onClick={() => openPlayer(record)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlayer(record); } }}
+                        style={{ ...row, cursor: 'pointer' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: '18px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            № {formatRecordNumber(record.number)} · {record.eventTitle}
+                          </div>
+                          <div style={sub}>{[formatTableDate(record.startedAt), record.stationName].filter(Boolean).join(' · ')}</div>
+                        </div>
+                        <span style={{ fontSize: 12, flexShrink: 0, color: record.status === 'recording' ? COLORS.rec : COLORS.muted, fontVariantNumeric: 'tabular-nums' }}>
+                          {record.status === 'recording' ? 'идёт запись' : record.status === 'failed' ? 'ошибка' : formatShortDuration(record.durationSeconds)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        )}
+        {archiveOn && <VideoPlayerPopup record={playerRecord} isOpen={playerOpen} onClose={() => setPlayerOpen(false)} />}
+        {access.viewLive && <StreamPopup camera={streamCameraLive} isOpen={streamOpen} onClose={() => setStreamOpen(false)} />}
+      </div>
+    );
+  }
 
   return (
     <div

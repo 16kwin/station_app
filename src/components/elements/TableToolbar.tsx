@@ -26,6 +26,8 @@ import ArrowIcon6Blue from '../../assets/Icons/ArrowIcons/ArrowIcon6Blue.svg';
 import CheckboxIcon18OffBlack from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OffBlack.svg';
 import CheckboxIcon18OnBlue from '../../assets/Icons/СheckboxIcons/СheckboxIcon18OnBlue.svg';
 import { useToolbarExport } from './toolbarExport';
+import { useReadOnly } from '../../services/readOnly';
+import { useViewport } from '../hooks/useViewport';
 
 interface SortField { key: string; label: string; iconType?: '19' | '20' | null; isAccounting?: boolean; }
 interface FilterField { key: string; label: string; hasSubmenu?: boolean; options?: { uid: string; name: string }[]; }
@@ -213,6 +215,10 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
   const [downloadOpen, setDownloadOpen] = useState(false);
   // Выгрузка PDF/Excel/Word и печать — только при функции export (toolbarExport.ts): одно место на все справочники
   const exportActions = useToolbarExport({ onPrint, onDownloadPdf, onDownloadExcel, onDownloadWord });
+  // Телефон и планшет в режиме просмотра: без «Создать» и «Удалить»; на телефоне строки — карточками (DataTable),
+  // поэтому печать, история и настройка колонок не нужны — остаются поиск, сортировка, фильтр и скачивание
+  const readOnly = useReadOnly();
+  const phone = useViewport() === 'phone';
 
   useImperativeHandle(ref, () => ({
     focusBarcodeSearch: () => {
@@ -462,7 +468,8 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
   const placementSubmenuHeight = TOP_PAD + placementLevels.length * TEXT_HEIGHT + (placementLevels.length - 1) * ITEM_GAP + BOTTOM_PAD;
 
   return (
-    <div style={{ position: 'relative', height: 40 }}>
+    // Телефон: кнопки 32 px (масштаб 0.8) и сразу на своих местах — без въезда при появлении
+    <div style={{ position: 'relative', height: 40, zoom: phone ? 0.8 : undefined }}>
       {/* Поиск */}
       <motion.div 
         style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: expanded === 'search' ? '#666EFE' : '#FFFFFF', border: expanded === 'search' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
@@ -482,7 +489,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
       {/* Сортировка */}
       <motion.div 
         style={{ position: 'absolute', left: 0, top: 0, borderRadius: 10, backgroundColor: '#FFFFFF', border: expanded === 'sort' ? 'none' : (hasActiveSort ? 'none' : '1px solid rgba(102, 110, 254, 0.15)'), boxShadow: expanded === 'sort' ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'hidden', zIndex: expanded === 'sort' ? 20 : 1 }} 
-        animate={{ x: sortX, width: sortWidth, height: expanded === 'sort' ? BTN_HEADER + sortListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
+        initial={phone ? false : undefined} animate={{ x: sortX, width: sortWidth, height: expanded === 'sort' ? BTN_HEADER + sortListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
         transition={{ x: spring, width: tween, height: tween }}
       >
         <div onClick={() => toggleExpand('sort')} style={{ ...btnBaseStyle, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'sort' || hasActiveSort ? '#666EFE' : 'transparent', borderRadius: expanded === 'sort' ? '10px 10px 0 0' : 10 }}>
@@ -540,7 +547,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
       {hasFilterFields && (
         <motion.div 
           style={{ position: 'absolute', left: 0, top: 0, borderRadius: 10, backgroundColor: '#FFFFFF', border: expanded === 'filter' ? 'none' : (hasActiveFilter ? 'none' : '1px solid rgba(102, 110, 254, 0.15)'), boxShadow: expanded === 'filter' ? '0 8px 32px rgba(0,0,0,0.12)' : 'none', overflow: 'visible', zIndex: expanded === 'filter' ? 20 : 1 }} 
-          animate={{ x: filterX, width: filterWidth, height: expanded === 'filter' ? BTN_HEADER + filterListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
+          initial={phone ? false : undefined} animate={{ x: filterX, width: filterWidth, height: expanded === 'filter' ? BTN_HEADER + filterListHeight + BTN_CLEAR : BTN_COLLAPSED }} 
           transition={{ x: spring, width: tween, height: tween }}
         >
           <div onClick={() => toggleExpand('filter')} style={{ ...btnBaseStyle, height: BTN_HEADER, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: expanded === 'filter' || hasActiveFilter ? '#666EFE' : 'transparent', borderRadius: expanded === 'filter' ? '10px 10px 0 0' : 10 }}>
@@ -690,7 +697,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
       {hasBarcodeSearch && (
         <motion.div 
           style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: expanded === 'barcodeSearch' ? '#666EFE' : '#FFFFFF', border: expanded === 'barcodeSearch' ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden', zIndex: expanded === 'barcodeSearch' ? 20 : 1 }} 
-          animate={{ x: barcodeSearchX, width: barcodeSearchWidth }} 
+          initial={phone ? false : undefined} animate={{ x: barcodeSearchX, width: barcodeSearchWidth }} 
           transition={{ x: spring, width: tween }}
         >
           <div onClick={expanded === 'barcodeSearch' ? handleBarcodeSearchClose : () => setExpanded('barcodeSearch')} style={{ ...btnBaseStyle, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
@@ -712,7 +719,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
       )}
 
       {/* Кнопка Создать */}
-      <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} animate={{ x: createGroupX }} transition={spring}>
+      {!readOnly && <motion.div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', gap: 15 }} initial={phone ? false : undefined} animate={{ x: createGroupX }} transition={spring}>
         <button style={{ ...btnBaseStyle, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, width: 130 }} 
           onClick={onCreate}>
           <img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14, marginLeft: 12 }} />
@@ -723,7 +730,7 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           onClick={onDelete}>
           <img src={DeleteIcon18Black} alt="" style={{ width: 18, height: 18 }} />
         </button>
-      </motion.div>
+      </motion.div>}
       
       {/* Правые кнопки */}
       <div style={{ position: 'absolute', right: 0, top: 0, display: 'flex', gap: 15 }}>
@@ -762,18 +769,18 @@ const TableToolbar = forwardRef<TableToolbarRef, TableToolbarProps>(({
           </AnimatePresence>
         </motion.div>
         )}
-        {exportActions.onPrint && (
+        {exportActions.onPrint && !phone && (
           <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={exportActions.onPrint}>
             <img src={PrintIcon18Black} alt="" style={{ width: 18, height: 18 }} />
           </button>
         )}
-        {onHistory && (
+        {onHistory && !phone && (
           <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: showHistory ? '#666EFE' : '#FFFFFF', border: showHistory ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
             onClick={onHistory}>
             <img src={showHistory ? HistoryIcon18White : HistoryIcon18Black} alt="" style={{ width: 18, height: 16 }} />
           </button>
         )}
-        {onConfiguration && (
+        {onConfiguration && !phone && (
           <button style={{ ...btnBaseStyle, width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
             onClick={onConfiguration}>
             <img src={ConfigurationIcon18Black} alt="" style={{ width: 18, height: 18 }} />

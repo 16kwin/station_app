@@ -13,7 +13,7 @@ const MINUTE_MS = 60 * 1000;
 export interface InactivityTimeouts {
   /** Через сколько миллисекунд бездействия экран блокируется */
   inactivityMs: number;
-  /** За сколько миллисекунд до блокировки показывается предупреждение */
+  /** За сколько миллисекунд до блокировки показывается предупреждение; 0 — без предупреждения */
   warningMs: number;
 }
 
@@ -63,15 +63,17 @@ export const useInactivityLock = () => {
 
     clearTimers();
 
-    // Таймер до предупреждения
-    warningTimerRef.current = setTimeout(() => {
-      if (isAuth && !isLocked) {
-        showWarningRef.current = true;
-        setShowWarning(true);
-        // Отправляем событие в другие вкладки
-        channelRef.current?.postMessage({ type: 'warning' });
-      }
-    }, inactivityMs - warningMs);
+    // Таймер до предупреждения (срок предупреждения 0 в профиле установки — блокировка без предупреждения)
+    if (warningMs > 0) {
+      warningTimerRef.current = setTimeout(() => {
+        if (isAuth && !isLocked) {
+          showWarningRef.current = true;
+          setShowWarning(true);
+          // Отправляем событие в другие вкладки
+          channelRef.current?.postMessage({ type: 'warning' });
+        }
+      }, inactivityMs - warningMs);
+    }
 
     // Таймер до блокировки
     timerRef.current = setTimeout(() => {

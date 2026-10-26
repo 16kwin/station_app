@@ -13,6 +13,8 @@ import CheckboxIcon18OnWhite from '../../assets/Icons/СheckboxIcons/СheckboxIc
 import ContextMenuOpenIcon16 from '../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
 import ContextMenuCopyIcon16 from '../../assets/Icons/CopyIcons/CopyIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
+import DataTableCards from './DataTableCards';
+import { useViewport } from '../hooks/useViewport';
 
 interface ColumnItem { key: string; label: string; }
 interface ColumnLayout { key: string; label: string; left: number; width: number; }
@@ -108,6 +110,8 @@ const DataTable: React.FC<DataTableProps> = ({
   centerColumns = [],
   rowBackground,
 }) => {
+  // Телефон: строки карточками (DataTableCards), компьютер и планшет — таблица как раньше
+  const phone = useViewport() === 'phone';
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
@@ -524,6 +528,13 @@ const DataTable: React.FC<DataTableProps> = ({
   const rowIconLeft = hideCheckbox
     ? CHECKBOX_LEFT
     : CHECKBOX_LEFT + CHECKBOX_BLOCK_WIDTH + CHECKBOX_TO_ICON_GAP;
+
+  if (phone) {
+    return (
+      <DataTableCards columns={columns} visibleKeys={visibleKeys} data={data} renderCell={renderCell}
+        renderCellNode={renderCellNode} onOpen={onDoubleClick} rowBackground={rowBackground} />
+    );
+  }
 
   return (
     <div style={{ width: tableWidth, height: tableHeight, backgroundColor: 'transparent', borderRadius: TABLE_RADIUS, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
