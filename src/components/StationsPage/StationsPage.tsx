@@ -32,6 +32,7 @@ import Icon11 from '../../assets/Station/11.svg';
 import Icon12 from '../../assets/Station/12.svg';
 import Icon13 from '../../assets/Station/13.svg';
 import type { JSX } from 'react/jsx-runtime';
+import { useCompact, useWindowWidth } from '../hooks/useViewport';
 
 interface Holding {
   id: number;
@@ -197,7 +198,45 @@ const loadSavedState = () => {
   return null;
 };
 
+/** Телефон и планшет: быстрые фильтры станций по группам (индексы кнопок панели) */
+const COMPACT_GROUPS: readonly (readonly [string, readonly number[]])[] = [
+  ['Размещение', [11, 3, 4, 5]],
+  ['Тип', [6, 7]],
+  ['Остаток', [8]],
+];
+
+const COMPACT_GROUP_BOX: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+  padding: '4px 6px 6px',
+  borderRadius: 12,
+  border: '1px solid rgba(102, 110, 254, 0.15)',
+  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  boxSizing: 'border-box',
+};
+
+const COMPACT_GROUP_CAPTION: React.CSSProperties = {
+  fontFamily: 'Inter, sans-serif',
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  lineHeight: '12px',
+  color: 'rgba(45, 64, 89, 0.55)',
+  paddingLeft: 2,
+};
+
 const StationsPage = () => {
+  // Телефон и планшет: заголовок и кнопки по ширине экрана, плитки — столько колонок, сколько помещается
+  const compact = useCompact();
+  const windowWidth = useWindowWidth();
+  // Плитки 220 px: на телефоне — две в ряд, уменьшенные; шире — столько, сколько помещается в натуральную величину.
+  // Ширина рабочей области — окно без полей рамки (8 + 8) и отступов раздела (12 + 12)
+  const tileGap = 16;
+  const tileArea = Math.max(0, windowWidth - 40);
+  const tileColumns = Math.max(2, Math.floor((tileArea + tileGap) / (220 + tileGap)));
+  const tileZoom = Math.min(1, tileArea / (tileColumns * 220 + (tileColumns - 1) * tileGap));
   const savedState = loadSavedState();
 
   const expandedRef = useRef<HTMLDivElement | null>(null);
@@ -1191,6 +1230,13 @@ const StationsPage = () => {
     return windows;
   };
 
+  // Телефон и планшет: кнопка панели в масштабе 0.6 (≈ 32 px), раскрытая — 0.8
+  const compactButton = (globalIdx: number) => (
+    <div key={`compact-${globalIdx}`} style={{ display: 'inline-flex', zoom: expandedButton === globalIdx ? 0.8 : 0.6 }}>
+      {renderButton(buttons[globalIdx], globalIdx)}
+    </div>
+  );
+
   const renderButton = (button: typeof buttons[0], globalIdx: number) => {
     const isActive = activeButtons.includes(globalIdx);
     const isExpanded = expandedButton === globalIdx;
@@ -1476,7 +1522,9 @@ const StationsPage = () => {
 
   const renderStationsGrid = () => (
     <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-      style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 220px)', gap: '30px', paddingTop: '10px', paddingBottom: '10px', paddingLeft: '40px', paddingRight: '15px', width: 'max-content' }}>
+      style={compact
+        ? { display: 'grid', gridTemplateColumns: `repeat(${tileColumns}, 220px)`, justifyContent: 'center', gap: `${tileGap}px`, padding: '10px 0', zoom: tileZoom }
+        : { display: 'grid', gridTemplateColumns: 'repeat(7, 220px)', gap: '30px', paddingTop: '10px', paddingBottom: '10px', paddingLeft: '40px', paddingRight: '15px', width: 'max-content' }}>
       {stationsStatic.map((station) => {
         const dynamic = stationsDynamic.get(station.uid);
         return (
@@ -1594,27 +1642,47 @@ const StationsPage = () => {
         )}
       </AnimatePresence>
 
-      <div style={{ paddingTop: `${adaptiveGaps.topPadding}px`, paddingLeft: '60px' }}>
-        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: '30px', fontWeight: 'bold', letterSpacing: '0', color: '#2D4059', margin: 0 }}>Панель управления станциями</h1>
+      <div style={{ paddingTop: compact ? '12px' : `${adaptiveGaps.topPadding}px`, paddingLeft: compact ? '16px' : '60px' }}>
+        <h1 style={{ fontFamily: 'Roboto, sans-serif', fontSize: compact ? '18px' : '30px', fontWeight: 'bold', letterSpacing: '0', color: '#2D4059', margin: 0 }}>Панель управления станциями</h1>
       </div>
 
-      <div ref={controlsRowRef} style={{ marginTop: `${adaptiveGaps.controlsMarginTop}px`, paddingLeft: '70px', paddingRight: '70px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minHeight: '54px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '20px' }}>{buttons.slice(0, 3).map((button, idx) => renderButton(button, idx))}</div>
-          <div style={{ width: `${gapWidth}px`, transition: 'width 0.4s ease', overflow: 'hidden' }} />
+      {compact ? (
+        // Телефон и планшет: первый ряд — поиск, сортировка, фильтр и переключатель вида в общей рамке; второй — быстрые
+        // фильтры тремя группами в рамках с подписью внутри. Кнопки 54 px в масштабе 0.6 (≈ 32 px, как панели
+        // справочников); раскрытая кнопка (поиск, списки) — в масштабе 0.8, чтобы список читался
+        <div ref={controlsRowRef} style={{ margin: '8px 12px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>{[0, 1, 2].map(compactButton)}</div>
+            <div style={{ ...COMPACT_GROUP_BOX, flexDirection: 'row', gap: 4, padding: 4, flexShrink: 0 }}>{viewButtons.map(compactButton)}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'stretch' }}>
+            {COMPACT_GROUPS.map(([caption, indexes]) => (
+              <div key={caption} style={COMPACT_GROUP_BOX}>
+                <span style={COMPACT_GROUP_CAPTION}>{caption}</span>
+                <div style={{ display: 'flex', gap: 4 }}>{indexes.map(compactButton)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+      <div ref={controlsRowRef} style={{ marginTop: compact ? '12px' : `${adaptiveGaps.controlsMarginTop}px`, paddingLeft: compact ? '12px' : '70px', paddingRight: compact ? '12px' : '70px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minHeight: '54px', flexWrap: compact ? 'wrap' : undefined, gap: compact ? '12px' : undefined }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: compact ? '12px' : '20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: compact ? '12px' : '20px' }}>{buttons.slice(0, 3).map((button, idx) => renderButton(button, idx))}</div>
+          <div style={{ width: compact ? 0 : `${gapWidth}px`, transition: 'width 0.4s ease', overflow: 'hidden' }} />
           <div style={{ display: 'flex', gap: '20px' }}>
             {renderButton(buttons[11], 11)}
             {renderButton(buttons[3], 3)}
             {renderButton(buttons[4], 4)}
             {renderButton(buttons[5], 5)}
           </div>
-          <div style={{ width: '90px' }} />
+          <div style={{ width: compact ? 0 : '90px' }} />
           <div style={{ display: 'flex', gap: '20px' }}>{buttons.slice(6, 8).map((button, idx) => renderButton(button, idx + 6))}</div>
-          <div style={{ width: '90px' }} />
+          <div style={{ width: compact ? 0 : '90px' }} />
           <div style={{ display: 'flex', gap: '20px' }}>{buttons.slice(8, 9).map((button, idx) => renderButton(button, idx + 8))}</div>
         </div>
         <div style={{ display: 'flex', gap: '20px' }}>{viewButtons.map(idx => renderButton(buttons[idx], idx))}</div>
       </div>
+      )}
 
       {viewMode === 'map' ? (
         // Режим карты: без прокрутки страницы — карта сама масштабируется и двигается. Модуль карты грузится
@@ -1631,7 +1699,8 @@ const StationsPage = () => {
           />
         </div>
       ) : (
-        <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '0', right: '0', height: `${SCROLL_AREA_HEIGHT}px`, zIndex: 1 }}>
+        // Телефон и планшет: без своей прокрутки высотой 640 px — плитки листаются вместе с разделом
+        <div style={{ position: 'absolute', top: `${scrollAreaTop}px`, left: '0', right: '0', height: compact ? 'auto' : `${SCROLL_AREA_HEIGHT}px`, zIndex: 1 }}>
           <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {loading ? (
@@ -1644,9 +1713,11 @@ const StationsPage = () => {
                 <AnimatePresence mode="wait">{viewMode === 'grid' ? renderStationsGrid() : renderStationsList()}</AnimatePresence>
               )}
             </div>
-            <div style={{ position: 'absolute', right: '15px', top: 0 }}>
-              <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={SCROLL_AREA_HEIGHT} />
-            </div>
+            {!compact && (
+              <div style={{ position: 'absolute', right: '15px', top: 0 }}>
+                <CustomScrollbar scrollContainerRef={scrollContainerRef} orientation="vertical" trackSize={SCROLL_AREA_HEIGHT} />
+              </div>
+            )}
           </div>
         </div>
       )}

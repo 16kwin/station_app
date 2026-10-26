@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { isValidElement, type ReactNode } from 'react';
 import {
   guardTabComponent,
+  isTabKnownOff,
   isUnavailableTab,
   restoreTabs,
   revalidateTabList,
@@ -112,6 +113,25 @@ describe('восстановление сохранённых вкладок', (
       ['m', 'v'],
     );
     assert.equal(restored?.activeTabId, 'v');
+  });
+
+  test('«Безопасность» без права на страницу не восстанавливается; с правом и без профиля — остаётся', async () => {
+    const tabs = saved([{ id: 'm', path: '/main' }, { id: 's', path: '/security' }], 's');
+    connectFeatureHttp(stubHttp(profile('r1', FULL, { canViewSecurity: false })));
+    await loadFeatures();
+    assert.deepEqual(restoreTabs(tabs), { tabs: [{ id: 'm', path: '/main', label: '/main' }], activeTabId: 'm' });
+    assert.equal(isTabKnownOff('/security?x=1'), true);
+    assert.equal(isTabKnownOff('/main'), false);
+
+    resetFeatures();
+    connectFeatureHttp(stubHttp(profile('r2', FULL, { canViewSecurity: true })));
+    await loadFeatures();
+    assert.deepEqual(restoreTabs(tabs)?.tabs.map(t => t.id), ['m', 's']);
+
+    resetFeatures();
+    connectFeatureHttp(stubHttp(new Error('сеть')));
+    await loadFeatures();
+    assert.deepEqual(restoreTabs(tabs)?.tabs.map(t => t.id), ['m', 's'], 'профиля нет — право неизвестно, вкладка остаётся');
   });
 
   test('модуля нет в сборке — вкладка отбрасывается и без профиля', () => {

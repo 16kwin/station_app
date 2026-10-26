@@ -12,6 +12,7 @@ import { formatClock, formatDate, formatDateTime, formatRecordNumber, parseServe
 import { ChevronDownIcon, DownloadIcon, PauseIcon, PlayIcon, StopIcon } from './icons';
 import { ActionButton, ModalShell, Spinner } from './ui';
 import { useCanDownloadVideo } from './access';
+import { useCompact, useWindowWidth } from '../../hooks/useViewport';
 
 /** Геометрия окна по макету: две камеры — 1242 в ширину, одна — 799 */
 const WIDTH_BOTH = 1242;
@@ -167,6 +168,9 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ width, current, duration, onS
 
 const VideoPlayerPopup: React.FC<VideoPlayerPopupProps> = ({ record, isOpen, onClose }) => {
   const canDownload = useCanDownloadVideo();
+  // Телефон и планшет: окно по ширине экрана, одна камера за раз (переключатель), элементы — столбиком
+  const compact = useCompact();
+  const windowWidth = useWindowWidth();
   const playable = useMemo(() => (record?.files ?? []).filter(file => file.status === 'done'), [record]);
   const failed = useMemo(() => (record?.files ?? []).filter(file => file.status !== 'done'), [record]);
   const stationFile = playable.find(file => file.cameraType === 'station') ?? null;
@@ -193,6 +197,11 @@ const VideoPlayerPopup: React.FC<VideoPlayerPopupProps> = ({ record, isOpen, onC
     setErrorIds(new Set());
     setLoadingIds(new Set(playable.map(file => file.id)));
   }, [record, hasBoth, stationFile, playable]);
+
+  // На телефоне две камеры рядом не помещаются — показываем камеру станции, обзорная — переключателем
+  useEffect(() => {
+    if (compact && mode === 'both') setMode(stationFile ? 'station' : 'overview');
+  }, [compact, mode, stationFile]);
 
   const visible: VideoRecordFile[] = useMemo(() => {
     if (mode === 'both') return [stationFile, overviewFile].filter((file): file is VideoRecordFile => file !== null);
@@ -318,6 +327,109 @@ const VideoPlayerPopup: React.FC<VideoPlayerPopupProps> = ({ record, isOpen, onC
   const availableModes: ViewMode[] = hasBoth ? ['both', 'station', 'overview'] : [mode];
 
   const infoLine: React.CSSProperties = { fontSize: 15, lineHeight: '18px', whiteSpace: 'nowrap' };
+
+  if (compact) {
+    if (!isOpen) return null;
+    const file = visible[0] ?? null;
+    const duration = file ? durations[file.id] ?? file.durationSeconds ?? 0 : 0;
+    // Полоса перемотки — по ширине окна (окно: экран без полей 8 + 8, внутри поля 14 + 14)
+    const barWidth = Math.max(160, Math.min(480, windowWidth - 16) - 44);
+    const small: React.CSSProperties = { fontSize: 12, lineHeight: '16px', color: COLORS.muted };
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: COLORS.overlay, backdropFilter: 'blur(6px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+        <div role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}
+          style={{ width: '100%', maxWidth: 480, maxHeight: '100%', overflowY: 'auto', backgroundColor: COLORS.white, borderRadius: 16, boxShadow: SHADOWS.modal, padding: '12px 14px 14px', boxSizing: 'border-box', fontFamily: FONT, color: COLORS.text }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, lineHeight: '20px' }}>
+              Видеозапись № {formatRecordNumber(record.number)}
+            </div>
+            <button type="button" aria-label="Закрыть" onClick={onClose}
+              style={{ width: 32, height: 32, border: 'none', borderRadius: 8, backgroundColor: 'transparent', color: COLORS.muted, fontSize: 20, lineHeight: '20px', cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+            <span style={small}>{formatDateTime(started)} – {finished ? formatDateTime(finished) : '…'}</span>
+            <span style={small}>Событие: {record.eventTitle} · {formatClock(record.durationSeconds)}</span>
+            {failed.length > 0 && (
+              <span style={{ ...small, color: COLORS.rec }}>{failed.map(item => `${item.cameraTitle}: ${item.errorMessage ?? 'нет файла'}`).join('; ')}</span>
+            )}
+          </div>
+          {hasBoth && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+              {(['station', 'overview'] as const).map(option => (
+                <button key={option} type="button" onClick={() => setMode(option)}
+                  style={{ flex: 1, height: 32, borderRadius: 8, border: `1px solid ${option === mode ? COLORS.accent : COLORS.rowBorder}`, backgroundColor: option === mode ? 'rgba(102, 110, 254, 0.08)' : COLORS.white, color: option === mode ? COLORS.accent : COLORS.text, fontFamily: FONT, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  {MODE_LABELS[option]}
+                </button>
+              ))}
+            </div>
+          )}
+          {file === null ? (
+            <div style={{ marginTop: 10, borderRadius: 10, backgroundColor: '#F1F3F9', color: COLORS.muted, fontSize: 13, padding: '28px 12px', textAlign: 'center' }}>
+              Ни одна камера не записала это событие
+            </div>
+          ) : (
+            <>
+              <div style={{ position: 'relative', marginTop: 10, width: '100%', aspectRatio: '16 / 9', borderRadius: 10, overflow: 'hidden', backgroundColor: '#0E1118' }}>
+                <video
+                  key={file.id}
+                  ref={element => {
+                    if (element) videos.current.set(file.id, element);
+                    else videos.current.delete(file.id);
+                  }}
+                  src={apiUrl(file.contentUrl)}
+                  preload="metadata"
+                  playsInline
+                  muted
+                  controlsList="nodownload noremoteplayback"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  onContextMenu={event => event.preventDefault()}
+                  onLoadedMetadata={event => {
+                    const value = event.currentTarget.duration;
+                    if (Number.isFinite(value)) setDurations(prev => ({ ...prev, [file.id]: value }));
+                  }}
+                  onCanPlay={() => markLoaded(file.id)}
+                  onTimeUpdate={event => onTimeUpdate(file, event.currentTarget)}
+                  onEnded={() => setPlaying(false)}
+                  onError={() => {
+                    markLoaded(file.id);
+                    setErrorIds(prev => new Set(prev).add(file.id));
+                  }}
+                  onClick={() => (playing ? pause() : play())}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                />
+                {(loadingIds.has(file.id) || errorIds.has(file.id)) && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#C9D0DE', fontSize: 13, backgroundColor: 'rgba(14, 17, 24, 0.6)' }}>
+                    {errorIds.has(file.id) ? 'Не удалось загрузить видео' : (<><Spinner color="#C9D0DE" /> Загрузка видео…</>)}
+                  </div>
+                )}
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <ProgressBar width={barWidth} current={current} duration={duration} onSeek={seek} />
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 13, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{formatDateTime(frameTime)}</div>
+            </>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 10, zoom: 0.8 }}>
+            <ControlButton label="Воспроизвести" onClick={play} active={playing}>
+              <PlayIcon color={playing ? COLORS.accent : COLORS.text} />
+            </ControlButton>
+            <ControlButton label="Пауза" onClick={pause}>
+              <PauseIcon />
+            </ControlButton>
+            <ControlButton label="Стоп" onClick={stop}>
+              <StopIcon />
+            </ControlButton>
+            {canDownload && (
+              <ControlButton label="Скачать запись" onClick={download}>
+                <DownloadIcon />
+              </ControlButton>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ModalShell

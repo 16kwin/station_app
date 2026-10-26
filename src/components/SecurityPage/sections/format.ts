@@ -26,6 +26,19 @@ export const formatDate = (iso: string | null | undefined): string => {
 export const formatCount = (n: number | null | undefined): string =>
   n === null || n === undefined ? '—' : n.toLocaleString('ru-RU');
 
+/** Число со словом в нужной форме: countOf(3, ['строка', 'строки', 'строк']) → «3 строки»; нет числа — «—» */
+export const countOf = (n: number | null | undefined, forms: readonly [one: string, few: string, many: string]): string => {
+  if (n === null || n === undefined) return '—';
+  const abs = Math.abs(Math.trunc(n));
+  const mod100 = abs % 100;
+  const mod10 = abs % 10;
+  const form = mod100 >= 11 && mod100 <= 14 ? forms[2] : mod10 === 1 ? forms[0] : mod10 >= 2 && mod10 <= 4 ? forms[1] : forms[2];
+  return `${formatCount(n)} ${form}`;
+};
+
+export const ROWS_FORMS = ['строка', 'строки', 'строк'] as const;
+export const FILES_FORMS = ['файл', 'файла', 'файлов'] as const;
+
 const UNITS = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
 
 /** «12,3 ГБ» */

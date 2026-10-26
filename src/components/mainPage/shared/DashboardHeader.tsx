@@ -26,6 +26,8 @@ export interface DashboardHeaderProps {
   onDateReset?: () => void;
   /** Кнопки «Фильтр» и «Куб» рядом с пилюлей дат; у аудитора по макету их нет */
   showTools?: boolean;
+  /** Телефон и планшет: шапка в потоке над панелью, строки переносятся, всё мельче */
+  compact?: boolean;
 }
 
 // Геометрия шапки в координатах холста 1800×840
@@ -128,6 +130,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onDateClick,
   onDateReset,
   showTools = true,
+  compact = false,
 }) => {
   const handlePrevBlock = () => onBlockChange((blockIndex - 1 + blocks.length) % blocks.length);
   const handleNextBlock = () => onBlockChange((blockIndex + 1) % blocks.length);
@@ -146,7 +149,18 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   return (
     <div
-      style={{
+      style={compact ? {
+        // Масштаб 0.75: заголовок ≈ 18 px, кнопки ≈ 30 px
+        position: 'relative',
+        width: '100%',
+        padding: '12px 16px 4px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 12,
+        zoom: 0.75,
+      } : {
         position: 'absolute',
         left: 0,
         top: 0,

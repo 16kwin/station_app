@@ -4,7 +4,7 @@
 // в теле запроса, после ответа (любого) поле очищается, в консоль и журнал не пишется.
 import React, { useEffect, useRef, useState } from 'react';
 import { purgeFeatureData, validatePurge, type PurgeResult, type StoredDataRow } from './api';
-import { formatBytes, formatCount } from './sections/format';
+import { FILES_FORMS, ROWS_FORMS, countOf, formatBytes } from './sections/format';
 import { Mono } from './sections/ui';
 
 interface PurgeDialogProps {
@@ -20,12 +20,12 @@ const Volumes: React.FC<{ tables: StoredDataRow['tables']; dirs: StoredDataRow['
   <ul className="sp-plain sp-dialog-list">
     {tables.map(t => (
       <li key={t.name}>
-        таблица <Mono>{t.name}</Mono> — {formatCount(t.rows)} строк
+        таблица <Mono>{t.name}</Mono> — {t.rows === null ? 'число строк неизвестно' : countOf(t.rows, ROWS_FORMS)}
       </li>
     ))}
     {dirs.map(d => (
       <li key={d.path}>
-        каталог <Mono wrap>{d.path}</Mono> — {d.files === null ? '' : `${formatCount(d.files)} файлов, `}
+        каталог <Mono wrap>{d.path}</Mono> — {d.files === null ? '' : `${countOf(d.files, FILES_FORMS)}, `}
         {formatBytes(d.bytes)}
       </li>
     ))}

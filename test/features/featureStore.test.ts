@@ -105,10 +105,23 @@ describe('ответ сервера', () => {
     assert.equal(parsed.preset, 'full');
     assert.equal(parsed.presetSource, 'default');
     assert.equal(parsed.revision, 'abc123');
-    assert.deepEqual(parsed.ui, { inactivityMinutes: null, warningMinutes: 2 });
+    assert.deepEqual(parsed.ui, { inactivityMinutes: null, warningMinutes: 2, mobileReadOnly: true });
     assert.equal(parsed.canViewSecurity, true);
     assert.equal(parsed.canManage, false);
     assert.equal(parsed.installation, null, 'сервер не прислал состояние установки');
+  });
+
+  test('срок предупреждения 0 — без предупреждения (awms.ui.warning-minutes=0); отрицательный отбрасывается', () => {
+    const zero = parseFeatureProfile(profile('r0', {}, { ui: { inactivityMinutes: 5, warningMinutes: 0 } }));
+    assert.deepEqual(zero.ui, { inactivityMinutes: 5, warningMinutes: 0, mobileReadOnly: true });
+    const negative = parseFeatureProfile(profile('r0', {}, { ui: { inactivityMinutes: 0, warningMinutes: -1 } }));
+    assert.deepEqual(negative.ui, { inactivityMinutes: null, warningMinutes: null, mobileReadOnly: true });
+  });
+
+  test('с телефона только просмотр, пока установка явно не разрешила запись (awms.mobile.read-only=false)', () => {
+    assert.equal(parseFeatureProfile(profile('r0', {}, {})).ui.mobileReadOnly, true, 'старый сервер без поля');
+    assert.equal(parseFeatureProfile(profile('r0', {}, { ui: { mobileReadOnly: true } })).ui.mobileReadOnly, true);
+    assert.equal(parseFeatureProfile(profile('r0', {}, { ui: { mobileReadOnly: false } })).ui.mobileReadOnly, false);
   });
 
   test('состояние установки без ролей (installation) разбирается так же, как features', () => {

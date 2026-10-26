@@ -108,7 +108,7 @@ const AppContent = () => {
           </motion.div>
         ) : isAuth ? (
           <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-            {/* До ответа /api/features — прелоадер; профиль не получен — только ядро и плашка с кнопкой «Повторить» */}
+            {/* До ответа /api/features — прелоадер; профиль не получен (прежний сервер, сбой) — всё как до выключателей */}
             <FeatureProvider>
               {/* Страховка для ленивых модулей: у каждого из lazyModules своё ожидание, это — на случай без него */}
               <Suspense fallback={<FullScreenPreloader />}>

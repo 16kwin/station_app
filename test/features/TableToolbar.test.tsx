@@ -64,7 +64,7 @@ describe('выгрузка в панели справочников', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/components/elements/TableToolbar.tsx'), 'utf8');
     assert.match(source, /useToolbarExport\(\{ onPrint, onDownloadPdf, onDownloadExcel, onDownloadWord \}\)/);
     assert.match(source, /\{exportActions\.downloadMenu && \(/, 'меню «Скачать» — под downloadMenu');
-    assert.match(source, /\{exportActions\.onPrint && \(/, 'кнопка печати — под onPrint из toolbarExport');
+    assert.match(source, /\{exportActions\.onPrint && (!phone && )?\(/, 'кнопка печати — под onPrint из toolbarExport');
     // Свойства страницы напрямую в разметке не вызываются: обработчик сработал бы и при выключенной export
     assert.doesNotMatch(source, /[^.]onDownload(Pdf|Excel|Word)\?\.\(\)/);
     assert.doesNotMatch(source, /onClick=\{onPrint\}/);

@@ -6,7 +6,9 @@ import { parseSecurityReport, type FeatureRow } from '../../src/components/Secur
 import {
   buildExport,
   canPurgeRow,
+  countOf,
   EXPORT_FORMAT,
+  FILES_FORMS,
   exportFileName,
   fallbackCaveats,
   fallbackSelfCheck,
@@ -14,6 +16,7 @@ import {
   formatBytes,
   levelText,
   rolesNotGuaranteed,
+  ROWS_FORMS,
 } from '../../src/components/SecurityPage/sections/format';
 import { FINGERPRINT, FILE_SHA, stubReport } from './fixtures';
 
@@ -136,5 +139,17 @@ describe('выгрузка JSON', () => {
     assert.equal(formatBytes(1536), '1,5 КБ');
     assert.equal(formatBytes(13207024435), '12,3 ГБ');
     assert.equal(formatBytes(null), '—');
+  });
+});
+
+describe('числа со словом', () => {
+  test('форма слова по числу: 1 строка, 3 строки, 11 строк, 21 файл, 1 234 файла', () => {
+    assert.equal(countOf(1, ROWS_FORMS), '1 строка');
+    assert.equal(countOf(3, ROWS_FORMS), '3 строки');
+    assert.equal(countOf(11, ROWS_FORMS), '11 строк');
+    assert.equal(countOf(0, ROWS_FORMS), '0 строк');
+    assert.equal(countOf(21, FILES_FORMS), '21 файл');
+    assert.equal(countOf(1234, FILES_FORMS).replace(/\s/g, ' '), '1 234 файла');
+    assert.equal(countOf(null, FILES_FORMS), '—');
   });
 });

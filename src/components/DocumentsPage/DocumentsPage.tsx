@@ -5,6 +5,8 @@ import React from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useFeatureSnapshot } from '../../services/features/featureStore';
 import { isPathAllowed } from '../../services/features/routes';
+import { useCompact } from '../hooks/useViewport';
+import CompactSectionIndex from '../elements/CompactSectionIndex';
 
 interface DocumentButton {
   /** Путь вкладки */
@@ -23,8 +25,12 @@ const DOCUMENT_BUTTONS: readonly DocumentButton[] = [
   { path: '/documents/gpp', label: 'Документ: ГПП', text: 'График подготовки производства' },
 ];
 
+/** Телефон и планшет: журналы — отдельной группой */
+const JOURNALS = new Set(['/documents/video-archive']);
+
 const DocumentsPage = () => {
   const { openTab } = useTabs();
+  const compact = useCompact();
   // Подписка на профиль функций: кнопки перерисовываются, когда меняется состав функций
   const { on } = useFeatureSnapshot();
   const buttons = DOCUMENT_BUTTONS.filter(button => isPathAllowed(button.path, key => on.has(key)));
@@ -42,6 +48,19 @@ const DocumentsPage = () => {
     boxShadow: '0 4px 12px rgba(102, 110, 254, 0.3)',
     transition: 'all 0.3s ease',
   };
+
+  if (compact) {
+    const item = (button: DocumentButton) => ({ key: button.path, label: button.text, onClick: () => openTab(button.path, button.label, null) });
+    return (
+      <CompactSectionIndex
+        title="Документы"
+        groups={[
+          { title: 'Документы', items: buttons.filter(button => !JOURNALS.has(button.path)).map(item) },
+          { title: 'Журналы', items: buttons.filter(button => JOURNALS.has(button.path)).map(item) },
+        ]}
+      />
+    );
+  }
 
   return (
     <div style={{ position: 'relative', height: '100%' }}>

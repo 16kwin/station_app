@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import AxiosService from '../../services/AxiosService';
+import { useCompact } from '../hooks/useViewport';
 import EyeIconSvg from '../../assets/Eye.svg';
 import EyeOffIconSvg from '../../assets/EyeOff.svg';
 import EyeRedIconSvg from '../../assets/EyeRed.svg';
@@ -49,6 +50,9 @@ const inputStyle: React.CSSProperties = {
 };
 
 const ChangePasswordForm: React.FC<Props> = ({ login, currentPassword, http = AxiosService, onChanged, onCancel }) => {
+  // Телефон и планшет: поля во всю ширину карточки (компьютерный вид — прежние 399 px)
+  const compact = useCompact();
+  const fieldWidth = compact ? '100%' : '399px';
   const askCurrent = currentPassword === undefined;
   const [values, setValues] = useState<Record<FieldName, string>>({ current: '', next: '', repeat: '' });
   const [focused, setFocused] = useState<FieldName | null>(null);
@@ -100,7 +104,7 @@ const ChangePasswordForm: React.FC<Props> = ({ login, currentPassword, http = Ax
   const field = (name: FieldName, legend: string, placeholder: string, autoComplete: string, withEye: boolean, autoFocus: boolean) => (
     <div style={{ marginBottom: '26px', position: 'relative' }}>
       <fieldset
-        style={{ width: '399px', height: '59px', borderColor: color(name), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
+        style={{ width: fieldWidth, height: '59px', borderColor: color(name), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
         onFocus={() => setFocused(name)}
         onBlur={() => setFocused(null)}
       >
@@ -138,17 +142,17 @@ const ChangePasswordForm: React.FC<Props> = ({ login, currentPassword, http = Ax
 
   return (
     <>
-      <div style={{ marginTop: '75px', width: '100%', paddingLeft: '113px' }}>
+      <div style={{ marginTop: compact ? '32px' : '75px', width: '100%', paddingLeft: compact ? 0 : '113px' }}>
         <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '29px', fontWeight: 600, fontFamily: FONT, color: TEXT, margin: 0 }}>Смена пароля</h2>
+          <h2 style={{ fontSize: compact ? '24px' : '29px', fontWeight: 600, fontFamily: FONT, color: TEXT, margin: 0 }}>Смена пароля</h2>
         </div>
-        <div style={{ height: '24px', display: 'flex', alignItems: 'center', marginTop: '8px' }}>
+        <div style={{ minHeight: '24px', display: 'flex', alignItems: 'center', marginTop: '8px' }}>
           <p style={{ fontSize: '16px', fontWeight: 500, letterSpacing: '0.16px', fontFamily: FONT, color: TEXT, margin: 0, opacity: 0.5 }}>
             Задайте новый пароль для продолжения работы
           </p>
         </div>
       </div>
-      <form onSubmit={handleSubmit} style={{ marginTop: '28px', width: '399px' }}>
+      <form onSubmit={handleSubmit} style={{ marginTop: '28px', width: fieldWidth }}>
         {/* Логин — для менеджера паролей браузера: новый пароль запоминается к нужной учётной записи */}
         <input type="text" name="username" autoComplete="username" value={login} readOnly hidden />
         <p style={{ fontSize: '15px', fontWeight: 500, fontFamily: FONT, color: TEXT, margin: '0 0 22px' }}>
@@ -164,7 +168,7 @@ const ChangePasswordForm: React.FC<Props> = ({ login, currentPassword, http = Ax
         <button
           type="submit"
           disabled={!isButtonActive || isLoading}
-          style={{ width: '399px', height: '59px', borderRadius: '10px', border: 'none', backgroundColor: ACCENT, opacity: isButtonActive ? 1 : 0.5, cursor: isButtonActive ? 'pointer' : 'not-allowed', fontSize: '17px', fontWeight: 600, fontFamily: FONT, color: '#FFFFFF' }}
+          style={{ width: fieldWidth, height: '59px', borderRadius: '10px', border: 'none', backgroundColor: ACCENT, opacity: isButtonActive ? 1 : 0.5, cursor: isButtonActive ? 'pointer' : 'not-allowed', fontSize: '17px', fontWeight: 600, fontFamily: FONT, color: '#FFFFFF' }}
         >
           {isLoading ? 'Сохранение...' : 'Сменить пароль и войти'}
         </button>
@@ -173,7 +177,7 @@ const ChangePasswordForm: React.FC<Props> = ({ login, currentPassword, http = Ax
           type="button"
           onClick={() => onCancel()}
           disabled={isLoading}
-          style={{ width: '399px', height: '40px', marginTop: '6px', border: 'none', background: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '16px', fontWeight: 500, fontFamily: FONT, color: TEXT, opacity: 0.6 }}
+          style={{ width: fieldWidth, height: '40px', marginTop: '6px', border: 'none', background: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '16px', fontWeight: 500, fontFamily: FONT, color: TEXT, opacity: 0.6 }}
         >
           Выйти
         </button>
