@@ -151,7 +151,9 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
       days.push({ day: i, month: currentMonth, year: currentYear, isCurrentMonth: true });
     }
 
-    const remainingDays = 35 - days.length;
+    // 5 строк, а если месяц в них не помещается (начало в СБ/ВС и 30–31 день) — 6
+    const cells = days.length > 35 ? 42 : 35;
+    const remainingDays = cells - days.length;
     for (let i = 1; i <= remainingDays; i++) {
       days.push({
         day: i,
@@ -161,8 +163,12 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
       });
     }
 
-    return days.slice(0, 35);
+    return days;
   }, [currentYear, currentMonth]);
+
+  const rowCount = calendarDays.length / 7;
+  // Высота сетки дней постоянная: шесть строк делаем ниже, чтобы окно не меняло размер
+  const rowHeight = rowCount > 5 ? 33 : 38;
 
   const handleDateClick = (day: number, month: number, year: number, isCurrentMonth: boolean) => {
     setSelectedDay(day);
@@ -174,7 +180,9 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
 
   const handleConfirm = () => {
     if (selectedDay) {
-      const dateStr = formatDate(currentYear, currentMonth, selectedDay);
+      // 31-е, выбранное в длинном месяце, после перехода на короткий становится последним днём
+      const lastDay = new Date(currentYear, currentMonth, 0).getDate();
+      const dateStr = formatDate(currentYear, currentMonth, Math.min(selectedDay, lastDay));
       onConfirm(dateStr);
       onClose();
     }
@@ -340,11 +348,11 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
                     alignItems: 'center',
                   }}
                 >
-                  {Array.from({ length: 5 }).map((_, rowIndex) => (
+                  {Array.from({ length: rowCount }).map((_, rowIndex) => (
                     <div key={rowIndex} style={{
                       display: 'flex',
                       gap: BLOCK_GAP,
-                      height: 38,
+                      height: rowHeight,
                     }}>
                       {calendarDays.slice(rowIndex * 7, rowIndex * 7 + 7).map((dayInfo, colIndex) => {
                         const selected = isSelected(dayInfo.day, dayInfo.month, dayInfo.year);
@@ -354,7 +362,7 @@ const CalendarPopup: React.FC<CalendarPopupProps> = ({
                             onClick={() => handleDateClick(dayInfo.day, dayInfo.month, dayInfo.year, dayInfo.isCurrentMonth)}
                             style={{
                               width: BLOCK_WIDTH,
-                              height: 38,
+                              height: rowHeight,
                               borderRadius: 12,
                               display: 'flex',
                               alignItems: 'center',

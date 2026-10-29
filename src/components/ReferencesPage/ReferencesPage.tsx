@@ -1,9 +1,34 @@
 // ReferencesPage.tsx — ПОЛНЫЙ ФАЙЛ
 import React from 'react';
 import { useTabs } from '../../context/TabContext';
+import { useCompact } from '../hooks/useViewport';
+import CompactSectionIndex from '../elements/CompactSectionIndex';
+
+/** Телефон и планшет: справочники по группам (на компьютере — прежний ряд кнопок) */
+const COMPACT_GROUPS: { title: string; paths: string[] }[] = [
+  {
+    title: 'Номенклатура',
+    paths: ['/references/nomenclature', '/references/accounting-groups', '/references/nomenclature-groups', '/references/nomenclature-types',
+      '/references/attribute-groups', '/references/attribute-types', '/references/units', '/references/nomenclature-units', '/references/templates'],
+  },
+  {
+    title: 'Производители и поставщики',
+    paths: ['/references/manufacturers', '/references/brands', '/references/models', '/references/countries', '/references/suppliers',
+      '/references/supplier-directions', '/references/supplier-brands', '/references/production-directions'],
+  },
+  {
+    title: 'Организация',
+    paths: ['/references/locations', '/references/holdings', '/references/enterprises', '/references/workshops', '/references/sections', '/references/employees'],
+  },
+  {
+    title: 'Станции',
+    paths: ['/references/stations', '/references/station-types', '/references/station-manufacturers', '/references/station-models', '/references/station-configurations'],
+  },
+];
 
 const ReferencesPage = () => {
   const { openTab } = useTabs();
+  const compact = useCompact();
 
   const buttonStyle: React.CSSProperties = {
     height: '54px',
@@ -49,6 +74,26 @@ const ReferencesPage = () => {
     { path: '/references/station-configurations', label: 'Конфигурации станций', tabLabel: 'Справочник: Конфигурации станций' },
     { path: '/references/stations', label: 'Станции', tabLabel: 'Справочник: Станции' },
   ];
+
+  if (compact) {
+    const byPath = new Map(items.map(item => [item.path, item]));
+    const grouped = new Set(COMPACT_GROUPS.flatMap(group => group.paths));
+    // Справочник, не попавший в группы (добавят новый), — в «Прочие», чтобы не пропал
+    const others = items.filter(item => !grouped.has(item.path)).map(item => item.path);
+    const groups = others.length > 0 ? [...COMPACT_GROUPS, { title: 'Прочие', paths: others }] : COMPACT_GROUPS;
+    return (
+      <CompactSectionIndex
+        title="Справочники"
+        groups={groups.map(group => ({
+          title: group.title,
+          items: group.paths.flatMap(path => {
+            const item = byPath.get(path);
+            return item ? [{ key: item.path, label: item.label, onClick: () => openTab(item.path, item.tabLabel, null) }] : [];
+          }),
+        }))}
+      />
+    );
+  }
 
   return (
     <div style={{ position: 'relative', height: '100%' }}>

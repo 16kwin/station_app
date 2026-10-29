@@ -1,7 +1,9 @@
 // tabFeatures.ts — вкладки приложения и состав функций установки (разделы 8.1–8.3 проекта «Дискретное
 // отключение функций»). Чистые функции без React-состояния: их вызывает TabContext и проверяют тесты.
-//  • Восстановление: сохранённые вкладки разделов, которые точно выключены (isPathKnownOff), молча отбрасываются.
-//    Пока профиль не получен (сбой связи), раздел не выключен, а неизвестен: вкладка остаётся с заглушкой.
+//  • Восстановление: сохранённые вкладки разделов, которые точно выключены (isPathKnownOff), и «Безопасность»
+//    без права на неё (isTabKnownOff) молча отбрасываются.
+//    Пока профиль не получен (прежний сервер без /api/features, сбой связи), раздел не выключен, а неизвестен:
+//    вкладка остаётся, интерфейс работает как до выключателей (featureStore), функции закрывает только сервер.
 //  • Правило вкладки: раздел закрыт (!isPathAllowed) — вместо раздела «Раздел недоступен» (FeatureUnavailablePage).
 //    Заглушка — не null, поэтому MainLayout не подставит в такую вкладку настоящий раздел.
 //  • Перепроверка: состав функций изменился — закрытые разделы открытых вкладок меняются на заглушку (модуль
@@ -9,7 +11,22 @@
 //    создаёт раздел заново.
 import { createElement, isValidElement, type ReactNode } from 'react';
 import FeatureUnavailablePage from '../services/features/FeatureUnavailablePage';
+import { getFeatureSnapshot } from '../services/features/featureStore';
 import { featureForPath, isPathAllowed, isPathKnownOff } from '../services/features/routes';
+
+/** Страница «Безопасность»: раздел ядра, но только для тех, кому сервер её открыл (canViewSecurity) */
+const SECURITY_PATH = '/security';
+
+/**
+ * Сохранённая вкладка точно закрыта для этого пользователя: раздел выключенной функции (isPathKnownOff) или
+ * страница «Безопасность», когда полученный профиль не даёт права на неё (роль сменили, вошёл другой пользователь
+ * общего ПК). Пока профиля нет, право неизвестно — вкладка остаётся
+ */
+export const isTabKnownOff = (path: string): boolean => {
+  if (isPathKnownOff(path)) return true;
+  const { profile } = getFeatureSnapshot();
+  return profile !== null && !profile.canViewSecurity && path.replace(/[?#].*$/, '').replace(/\/+$/, '') === SECURITY_PATH;
+};
 
 /** Вкладка в localStorage (tabs_state): без компонента */
 export interface SavedTab {
@@ -46,7 +63,7 @@ const savedTab = (value: unknown): SavedTab | null => {
  * молча. Активной остаётся сохранённая вкладка, а если её отбросили — первая. null — восстанавливать нечего
  * (открывается «Главная»)
  */
-export const restoreTabs = (saved: unknown, knownOff: (path: string) => boolean = isPathKnownOff): RestoredTabs | null => {
+export const restoreTabs = (saved: unknown, knownOff: (path: string) => boolean = isTabKnownOff): RestoredTabs | null => {
   if (!isRecord(saved) || !Array.isArray(saved.tabs)) return null;
   const tabs = saved.tabs
     .map(savedTab)

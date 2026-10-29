@@ -56,6 +56,9 @@ const TkpPage = () => {
     fetchTkp();
   }, [activeListTab]);
 
+  // Кнопки «Печать» и «Скачать PDF» — функция export (выгрузка и печать, раздел 4.2 проекта)
+  const exportOn = useFeature('export');
+
   // Живые обновления — только при функции websocket (раздел 4.2 проекта «Дискретное отключение функций»):
   // выключили — соединения нет, включили — эффект подключается заново. Адрес сервера — из window.config
   const liveUpdatesOn = useFeature('websocket');
@@ -157,8 +160,9 @@ const TkpPage = () => {
           </button>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 15 }}>
-          <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>
-          <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>
+          {/* Печать и PDF — функция export: выключена — кнопок нет */}
+          {exportOn && <button style={smallButtonStyle}><img src={Icon8} alt="" style={{ width: 18, height: 18 }} /></button>}
+          {exportOn && <button style={smallButtonStyle}><img src={Icon9} alt="" style={{ width: 14, height: 18 }} /></button>}
           <button style={smallButtonStyle}><img src={Icon10} alt="" style={{ width: 18, height: 16 }} /></button>
         </div>
       </div>

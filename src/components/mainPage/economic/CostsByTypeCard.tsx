@@ -33,8 +33,28 @@ const CostsByTypeCard: React.FC<CostsByTypeCardProps> = ({ items, onSettingsClic
   const minIndex = visible.length > 1 ? amounts.indexOf(minAmount) : -1;
   const scaleMax = maxAmount * FULL_SCALE;
 
+  // Телефон и планшет: список — название и сумма в строку, под ними полоска во всю ширину
+  const compactList = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {visible.map((item, index) => {
+        const ratio = scaleMax > 0 ? Math.min(1, Math.max(0, amounts[index] / scaleMax)) : 0;
+        return (
+          <div key={`${index}:${item.key}`}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: FONT, fontSize: 12, fontWeight: 500, lineHeight: '15px' }}>
+              <span style={{ color: COLORS.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+              <span style={{ color: COLORS.valueText, flexShrink: 0 }}>{formatRubDots(amounts[index] * countProgress)}</span>
+            </div>
+            <div style={{ marginTop: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.track }}>
+              <div style={{ width: `${ratio * barProgress * 100}%`, height: 4, borderRadius: 2, backgroundColor: index === minIndex ? COLORS.fact : COLORS.teal }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
-    <DashboardCard rect={CARD_RECTS.costsByType} title="Затраты по видам номенклатуры" onSettingsClick={onSettingsClick}>
+    <DashboardCard rect={CARD_RECTS.costsByType} title="Затраты по видам номенклатуры" onSettingsClick={onSettingsClick} compactContent={compactList}>
       {visible.map((item, index) => {
         const barLeft = COLUMN_X[index % COLUMNS];
         const barTop = ROW_Y[Math.floor(index / COLUMNS)];

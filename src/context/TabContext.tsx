@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getFeatureSnapshot, subscribeFeatures, useFeatureStatus } from '../services/features/featureStore';
 import { guardTabComponent, restoreTabs, revalidateTabList } from './tabFeatures';
+import { isChildTabPath, isTabSection, uidTabSectionOf } from '../layouts/tabRoutes';
 
 export interface Tab {
   id: string;
@@ -69,6 +70,16 @@ const saveTabsToStorage = (tabs: Tab[], activeId: string | null) => {
   localStorage.setItem('tabs_state', JSON.stringify(toSave));
 };
 
+/**
+ * Адрес, с которым открыли приложение, если это раздел или карточка (закладка, ссылка, окно из window.open).
+ * Раньше восстановление вкладок уводило с него на прежнюю активную вкладку или «Главную»; null — обычный вход
+ */
+const initialDeepLink = (): string | null => {
+  const { pathname, search } = window.location;
+  if (pathname === '/' || pathname === '/main') return null;
+  return isTabSection(pathname) || isChildTabPath(pathname) || uidTabSectionOf(pathname) !== null ? pathname + search : null;
+};
+
 const loadTabsFromStorage = (): unknown => {
   const saved = localStorage.getItem('tabs_state');
   if (saved) {
@@ -88,6 +99,7 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   const [lockedTabs, setLockedTabs] = useState<Set<string>>(new Set());
   const closeGuardsRef = React.useRef<Map<string, () => void>>(new Map());
   const navigate = useNavigate();
+  const [deepLink] = useState(initialDeepLink);
 
   // Вкладки восстанавливаются, когда профиль функций получен (или не получен из-за сбоя)
   const featureStatus = useFeatureStatus();
@@ -112,7 +124,9 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       setActiveTabId(saved.activeTabId);
 
       const activeTab = restoredTabs.find(t => t.id === saved.activeTabId) ?? restoredTabs[0];
-      navigate(activeTab.path);
+      // Прямая ссылка открывается поверх восстановленных вкладок (MainLayout найдёт её вкладку или откроет новую)
+      if (deepLink) navigate(deepLink, { replace: true });
+      else navigate(activeTab.path);
     } else {
       const mainTab: Tab = {
         id: Date.now().toString(),
@@ -122,10 +136,11 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
       };
       setTabs([mainTab]);
       setActiveTabId(mainTab.id);
-      navigate('/main');
+      if (deepLink) navigate(deepLink, { replace: true });
+      else navigate('/main');
     }
     setIsRestored(true);
-  }, [isRestored, profileSettled, profileWaitExpired, navigate]);
+  }, [isRestored, profileSettled, profileWaitExpired, navigate, deepLink]);
 
   const revalidateTabs = useCallback(() => {
     setTabs(prevTabs => revalidateTabList(prevTabs));

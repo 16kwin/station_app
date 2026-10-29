@@ -18,6 +18,7 @@ import { loadPublicFeatures } from '../../services/features/publicFeatures';
 import ChangePasswordForm from './ChangePasswordForm';
 import { offerToSavePassword } from './browserCredentials';
 import { parseLoginResponse } from './passwordChange';
+import { useViewport } from '../hooks/useViewport';
 
 interface CircleData {
   id: number;
@@ -59,6 +60,11 @@ const LoginPage = () => {
   const passwordChangeRef = useRef(false);
 
   const [windowSize, setWindowSize] = useState({ width: 1920, height: 960 });
+  // Телефон и планшет: экран приветствия и форма по ширине экрана, без видео справа (компьютер — как раньше)
+  const viewport = useViewport();
+  const compact = viewport !== 'desktop';
+  const phone = viewport === 'phone';
+  const fieldWidth = compact ? '100%' : '399px';
   const [isLoaded, setIsLoaded] = useState(false);
   const [, setTick] = useState(0);
   const circlesRef = useRef<CircleData[]>([]);
@@ -315,22 +321,22 @@ const LoginPage = () => {
   if (!isLoaded) return null;
 
   return (
-    <div className="w-full h-dvh relative overflow-auto" style={{ minWidth: `${windowSize.width}px`, minHeight: `${windowSize.height}px` }}>
+    <div className="w-full h-dvh relative overflow-auto" style={compact ? undefined : { minWidth: `${windowSize.width}px`, minHeight: `${windowSize.height}px` }}>
       <div className="w-full h-full flex items-center justify-center">
-        <div style={{ width: `${windowSize.width}px`, height: `${windowSize.height}px` }} className="relative">
+        <div style={compact ? { width: '100%', height: '100%' } : { width: `${windowSize.width}px`, height: `${windowSize.height}px` }} className="relative">
           <style>{`input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,input:-webkit-autofill:active{-webkit-box-shadow:0 0 0 30px white inset!important;-webkit-text-fill-color:#2D4059!important;transition:background-color 5000s ease-in-out 0s;font-size:17px!important;font-family:Inter,sans-serif!important}`}</style>
           <AnimatePresence mode="wait">
             {!showForm ? (
               <motion.div key="welcome" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', height: '100%', paddingTop: '181px', paddingBottom: '120px' }}>
-                <div className="flex flex-col items-center">
-                  <img src={LOGO} alt="logo" draggable={false} style={{ width: '322px', height: '279px', pointerEvents: 'none', userSelect: 'none' }} />
-                  <div style={{ height: '67px', display: 'flex', alignItems: 'center', marginTop: '25px' }}>
-                    <h1 style={{ fontSize: '55px', fontWeight: 800, letterSpacing: '3px', fontFamily: 'Inter, sans-serif', color: '#FFFFFF', margin: 0 }}>ДИНАМИКА:AWMS</h1>
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', height: '100%', paddingTop: compact ? '14vh' : '181px', paddingBottom: compact ? '10vh' : '120px' }}>
+                <div className="flex flex-col items-center" style={compact ? { padding: '0 16px', textAlign: 'center' } : undefined}>
+                  <img src={LOGO} alt="logo" draggable={false} style={{ width: phone ? '160px' : compact ? '240px' : '322px', height: phone ? '139px' : compact ? '208px' : '279px', pointerEvents: 'none', userSelect: 'none' }} />
+                  <div style={{ minHeight: compact ? undefined : '67px', display: 'flex', alignItems: 'center', marginTop: compact ? '18px' : '25px' }}>
+                    <h1 style={{ fontSize: phone ? '30px' : compact ? '44px' : '55px', fontWeight: 800, letterSpacing: compact ? '2px' : '3px', fontFamily: 'Inter, sans-serif', color: '#FFFFFF', margin: 0 }}>ДИНАМИКА:AWMS</h1>
                   </div>
-                  <div style={{ width: '574px', height: '2px', marginTop: '15px', background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 50%, rgba(255,255,255,0) 100%)' }} />
-                  <div style={{ height: '36px', display: 'flex', alignItems: 'center', marginTop: '15px' }}>
-                    <p style={{ fontSize: '30px', fontWeight: 600, letterSpacing: '1px', fontFamily: 'Inter, sans-serif', color: '#FFFFFF', margin: 0 }}>СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ</p>
+                  <div style={{ width: phone ? '260px' : compact ? '420px' : '574px', maxWidth: '100%', height: '2px', marginTop: compact ? '12px' : '15px', background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 50%, rgba(255,255,255,0) 100%)' }} />
+                  <div style={{ minHeight: compact ? undefined : '36px', display: 'flex', alignItems: 'center', marginTop: compact ? '12px' : '15px' }}>
+                    <p style={{ fontSize: phone ? '14px' : compact ? '22px' : '30px', fontWeight: 600, letterSpacing: '1px', fontFamily: 'Inter, sans-serif', color: '#FFFFFF', margin: 0 }}>СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ</p>
                   </div>
                 </div>
                 <div className="relative flex items-center justify-center">
@@ -342,16 +348,20 @@ const LoginPage = () => {
               </motion.div>
             ) : (
               <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                <div style={{ width: '1250px', height: '800px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ width: '625px', height: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '40px', position: 'relative' }}>
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: compact ? '16px' : undefined, boxSizing: 'border-box' }}>
+                <div style={compact
+                  ? { width: '440px', maxWidth: '100%', maxHeight: '100%', overflowY: 'auto', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', position: 'relative' }
+                  : { width: '1250px', height: '800px', backgroundColor: '#FFFFFF', borderRadius: '15px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', position: 'relative', overflow: 'hidden' }}>
+                  <div style={compact
+                    ? { width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px', position: 'relative', boxSizing: 'border-box' }
+                    : { width: '625px', height: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '40px', position: 'relative' }}>
                     <img src={LOGO} alt="ДИНАМИКА" draggable={false} style={{ width: '63px', height: '57px', pointerEvents: 'none', userSelect: 'none' }} />
                     <div style={{ height: '25px', display: 'flex', alignItems: 'center', marginTop: '7px' }}>
                       <h1 style={{ fontSize: '21px', fontWeight: 600, letterSpacing: '3.15px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>ДИНАМИКА:AWMS</h1>
                     </div>
                     <div style={{ width: '211px', height: '2px', marginTop: '7px', background: 'linear-gradient(to right, rgba(45,64,89,0) 0%, #2D4059 50%, rgba(45,64,89,0) 100%)' }} />
-                    <div style={{ height: '21px', display: 'flex', alignItems: 'center', marginTop: '7px' }}>
-                      <p style={{ fontSize: '17px', fontWeight: 600, letterSpacing: '0.17px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ</p>
+                    <div style={{ minHeight: '21px', display: 'flex', alignItems: 'center', marginTop: '7px', textAlign: 'center' }}>
+                      <p style={{ fontSize: phone ? '12px' : compact ? '14px' : '17px', fontWeight: 600, letterSpacing: '0.17px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>СИСТЕМА УПРАВЛЕНИЯ АВТОМАТИЧЕСКИМИ СКЛАДАМИ</p>
                     </div>
                     {passwordChange ? (
                       <ChangePasswordForm
@@ -362,17 +372,17 @@ const LoginPage = () => {
                       />
                     ) : (
                       <>
-                        <div style={{ marginTop: '75px', width: '100%', paddingLeft: '113px' }}>
+                        <div style={{ marginTop: compact ? '32px' : '75px', width: '100%', paddingLeft: compact ? 0 : '113px' }}>
                           <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '29px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>Авторизация</h2>
+                            <h2 style={{ fontSize: compact ? '24px' : '29px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0 }}>Авторизация</h2>
                           </div>
-                          <div style={{ height: '24px', display: 'flex', alignItems: 'center', marginTop: '8px' }}>
+                          <div style={{ minHeight: '24px', display: 'flex', alignItems: 'center', marginTop: '8px' }}>
                             <p style={{ fontSize: '16px', fontWeight: 500, letterSpacing: '0.16px', fontFamily: 'Inter, sans-serif', color: '#2D4059', margin: 0, opacity: 0.5 }}>Войдите в учетную запись для продолжения работы</p>
                           </div>
                         </div>
-                        <form ref={formRef} onSubmit={handleSubmit} style={{ marginTop: '36px', width: '399px' }}>
+                        <form ref={formRef} onSubmit={handleSubmit} style={{ marginTop: compact ? '28px' : '36px', width: fieldWidth }}>
                           <div style={{ marginBottom: '30px', position: 'relative' }}>
-                            <fieldset style={{ width: '399px', height: '59px', borderColor: getBorderColor('username'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
+                            <fieldset style={{ width: fieldWidth, height: '59px', borderColor: getBorderColor('username'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
                               onFocus={() => { setFocusedField('username'); setHasError(false); }} onBlur={() => setFocusedField(null)}>
                               <legend style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'Inter, sans-serif', width: '48px', height: '21px', lineHeight: '21px', color: getLegendColor('username'), padding: '0 4px', marginLeft: '12px', position: 'absolute', top: 0, left: 0, transform: 'translateY(-50%)', backgroundColor: '#FFFFFF' }}>Логин</legend>
                               <input style={{ ...autofillInputStyle, paddingLeft: '16px', paddingRight: '16px', width: '100%', height: '100%', borderRadius: '8px' }}
@@ -381,7 +391,7 @@ const LoginPage = () => {
                             </fieldset>
                           </div>
                           <div style={{ marginBottom: '20px', position: 'relative' }}>
-                            <fieldset style={{ width: '399px', height: '59px', borderColor: getBorderColor('password'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
+                            <fieldset style={{ width: fieldWidth, height: '59px', borderColor: getBorderColor('password'), borderRadius: '8px', borderWidth: '2px', borderStyle: 'solid', padding: 0, display: 'flex', alignItems: 'center', margin: 0, position: 'relative', boxSizing: 'border-box' }}
                               onFocus={() => { setFocusedField('password'); setHasError(false); }} onBlur={() => setFocusedField(null)}>
                               <legend style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'Inter, sans-serif', width: '57px', height: '21px', lineHeight: '21px', color: getLegendColor('password'), padding: '0 4px', marginLeft: '12px', position: 'absolute', top: 0, left: 0, transform: 'translateY(-50%)', backgroundColor: '#FFFFFF' }}>Пароль</legend>
                               <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
@@ -396,12 +406,12 @@ const LoginPage = () => {
                               </div>
                             </fieldset>
                           </div>
-                          <div style={{ height: '18px', display: 'flex', alignItems: 'center', marginBottom: '47px' }}>
+                          <div style={{ height: '18px', display: 'flex', alignItems: 'center', marginBottom: compact ? '32px' : '47px' }}>
                             <Checkbox checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} size={18} />
                             <span style={{ marginLeft: '8px', fontSize: '16px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: '#2D4059' }}>Запомнить учетную запись</span>
                           </div>
                           <button type="submit" disabled={!isButtonActive || isLoading}
-                            style={{ width: '399px', height: '59px', borderRadius: '10px', border: 'none', backgroundColor: '#666EFE', opacity: isButtonActive ? 1 : 0.5, cursor: isButtonActive ? 'pointer' : 'not-allowed', fontSize: '17px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#FFFFFF' }}>
+                            style={{ width: fieldWidth, height: '59px', borderRadius: '10px', border: 'none', backgroundColor: '#666EFE', opacity: isButtonActive ? 1 : 0.5, cursor: isButtonActive ? 'pointer' : 'not-allowed', fontSize: '17px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: '#FFFFFF' }}>
                             {isLoading ? 'Вход...' : 'Войти'}
                           </button>
                           {message && <p style={{ fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: '#FF3052', marginTop: '8px', textAlign: 'center' }}>{message}</p>}
@@ -409,7 +419,7 @@ const LoginPage = () => {
                       </>
                     )}
                   </div>
-                  <div style={{ width: '625px', height: '800px', overflow: 'hidden' }}>
+                  {!compact && <div style={{ width: '625px', height: '800px', overflow: 'hidden' }}>
                     <video
                       src={LOGIN_VIDEO}
                       autoPlay
@@ -419,7 +429,7 @@ const LoginPage = () => {
                       draggable={false}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', userSelect: 'none' }}
                     />
-                  </div>
+                  </div>}
                 </div>
               </motion.div>
             )}

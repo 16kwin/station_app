@@ -6,6 +6,8 @@ import axios from 'axios';
 import ConstantInfo from '../info/ConstantInfo';
 import { navigateTo } from './navigate';
 import { installFeatureInterceptors } from './features/httpFeatures';
+import { DEVICE_HEADER, isMobileDevice } from './device';
+import { READ_ONLY_HEADER, ReadOnlyBlockedError, allowedInReadOnly, isReadOnlyMode, notifyReadOnlyBlocked } from './readOnly';
 
 declare global {
   interface Window {
@@ -80,6 +82,17 @@ AxiosService.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Телефон, ТСД, планшет: помечаем устройство для сервера и в режиме просмотра не отправляем запись (readOnly.ts).
+// Перехватчики запроса axios выполняются в обратном порядке: этот — раньше получения CSRF-токена
+AxiosService.interceptors.request.use((config) => {
+  if (isMobileDevice()) config.headers[DEVICE_HEADER] = 'mobile';
+  if (isReadOnlyMode() && !allowedInReadOnly(config.method, config.url)) {
+    notifyReadOnlyBlocked();
+    return Promise.reject(new ReadOnlyBlockedError());
+  }
+  return config;
+});
+
 AxiosService.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -87,6 +100,12 @@ AxiosService.interceptors.response.use(
 
     // Если оригинальный запрос не существует, просто отклоняем
     if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    // Сервер отклонил запись с телефона (MobileReadOnlyFilter): токен не обновляем — это не истёкший вход
+    if (error.response?.status === 403 && error.response.headers?.[READ_ONLY_HEADER]) {
+      notifyReadOnlyBlocked();
       return Promise.reject(error);
     }
 

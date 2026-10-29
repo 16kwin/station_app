@@ -24,7 +24,8 @@ export const REVISION_RETRY_MS = 30_000;
 
 /**
  * idle — профиль ещё не запрашивали (до входа или после выхода); loading — первая загрузка;
- * ready — профиль получен; error — профиль получить не удалось, видно только ядро
+ * ready — профиль получен или запрос не удался (тогда профиля нет и интерфейс работает как до выключателей);
+ * error — сейчас не выставляется, оставлено для подписчиков, которые его проверяют
  */
 export type FeatureStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -44,8 +45,13 @@ export interface FeatureProfile {
    * установке нет, и не должен стирать данные других пользователей общего ПК
    */
   installation: Readonly<Record<string, boolean>> | null;
-  /** Таймауты автоблокировки из профиля установки; null — не заданы, действуют значения интерфейса */
-  ui: { inactivityMinutes: number | null; warningMinutes: number | null };
+  /** Таймауты автоблокировки из профиля установки (предупреждение 0 — без него); null — не заданы, как в интерфейсе */
+  ui: {
+    inactivityMinutes: number | null;
+    warningMinutes: number | null;
+    /** С телефона и планшета — только просмотр (awms.mobile.read-only); нет поля — как true, решение команды */
+    mobileReadOnly?: boolean;
+  };
   /** Пользователю доступна страница «Безопасность» */
   canViewSecurity: boolean;
   /** Пользователю доступны переключатели администратора (этап 2) */
@@ -125,6 +131,10 @@ const text = (value: unknown): string | null => (typeof value === 'string' && va
 const minutes = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 
+/** Срок предупреждения перед блокировкой: 0 — без предупреждения (awms.ui.warning-minutes=0 в потолке) */
+const warningMinutes = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+
 /** Только логические значения; не объект — null */
 const flags = (value: unknown): Record<string, boolean> | null => {
   if (!isRecord(value)) return null;
@@ -146,7 +156,11 @@ export const parseFeatureProfile = (data: unknown): FeatureProfile => {
     revision: text(data.revision),
     features,
     installation: flags(data.installation),
-    ui: { inactivityMinutes: minutes(ui.inactivityMinutes), warningMinutes: minutes(ui.warningMinutes) },
+    ui: {
+      inactivityMinutes: minutes(ui.inactivityMinutes),
+      warningMinutes: warningMinutes(ui.warningMinutes),
+      mobileReadOnly: ui.mobileReadOnly !== false,
+    },
     canViewSecurity: data.canViewSecurity === true,
     canManage: data.canManage === true,
   };

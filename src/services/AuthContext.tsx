@@ -167,7 +167,8 @@ export const AuthProvider: React.FC<ModalProps> = ({ children }) => {
   const loadFeaturesFor = (user: string) => {
     if (featuresUserRef.current !== null && featuresUserRef.current !== user) resetFeatures();
     featuresUserRef.current = user;
-    // Ошибку обрабатывает хранилище: без профиля видно только ядро, плашка предлагает повторить
+    // Ошибку обрабатывает хранилище: профиль не получен (прежний сервер без /api/features, сбой) — интерфейс
+    // работает как до выключателей, функции закрывает только сервер
     void loadFeatures();
   };
 

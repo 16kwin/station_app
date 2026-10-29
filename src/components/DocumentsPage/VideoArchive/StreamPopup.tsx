@@ -6,12 +6,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { StreamCheck, VideoCamera } from './types';
 import { checkCamera, errorText } from './api';
-import { COLORS } from './theme';
+import { COLORS, FONT, SHADOWS } from './theme';
 import { ActionButton, ModalShell, RecordButton, Spinner } from './ui';
 import LiveVideo from './LiveVideo';
 import type { LiveStats } from './useLiveStream';
 import { useClipRecorder } from './useClipRecorder';
 import { useCanSetupCameras } from './access';
+import { useCompact } from '../../hooks/useViewport';
 
 const WIDTH = 900;
 const HEIGHT = 744;
@@ -48,6 +49,7 @@ const StreamPopup: React.FC<StreamPopupProps> = ({ camera, isOpen, onClose }) =>
   /** Когда показан результат проверки; через CHECK_SHOWN_MS строка возвращается к живому видео */
   const [checkShownAt, setCheckShownAt] = useState<number | null>(null);
   const [live, setLive] = useState<LiveStats | null>(null);
+  const compact = useCompact();
   const recordCameras = useMemo(() => (camera ? [camera] : []), [camera]);
   const recorder = useClipRecorder(recordCameras, camera?.stationName ?? undefined);
   const canCheck = useCanSetupCameras();
@@ -108,6 +110,33 @@ const StreamPopup: React.FC<StreamPopupProps> = ({ camera, isOpen, onClose }) =>
             ? { text: `${check.message} · подключение заняло ${seconds(check.elapsedMs / 1000)} с`, tone: 'ok' }
             : { text: checkError ?? check?.message ?? 'Камера не ответила', tone: 'error' }
           : { text: liveText, tone: live?.state === 'playing' ? 'ok' : live?.state === 'error' ? 'error' : 'muted' };
+
+  if (compact) {
+    // Телефон и планшет: окно по ширине экрана, видео 16:9; запись клипа и проверка камеры — только с компьютера
+    if (!isOpen) return null;
+    return (
+      <div onClick={handleClose} style={{ position: 'fixed', inset: 0, backgroundColor: COLORS.overlay, backdropFilter: 'blur(6px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+        <div role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}
+          style={{ width: '100%', maxWidth: 480, maxHeight: '100%', overflowY: 'auto', backgroundColor: COLORS.white, borderRadius: 16, boxShadow: SHADOWS.modal, padding: '12px 14px 14px', boxSizing: 'border-box', fontFamily: FONT, color: COLORS.text }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, lineHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{camera.name}</div>
+            <button type="button" aria-label="Закрыть" onClick={handleClose}
+              style={{ width: 32, height: 32, border: 'none', borderRadius: 8, backgroundColor: 'transparent', color: COLORS.muted, fontSize: 20, lineHeight: '20px', cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ fontSize: 12, lineHeight: '16px', color: COLORS.muted, marginTop: 2 }}>
+            {[camera.cameraType === 'overview' ? 'Обзорная камера' : 'Камера станции', camera.stationName].filter(Boolean).join(' · ')}
+          </div>
+          <div style={{ position: 'relative', marginTop: 10, width: '100%', aspectRatio: '16 / 9', borderRadius: 10, overflow: 'hidden' }}>
+            <LiveVideo camera={camera} size="preview" onStats={setLive} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '7px 10px', borderRadius: 8, fontSize: 12, lineHeight: '16px', backgroundColor: TONE_COLORS[status.tone].bg, color: TONE_COLORS[status.tone].fg }}>
+            {status.tone === 'muted' ? <Spinner /> : <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, backgroundColor: TONE_COLORS[status.tone].fg }} />}
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{status.text}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ModalShell isOpen={isOpen} onClose={handleClose} width={WIDTH} height={HEIGHT} title={`Поток камеры ${camera.name}`}>

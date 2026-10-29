@@ -20,6 +20,7 @@ import PurchasingDashboard from './purchasing/PurchasingDashboard';
 import AuditorDashboard from './auditor/AuditorDashboard';
 import ControllerDashboard from './controller/ControllerDashboard';
 import ShopHeadDashboard from './shopHead/ShopHeadDashboard';
+import { useCompact } from '../hooks/useViewport';
 
 /** Высота полосы шапки над карточками панели */
 const HEADER_HEIGHT = 107;
@@ -42,6 +43,8 @@ const Dashboards: React.FC<DashboardsProps> = ({ roles }) => {
   const [roleOpen, setRoleOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [dateAnchor, setDateAnchor] = useState<AnchorRect | null>(null);
+  // Телефон и планшет: шапка над панелью, карточки панели — друг под другом во всю ширину (DashboardCard)
+  const compact = useCompact();
 
   // Выбранная роль могла стать недоступной (сервер выключил её данные) — показываем первую доступную
   const role = pickRole(roles, roleKey) ?? roles[0];
@@ -75,8 +78,8 @@ const Dashboards: React.FC<DashboardsProps> = ({ roles }) => {
     setRange({ ...DEFAULT_RANGE });
   };
 
-  return (
-    <div style={{ position: 'relative', width: CANVAS.width, height: CANVAS.height, padding: 0 }}>
+  const dashboard = (
+    <>
       {block.key === 'economic' && <EconomicDashboard range={range} />}
       {block.key === 'quality' && <QualityDashboard range={range} />}
       {block.key === 'workshop' && <OperatorDashboard />}
@@ -85,21 +88,41 @@ const Dashboards: React.FC<DashboardsProps> = ({ roles }) => {
       {block.key === 'controller' && <ControllerDashboard scope="section" />}
       {block.key === 'chiefController' && <ControllerDashboard scope="enterprise" />}
       {block.key === 'shopHead' && <ShopHeadDashboard />}
+    </>
+  );
 
-      {/* Шапка лежит поверх панели: панель занимает весь холст и иначе перехватывала бы клики */}
-      <div style={{ position: 'absolute', left: 0, top: 0, width: CANVAS.width, height: HEADER_HEIGHT, zIndex: 6 }}>
-        <DashboardHeader
-          title={role.title}
-          onTitleClick={() => setRoleOpen(true)}
-          blocks={role.blocks.map(item => item.label)}
-          blockIndex={blockIndex}
-          onBlockChange={handleBlockChange}
-          range={role.hasDateRange ? range : undefined}
-          onDateClick={handleDateClick}
-          onDateReset={handleDateReset}
-          showTools={role.showTools !== false}
-        />
-      </div>
+  const header = (
+    <DashboardHeader
+      title={role.title}
+      onTitleClick={() => setRoleOpen(true)}
+      blocks={role.blocks.map(item => item.label)}
+      blockIndex={blockIndex}
+      onBlockChange={handleBlockChange}
+      range={role.hasDateRange ? range : undefined}
+      onDateClick={handleDateClick}
+      onDateReset={handleDateReset}
+      showTools={role.showTools !== false}
+      compact={compact}
+    />
+  );
+
+  return (
+    <div style={compact ? { position: 'relative', width: '100%' } : { position: 'relative', width: CANVAS.width, height: CANVAS.height, padding: 0 }}>
+      {compact ? (
+        <>
+          <div style={{ position: 'relative', zIndex: 6 }}>{header}</div>
+          <div className="awms-dashboard-compact">{dashboard}</div>
+        </>
+      ) : (
+        <>
+          {dashboard}
+
+          {/* Шапка лежит поверх панели: панель занимает весь холст и иначе перехватывала бы клики */}
+          <div style={{ position: 'absolute', left: 0, top: 0, width: CANVAS.width, height: HEADER_HEIGHT, zIndex: 6 }}>
+            {header}
+          </div>
+        </>
+      )}
 
       <DateRangePopup
         isOpen={dateOpen && role.hasDateRange}
