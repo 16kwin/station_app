@@ -27,6 +27,7 @@ const JOURNALS = new Set(['/documents/video-archive']);
 const DocumentsPage = () => {
   const { openTab } = useTabs();
   const { on } = useFeatureSnapshot();
+  const compact = useCompact();
   const buttons = DOCUMENT_BUTTONS.filter(button => isPathAllowed(button.path, key => on.has(key)));
 
   const buttonStyle: React.CSSProperties = {
