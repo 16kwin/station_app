@@ -1,8 +1,4 @@
-// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты заказа на перемещение)
-// Каркас приложения: панель вкладок, содержимое вкладок, плавающее меню. Вкладку рисует компонент её раздела
-// или карточки (списки путей — tabRoutes.ts). Раздел выключенной функции показывает «Раздел недоступен»
-// (раздел 8 проекта «Дискретное отключение функций»); модули, которые вариант поставки может исключить,
-// подключаются только через lazyModules.
+// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты перемещения)
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -23,6 +19,8 @@ import RefillPage from '../components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from '../components/DocumentsPage/Refill/RefillCreatePage';
 import MoveOrderPage from '../components/DocumentsPage/MoveOrder/MoveOrderPage';
 import MoveOrderCreatePage from '../components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
+import TransferPage from '../components/DocumentsPage/Transfer/TransferPage';
+import TransferCreatePage from '../components/DocumentsPage/Transfer/TransferCreatePage';
 import NomenclaturePage from '../components/ReferencesPage/NomenclaturePage/NomenclaturePage';
 import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage';
 import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
@@ -98,7 +96,6 @@ const fetchSupplierName = async (uid: string): Promise<string> => {
   catch { supplierInfoCache.set(uid, uid); return uid; }
 };
 
-// Разделы и карточки — по спискам tabRoutes.ts: тип Record требует компонент для каждого пути и не пускает лишних
 const staticComponents: Record<TabSection, ReactNode> = {
   '/main': <MainPage />, '/stations': <StationsPage />, '/references': <ReferencesPage />,
   '/documents': <DocumentsPage />, '/reports': <ReportsPage />, '/analytics': <AnalyticsPage />,
@@ -128,11 +125,11 @@ const staticComponents: Record<TabSection, ReactNode> = {
   '/documents/stock-level-control': <StockLevelControlPage />,
   '/documents/refill': <RefillPage />,
   '/documents/move-orders': <MoveOrderPage />,
+  '/documents/transfers': <TransferPage />,
   '/documents/video-archive': <VideoArchivePage />,
   '/documents/gpp': <GppPage />,
 };
 
-/** Карточки и документы: путь начинается с префикса */
 const childComponents: Record<TabChildPrefix, ReactNode> = {
   '/references/nomenclature/create/': <NomenclatureCreatePage />,
   '/references/nomenclature/edit/': <NomenclatureCreatePage />,
@@ -154,16 +151,16 @@ const childComponents: Record<TabChildPrefix, ReactNode> = {
   '/documents/refill/edit/': <RefillCreatePage />,
   '/documents/move-orders/create/': <MoveOrderCreatePage />,
   '/documents/move-orders/edit/': <MoveOrderCreatePage />,
+  '/documents/transfers/create/': <TransferCreatePage />,
+  '/documents/transfers/edit/': <TransferCreatePage />,
 };
 
-/** Заказ и ТКП по uid */
 const uidComponents: Record<TabUidSection, ReactNode> = {
   '/orders': <OrderCreatePage />,
   '/tkp': <TkpViewPage />,
 };
 
 const getComponentByPath = (fullPath: string): ReactNode => {
-  // Восстановленная вкладка хранит путь вместе с параметрами (?…): раздел определяется без них
   const path = tabPathname(fullPath);
   if (isTabSection(path)) return staticComponents[path];
   const prefix = childTabPrefixOf(path);
@@ -173,15 +170,9 @@ const getComponentByPath = (fullPath: string): ReactNode => {
   return null;
 };
 
-/**
- * Вкладка раздела функции. Функция выключена — «Раздел недоступен»: модуль размонтируется, его опросы
- * и соединения останавливаются. Решение живое: вкладка следит за профилем функций, поэтому после смены состава
- * (новая ревизия, профиль пришёл после сбоя связи) раздел закрывается или возвращается без перезагрузки
- */
 const FeatureTab = ({ feature, children }: { feature: FeatureKey; children: ReactNode }) =>
   useFeature(feature) ? <>{children}</> : <FeatureUnavailablePage feature={feature} />;
 
-/** Компонент вкладки с защитой раздела функции (раздел 8.1 проекта) — единственный способ получить компонент вкладки */
 const getGuardedComponent = (path: string): ReactNode => {
   const component = getComponentByPath(path);
   const feature = featureForPath(path);
@@ -215,6 +206,7 @@ const getLabelByPath = (path: string): string => {
     '/documents/stock-level-control': 'Документ: Контроль уровня остатков',
     '/documents/refill': 'Документ: Пополнение',
     '/documents/move-orders': 'Документ: Заказ на перемещение',
+    '/documents/transfers': 'Документ: Перемещение',
     '/documents/video-archive': 'Журнал событий: видеоархив',
     '/documents/gpp': 'Документ: ГПП',
   };
@@ -240,6 +232,8 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/documents/refill/edit/')) { return 'Пополнение'; }
   if (path.startsWith('/documents/move-orders/create/')) { return 'Заказ на перемещение (новый)'; }
   if (path.startsWith('/documents/move-orders/edit/')) { return 'Заказ на перемещение'; }
+  if (path.startsWith('/documents/transfers/create/')) { return 'Перемещение (новый)'; }
+  if (path.startsWith('/documents/transfers/edit/')) { return 'Перемещение'; }
   if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };
@@ -382,7 +376,6 @@ const MainLayout = () => {
           >
             {tabs.map(tab => (
               <div key={tab.id} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-                {/* Ленивый раздел ждёт загрузки своего куска внутри своей вкладки: соседние вкладки не прячутся */}
                 <Suspense fallback={null}>{tab.component}</Suspense>
               </div>
             ))}

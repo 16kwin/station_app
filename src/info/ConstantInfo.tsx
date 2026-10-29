@@ -602,7 +602,25 @@ const ConstantInfo = {
   restApiMoveOrderFiltersSettingsSave: (userId: number) => `/api/move-orders/filters-settings?userId=${userId}`,
   restApiMoveOrderSortSettings: (userId: number) => `/api/move-orders/sort-settings?userId=${userId}`,
   restApiMoveOrderSortSettingsSave: (userId: number) => `/api/move-orders/sort-settings?userId=${userId}`,
-
+    // === Документы: Перемещение ===
+  restApiTransferCrud: (userId: number) => `/api/transfers?userId=${userId}`,
+  restApiTransferGenerateCode: '/api/transfers/generate-code',
+  restApiTransfer: (uid: string) => `/api/transfers/${uid}`,
+  restApiTransferAgree: (uid: string) => `/api/transfers/${uid}/agree`,
+  restApiTransferCancel: (uid: string) => `/api/transfers/${uid}/cancel`,
+  restApiTransferTakeToWork: (uid: string) => `/api/transfers/${uid}/take-to-work`,
+  restApiTransferShip: (uid: string) => `/api/transfers/${uid}/ship`,
+  restApiTransferReceive: (uid: string) => `/api/transfers/${uid}/receive`,
+  restApiTransferLoad: (uid: string) => `/api/transfers/${uid}/load`,
+  restApiTransferEvents: '/api/transfers/events',
+  restApiTransferEventsByUid: (uid: string) => `/api/transfers/${uid}/events`,
+  restApiTransferColumnsSettings: (userId: number) => `/api/transfers/columns-settings?userId=${userId}`,
+  restApiTransferColumnsSettingsSave: (userId: number) => `/api/transfers/columns-settings?userId=${userId}`,
+  restApiMoveOrderSubmitApproval: (uid: string) => `/api/move-orders/${uid}/submit-approval`,
+restApiMoveOrderApprove: (uid: string) => `/api/move-orders/${uid}/approve`,
+restApiMoveOrderReject: (uid: string) => `/api/move-orders/${uid}/reject`,
+restApiMoveOrderTakeToWork: (uid: string) => `/api/move-orders/${uid}/take-to-work`,
+restApiMoveOrderCancel: (uid: string) => `/api/move-orders/${uid}/cancel`,
 };
 
 export default ConstantInfo;

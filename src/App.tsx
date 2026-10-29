@@ -1,7 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты заказа на перемещение)
-// Маршруты приложения. Профиль функций установки (FeatureProvider) загружается сразу после входа, до вкладок:
-// восстановление вкладок и меню читают уже полученный профиль. Модули, которые вариант поставки может исключить
-// из сборки, подключаются только через lazyModules (раздел 8 проекта «Дискретное отключение функций»).
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты перемещения)
 import { Suspense, useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -54,6 +51,8 @@ import RefillPage from './components/DocumentsPage/Refill/RefillPage';
 import RefillCreatePage from './components/DocumentsPage/Refill/RefillCreatePage';
 import MoveOrderPage from './components/DocumentsPage/MoveOrder/MoveOrderPage';
 import MoveOrderCreatePage from './components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
+import TransferPage from './components/DocumentsPage/Transfer/TransferPage';
+import TransferCreatePage from './components/DocumentsPage/Transfer/TransferCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
@@ -108,18 +107,12 @@ const AppContent = () => {
           </motion.div>
         ) : isAuth ? (
           <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-            {/* До ответа /api/features — прелоадер; профиль не получен — только ядро и плашка с кнопкой «Повторить» */}
             <FeatureProvider>
-              {/* Страховка для ленивых модулей: у каждого из lazyModules своё ожидание, это — на случай без него */}
               <Suspense fallback={<FullScreenPreloader />}>
                 <Routes>
                   <Route path="/login" element={<Navigate to="/main" replace />} />
-                  {/* Отдельные вкладки браузера без меню приложения: второй экран и граф закупок. Функция выключена —
-                      «Раздел недоступен» во весь экран, без опроса */}
                   <Route path="/screen/events" element={<PrivateRoute><FeatureRoute when="dashboards.screen"><EventsScreenPage /></FeatureRoute></PrivateRoute>} />
                   <Route path="/screen/purchase-graph" element={<PrivateRoute><FeatureRoute when="dashboards.graph"><PurchaseGraphPage /></FeatureRoute></PrivateRoute>} />
-                  {/* Вкладки рисует MainLayout (по своему списку путей, без Outlet): вложенные маршруты ниже нужны, чтобы
-                      адрес вкладки сопоставился, а не ушёл по «*» на /main. Защита разделов функций — в MainLayout */}
                   <Route path="/" element={<PrivateRoute><TabProvider><MainLayout /></TabProvider></PrivateRoute>}>
                     <Route index element={<MainPage />} />
                     <Route path="main" element={<MainPage />} />
@@ -178,6 +171,9 @@ const AppContent = () => {
                     <Route path="documents/move-orders" element={<MoveOrderPage />} />
                     <Route path="documents/move-orders/create/:uid" element={<MoveOrderCreatePage />} />
                     <Route path="documents/move-orders/edit/:uid" element={<MoveOrderCreatePage />} />
+                    <Route path="documents/transfers" element={<TransferPage />} />
+                    <Route path="documents/transfers/create/:uid" element={<TransferCreatePage />} />
+                    <Route path="documents/transfers/edit/:uid" element={<TransferCreatePage />} />
                     <Route path="reports" element={<ReportsPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route path="orders" element={<OrdersPage />} />

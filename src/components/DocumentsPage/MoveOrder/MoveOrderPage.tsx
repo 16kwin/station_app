@@ -10,7 +10,6 @@ import TableToolbar from '../../elements/TableToolbar';
 import CatalogSelectPopup from '../../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import type { ContextMenuItem } from '../../elements/ContextMenu';
 import ContextMenuOpenIcon16 from '../../../assets/Icons/OpenIcons/OpenIcon16Black.svg';
-import ContextMenuCopyIcon16 from '../../../assets/Icons/CopyIcons/CopyIcon16Black.svg';
 import ContextMenuDeleteIcon16 from '../../../assets/Icons/DeleteIcons/DeleteIcon16Black.svg';
 import CreateIcon14Black from '../../../assets/Icons/СreateIcons/СreateIcon14Black.svg';
 import DocumentIcon16Black from '../../../assets/Icons/StationIcons/StationIcon16Black.svg';
@@ -49,9 +48,11 @@ const SORT_FIELDS: SortField[] = [
 const FILTER_FIELDS = [
   { key: 'stockToName', label: 'Склад-получатель' },
   { key: 'status', label: 'Статус', options: [
-    { uid: 'DRAFT', name: 'Не акцептован' },
-    { uid: 'POSTED', name: 'Проведён' },
-    { uid: 'ACCEPTED', name: 'Акцептован' },
+    { uid: 'DRAFT', name: 'Записан' },
+    { uid: 'ON_APPROVAL', name: 'На согласовании' },
+    { uid: 'APPROVED', name: 'Согласован' },
+    { uid: 'REJECTED', name: 'Отклонён' },
+    { uid: 'IN_PROGRESS', name: 'В работе' },
     { uid: 'CANCELLED', name: 'Отменён' },
   ]},
 ];
@@ -81,9 +82,11 @@ const calculateAdaptiveWidths = (columnKeys: string[]): Record<string, number> =
 type ExpandedType = 'search' | 'sort' | 'filter' | 'barcodeSearch' | null;
 
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Не акцептован',
-  POSTED: 'Проведён',
-  ACCEPTED: 'Акцептован',
+  DRAFT: 'Записан',
+  ON_APPROVAL: 'На согласовании',
+  APPROVED: 'Согласован',
+  REJECTED: 'Отклонён',
+  IN_PROGRESS: 'В работе',
   CANCELLED: 'Отменён',
 };
 
@@ -96,7 +99,7 @@ const MoveOrderPage = () => {
   const [showConfigurationPopup, setShowConfigurationPopup] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(REQUIRED_COLUMNS));
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(REQUIRED_COLUMNS);
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(new Set(REQUIRED_COLUMNS));
   const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<ExpandedType>(null);
   const [searchValue, setSearchValue] = useState('');
@@ -106,13 +109,6 @@ const MoveOrderPage = () => {
   const [filterValues, setFilterValues] = useState<Record<string, Set<string>>>({});
   const [isFirstInit, setIsFirstInit] = useState(false);
   const [stationOptions, setStationOptions] = useState<{ uid: string; name: string }[]>([]);
-
-  // Обычное создание
-  const [showCreatePopup, setShowCreatePopup] = useState(false);
-  const [formStockToUid, setFormStockToUid] = useState('');
-  const [formStockToName, setFormStockToName] = useState('');
-  const [showStationSelect, setShowStationSelect] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
 
   // Создание на основании
   const [showBasedPopup, setShowBasedPopup] = useState(false);
@@ -380,7 +376,7 @@ const MoveOrderPage = () => {
   const rowContextMenuItems = useCallback((uid: string, name: string): ContextMenuItem[] => {
     const item = responseData.data.find(d => d.uid === uid);
     const status = item?.status;
-    const isLocked = status === 'POSTED' || status === 'ACCEPTED';
+    const isLocked = status === 'IN_PROGRESS' || status === 'APPROVED';
 
     const items: ContextMenuItem[] = [
       { id: 'open', label: 'Открыть', icon: ContextMenuOpenIcon16, onClick: () => {
@@ -450,62 +446,16 @@ const MoveOrderPage = () => {
     all ? setSelectedIds(new Set()) : setSelectedIds(new Set(filteredData.map(d => d.uid)));
   };
 
-  const openCreatePopup = () => {
-    setFormStockToUid('');
-    setFormStockToName('');
-    setShowCreatePopup(true);
-  };
-
-  const handleCreateSubmit = async () => {
-    if (!formStockToUid || isCreating) return;
-    setIsCreating(true);
-    try {
-      const r = await AxiosService.get(ConstantInfo.restApiMoveOrderGenerateCode);
-      const code = String(r.data).padStart(4, '0');
-      const newUid = crypto.randomUUID();
-      const params = new URLSearchParams();
-      params.set('stockToUid', formStockToUid);
-      if (formStockToName) params.set('stockToName', formStockToName);
-      openTab(
-        `/documents/move-orders/create/${newUid}?${params.toString()}`,
-        `Заказ на перемещение: ${code}`,
-        null
-      );
-      setShowCreatePopup(false);
-    } catch {
-      const newUid = crypto.randomUUID();
-      const params = new URLSearchParams();
-      params.set('stockToUid', formStockToUid);
-      if (formStockToName) params.set('stockToName', formStockToName);
-      openTab(
-        `/documents/move-orders/create/${newUid}?${params.toString()}`,
-        'Заказ на перемещение (новый)',
-        null
-      );
-      setShowCreatePopup(false);
-    } finally {
-      setIsCreating(false);
-    }
+  // Создание — сразу пустая карточка
+  const openCreate = () => {
+    const newUid = crypto.randomUUID();
+    openTab(`/documents/move-orders/create/${newUid}`, 'Заказ на перемещение (новый)', null);
   };
 
   const handleBasedSubmit = async () => {
     if (!basedStockToUid || !basedSourceUid || isCreatingBased) return;
     setIsCreatingBased(true);
     try {
-      const r = await AxiosService.get(ConstantInfo.restApiMoveOrderGenerateCode);
-      const code = String(r.data).padStart(4, '0');
-      const newUid = crypto.randomUUID();
-      const params = new URLSearchParams();
-      params.set('stockToUid', basedStockToUid);
-      if (basedStockToName) params.set('stockToName', basedStockToName);
-      params.set('basedOn', basedSourceUid);
-      openTab(
-        `/documents/move-orders/create/${newUid}?${params.toString()}`,
-        `Заказ на перемещение: ${code}`,
-        null
-      );
-      setShowBasedPopup(false);
-    } catch {
       const newUid = crypto.randomUUID();
       const params = new URLSearchParams();
       params.set('stockToUid', basedStockToUid);
@@ -553,7 +503,7 @@ const MoveOrderPage = () => {
           onCheckFilterOption={handleCheckFilterOption}
           onClearFilters={handleClearFilters}
           selectedCount={selectedIds.size}
-          onCreate={openCreatePopup}
+          onCreate={openCreate}
           onDelete={() => { if (selectedIds.size > 0) { setDeleteTargetUid(null); setShowDeleteConfirm(true); } }}
           onConfiguration={() => setShowConfigurationPopup(true)}
           expanded={expanded}
@@ -600,49 +550,6 @@ const MoveOrderPage = () => {
         onSave={handleSaveColumns}
       />
 
-      {/* Попап обычного создания */}
-      {showCreatePopup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePopup(false)}>
-          <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание заказа на перемещение</h3>
-
-            <div>
-              <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Склад-получатель</label>
-              <div
-                onClick={() => setShowStationSelect(true)}
-                style={{
-                  width: '100%', height: 44, borderRadius: 10,
-                  border: formStockToUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                  backgroundColor: '#FFFFFF',
-                  display: 'flex', alignItems: 'center',
-                  paddingLeft: 12, paddingRight: 12,
-                  cursor: 'pointer', boxSizing: 'border-box',
-                }}
-              >
-                <img src={formStockToUid ? StationIcon16Blue : StationIcon16Gray} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
-                <span style={{
-                  marginLeft: 12, flex: 1,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-                  color: formStockToUid ? '#666EFE' : '#A0A3BD',
-                }}>
-                  {formStockToName || 'Выберите склад-получатель'}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowCreatePopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
-                Отмена
-              </button>
-              <button onClick={handleCreateSubmit} disabled={isCreating || !formStockToUid} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: formStockToUid && !isCreating ? '#666EFE' : '#BCC8FF', cursor: formStockToUid && !isCreating ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>
-                {isCreating ? 'Создание...' : 'Создать'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Попап создания на основании */}
       {showBasedPopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBasedPopup(false)}>
@@ -685,17 +592,6 @@ const MoveOrderPage = () => {
           </div>
         </div>
       )}
-
-      <CatalogSelectPopup
-        isOpen={showStationSelect}
-        onClose={() => setShowStationSelect(false)}
-        onSelect={(id: string, name: string) => {
-          setFormStockToUid(id);
-          setFormStockToName(name);
-          setShowStationSelect(false);
-        }}
-        popupType="station"
-      />
 
       <CatalogSelectPopup
         isOpen={showBasedStationSelect}

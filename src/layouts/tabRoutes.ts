@@ -49,6 +49,7 @@ export const TAB_SECTIONS = [
   '/documents/stock-level-control',
   '/documents/refill',
   '/documents/move-orders',
+  '/documents/transfers',
   '/documents/video-archive',
   '/documents/gpp',
 ] as const;
@@ -77,6 +78,8 @@ export const TAB_CHILD_PREFIXES = [
   '/documents/refill/edit/',
   '/documents/move-orders/create/',
   '/documents/move-orders/edit/',
+  '/documents/transfers/create/',
+  '/documents/transfers/edit/',
 ] as const;
 
 export type TabChildPrefix = (typeof TAB_CHILD_PREFIXES)[number];

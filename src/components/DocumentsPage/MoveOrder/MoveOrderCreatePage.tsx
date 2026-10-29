@@ -13,7 +13,6 @@ import ConfigurationPopup from '../../elements/ConfigurationPopup';
 import CatalogSelectPopup from '../../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import MoveOrderAddLinePopup from './MoveOrderAddLinePopup';
 import DocumentCommentPopup from '../../elements/DocumentCommentPopup';
-import DocumentProgressBar from '../../elements/DocumentProgressBar';
 import type { ContextMenuItem } from '../../elements/ContextMenu';
 import type { MoveOrderLineDraft } from './MoveOrderAddLinePopup';
 
@@ -23,7 +22,6 @@ import CalendarIcon16Gray from '../../../assets/Icons/CalendarIcons/CalendarIcon
 import StationIcon16Gray from '../../../assets/Icons/StationIcons/StationIcon16Gray.svg';
 import StationIcon16Blue from '../../../assets/Icons/StationIcons/StationIcon16Blue.svg';
 import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
-import SpendIcon17Black from '../../../assets/Icons/SpendIcons/SpendIcon17Black.svg';
 import CancelIcon16Black from '../../../assets/Icons/CancelIcons/CancelIcon16Black.svg';
 import CancelIcon16BlackOne from '../../../assets/Icons/CancelIcons/CancelIcon16BlackOne.svg';
 import ExecutionIcon16Gray from '../../../assets/Icons/ExecutionIcons/ExecutionIcon16Gray.svg';
@@ -32,11 +30,6 @@ import DescriptionIcon16Gray from '../../../assets/Icons/DescriptionIcons/Descri
 import DescriptionIcon16Blue from '../../../assets/Icons/DescriptionIcons/DescriptionIcon16Blue.svg';
 import DescriptionIcon18Black from '../../../assets/Icons/DescriptionIcons/DescriptionIcon18Black.svg';
 import NomenclatureIcon16Black from '../../../assets/Icons/NomenclatureIcons/NomenclatureIcon16Black.svg';
-
-import StatusIcon93Red from '../../../assets/Icons/StatusIcons/StatusIcon93Red.svg';
-import StatusIcon104Blue from '../../../assets/Icons/StatusIcons/StatusIcon104Blue.svg';
-import StatusIcon107Orange from '../../../assets/Icons/StatusIcons/StatusIcon107Orange.svg';
-import StatusIcon114Green from '../../../assets/Icons/StatusIcons/StatusIcon114Green.svg';
 
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
@@ -68,19 +61,19 @@ const TITLE_TOP = 35;
 const TITLE_LEFT = 60;
 const TITLE_TO_STATUS_GAP = 25;
 
-const EDIT_BTN_W = 192;
-const EDIT_BTN_H = 46;
-const EDIT_BTN_RADIUS = 30;
-const EDIT_BTN_TOP = 28;
-const EDIT_BTN_RIGHT = 30;
+const MANAGE_BTN_W = 215;
+const MANAGE_BTN_H = 46;
+const MANAGE_BTN_RADIUS = 30;
+const MANAGE_BTN_TOP = 28;
+const MANAGE_BTN_RIGHT = 30;
 
-const CREATE_BASED_BTN_W = 217;
-const CREATE_BASED_BTN_H = 46;
-const CREATE_BASED_BTN_RADIUS = 30;
-const CREATE_BASED_BTN_TOP = 28;
-const CREATE_BASED_BTN_GAP = 30;
+const MANAGE_MENU_W = 260;
+const MANAGE_MENU_ITEM_H = 44;
+const MANAGE_MENU_PAD = 8;
+const MANAGE_MENU_GAP = 8;
+const MANAGE_MENU_RADIUS = 16;
 
-const HEADER_TOP = TITLE_TOP + 60;
+const HEADER_TOP = TITLE_TOP + 60 + 24;
 const HEADER_LEFT = 30;
 const HEADER_W = 1740;
 const HEADER_H = 125;
@@ -91,6 +84,11 @@ const HEADER_FIELD_H = 50;
 const HEADER_FIELD_BOTTOM = 36;
 const HEADER_FIELD_LEFT_FIRST = 40;
 const HEADER_FIELD_GAP = 40;
+
+const TRACK_TOP = TITLE_TOP + 40;
+const TRACK_LEFT = 60;
+const TRACK_LABEL_GAP = 10;
+const TRACK_LINE_HEIGHT = 18;
 
 const TOOLBAR_TOP = HEADER_TOP + HEADER_H + 24;
 const TOOLBAR_LEFT = HEADER_LEFT;
@@ -166,8 +164,10 @@ const BOTTOM_BTN_GAP = 30;
 
 const BTN_CLOSE_W = 114;
 const BTN_SAVE_W = 150;
-const BTN_POST_W = 153;
-const BTN_ACCEPT_W = 160;
+const BTN_SUBMIT_W = 190;
+const BTN_TAKE_TO_WORK_W = 200;
+const BTN_APPROVE_W = 160;
+const BTN_REJECT_W = 160;
 const BTN_GROUP_CANCEL_W = 216;
 
 const COLOR_STATUS_CLOSED = '#00D664';
@@ -223,6 +223,7 @@ interface DocMoveOrder {
   stockToName: string | null;
   deadline: string | null;
   comment: string | null;
+  useApproval: boolean | null;
   status: string;
   lines: MoveOrderLine[];
 }
@@ -269,12 +270,39 @@ const STATUS_COLUMNS = [
 ];
 const STATUS_VISIBLE = ['materialName', 'quantity', 'stockFromName', 'responsibleName', 'shippingAt', 'shippedAt', 'loadingAt', 'closedAt', 'overallStatus'];
 
+// Трек по позиции (маппинг статуса строки)
 const LINE_STATUS_LABELS: Record<string, string> = {
   NOT_STARTED: 'Не взят в работу',
+  IN_PROGRESS: 'Взят в работу',
   SHIPPING: 'Отгружается',
   SHIPPED: 'Отгружено',
-  CLOSED: 'Закрыт',
+  RECEIVED: 'Принято',
+  CLOSED: 'Загружено',
   CANCELLED: 'Отменено',
+};
+
+// Статус заказа (верхний уровень)
+const DOC_STATUS_LABELS: Record<string, string> = {
+  NEW: 'Новый',
+  DRAFT: 'Записан',
+  ON_APPROVAL: 'На согласовании',
+  APPROVED: 'Согласован',
+  REJECTED: 'Отклонён',
+  IN_PROGRESS: 'В работе',
+  CLOSED: 'Заказ закрыт',
+  CANCELLED: 'Отменён',
+};
+
+// Трек заказа (по статусу заказа; для IN_PROGRESS считается по строкам в trackLines)
+const TRACK_LABELS_BY_STATUS: Record<string, string> = {
+  NEW: '—',
+  DRAFT: 'Создан',
+  ON_APPROVAL: 'На согласовании',
+  APPROVED: 'Передан в работу',
+  REJECTED: 'Отклонён',
+  IN_PROGRESS: 'Взят в работу',
+  CLOSED: 'Заказ закрыт (загружено)',
+  CANCELLED: 'Отменён',
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -308,10 +336,10 @@ const FILTER_FIELDS: { key: FilterKey; label: string }[] = [
 ];
 
 const STATUS_FILTER_OPTIONS = [
-  { uid: 'CLOSED', name: 'Закрыт' },
-  { uid: 'LOADING', name: 'Загружается' },
+  { uid: 'CLOSED', name: 'Загружено' },
+  { uid: 'RECEIVED', name: 'Принято' },
   { uid: 'SHIPPED', name: 'Отгружено' },
-  { uid: 'SHIPPING', name: 'Отгружается' },
+  { uid: 'IN_PROGRESS', name: 'Взят в работу' },
   { uid: 'NOT_STARTED', name: 'Не взят в работу' },
 ];
 
@@ -428,24 +456,46 @@ const normalizeLines = (list: MoveOrderLine[]) =>
       return ak.localeCompare(bk);
     });
 
-const snapshotOf = (stockToUid: string, comment: string, lines: MoveOrderLine[]) =>
-  JSON.stringify({ stockToUid, comment, lines: normalizeLines(lines) });
+const snapshotOf = (stockToUid: string, comment: string, useApproval: boolean, lines: MoveOrderLine[]) =>
+  JSON.stringify({ stockToUid, comment, useApproval, lines: normalizeLines(lines) });
 
 const getStatusTextColor = (status: string | null | undefined): string => {
   const s = String(status || '');
   if (s === 'CLOSED') return COLOR_STATUS_CLOSED;
-  if (s === 'LOADING' || s === 'SHIPPED') return COLOR_STATUS_LOADING_OR_SHIPPED;
-  if (s === 'SHIPPING') return COLOR_STATUS_SHIPPING;
+  if (s === 'RECEIVED') return '#00A64F';
+  if (s === 'SHIPPED') return COLOR_STATUS_LOADING_OR_SHIPPED;
   return COLOR_STATUS_NOT_STARTED;
 };
 
 const getOverallStatus = (item: MoveOrderLine): { label: string; color: string; ratio: number } => {
   const s = String(item.status || '');
-  if (s === 'CLOSED') return { label: 'Закрыт', color: COLOR_STATUS_CLOSED, ratio: 1 };
-  if (s === 'LOADING') return { label: 'Загружается', color: COLOR_STATUS_LOADING_OR_SHIPPED, ratio: 0.75 };
+  if (s === 'CLOSED') return { label: 'Загружено', color: COLOR_STATUS_CLOSED, ratio: 1 };
+  if (s === 'RECEIVED') return { label: 'Принято', color: '#00A64F', ratio: 0.75 };
   if (s === 'SHIPPED') return { label: 'Отгружено', color: COLOR_STATUS_LOADING_OR_SHIPPED, ratio: 0.5 };
-  if (s === 'SHIPPING') return { label: 'Отгружается', color: COLOR_STATUS_SHIPPING, ratio: 0.25 };
+  if (s === 'IN_PROGRESS') return { label: 'Взят в работу', color: '#666EFE', ratio: 0.25 };
   return { label: 'Не взят в работу', color: COLOR_STATUS_NOT_STARTED, ratio: 0.125 };
+};
+
+// Общий трек заказа при IN_PROGRESS — по статусам активных строк
+const calcMoveOrderTrack = (docStatus: string, lines: MoveOrderLine[]): string => {
+  if (docStatus !== 'IN_PROGRESS' && docStatus !== 'CLOSED') {
+    return TRACK_LABELS_BY_STATUS[docStatus] || '—';
+  }
+  const active = lines.filter(l => !l.cancelled && l.status !== 'CANCELLED');
+  if (active.length === 0) return TRACK_LABELS_BY_STATUS[docStatus] || '—';
+
+  const allClosed = active.every(l => l.status === 'CLOSED');
+  if (allClosed) return 'Заказ закрыт (загружено)';
+
+  const allReceivedOrClosed = active.every(l => l.status === 'RECEIVED' || l.status === 'CLOSED');
+  if (allReceivedOrClosed) return 'Принято';
+
+  const allShippedOrFurther = active.every(l =>
+    l.status === 'SHIPPED' || l.status === 'RECEIVED' || l.status === 'CLOSED'
+  );
+  if (allShippedOrFurther) return 'Отгружено';
+
+  return 'Взят в работу';
 };
 
 const MoveOrderCreatePage: React.FC = () => {
@@ -463,8 +513,10 @@ const MoveOrderCreatePage: React.FC = () => {
   const [doc, setDoc] = useState<DocMoveOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isAccepting, setIsAccepting] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isTakingToWork, setIsTakingToWork] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   const [viewMode, setViewMode] = useState<'document' | 'status'>('document');
@@ -477,6 +529,7 @@ const MoveOrderCreatePage: React.FC = () => {
   const [stockToUid, setStockToUid] = useState(stockToUidParam);
   const [stockToName, setStockToName] = useState(stockToNameParam);
   const [comment, setComment] = useState('');
+  const [useApproval, setUseApproval] = useState(true);
   const [showStockToSelect, setShowStockToSelect] = useState(false);
 
   const [commentPopupOpen, setCommentPopupOpen] = useState(false);
@@ -515,6 +568,11 @@ const MoveOrderCreatePage: React.FC = () => {
   const [showGroupCancelTooltip, setShowGroupCancelTooltip] = useState(false);
   const groupCancelTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [manageOpen, setManageOpen] = useState(false);
+  const manageWrapRef = useRef<HTMLDivElement | null>(null);
+
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
   const draftKey = `moveOrder_localDraft_${activeTabId || 'no-tab'}_${uid}`;
 
   useEffect(() => {
@@ -531,14 +589,23 @@ const MoveOrderCreatePage: React.FC = () => {
 
   const handleGroupCancelMouseEnter = () => {
     if (groupCancelTimeoutRef.current) clearTimeout(groupCancelTimeoutRef.current);
-    groupCancelTimeoutRef.current = setTimeout(() => {
-      setShowGroupCancelTooltip(true);
-    }, 300);
+    groupCancelTimeoutRef.current = setTimeout(() => setShowGroupCancelTooltip(true), 300);
   };
   const handleGroupCancelMouseLeave = () => {
     if (groupCancelTimeoutRef.current) clearTimeout(groupCancelTimeoutRef.current);
     setShowGroupCancelTooltip(false);
   };
+
+  useEffect(() => {
+    if (!manageOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (manageWrapRef.current && !manageWrapRef.current.contains(e.target as Node)) {
+        setManageOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [manageOpen]);
 
   const fetchDoc = useCallback(async (docUid: string) => {
     setIsLoading(true);
@@ -549,20 +616,22 @@ const MoveOrderCreatePage: React.FC = () => {
       setStockToUid(d.stockToUid || '');
       setStockToName(d.stockToName || '');
       setComment(d.comment || '');
+      setUseApproval(d.useApproval !== false);
       const loadedLines = (d.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` }));
       setLines(loadedLines);
       setSavedLines(loadedLines);
 
-      setSavedSnapshot(snapshotOf(d.stockToUid || '', d.comment || '', loadedLines));
+      setSavedSnapshot(snapshotOf(d.stockToUid || '', d.comment || '', d.useApproval !== false, loadedLines));
       setIsDataSaved(true);
 
       try {
         const raw = sessionStorage.getItem(draftKey);
         if (raw) {
-          const draft = JSON.parse(raw) as { stockToUid: string; comment: string; lines: MoveOrderLine[] };
+          const draft = JSON.parse(raw) as { stockToUid: string; comment: string; useApproval?: boolean; lines: MoveOrderLine[] };
           if (draft) {
             setStockToUid(draft.stockToUid ?? d.stockToUid ?? '');
             setComment(draft.comment ?? d.comment ?? '');
+            if (typeof draft.useApproval === 'boolean') setUseApproval(draft.useApproval);
             setLines((draft.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` })));
           }
         }
@@ -638,7 +707,8 @@ const MoveOrderCreatePage: React.FC = () => {
             stockToName: stockToNameParam || null,
             deadline: null,
             comment: null,
-            status: 'DRAFT',
+            useApproval: true,
+            status: 'NEW',
             lines: [],
           };
           setDoc(newDoc);
@@ -680,7 +750,8 @@ const MoveOrderCreatePage: React.FC = () => {
         stockToName: stockToNameParam || null,
         deadline: null,
         comment: null,
-        status: 'DRAFT',
+        useApproval: true,
+        status: 'NEW',
         lines: [],
       };
       setDoc(newDoc);
@@ -690,10 +761,11 @@ const MoveOrderCreatePage: React.FC = () => {
       try {
         const raw = sessionStorage.getItem(draftKey);
         if (raw) {
-          const draft = JSON.parse(raw) as { stockToUid: string; comment: string; lines: MoveOrderLine[] };
+          const draft = JSON.parse(raw) as { stockToUid: string; comment: string; useApproval?: boolean; lines: MoveOrderLine[] };
           if (draft) {
             if (draft.stockToUid) { setStockToUid(draft.stockToUid); }
             if (draft.comment != null) { setComment(draft.comment); }
+            if (typeof draft.useApproval === 'boolean') setUseApproval(draft.useApproval);
             if (draft.lines) setLines(draft.lines.map((l, i) => ({ ...l, uid: l.uid || `line_${i}` })));
           }
         }
@@ -713,12 +785,12 @@ const MoveOrderCreatePage: React.FC = () => {
     try {
       sessionStorage.setItem(
         draftKey,
-        JSON.stringify({ stockToUid, comment, lines })
+        JSON.stringify({ stockToUid, comment, useApproval, lines })
       );
     } catch (e) {
       console.error('Не удалось сохранить черновик:', e);
     }
-  }, [draftKey, stockToUid, comment, lines, isDataSaved, uid]);
+  }, [draftKey, stockToUid, comment, useApproval, lines, isDataSaved, uid]);
 
   useEffect(() => {
     if (!showHistory || !doc?.uid || !isEdit) return;
@@ -738,40 +810,27 @@ const MoveOrderCreatePage: React.FC = () => {
     }
   }, [panel, sortColumn]);
 
-  const isPosted = doc?.status === 'POSTED';
-  const isAccepted = doc?.status === 'ACCEPTED';
+  // ==================== СТАТУСЫ ====================
+  const isNewDoc = !isDataSaved && !isEdit;
+  const docStatus = isNewDoc ? 'NEW' : (doc?.status || 'DRAFT');
+  const isDraft = docStatus === 'DRAFT';
+  const isOnApproval = docStatus === 'ON_APPROVAL';
+  const isApproved = docStatus === 'APPROVED';
+  const isRejected = docStatus === 'REJECTED';
+  const isInProgress = docStatus === 'IN_PROGRESS';
+  const isClosed = docStatus === 'CLOSED';
+  const isCancelled = docStatus === 'CANCELLED';
+
   const isSavedOnce = isDataSaved || isEdit;
 
   const isDirty = useMemo(() => {
     if (savedSnapshot === null) {
       return lines.length > 0 || comment.length > 0;
     }
-    return snapshotOf(stockToUid, comment, lines) !== savedSnapshot;
-  }, [savedSnapshot, stockToUid, comment, lines]);
+    return snapshotOf(stockToUid, comment, useApproval, lines) !== savedSnapshot;
+  }, [savedSnapshot, stockToUid, comment, useApproval, lines]);
 
-  type StatusType = 'new' | 'changed' | 'saved' | 'posted' | 'accepted';
-
-  const statusType: StatusType = useMemo(() => {
-    if (isAccepted) return 'accepted';
-    if (isPosted) return 'posted';
-    if (!isSavedOnce) return 'new';
-    if (isDirty) return 'changed';
-    return 'saved';
-  }, [isAccepted, isPosted, isSavedOnce, isDirty]);
-
-  const statusIcon =
-    statusType === 'posted' ? StatusIcon114Green
-    : statusType === 'changed' ? StatusIcon107Orange
-    : statusType === 'saved' ? StatusIcon104Blue
-    : statusType === 'new' ? StatusIcon93Red
-    : null;
-
-  const statusWidth =
-    statusType === 'posted' ? 114
-    : statusType === 'changed' ? 107
-    : statusType === 'saved' ? 104
-    : statusType === 'new' ? 93
-    : 0;
+  const isChanged = isDirty && (isDraft || isApproved) && editMode;
 
   const titleText = (() => {
     const code = doc?.code != null ? String(doc.code).padStart(4, '0') : null;
@@ -780,17 +839,79 @@ const MoveOrderCreatePage: React.FC = () => {
     return 'Документ: Заказ на перемещение';
   })();
 
+  const statusLabel = (() => {
+    if (isCancelled) return DOC_STATUS_LABELS.CANCELLED;
+    if (isChanged) return 'Изменён';
+    return DOC_STATUS_LABELS[docStatus] || '';
+  })();
+
+  const statusColor = (() => {
+    if (isCancelled || isRejected) return '#FF3052';
+    if (isClosed) return COLOR_STATUS_CLOSED;
+    if (isApproved || isInProgress) return '#00D664';
+    if (isChanged) return '#FE975B';
+    return '#666EFE';
+  })();
+
+  // Трек заказа: при APPROVED — 2 строки; при IN_PROGRESS/CLOSED — по строкам; иначе — по статусу
+  const trackLines: string[] = useMemo(() => {
+    if (isChanged) return ['Изменён'];
+    if (isApproved) {
+      return [
+        'Документ перемещения: создан',
+        'Документ заказ на перемещение: Передан в работу',
+      ];
+    }
+    if (isInProgress || isClosed) {
+      return [calcMoveOrderTrack(docStatus, lines)];
+    }
+    return [TRACK_LABELS_BY_STATUS[docStatus] || '—'];
+  }, [isChanged, isApproved, isInProgress, isClosed, docStatus, lines]);
+
+  const reservedState = (() => {
+    if (isOnApproval || isApproved || isInProgress) return 'reserved';
+    if (isRejected || isCancelled) return 'cancelled';
+    return null;
+  })();
+
   const handleToggleHistory = () => { setShowHistory(v => !v); };
 
   const handleClose = () => {
+    const shouldConfirm = isSavedOnce && isDirty && !isCancelled && !isInProgress && !isOnApproval && !isRejected && !isClosed;
+    if (shouldConfirm) {
+      setShowCloseConfirm(true);
+      return;
+    }
     const t = tabs.find(tab => tab.id === activeTabId);
     if (t) closeTab(t.id);
   };
+
+  const handleConfirmClose = (save: boolean) => {
+    setShowCloseConfirm(false);
+    if (save) {
+      handleSave().then(ok => {
+        if (ok) {
+          const t = tabs.find(tab => tab.id === activeTabId);
+          if (t) closeTab(t.id);
+        }
+      });
+    } else {
+      const t = tabs.find(tab => tab.id === activeTabId);
+      if (t) closeTab(t.id);
+    }
+  };
+
+  const allActiveLinesHaveStockFrom = useMemo(() => {
+    const active = lines.filter(l => !l.cancelled);
+    return active.length > 0 && active.every(l => !!l.stockFromUid);
+  }, [lines]);
 
   const handleSave = async (): Promise<boolean> => {
     if (isSaving) return false;
     if (!uid) return false;
     if (!stockToUid) { alert('Укажите склад-получатель'); return false; }
+    if (lines.length === 0) { alert('Добавьте хотя бы одну строку'); return false; }
+    if (!allActiveLinesHaveStockFrom) { alert('Укажите склад-отправитель для всех активных строк'); return false; }
 
     setIsSaving(true);
     try {
@@ -798,22 +919,17 @@ const MoveOrderCreatePage: React.FC = () => {
         uid,
         stockToUid,
         comment,
-        lines: lines.map(l => {
-          const base: any = {
-            uid: l.uid.startsWith('line_') ? null : l.uid,
-            materialUid: l.materialUid,
-            quantity: l.quantity,
-            stockFromUid: l.stockFromUid,
-            priority: l.priority,
-            dueDate: convertDotToISO(l.dueDate),
-            comment: l.comment ?? null,
-            cancelled: !!l.cancelled,
-          };
-          if (!isAccepted) {
-            base.status = l.status;
-          }
-          return base;
-        }),
+        useApproval,
+        lines: lines.map(l => ({
+          uid: l.uid.startsWith('line_') ? null : l.uid,
+          materialUid: l.materialUid,
+          quantity: l.quantity,
+          stockFromUid: l.stockFromUid,
+          priority: l.priority,
+          dueDate: convertDotToISO(l.dueDate),
+          comment: l.comment ?? null,
+          cancelled: !!l.cancelled,
+        })),
       };
 
       let result: DocMoveOrder;
@@ -834,12 +950,13 @@ const MoveOrderCreatePage: React.FC = () => {
       setStockToUid(result.stockToUid || '');
       setStockToName(result.stockToName || '');
       setComment(result.comment || '');
+      setUseApproval(result.useApproval !== false);
       setLines(newLines);
       setSavedLines(newLines);
       setSelectedIds(new Set());
       setEditMode(false);
       setIsDataSaved(true);
-      setSavedSnapshot(snapshotOf(result.stockToUid || '', result.comment || '', newLines));
+      setSavedSnapshot(snapshotOf(result.stockToUid || '', result.comment || '', result.useApproval !== false, newLines));
 
       try { sessionStorage.removeItem(draftKey); } catch {}
 
@@ -859,50 +976,96 @@ const MoveOrderCreatePage: React.FC = () => {
     }
   };
 
-  const handleAccept = async () => {
-    if (!uid || isAccepting) return;
+  const handleSubmitForApproval = async () => {
+    if (!uid || isSubmitting) return;
     if (isDirty) { alert('Сначала сохраните изменения'); return; }
-    setIsAccepting(true);
+    if (!allActiveLinesHaveStockFrom) { alert('Укажите склад-отправитель для всех активных строк'); return; }
+    setIsSubmitting(true);
     try {
-      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderAccept(uid));
-      const accDoc = r.data as DocMoveOrder;
-      setDoc(accDoc);
-      const newLines = (accDoc.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` }));
+      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderSubmitApproval(uid));
+      const updated = r.data as DocMoveOrder;
+      setDoc(updated);
+      const newLines = (updated.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` }));
       setLines(newLines);
       setSavedLines(newLines);
-      setSavedSnapshot(snapshotOf(accDoc.stockToUid || '', accDoc.comment || '', newLines));
+      setSavedSnapshot(snapshotOf(updated.stockToUid || '', updated.comment || '', updated.useApproval !== false, newLines));
       setIsDataSaved(true);
     } catch (e: any) {
-      console.error('Ошибка акцепта:', e);
-      alert('Ошибка при акцепте: ' + (e?.response?.data?.message || e.message));
+      console.error('Ошибка отправки на согласование:', e);
+      alert('Ошибка: ' + (e?.response?.data?.message || e.message));
     } finally {
-      setIsAccepting(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handlePost = async () => {
-    if (!uid || isPosting) return;
-    if (isDirty) { alert('Сначала сохраните изменения'); return; }
-    setIsPosting(true);
+  const handleApprove = async () => {
+    if (!uid || isApproving) return;
+    setIsApproving(true);
     try {
-      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderPost(uid));
-      const postedDoc = r.data as DocMoveOrder;
-      setDoc(postedDoc);
-      const newLines = (postedDoc.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` }));
+      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderApprove(uid));
+      const updated = r.data as DocMoveOrder;
+      setDoc(updated);
+      const newLines = (updated.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` }));
       setLines(newLines);
       setSavedLines(newLines);
-      setSavedSnapshot(snapshotOf(postedDoc.stockToUid || '', postedDoc.comment || '', newLines));
+      setSavedSnapshot(snapshotOf(updated.stockToUid || '', updated.comment || '', updated.useApproval !== false, newLines));
       setIsDataSaved(true);
     } catch (e: any) {
-      console.error('Ошибка проведения:', e);
-      alert('Ошибка при проведении: ' + (e?.response?.data?.message || e.message));
+      console.error('Ошибка согласования:', e);
+      alert('Ошибка: ' + (e?.response?.data?.message || e.message));
     } finally {
-      setIsPosting(false);
+      setIsApproving(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!uid || isRejecting) return;
+    setIsRejecting(true);
+    try {
+      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderReject(uid));
+      setDoc(r.data as DocMoveOrder);
+    } catch (e: any) {
+      console.error('Ошибка отклонения:', e);
+      alert('Ошибка: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const handleTakeToWork = async () => {
+    if (!uid || isTakingToWork) return;
+    if (isDirty) { alert('Сначала сохраните изменения'); return; }
+    setIsTakingToWork(true);
+    try {
+      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderTakeToWork(uid));
+      const updated = r.data as DocMoveOrder;
+      setDoc(updated);
+      const newLines = (updated.lines || []).map((l, i) => ({ ...l, uid: l.uid || `line_${i}` }));
+      setLines(newLines);
+      setSavedLines(newLines);
+      setSavedSnapshot(snapshotOf(updated.stockToUid || '', updated.comment || '', updated.useApproval !== false, newLines));
+      setIsDataSaved(true);
+    } catch (e: any) {
+      console.error('Ошибка передачи в работу:', e);
+      alert('Ошибка: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setIsTakingToWork(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!uid) return;
+    try {
+      const r = await AxiosService.post(ConstantInfo.restApiMoveOrderCancel(uid));
+      setDoc(r.data as DocMoveOrder);
+    } catch (e: any) {
+      console.error('Ошибка отмены:', e);
+      alert('Ошибка: ' + (e?.response?.data?.message || e.message));
     }
   };
 
   const handleGroupCancel = () => {
-    if (isPosted || isAccepted) return;
+    if (!canGroupCancel) return;
 
     setLines(prev => {
       const notStarted = prev.filter(l => l.status === 'NOT_STARTED');
@@ -919,7 +1082,7 @@ const MoveOrderCreatePage: React.FC = () => {
   };
 
   const handleCleanSelected = () => {
-    if (isPosted || isAccepted) return;
+    if (!canClean) return;
     if (selectedIds.size === 0) return;
     setLines(prev => prev.filter(l => !selectedIds.has(l.uid)));
     setSelectedIds(new Set());
@@ -951,8 +1114,7 @@ const MoveOrderCreatePage: React.FC = () => {
 
   const handleToggleCancelled = (lineUid: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isPosted) return;
-    if (!isAccepted && !editMode && isSavedOnce) return;
+    if (!canToggleLineCancel) return;
     setLines(prev => prev.map(l => l.uid === lineUid ? { ...l, cancelled: !l.cancelled } : l));
   };
 
@@ -973,8 +1135,8 @@ const MoveOrderCreatePage: React.FC = () => {
 
   const renderDocCellNode = (key: string, item: MoveOrderLine): React.ReactNode | null => {
     const isStruck = isLineCancelledSaved(item.uid, !!item.cancelled);
-    const isClosed = String(item.status || '') === 'CLOSED';
-    const statusColor = getStatusTextColor(item.status);
+    const isClosedLine = String(item.status || '') === 'CLOSED';
+    const statusColorText = getStatusTextColor(item.status);
 
     if (key === 'materialName') {
       return (
@@ -983,7 +1145,7 @@ const MoveOrderCreatePage: React.FC = () => {
             fontFamily: 'Inter, sans-serif',
             fontSize: 15,
             fontWeight: 400,
-            color: isClosed ? COLOR_STATUS_CLOSED : '#2D4059',
+            color: isClosedLine ? COLOR_STATUS_CLOSED : '#2D4059',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: '-webkit-box',
@@ -1002,7 +1164,7 @@ const MoveOrderCreatePage: React.FC = () => {
     }
     if (key === 'cancelled') {
       const checked = !!item.cancelled;
-      const canToggle = !isPosted && (isAccepted || editMode || !isSavedOnce);
+      const canToggle = canToggleLineCancel;
       return (
         <div
           onClick={canToggle ? (e) => handleToggleCancelled(item.uid, e) : undefined}
@@ -1024,7 +1186,7 @@ const MoveOrderCreatePage: React.FC = () => {
         <span
           style={{
             textDecoration: isStruck ? 'line-through' : 'none',
-            color: statusColor,
+            color: statusColorText,
             width: '100%',
             display: 'block',
             overflow: 'hidden',
@@ -1039,12 +1201,12 @@ const MoveOrderCreatePage: React.FC = () => {
     if (isStruck) {
       const text = renderDocCell(key, item);
       return (
-        <span style={{ textDecoration: 'line-through', color: isClosed ? COLOR_STATUS_CLOSED : undefined, width: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ textDecoration: 'line-through', color: isClosedLine ? COLOR_STATUS_CLOSED : undefined, width: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {text}
         </span>
       );
     }
-    if (isClosed) {
+    if (isClosedLine) {
       const text = renderDocCell(key, item);
       return (
         <span style={{ color: COLOR_STATUS_CLOSED, width: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1160,17 +1322,26 @@ const MoveOrderCreatePage: React.FC = () => {
   };
 
   const handleDoubleClick = (uidRow: string, _name: string) => {
-    if (isPosted) return;
-    if (!isAccepted && !editMode && isSavedOnce) return;
     const line = lines.find(l => l.uid === uidRow);
     if (!line) return;
-    if (isLineCancelledSaved(line.uid, !!line.cancelled)) return;
-    setEditLineUid(uidRow);
-    setEditLineMode(isAccepted ? 'accepted' : 'default');
-    setAddPopupOpen(true);
+
+    if (canEditLine) {
+      if (isLineCancelledSaved(line.uid, !!line.cancelled)) return;
+      setEditLineUid(uidRow);
+      setEditLineMode('default');
+      setAddPopupOpen(true);
+      return;
+    }
+
+    if (canEditLinePartial) {
+      setEditLineUid(uidRow);
+      setEditLineMode('accepted');
+      setAddPopupOpen(true);
+    }
   };
 
   const openAddPopup = () => {
+    if (!canAdd) return;
     setEditLineUid(null);
     setEditLineMode('default');
     setAddPopupOpen(true);
@@ -1178,16 +1349,23 @@ const MoveOrderCreatePage: React.FC = () => {
 
   const handleAddLineFromPopup = (line: MoveOrderLineDraft) => {
     if (editLineUid) {
-      setLines(prev => prev.map(l => l.uid === editLineUid ? {
-        ...l,
-        quantity: line.quantity,
-        stockFromUid: line.stockFromUid,
-        stockFromName: line.stockFromName,
-        priority: line.priority,
-        dueDate: line.dueDate,
-        comment: line.comment,
-        available: line.available ?? l.available ?? null,
-      } : l));
+      if (editLineMode === 'accepted') {
+        setLines(prev => prev.map(l => l.uid === editLineUid ? {
+          ...l,
+          quantity: line.quantity,
+        } : l));
+      } else {
+        setLines(prev => prev.map(l => l.uid === editLineUid ? {
+          ...l,
+          quantity: line.quantity,
+          stockFromUid: line.stockFromUid,
+          stockFromName: line.stockFromName,
+          priority: line.priority,
+          dueDate: line.dueDate,
+          comment: line.comment,
+          available: line.available ?? l.available ?? null,
+        } : l));
+      }
       setEditLineUid(null);
       return;
     }
@@ -1230,10 +1408,10 @@ const MoveOrderCreatePage: React.FC = () => {
     if (filterValues.status.size > 0) {
       result = result.filter(l => {
         const s = String(l.status || '');
-        if (filterValues.status.has('LOADING') && l.loadingAt && !l.shippingAt && !l.shippedAt && !l.closedAt) return true;
         if (filterValues.status.has('CLOSED') && s === 'CLOSED') return true;
+        if (filterValues.status.has('RECEIVED') && s === 'RECEIVED') return true;
         if (filterValues.status.has('SHIPPED') && s === 'SHIPPED') return true;
-        if (filterValues.status.has('SHIPPING') && s === 'SHIPPING') return true;
+        if (filterValues.status.has('IN_PROGRESS') && s === 'IN_PROGRESS') return true;
         if (filterValues.status.has('NOT_STARTED') && s === 'NOT_STARTED') return true;
         return false;
       });
@@ -1241,12 +1419,12 @@ const MoveOrderCreatePage: React.FC = () => {
 
     if (filterValues.cancelled.size > 0) {
       result = result.filter(l => {
-        const isCancelled = !!l.cancelled;
+        const isCancelledLine = !!l.cancelled;
         const wantCancelled = filterValues.cancelled.has('yes');
         const wantNotCancelled = filterValues.cancelled.has('no');
         if (wantCancelled && wantNotCancelled) return true;
-        if (wantCancelled) return isCancelled;
-        if (wantNotCancelled) return !isCancelled;
+        if (wantCancelled) return isCancelledLine;
+        if (wantNotCancelled) return !isCancelledLine;
         return true;
       });
     }
@@ -1457,82 +1635,96 @@ const MoveOrderCreatePage: React.FC = () => {
     if (next !== 'filter') setSubmenuOpen(null);
   };
 
-  const canEdit = !isPosted && !isAccepted && isSavedOnce && !isDirty && !editMode;
-  const canCreateBased = isSavedOnce && !isDirty;
-  const canAdd = !isPosted && !isAccepted && (!isSavedOnce || editMode);
-  const isAllBasedLinesFilled = !isBasedOn || lines.every(l => {
-    const q = l.quantity != null && l.quantity > 0;
-    const s = !!l.stockFromUid;
-    const p = !!l.priority;
-    const d = !!l.dueDate;
-    return q && s && p && d;
-  });
-  const canSave =
-    !isPosted &&
-    (isAccepted
-      ? isDirty
-      : (isDirty && (!isSavedOnce ? lines.length > 0 : true) && isAllBasedLinesFilled));
-  const canPost = !isPosted && !isAccepted && isSavedOnce && !isDirty && lines.length > 0;
-  const canAccept = isPosted && !isDirty;
+  // ==================== ДОСТУПНОСТЬ ====================
 
-  const headerEditable = !isPosted && !isAccepted && (!isSavedOnce || editMode);
-  const stockToEditable = !isPosted && !isAccepted && !isSavedOnce;
+  const canModifyLines =
+    isNewDoc ||
+    (isDraft && editMode) ||
+    (isDraft && !isSavedOnce);
 
-  const canGroupCancel = !isPosted && !isAccepted && (editMode || !isSavedOnce);
-  const canClean = !isPosted && !isAccepted && selectedIds.size > 0;
+  const canAdd = !isCancelled && !isRejected && !isApproved && !isInProgress && !isClosed && !isOnApproval && canModifyLines;
+  const canEditLine = canAdd;
+  const canDeleteLine = canAdd;
 
-  const editBtnLeft = `calc(100% - ${EDIT_BTN_RIGHT + EDIT_BTN_W}px)`;
-  const createBasedBtnLeft = `calc(100% - ${EDIT_BTN_RIGHT + EDIT_BTN_W + CREATE_BASED_BTN_GAP + CREATE_BASED_BTN_W}px)`;
+  const canEditLinePartial = isApproved && editMode && !isCancelled && !isRejected;
+  const canToggleLineCancel = isApproved && editMode && !isCancelled && !isRejected;
 
-  const editBtnStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: EDIT_BTN_TOP,
-    left: editBtnLeft,
-    width: EDIT_BTN_W,
-    height: EDIT_BTN_H,
-    borderRadius: EDIT_BTN_RADIUS,
-    border: 'none',
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    cursor: canEdit ? 'pointer' : 'not-allowed',
-    opacity: canEdit ? 1 : 0.35,
-    pointerEvents: canEdit ? 'auto' : 'none',
-    zIndex: 5,
-    padding: 0,
+  const canClean = canDeleteLine && selectedIds.size > 0;
+
+  const canSave = useMemo(() => {
+    if (isCancelled || isRejected || isInProgress || isClosed || isOnApproval) return false;
+    if (isNewDoc) return lines.length > 0 && !!stockToUid && allActiveLinesHaveStockFrom;
+    if (isDraft) return isDirty && allActiveLinesHaveStockFrom && !!stockToUid;
+    if (isApproved) return editMode && isDirty;
+    return false;
+  }, [isNewDoc, isDraft, isApproved, isDirty, lines.length, stockToUid, isCancelled, isRejected, isInProgress, isClosed, isOnApproval, editMode, allActiveLinesHaveStockFrom]);
+
+  const canSubmitForApproval = isDraft && !!useApproval && !isDirty && isSavedOnce && lines.length > 0 && allActiveLinesHaveStockFrom && !!stockToUid;
+  const canTakeToWork = isDraft && !useApproval && !isDirty && isSavedOnce && lines.length > 0 && allActiveLinesHaveStockFrom && !!stockToUid;
+  const canApprove = isOnApproval;
+  const canReject = isOnApproval;
+
+  const canCancelDoc = (isDraft || isOnApproval || isApproved) && !isCancelled && !isRejected && !isInProgress && !isClosed;
+  const canEditDoc = !isCancelled && !isRejected && !isInProgress && !isClosed && !isOnApproval && !isDirty && !editMode && (isDraft || isApproved);
+  const canCreateBased = isSavedOnce && !isDirty && !isCancelled && !isRejected;
+
+  const canGroupCancel = (isDraft || isOnApproval || isApproved) && !isCancelled && !isRejected && lines.length > 1;
+
+  const headerEditable = (isNewDoc || (isDraft && editMode)) && !isCancelled && !isRejected && !isApproved && !isInProgress && !isClosed && !isOnApproval;
+  const stockToEditable = headerEditable;
+
+  const useApprovalEditable = !isCancelled && !isRejected && !isOnApproval && !isApproved && !isInProgress && !isClosed && (isNewDoc || isDraft);
+
+  const showSubmitOrTakeToWork = isNewDoc || isDraft;
+  const showApproveReject = isOnApproval || isApproved;
+  const showSaveButton = !isOnApproval && !isRejected && !isCancelled && !isClosed;
+  const showGroupCancel = !isOnApproval && !isRejected && !isCancelled && !isClosed;
+
+  const submitOrTakeLabel = useApproval ? 'На согласование' : 'Передать в работу';
+  const submitOrTakeActive = useApproval ? canSubmitForApproval : canTakeToWork;
+  const submitOrTakeLoading = useApproval ? isSubmitting : isTakingToWork;
+  const submitOrTakeWidth = useApproval ? BTN_SUBMIT_W : BTN_TAKE_TO_WORK_W;
+
+  const approveActive = isOnApproval && canApprove && !isApproving;
+  const rejectActive = isOnApproval && canReject && !isRejecting;
+
+  const handleSubmitOrTake = () => {
+    if (useApproval) handleSubmitForApproval();
+    else handleTakeToWork();
   };
 
-  const createBasedBtnStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: CREATE_BASED_BTN_TOP,
-    left: createBasedBtnLeft,
-    width: CREATE_BASED_BTN_W,
-    height: CREATE_BASED_BTN_H,
-    borderRadius: CREATE_BASED_BTN_RADIUS,
-    border: 'none',
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    cursor: canCreateBased ? 'pointer' : 'not-allowed',
-    opacity: canCreateBased ? 1 : 0.35,
-    pointerEvents: canCreateBased ? 'auto' : 'none',
-    zIndex: 5,
-    padding: 0,
-  };
-
-  const commentFilled = comment.length > 0;
+  const manageItems: ContextMenuItem[] = [
+    {
+      id: 'cancel',
+      label: 'Отменить',
+      icon: CancelIcon16BlackOne,
+      iconWidth: 16,
+      iconHeight: 16,
+      disabled: !canCancelDoc,
+      onClick: () => { setManageOpen(false); handleCancel(); },
+    },
+    {
+      id: 'edit',
+      label: 'Редактировать',
+      icon: DescriptionIcon18Black,
+      iconWidth: 16,
+      iconHeight: 16,
+      disabled: !canEditDoc,
+      onClick: () => { setManageOpen(false); setEditMode(true); },
+    },
+    {
+      id: 'based',
+      label: 'Создать на основании',
+      icon: CreateIcon14Black,
+      iconWidth: 14,
+      iconHeight: 14,
+      disabled: !canCreateBased,
+      onClick: () => { setManageOpen(false); setShowBasedPopup(true); },
+    },
+  ];
 
   const editingLine = editLineUid ? lines.find(l => l.uid === editLineUid) : null;
-  const editingMaxQuantity =
-    editLineMode === 'accepted' && editingLine
-      ? (editingLine.acceptedQuantity != null ? editingLine.acceptedQuantity : editingLine.quantity ?? null)
-      : null;
+  const editingMaxQuantity = editingLine?.acceptedQuantity != null ? editingLine.acceptedQuantity : editingLine?.quantity ?? null;
 
   const handleBasedSubmit = () => {
     if (!basedStockToUid || isCreatingBased) return;
@@ -1556,71 +1748,30 @@ const MoveOrderCreatePage: React.FC = () => {
     }
   };
 
-  // === CONTEXT MENU ITEMS ===
   const rowContextMenuItems = useCallback((uidRow: string): ContextMenuItem[] => {
     const line = lines.find(l => l.uid === uidRow);
     const lineCancelledSaved = line ? isLineCancelledSaved(line.uid, !!line.cancelled) : false;
 
-    const canAddLine = !isPosted && !isAccepted && (!isSavedOnce || editMode);
-    const canEditLine = !isPosted && !isAccepted && (!isSavedOnce || editMode) && !lineCancelledSaved;
-    const canDeleteLine = !isPosted && !isAccepted && (!isSavedOnce || editMode);
-    const canToggleCancel = !isPosted;
-
     return [
-      {
-        id: 'add',
-        label: 'Добавить',
-        icon: CreateIcon14Black,
-        iconWidth: 14,
-        iconHeight: 14,
-        disabled: !canAddLine,
-        onClick: () => { openAddPopup(); },
-      },
-      {
-        id: 'edit',
-        label: 'Редактировать',
-        icon: DescriptionIcon18Black,
-        iconWidth: 16,
-        iconHeight: 16,
-        disabled: !canEditLine,
-        onClick: () => {
-          const l = lines.find(x => x.uid === uidRow);
-          if (!l) return;
-          if (isLineCancelledSaved(l.uid, !!l.cancelled)) return;
+      { id: 'add', label: 'Добавить', icon: CreateIcon14Black, iconWidth: 14, iconHeight: 14, disabled: !canAdd, onClick: () => { openAddPopup(); } },
+      { id: 'edit', label: 'Редактировать', icon: DescriptionIcon18Black, iconWidth: 16, iconHeight: 16, disabled: !canEditLine && !canEditLinePartial, onClick: () => {
+        const l = lines.find(x => x.uid === uidRow);
+        if (!l) return;
+        if (canEditLinePartial) {
           setEditLineUid(uidRow);
-          setEditLineMode(isAccepted ? 'accepted' : 'default');
+          setEditLineMode('accepted');
           setAddPopupOpen(true);
-        },
-      },
-      {
-        id: 'clean',
-        label: 'Очистить',
-        icon: CleanIcon18Black,
-        iconWidth: 18,
-        iconHeight: 17,
-        disabled: !canDeleteLine,
-        onClick: () => {
-          setLines(prev => prev.filter(l => l.uid !== uidRow));
-          setSelectedIds(prev => {
-            const n = new Set(prev);
-            n.delete(uidRow);
-            return n;
-          });
-        },
-      },
-      {
-        id: 'cancel',
-        label: 'Отменить',
-        icon: CancelIcon16BlackOne,
-        iconWidth: 16,
-        iconHeight: 16,
-        disabled: !canToggleCancel,
-        onClick: () => {
-          setLines(prev => prev.map(l => l.uid === uidRow ? { ...l, cancelled: !l.cancelled } : l));
-        },
-      },
+          return;
+        }
+        if (lineCancelledSaved) return;
+        setEditLineUid(uidRow);
+        setEditLineMode('default');
+        setAddPopupOpen(true);
+      } },
+      { id: 'clean', label: 'Очистить', icon: CleanIcon18Black, iconWidth: 18, iconHeight: 17, disabled: !canDeleteLine, onClick: () => { setLines(prev => prev.filter(l => l.uid !== uidRow)); setSelectedIds(prev => { const n = new Set(prev); n.delete(uidRow); return n; }); } },
+      { id: 'cancel', label: 'Отменить', icon: CancelIcon16BlackOne, iconWidth: 16, iconHeight: 16, disabled: !canToggleLineCancel, onClick: () => { setLines(prev => prev.map(l => l.uid === uidRow ? { ...l, cancelled: !l.cancelled } : l)); } },
     ];
-  }, [lines, isPosted, isAccepted, isSavedOnce, editMode, isLineCancelledSaved]);
+  }, [lines, canAdd, canEditLine, canEditLinePartial, canDeleteLine, canToggleLineCancel, isLineCancelledSaved]);
 
   return (
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
@@ -1634,33 +1785,122 @@ const MoveOrderCreatePage: React.FC = () => {
             <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 500, color: '#2D4059', margin: 0, lineHeight: '29px', whiteSpace: 'nowrap' }}>
               {titleText}
             </h1>
-            {statusType === 'accepted' ? (
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#666EFE', lineHeight: '29px' }}>
-                Акцептован
+            {statusLabel && (
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: statusColor, lineHeight: '29px' }}>
+                {statusLabel}
               </span>
-            ) : statusIcon ? (
-              <img src={statusIcon} alt="" style={{ width: statusWidth, height: 29, flexShrink: 0 }} />
-            ) : null}
+            )}
           </div>
 
-          <button onClick={canCreateBased ? () => setShowBasedPopup(true) : undefined} disabled={!canCreateBased} style={createBasedBtnStyle} title="Создать на основании">
-            <img src={CreateIcon14Black} alt="" style={{ width: 14, height: 14, flexShrink: 0 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: '18px' }}>
-              Создать на основании
+          <div style={{ position: 'absolute', top: TRACK_TOP, left: TRACK_LEFT, right: 60, display: 'flex', alignItems: 'flex-start', gap: TRACK_LABEL_GAP, zIndex: 2 }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500, color: '#5A607F', lineHeight: `${TRACK_LINE_HEIGHT}px` }}>
+              Этап:
             </span>
-          </button>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {trackLines.map((ln, i) => (
+                <span key={i} style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: '#666EFE', lineHeight: `${TRACK_LINE_HEIGHT}px` }}>
+                  {ln}
+                </span>
+              ))}
+            </div>
+            {reservedState === 'reserved' && (
+              <span
+                style={{
+                  marginLeft: 20,
+                  padding: '4px 10px',
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(0, 214, 100, 0.1)',
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: '#00A64F',
+                }}
+              >
+                Номенклатура забронирована
+              </span>
+            )}
+            {reservedState === 'cancelled' && (
+              <span
+                style={{
+                  marginLeft: 20,
+                  padding: '4px 10px',
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(255, 48, 82, 0.1)',
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: '#FF3052',
+                }}
+              >
+                Бронь отменена
+              </span>
+            )}
+          </div>
 
-          <button
-            onClick={canEdit ? () => setEditMode(true) : undefined}
-            disabled={!canEdit}
-            style={editBtnStyle}
-            title="Редактировать"
-          >
-            <img src={DescriptionIcon18Black} alt="" style={{ width: 18, height: 18, flexShrink: 0 }} />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059', lineHeight: '18px' }}>
-              Редактировать
-            </span>
-          </button>
+          <div ref={manageWrapRef} style={{ position: 'absolute', top: MANAGE_BTN_TOP, right: MANAGE_BTN_RIGHT, zIndex: 20 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setManageOpen(v => !v); }}
+              style={{
+                ...btnBaseStyle,
+                width: MANAGE_BTN_W, height: MANAGE_BTN_H, borderRadius: MANAGE_BTN_RADIUS,
+                border: 'none', backgroundColor: '#FFFFFF', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+                cursor: 'pointer', padding: 0,
+              }}
+            >
+              <img src={DescriptionIcon18Black} alt="" style={{ width: 18, height: 18 }} />
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>Меню управления</span>
+            </button>
+
+            <AnimatePresence>
+              {manageOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    position: 'absolute',
+                    top: MANAGE_BTN_H + MANAGE_MENU_GAP,
+                    right: 0,
+                    width: MANAGE_MENU_W,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: MANAGE_MENU_RADIUS,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
+                    paddingTop: MANAGE_MENU_PAD,
+                    paddingBottom: MANAGE_MENU_PAD,
+                    zIndex: 30,
+                  }}
+                >
+                  {manageItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      onClick={() => { if (!item.disabled) item.onClick(); }}
+                      style={{
+                        height: MANAGE_MENU_ITEM_H,
+                        display: 'flex',
+                        alignItems: 'center',
+                        paddingLeft: 20,
+                        paddingRight: 20,
+                        cursor: item.disabled ? 'not-allowed' : 'pointer',
+                        opacity: item.disabled ? 0.4 : 1,
+                        borderBottom: idx < manageItems.length - 1 ? '1px solid rgba(45,64,89,0.06)' : 'none',
+                      }}
+                      onMouseEnter={(e) => { if (!item.disabled) e.currentTarget.style.backgroundColor = 'rgba(102,110,254,0.05)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      {item.icon && (
+                        <img src={item.icon} alt="" style={{ width: item.iconWidth ?? 16, height: item.iconHeight ?? 16, marginRight: 15 }} />
+                      )}
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059' }}>
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div style={{
             position: 'absolute',
@@ -1739,16 +1979,38 @@ const MoveOrderCreatePage: React.FC = () => {
                 width={HEADER_FIELD_W} height={HEADER_FIELD_H}
                 label="Комментарий:"
                 labelPosition="inside"
-                icon={commentFilled ? DescriptionIcon16Blue : DescriptionIcon16Gray}
+                icon={comment.length > 0 ? DescriptionIcon16Blue : DescriptionIcon16Gray}
                 value={comment}
                 placeholder="Комментарий по заказу"
                 type="comment"
                 disabled={!headerEditable}
                 iconWidth={18} iconHeight={18}
-                commentIcon={commentFilled ? PopupIcon14Blue : PopupIcon14Gray}
+                commentIcon={comment.length > 0 ? PopupIcon14Blue : PopupIcon14Gray}
                 commentIconActive={PopupIcon14Blue}
                 onClick={() => { if (headerEditable) setCommentPopupOpen(true); }}
               />
+            </div>
+
+            <div style={{ position: 'absolute', top: 8, left: HEADER_FIELD_LEFT_FIRST, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500, color: '#2D4059' }}>
+                Использовать режим согласования
+              </span>
+              <div
+                onClick={() => { if (useApprovalEditable) setUseApproval(v => !v); }}
+                style={{
+                  width: 40, height: 22, borderRadius: 11,
+                  backgroundColor: useApproval ? '#666EFE' : '#D1D5DB',
+                  cursor: useApprovalEditable ? 'pointer' : 'not-allowed',
+                  position: 'relative', transition: 'background-color 0.2s',
+                  opacity: useApprovalEditable ? 1 : 0.5,
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 2, left: useApproval ? 20 : 2,
+                  width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFFFFF',
+                  transition: 'left 0.2s',
+                }} />
+              </div>
             </div>
           </div>
 
@@ -2289,115 +2551,121 @@ const MoveOrderCreatePage: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          <DocumentProgressBar activeStep={isSavedOnce ? 0 : -1} />
-
           <div style={{ position: 'absolute', bottom: BOTTOM_BTN_BOTTOM, right: BOTTOM_BTN_RIGHT, display: 'flex', alignItems: 'center', gap: BOTTOM_BTN_GAP, zIndex: 10 }}>
-            <div
-              style={{ position: 'relative', display: 'inline-block' }}
-              onMouseEnter={handleGroupCancelMouseEnter}
-              onMouseLeave={handleGroupCancelMouseLeave}
-            >
+            {showGroupCancel && (
+              <div
+                style={{ position: 'relative', display: 'inline-block' }}
+                onMouseEnter={handleGroupCancelMouseEnter}
+                onMouseLeave={handleGroupCancelMouseLeave}
+              >
+                <button
+                  disabled={!canGroupCancel}
+                  onClick={handleGroupCancel}
+                  style={{
+                    width: BTN_GROUP_CANCEL_W, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
+                    border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
+                    cursor: canGroupCancel ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', paddingLeft: 22, boxSizing: 'border-box',
+                    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+                    opacity: canGroupCancel ? 1 : 0.5,
+                  }}
+                >
+                  <img src={CancelIcon16Black} alt="" style={{ width: 16, height: 18, flexShrink: 0 }} />
+                  <span style={{ marginLeft: 17 }}>Групповая отмена</span>
+                </button>
+
+                <AnimatePresence>
+                  {showGroupCancelTooltip && (
+                    <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 8, zIndex: 10000, pointerEvents: 'none' }}>
+                      <motion.div
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 5 }}
+                        transition={{ duration: 0.15 }}
+                        style={{
+                          position: 'relative', backgroundColor: '#2D4059', color: '#FFFFFF',
+                          padding: '8px 16px', borderRadius: 10, fontSize: 14,
+                          fontFamily: 'Inter, sans-serif', fontWeight: 400, whiteSpace: 'nowrap',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                        }}
+                      >
+                        Отменяет все позиции со статусом «Не взят в работу»
+                        <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #2D4059' }} />
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {showApproveReject && (
+              <>
+                <button
+                  onClick={handleApprove}
+                  disabled={!approveActive}
+                  style={{
+                    width: BTN_APPROVE_W, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
+                    border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
+                    cursor: approveActive ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+                    opacity: approveActive ? 1 : 0.5,
+                  }}
+                >
+                  {isApproving ? 'Согласование...' : 'Согласовать'}
+                </button>
+
+                <button
+                  onClick={handleReject}
+                  disabled={!rejectActive}
+                  style={{
+                    width: BTN_REJECT_W, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
+                    border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
+                    cursor: rejectActive ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FF3052',
+                    opacity: rejectActive ? 1 : 0.5,
+                  }}
+                >
+                  {isRejecting ? 'Отклонение...' : 'Отклонить'}
+                </button>
+              </>
+            )}
+
+            {showSubmitOrTakeToWork && (
               <button
-                disabled={!canGroupCancel}
-                onClick={handleGroupCancel}
+                onClick={handleSubmitOrTake}
+                disabled={!submitOrTakeActive || submitOrTakeLoading}
                 style={{
-                  width: BTN_GROUP_CANCEL_W, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
+                  width: submitOrTakeWidth, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
                   border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
-                  cursor: canGroupCancel ? 'pointer' : 'not-allowed',
-                  display: 'flex', alignItems: 'center', paddingLeft: 22, boxSizing: 'border-box',
+                  cursor: (!submitOrTakeActive || submitOrTakeLoading) ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
-                  opacity: canGroupCancel ? 1 : 0.5,
+                  opacity: (!submitOrTakeActive || submitOrTakeLoading) ? 0.5 : 1,
                 }}
               >
-                <img src={CancelIcon16Black} alt="" style={{ width: 16, height: 18, flexShrink: 0 }} />
-                <span style={{ marginLeft: 17 }}>Групповая отмена</span>
+                {submitOrTakeLoading ? 'Отправка...' : submitOrTakeLabel}
               </button>
+            )}
 
-              <AnimatePresence>
-                {showGroupCancelTooltip && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '100%',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      marginBottom: 8,
-                      zIndex: 10000,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 5 }}
-                      transition={{ duration: 0.15 }}
-                      style={{
-                        position: 'relative',
-                        backgroundColor: '#2D4059',
-                        color: '#FFFFFF',
-                        padding: '8px 16px',
-                        borderRadius: 10,
-                        fontSize: 14,
-                        fontFamily: 'Inter, sans-serif',
-                        fontWeight: 400,
-                        whiteSpace: 'nowrap',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                      }}
-                    >
-                      Отменяет все позиции со статусом «Не взят в работу»
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 0,
-                        height: 0,
-                        borderLeft: '6px solid transparent',
-                        borderRight: '6px solid transparent',
-                        borderTop: '6px solid #2D4059',
-                      }} />
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <button
-              disabled={(isPosted ? !canAccept : !canPost) || isPosting || isAccepting}
-              onClick={isPosted ? handleAccept : handlePost}
-              style={{
-                width: isPosted ? BTN_ACCEPT_W : BTN_POST_W,
-                height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
-                border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
-                cursor: ((isPosted ? canAccept : canPost) && !isPosting && !isAccepting) ? 'pointer' : 'not-allowed',
-                display: 'flex', alignItems: 'center', paddingLeft: 21, boxSizing: 'border-box',
-                fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
-                opacity: ((isPosted ? canAccept : canPost) && !isPosting && !isAccepting) ? 1 : 0.5,
-              }}
-            >
-              <img src={SpendIcon17Black} alt="" style={{ width: 17, height: 18, flexShrink: 0 }} />
-              <span style={{ marginLeft: 17 }}>
-                {isPosted
-                  ? (isAccepting ? 'Акцепт...' : 'Акцепт')
-                  : (isPosting ? 'Проведение...' : 'Провести')}
-              </span>
-            </button>
-
-            <button
-              disabled={!canSave || isSaving}
-              onClick={handleSave}
-              style={{
-                width: BTN_SAVE_W, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
-                border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
-                cursor: canSave && !isSaving ? 'pointer' : 'not-allowed',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 15,
-                fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
-                opacity: canSave && !isSaving ? 1 : 0.5,
-              }}
-            >
-              <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21 }} />
-              <span>{isSaving ? 'Сохранение...' : 'Записать'}</span>
-            </button>
+            {showSaveButton && (
+              <button
+                disabled={!canSave || isSaving}
+                onClick={handleSave}
+                style={{
+                  width: BTN_SAVE_W, height: BOTTOM_BTN_H, borderRadius: BOTTOM_BTN_RADIUS,
+                  border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF',
+                  cursor: canSave && !isSaving ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 15,
+                  fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#2D4059',
+                  opacity: canSave && !isSaving ? 1 : 0.5,
+                }}
+              >
+                <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21 }} />
+                <span>{isSaving ? 'Сохранение...' : 'Записать'}</span>
+              </button>
+            )}
 
             <button
               onClick={handleClose}
@@ -2432,7 +2700,7 @@ const MoveOrderCreatePage: React.FC = () => {
             editingUid={editLineUid}
             mode={editLineMode}
             maxQuantity={editingMaxQuantity}
-            lockMaterial={!!editingLine?._fromBased}
+            lockMaterial={!!editingLine?._fromBased || editLineMode === 'accepted'}
           />
 
           <ConfigurationPopup
@@ -2445,56 +2713,24 @@ const MoveOrderCreatePage: React.FC = () => {
             onSave={handleSaveColumns}
           />
 
-          <CatalogSelectPopup
-            isOpen={showStockToSelect}
-            onClose={() => setShowStockToSelect(false)}
-            onSelect={handleStockToSelect}
-            popupType="station"
-          />
-
-          <DocumentCommentPopup
-            isOpen={commentPopupOpen}
-            onClose={() => setCommentPopupOpen(false)}
-            onSave={(v) => setComment(v)}
-            initialValue={comment}
-            title="Комментарий к заказу"
-            placeholder="Введите комментарий..."
-          />
+          <CatalogSelectPopup isOpen={showStockToSelect} onClose={() => setShowStockToSelect(false)} onSelect={handleStockToSelect} popupType="station" />
+          <DocumentCommentPopup isOpen={commentPopupOpen} onClose={() => setCommentPopupOpen(false)} onSave={(v) => setComment(v)} initialValue={comment} title="Комментарий к заказу" placeholder="Введите комментарий..." />
 
           {showBasedPopup && (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBasedPopup(false)}>
               <div style={{ width: 450, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
                 <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Создание на основании</h3>
-
                 <div>
                   <label style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', display: 'block', marginBottom: 7 }}>Склад-получатель</label>
-                  <div
-                    onClick={() => setShowBasedStationSelect(true)}
-                    style={{
-                      width: '100%', height: 44, borderRadius: 10,
-                      border: basedStockToUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)',
-                      backgroundColor: '#FFFFFF',
-                      display: 'flex', alignItems: 'center',
-                      paddingLeft: 12, paddingRight: 12,
-                      cursor: 'pointer', boxSizing: 'border-box',
-                    }}
-                  >
+                  <div onClick={() => setShowBasedStationSelect(true)} style={{ width: '100%', height: 44, borderRadius: 10, border: basedStockToUid ? '1px solid #666EFE' : '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', display: 'flex', alignItems: 'center', paddingLeft: 12, paddingRight: 12, cursor: 'pointer', boxSizing: 'border-box' }}>
                     <img src={basedStockToUid ? StationIcon16Blue : StationIcon16Gray} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
-                    <span style={{
-                      marginLeft: 12, flex: 1,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
-                      color: basedStockToUid ? '#666EFE' : '#A0A3BD',
-                    }}>
+                    <span style={{ marginLeft: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: basedStockToUid ? '#666EFE' : '#A0A3BD' }}>
                       {basedStockToName || 'Выберите склад-получатель'}
                     </span>
                   </div>
                 </div>
-
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                  <button onClick={() => setShowBasedPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>
-                    Отмена
-                  </button>
+                  <button onClick={() => setShowBasedPopup(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
                   <button onClick={handleBasedSubmit} disabled={isCreatingBased || !basedStockToUid} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: basedStockToUid && !isCreatingBased ? '#666EFE' : '#BCC8FF', cursor: basedStockToUid && !isCreatingBased ? 'pointer' : 'not-allowed', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>
                     {isCreatingBased ? 'Создание...' : 'Создать'}
                   </button>
@@ -2503,16 +2739,21 @@ const MoveOrderCreatePage: React.FC = () => {
             </div>
           )}
 
-          <CatalogSelectPopup
-            isOpen={showBasedStationSelect}
-            onClose={() => setShowBasedStationSelect(false)}
-            onSelect={(id: string, name: string) => {
-              setBasedStockToUid(id);
-              setBasedStockToName(name);
-              setShowBasedStationSelect(false);
-            }}
-            popupType="station"
-          />
+          <CatalogSelectPopup isOpen={showBasedStationSelect} onClose={() => setShowBasedStationSelect(false)} onSelect={(id: string, name: string) => { setBasedStockToUid(id); setBasedStockToName(name); setShowBasedStationSelect(false); }} popupType="station" />
+
+          {showCloseConfirm && (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCloseConfirm(false)}>
+              <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+                <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Сохранить изменения?</h3>
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>В документе есть несохранённые изменения.</p>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <button onClick={() => setShowCloseConfirm(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+                  <button onClick={() => handleConfirmClose(false)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#FF3052', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Не сохранять</button>
+                  <button onClick={() => handleConfirmClose(true)} style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
