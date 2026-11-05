@@ -71,6 +71,7 @@ export default defineConfig({
       'localhost',
       '127.0.0.1',
           '109.69.22.155',
+          '147.45.165.156',
     'dynamikaawms.ru',
     ]
   }

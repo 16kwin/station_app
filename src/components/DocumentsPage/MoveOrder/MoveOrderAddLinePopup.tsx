@@ -1,4 +1,5 @@
 // MoveOrderAddLinePopup.tsx — попап добавления номенклатуры (с режимом accepted и lockMaterial)
+// Доступность и брони — через ./stockAvailability (fetchStockAvailability).
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AxiosService from '../../../services/AxiosService';
 import ConstantInfo from '../../../info/ConstantInfo';
@@ -7,6 +8,9 @@ import CalendarPopup from '../../elements/CalendarPopup';
 import CatalogSelectPopup from '../../ReferencesPage/NomenclaturePage/CatalogSelectPopup';
 import MoveOrderStockPickerPopup from './MoveOrderStockPickerPopup';
 import type { MoveOrderStockPickResult } from './MoveOrderStockPickerPopup';
+import StockAvailabilityWarning from './StockAvailabilityWarning';
+import type { StockAvailability, StockReservationRow } from './stockAvailability';
+import { fetchStockAvailability, describeDocHolder, pluralizeUnits } from './stockAvailability';
 
 import StationIcon16Gray from '../../../assets/Icons/StationIcons/StationIcon16Gray.svg';
 import StationIcon16Blue from '../../../assets/Icons/StationIcons/StationIcon16Blue.svg';
@@ -23,6 +27,7 @@ import ArticleIcon18Blue from '../../../assets/Icons/ArticleIcons/ArticleIcon18B
 import DescriptionIcon16Gray from '../../../assets/Icons/DescriptionIcons/DescriptionIcon16Gray.svg';
 import DescriptionIcon16Blue from '../../../assets/Icons/DescriptionIcons/DescriptionIcon16Blue.svg';
 import LinkIcons14Blue from '../../../assets/Icons/LinkIcons/LinkIcons14Blue.svg';
+import InfoIcon18Black from '../../../assets/Icons/InfoIcons/InfoIcon18Black.svg';
 
 export interface MoveOrderLineDraft {
   uid: string;
@@ -61,16 +66,6 @@ interface MaterialDetail {
   imageUrl: string | null;
 }
 
-interface StockBalanceRow {
-  materialUid: string;
-  cleanQuantity: number | null;
-}
-
-interface StockLevelReg {
-  minStock: number | null;
-  criticalStock: number | null;
-}
-
 interface MoveOrderAddLinePopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -105,14 +100,11 @@ const extractCode = (data: any): number | null => {
   return null;
 };
 
-// Возвращает строго ДД.ММ.ГГГГ из любого входа: ДД.ММ.ГГГГ, YYYY-MM-DD, ISO с T
 const formatDateDot = (s: string | null | undefined): string => {
   if (!s) return '';
   if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
   const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (mIso) {
-    return `${mIso[3]}.${mIso[2]}.${mIso[1]}`;
-  }
+  if (mIso) return `${mIso[3]}.${mIso[2]}.${mIso[1]}`;
   const mDot = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
   if (mDot) return `${mDot[1]}.${mDot[2]}.${mDot[3]}`;
   try {
@@ -216,11 +208,16 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
   const [dueDate, setDueDate] = useState<string>('');
   const [comment, setComment] = useState<string>('');
 
-  const [availableOnStock, setAvailableOnStock] = useState<number | null>(null);
-  const [availableLoading, setAvailableLoading] = useState(false);
+  const [availability, setAvailability] = useState<StockAvailability | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const dueDateAnchorRef = useRef<HTMLDivElement>(null);
+
+  const [infoTooltipOpen, setInfoTooltipOpen] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
+
+  const [stockWarning, setStockWarning] = useState<null | 'critical' | 'insufficient'>(null);
 
   const initializedRef = useRef(false);
 
@@ -245,8 +242,11 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
     setFullListOpen(false);
     setFullscreenImage(false);
     setStockPickerOpen(false);
-    setAvailableOnStock(typeof initialAvailable === 'number' ? initialAvailable : null);
     setCalendarOpen(false);
+
+    setAvailability(null);
+    setInfoTooltipOpen(false);
+    setStockWarning(null);
 
     if (initialMaterialUid) {
       loadMaterialDetail(initialMaterialUid);
@@ -296,59 +296,41 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
     }
   }, []);
 
-  // Считаем «Доступно» = freeQuantity - criticalStock (как в попапе доступности)
+  // Доступность + брони через stockAvailability
   useEffect(() => {
     if (!isOpen) return;
     if (!materialUid || !stockFromUid) {
-      setAvailableOnStock(null);
+      setAvailability(null);
       return;
     }
 
     let cancelled = false;
-    setAvailableLoading(true);
+    setAvailabilityLoading(true);
     (async () => {
       try {
-        const [balanceRes, kuoRes] = await Promise.allSettled([
-          AxiosService.get(ConstantInfo.restApiRefillStockBalances(stockFromUid)),
-          AxiosService.get(ConstantInfo.restApiStockLevelControlReg(stockFromUid, materialUid)),
-        ]);
-
-        let free: number | null = null;
-        if (balanceRes.status === 'fulfilled') {
-          const list = (balanceRes.value.data || []) as StockBalanceRow[];
-          const found = list.find(b => b.materialUid === materialUid);
-          free = found?.cleanQuantity ?? null;
-        }
-
-        let critical: number | null = null;
-        let kuoExists = false;
-        if (kuoRes.status === 'fulfilled') {
-          const kuo = kuoRes.value.data as StockLevelReg | null;
-          if (kuo) {
-            critical = kuo.criticalStock ?? null;
-            kuoExists = kuo.minStock != null || kuo.criticalStock != null;
-          }
-        }
-
-        if (free == null) {
-          if (!cancelled) setAvailableOnStock(null);
-          return;
-        }
-
-        const toMoveMax = kuoExists && critical != null
-          ? Math.max(0, free - critical)
-          : free;
-
-        if (!cancelled) setAvailableOnStock(toMoveMax);
+        const data = await fetchStockAvailability(materialUid, stockFromUid, null);
+        if (!cancelled) setAvailability(data);
       } catch {
-        if (!cancelled) setAvailableOnStock(null);
+        if (!cancelled) setAvailability(null);
       } finally {
-        if (!cancelled) setAvailableLoading(false);
+        if (!cancelled) setAvailabilityLoading(false);
       }
     })();
 
     return () => { cancelled = true; };
   }, [isOpen, materialUid, stockFromUid]);
+
+  // Закрытие тултипа «Информация»
+  useEffect(() => {
+    if (!infoTooltipOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setInfoTooltipOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [infoTooltipOpen]);
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -377,9 +359,6 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
     if (!result) return;
     setStockFromUid(result.stationUid);
     setStockFromName(result.stationName);
-    if (result.toMoveMax != null) {
-      setAvailableOnStock(result.toMoveMax);
-    }
   };
 
   const handleMaterialSelect = async (uid: string, name: string) => {
@@ -419,8 +398,18 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
   const isAllFilled = !!materialUid && quantityPositive && !!stockFromUid;
   const isValid = isAllFilled;
 
-  const handleSave = () => {
-    if (!isValid) return;
+  const checkStockWarning = (): null | 'critical' | 'insufficient' => {
+    if (!availability) return null;
+    if (!quantityPositive) return null;
+    if (availability.free == null) return null;
+    const qty = quantity as number;
+    const after = availability.free - qty;
+    if (after < 0) return 'insufficient';
+    if (availability.criticalStock != null && after < availability.criticalStock) return 'critical';
+    return null;
+  };
+
+  const performSave = () => {
     const newLine: MoveOrderLineDraft = {
       uid: editingUid || `line_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       materialUid: materialUid || null,
@@ -435,10 +424,33 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
       comment: comment || null,
       status: 'NOT_STARTED',
       cancelled: false,
-      available: availableOnStock,
+      available: availability?.toMoveMax ?? null,
     };
     onAdd(newLine);
     onClose();
+  };
+
+  const handleSave = () => {
+    if (!isValid) return;
+    const kind = checkStockWarning();
+    if (kind) {
+      setStockWarning(kind);
+      return;
+    }
+    performSave();
+  };
+
+  const handleConfirmStockWarning = () => {
+    setStockWarning(null);
+    performSave();
+  };
+
+  const handleCloseStockWarning = () => {
+    setStockWarning(null);
+  };
+
+  const handleInfoClick = () => {
+    setInfoTooltipOpen(prev => !prev);
   };
 
   const handleCancel = () => onClose();
@@ -465,6 +477,10 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
 
   const articleValue = materialDetail?.article || materialArticle || '';
   const commentActive = comment.length > 0;
+
+  const availableText = availabilityLoading
+    ? 'Загрузка...'
+    : (availability?.toMoveMax != null ? String(availability.toMoveMax) : '');
 
   const renderImageBlock = () => {
     const hasImage = !!materialDetail?.imageUrl;
@@ -516,16 +532,7 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
           justifyContent: 'center',
         }}>
           {hasImage ? (
-            <img
-              src={materialDetail!.imageUrl!}
-              alt=""
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
+            <img src={materialDetail!.imageUrl!} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
           ) : (
             <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: '#A0A3BD' }}>
               Нет изображения
@@ -535,6 +542,8 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
       </div>
     );
   };
+
+  const activeReservations: StockReservationRow[] = availability?.reservations ?? [];
 
   return (
     <>
@@ -551,14 +560,7 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
             </span>
           </div>
 
-          <div style={{
-            position: 'absolute',
-            top: DIVIDER_TOP,
-            height: DIVIDER_HEIGHT,
-            left: POPUP_W / 2,
-            width: 1,
-            backgroundColor: 'rgba(160, 163, 189, 0.2)',
-          }} />
+          <div style={{ position: 'absolute', top: DIVIDER_TOP, height: DIVIDER_HEIGHT, left: POPUP_W / 2, width: 1, backgroundColor: 'rgba(160, 163, 189, 0.2)' }} />
 
           {/* ЛЕВАЯ ЧАСТЬ */}
           <div style={{ position: 'absolute', top: posMaterialTop, left: LEFT_OFFSET }}>
@@ -712,7 +714,7 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
               height={RIGHT_FIELD_H}
               label="Доступность на складе-отправителе:"
               labelPosition="inside"
-              value={availableLoading ? 'Загрузка...' : (availableOnStock != null ? String(availableOnStock) : '')}
+              value={availableText}
               type="input"
               disabled
               icon={CodeIcon20Gray}
@@ -754,6 +756,76 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
               }}>
                 Карточка номенклатуры
               </span>
+            </div>
+          )}
+
+          {/* Блок «Информация» */}
+          {materialUid && stockFromUid && (
+            <div ref={infoRef} style={{ position: 'absolute', bottom: 30, left: RIGHT_LEFT }}>
+              <div
+                onClick={handleInfoClick}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+              >
+                <img src={InfoIcon18Black} alt="" style={{ width: 18, height: 18, display: 'block' }} />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: '#2D4059', lineHeight: '18px' }}>
+                  Информация
+                </span>
+              </div>
+
+              {infoTooltipOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 14px)',
+                    left: 0,
+                    width: 460,
+                    padding: 24,
+                    boxSizing: 'border-box',
+                    backgroundColor: '#2D4059',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                    zIndex: 10010,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 14,
+                  }}
+                >
+                  {availability?.minStock != null && (
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 13, lineHeight: '18px', color: '#FFFFFF' }}>
+                      Минимальный уровень остатка:{' '}
+                      <span style={{ fontWeight: 500, color: '#666EFE' }}>{availability.minStock}</span>{' '}
+                      <span style={{ fontWeight: 500, color: '#666EFE' }}>{pluralizeUnits(availability.minStock)}</span>
+                    </div>
+                  )}
+                  {availability?.free != null && (
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 13, lineHeight: '18px', color: '#FFFFFF' }}>
+                      Доступный остаток на складе-отправителе:{' '}
+                      <span style={{ fontWeight: 500, color: '#666EFE' }}>{availability.free}</span>{' '}
+                      <span style={{ fontWeight: 500, color: '#666EFE' }}>{pluralizeUnits(availability.free)}</span>
+                    </div>
+                  )}
+                  {activeReservations.length > 0 && (
+                    <>
+                      <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 13, lineHeight: '18px', color: '#FFFFFF' }}>
+                        Забронировано:{' '}
+                        <span style={{ fontWeight: 500, color: '#666EFE' }}>
+                          {activeReservations.reduce((s, r) => s + (r.reservedQuantity ?? 0), 0)}
+                        </span>{' '}
+                        <span style={{ fontWeight: 500, color: '#666EFE' }}>
+                          {pluralizeUnits(activeReservations.reduce((s, r) => s + (r.reservedQuantity ?? 0), 0))}
+                        </span>
+                      </div>
+                      {activeReservations.map((r) => (
+                        <div key={r.uid} style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 13, lineHeight: '18px', color: '#FFFFFF' }}>
+                          {describeDocHolder(r)}: <span style={{ fontWeight: 500, color: '#666EFE' }}>{r.reservedQuantity ?? 0}</span>{' '}
+                          <span style={{ fontWeight: 500, color: '#666EFE' }}>{pluralizeUnits(r.reservedQuantity ?? 0)}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  <div style={{ position: 'absolute', bottom: -8, left: 22, width: 0, height: 0, borderLeft: '8px solid transparent', borderRight: '8px solid transparent', borderTop: '8px solid #2D4059' }} />
+                </div>
+              )}
             </div>
           )}
 
@@ -838,6 +910,22 @@ const MoveOrderAddLinePopup: React.FC<MoveOrderAddLinePopupProps> = ({
         materialArticle={materialDetail?.article || materialArticle}
         stationOptions={stationOptions}
       />
+
+      {stockWarning && availability && (
+        <StockAvailabilityWarning
+          isOpen={true}
+          kind={stockWarning}
+          onClose={handleCloseStockWarning}
+          onConfirm={handleConfirmStockWarning}
+          materialName={materialDetail?.nameMaterial || materialName}
+          cellAddress={stockFromName || ''}
+          requestQty={typeof quantity === 'number' ? quantity : 0}
+          stockAvailable={availability.free ?? 0}
+          minStock={availability.minStock}
+          criticalStock={availability.criticalStock}
+          reservations={activeReservations}
+        />
+      )}
     </>
   );
 };

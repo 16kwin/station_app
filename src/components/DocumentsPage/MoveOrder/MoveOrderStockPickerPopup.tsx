@@ -1,43 +1,14 @@
 // MoveOrderStockPickerPopup.tsx — попап «Доступность номенклатуры»
+// Брони через ./stockAvailability; «Забронировано» + раскрытие со списком.
 import React, { useState, useEffect, useMemo } from 'react';
-import AxiosService from '../../../services/AxiosService';
-import ConstantInfo from '../../../info/ConstantInfo';
+import type { StockAvailability, StockReservationRow } from './stockAvailability';
+import { fetchStockAvailability, describeDocHolder, pluralizeUnits } from './stockAvailability';
 
 import StationIcon18White from '../../../assets/Icons/StationIcons/StationIcon18White.svg';
 
 interface StationOption {
   uid: string;
   name: string;
-}
-
-interface StockBalanceRow {
-  materialUid: string;
-  stockUid: string;
-  cleanQuantity: number | null;
-  reservedQuantity: number | null;
-  minStock: number | null;
-  criticalStock: number | null;
-}
-
-interface StockLevelReg {
-  uid: string;
-  stationUid: string | null;
-  materialUid: string | null;
-  minStock: number | null;
-  criticalStock: number | null;
-}
-
-interface AvailabilityRow {
-  stationUid: string;
-  stationName: string;
-  materialUid: string;
-  materialName: string;
-  materialArticle: string;
-  freeQuantity: number | null;
-  minStock: number | null;
-  criticalStock: number | null;
-  kuoExists: boolean;
-  toMoveMax: number | null;
 }
 
 export interface MoveOrderStockPickResult {
@@ -87,17 +58,17 @@ const ICON_RADIUS = 8;
 const COL_STATION_LEFT = 114;
 const COL_MATERIAL_LEFT = 350;
 const COL_MOVE_LEFT = 592;
-const COL_AVAIL_LEFT = 791;
-const COL_MIN_LEFT = 985;
-const COL_CRIT_LEFT = 1132;
-
-const VERTICAL_DIVIDER_LEFT = 960;
+const COL_RESERVED_LEFT = 720;
+const COL_AVAIL_LEFT = 880;
+const COL_MIN_LEFT = 1035;
+const COL_CRIT_LEFT = 1150;
 
 const COL_STATION_W = COL_MATERIAL_LEFT - COL_STATION_LEFT - 20;
 const COL_MATERIAL_W = 210;
-const COL_MOVE_W = COL_AVAIL_LEFT - COL_MOVE_LEFT - 20;
-const COL_AVAIL_W = VERTICAL_DIVIDER_LEFT - COL_AVAIL_LEFT - 20;
-const COL_MIN_W = COL_CRIT_LEFT - COL_MIN_LEFT - 20;
+const COL_MOVE_W = COL_RESERVED_LEFT - COL_MOVE_LEFT - 12;
+const COL_RESERVED_W = COL_AVAIL_LEFT - COL_RESERVED_LEFT - 12;
+const COL_AVAIL_W = COL_MIN_LEFT - COL_AVAIL_LEFT - 12;
+const COL_MIN_W = COL_CRIT_LEFT - COL_MIN_LEFT - 12;
 const COL_CRIT_W = TABLE_W - COL_CRIT_LEFT - 20;
 
 const BOTTOM_OFFSET = 30;
@@ -112,6 +83,12 @@ const BTN_RADIUS = 20;
 const ROW_HOVER_BG = 'rgba(102, 110, 254, 0.03)';
 const ROW_SELECTED_BG = 'rgba(102, 110, 254, 0.05)';
 
+interface AvailabilityRow {
+  stationUid: string;
+  stationName: string;
+  availability: StockAvailability;
+}
+
 const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
   isOpen,
   onClose,
@@ -125,6 +102,7 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [selectedStationUid, setSelectedStationUid] = useState<string | null>(null);
+  const [expandedReservationsFor, setExpandedReservationsFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -134,66 +112,26 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
     setIsLoading(true);
     setRows([]);
     setSelectedStationUid(null);
+    setExpandedReservationsFor(null);
 
     const loadAll = async () => {
       const collected: AvailabilityRow[] = [];
-
       for (const st of stationOptions) {
         if (cancelled) return;
-
-        let kuo: StockLevelReg | null = null;
-        try {
-          const r = await AxiosService.get(
-            ConstantInfo.restApiStockLevelControlReg(st.uid, materialUid)
-          );
-          kuo = (r.data as StockLevelReg) || null;
-        } catch { kuo = null; }
-
+        const data = await fetchStockAvailability(materialUid, st.uid, null);
         if (cancelled) return;
-
-        let balance: StockBalanceRow | null = null;
-        try {
-          const r = await AxiosService.get(ConstantInfo.restApiRefillStockBalances(st.uid));
-          const list = (r.data || []) as StockBalanceRow[];
-          balance = list.find(b => b.materialUid === materialUid) || null;
-        } catch { balance = null; }
-
-        if (cancelled) return;
-
-        const free = balance?.cleanQuantity ?? null;
-        if (free == null || free <= 0) continue;
-
-        const kuoExists = !!(kuo && (kuo.minStock != null || kuo.criticalStock != null));
-        const critical = kuo?.criticalStock ?? null;
-        const min = kuo?.minStock ?? null;
-
-        const toMoveMax = kuoExists && critical != null
-          ? Math.max(0, free - critical)
-          : free;
-
-        collected.push({
-          stationUid: st.uid,
-          stationName: st.name,
-          materialUid,
-          materialName,
-          materialArticle,
-          freeQuantity: free,
-          minStock: min,
-          criticalStock: critical,
-          kuoExists,
-          toMoveMax,
-        });
+        if (!data) continue;
+        if (data.free == null || data.free <= 0) continue;
+        collected.push({ stationUid: st.uid, stationName: st.name, availability: data });
       }
-
       if (cancelled) return;
       setRows(collected);
       setIsLoading(false);
     };
 
     loadAll();
-
     return () => { cancelled = true; };
-  }, [isOpen, materialUid, materialName, materialArticle, stationOptions]);
+  }, [isOpen, materialUid, stationOptions]);
 
   const handleRowClick = (stationUid: string) => {
     setSelectedStationUid(prev => prev === stationUid ? null : stationUid);
@@ -206,8 +144,8 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
     onApply({
       stationUid: row.stationUid,
       stationName: row.stationName,
-      toMoveMax: row.toMoveMax,
-      freeQuantity: row.freeQuantity,
+      toMoveMax: row.availability.toMoveMax,
+      freeQuantity: row.availability.free,
     });
     onClose();
   };
@@ -222,13 +160,11 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
     onApply({
       stationUid: selectedRow.stationUid,
       stationName: selectedRow.stationName,
-      toMoveMax: selectedRow.toMoveMax,
-      freeQuantity: selectedRow.freeQuantity,
+      toMoveMax: selectedRow.availability.toMoveMax,
+      freeQuantity: selectedRow.availability.free,
     });
     onClose();
   };
-
-  const handleClose = () => onClose();
 
   if (!isOpen) return null;
 
@@ -263,49 +199,20 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
         </div>
 
         <div style={{ position: 'absolute', top: INFO_TOP, right: INFO_RIGHT, height: 18, display: 'flex', alignItems: 'center' }}>
-          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 15, color: '#5A607F', lineHeight: '18px' }}>
-            Сведения
-          </span>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 15, color: '#5A607F', lineHeight: '18px' }}>Сведения</span>
         </div>
 
         <div style={{ position: 'absolute', top: 0, left: TABLE_LEFT, width: TABLE_W, height: HEADER_BOTTOM }}>
-          <div style={{ position: 'absolute', left: COL_STATION_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-            <span style={headerLabelStyle}>Склад</span>
-          </div>
-          <div style={{ position: 'absolute', left: COL_MATERIAL_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-            <span style={headerLabelStyle}>Номенклатура</span>
-          </div>
-          <div style={{ position: 'absolute', left: COL_MOVE_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-            <span style={headerLabelStyle}>К перемещению</span>
-          </div>
-          <div style={{ position: 'absolute', left: COL_AVAIL_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-            <span style={headerLabelStyle}>Доступный остаток</span>
-          </div>
-          <div style={{ position: 'absolute', left: COL_MIN_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-            <span style={headerLabelStyle}>Мин. остаток</span>
-          </div>
-          <div style={{ position: 'absolute', left: COL_CRIT_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}>
-            <span style={headerLabelStyle}>Крит. остаток</span>
-          </div>
-
-          <div style={{
-            position: 'absolute',
-            left: VERTICAL_DIVIDER_LEFT,
-            bottom: 1,
-            width: 1,
-            height: 16,
-            backgroundColor: DIVIDER_COLOR,
-          }} />
+          <div style={{ position: 'absolute', left: COL_STATION_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>Склад</span></div>
+          <div style={{ position: 'absolute', left: COL_MATERIAL_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>Номенклатура</span></div>
+          <div style={{ position: 'absolute', left: COL_MOVE_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>К перемещению</span></div>
+          <div style={{ position: 'absolute', left: COL_RESERVED_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>Забронировано</span></div>
+          <div style={{ position: 'absolute', left: COL_AVAIL_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>Доступный остаток</span></div>
+          <div style={{ position: 'absolute', left: COL_MIN_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>Мин. остаток</span></div>
+          <div style={{ position: 'absolute', left: COL_CRIT_LEFT, bottom: 0, height: 18, display: 'flex', alignItems: 'center' }}><span style={headerLabelStyle}>Крит. остаток</span></div>
         </div>
 
-        <div style={{
-          position: 'absolute',
-          top: DIVIDER_TOP,
-          left: DIVIDER_LEFT,
-          width: DIVIDER_W,
-          height: DIVIDER_THICKNESS,
-          backgroundColor: DIVIDER_COLOR,
-        }} />
+        <div style={{ position: 'absolute', top: DIVIDER_TOP, left: DIVIDER_LEFT, width: DIVIDER_W, height: DIVIDER_THICKNESS, backgroundColor: DIVIDER_COLOR }} />
 
         <div style={{
           position: 'absolute',
@@ -319,9 +226,7 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
           msOverflowStyle: 'none',
         }}>
           {isLoading && (
-            <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#A0A3BD' }}>
-              Загрузка...
-            </div>
+            <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#A0A3BD' }}>Загрузка...</div>
           )}
           {!isLoading && rows.length === 0 && (
             <div style={{ padding: '30px 0', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#A0A3BD' }}>
@@ -332,152 +237,113 @@ const MoveOrderStockPickerPopup: React.FC<MoveOrderStockPickerPopupProps> = ({
           {!isLoading && rows.map((r) => {
             const isHovered = hoveredRow === r.stationUid;
             const isSelected = selectedStationUid === r.stationUid;
+            const isExpanded = expandedReservationsFor === r.stationUid;
+            const a = r.availability;
             return (
-              <div
-                key={r.stationUid}
-                onMouseEnter={() => setHoveredRow(r.stationUid)}
-                onMouseLeave={() => setHoveredRow(null)}
-                onClick={() => handleRowClick(r.stationUid)}
-                onDoubleClick={() => handleRowDoubleClick(r.stationUid)}
-                style={{
-                  position: 'relative',
-                  height: ROW_H,
-                  borderBottom: `1px solid ${DIVIDER_COLOR}`,
-                  backgroundColor: isSelected ? ROW_SELECTED_BG : (isHovered ? ROW_HOVER_BG : 'transparent'),
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                }}
-              >
+              <div key={r.stationUid}>
                 <div
+                  onMouseEnter={() => setHoveredRow(r.stationUid)}
+                  onMouseLeave={() => setHoveredRow(null)}
+                  onClick={() => handleRowClick(r.stationUid)}
+                  onDoubleClick={() => handleRowDoubleClick(r.stationUid)}
                   style={{
-                    position: 'absolute',
-                    left: COL_ICON_LEFT,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: ICON_SIZE,
-                    height: ICON_SIZE,
-                    borderRadius: ICON_RADIUS,
-                    backgroundColor: '#666EFE',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    position: 'relative',
+                    height: ROW_H,
+                    borderBottom: `1px solid ${DIVIDER_COLOR}`,
+                    backgroundColor: isSelected ? ROW_SELECTED_BG : (isHovered ? ROW_HOVER_BG : 'transparent'),
+                    cursor: 'pointer',
+                    userSelect: 'none',
                   }}
                 >
-                  <img src={StationIcon18White} alt="" style={{ width: 18, height: 18 }} />
-                </div>
-
-                <div style={{ position: 'absolute', left: COL_STATION_LEFT, top: 0, height: ROW_H, width: COL_STATION_W, display: 'flex', alignItems: 'center' }}>
-                  <span style={cellTextStyle}>{r.stationName}</span>
-                </div>
-
-                <div style={{ position: 'absolute', left: COL_MATERIAL_LEFT, top: 0, height: ROW_H, width: COL_MATERIAL_W, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <span style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontWeight: 400,
-                    fontSize: 14,
-                    color: '#2D4059',
-                    lineHeight: '18px',
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    wordBreak: 'break-word',
+                  <div style={{
+                    position: 'absolute',
+                    left: COL_ICON_LEFT, top: '50%', transform: 'translateY(-50%)',
+                    width: ICON_SIZE, height: ICON_SIZE, borderRadius: ICON_RADIUS,
+                    backgroundColor: '#666EFE', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {r.materialName}
-                  </span>
+                    <img src={StationIcon18White} alt="" style={{ width: 18, height: 18 }} />
+                  </div>
+
+                  <div style={{ position: 'absolute', left: COL_STATION_LEFT, top: 0, height: ROW_H, width: COL_STATION_W, display: 'flex', alignItems: 'center' }}>
+                    <span style={cellTextStyle}>{r.stationName}</span>
+                  </div>
+
+                  <div style={{ position: 'absolute', left: COL_MATERIAL_LEFT, top: 0, height: ROW_H, width: COL_MATERIAL_W, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <span style={{
+                      fontFamily: 'Inter, sans-serif', fontWeight: 400, fontSize: 14, color: '#2D4059', lineHeight: '18px',
+                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', wordBreak: 'break-word',
+                    }}>{materialName}</span>
+                  </div>
+
+                  <div style={{ position: 'absolute', left: COL_MOVE_LEFT, top: 0, height: ROW_H, width: COL_MOVE_W, display: 'flex', alignItems: 'center' }}>
+                    <span style={{ ...cellTextStyle, color: '#666EFE' }}>{a.toMoveMax != null ? a.toMoveMax : '—'}</span>
+                  </div>
+
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (a.reserved > 0) setExpandedReservationsFor(prev => prev === r.stationUid ? null : r.stationUid);
+                    }}
+                    style={{ position: 'absolute', left: COL_RESERVED_LEFT, top: 0, height: ROW_H, width: COL_RESERVED_W, display: 'flex', alignItems: 'center', cursor: a.reserved > 0 ? 'pointer' : 'default' }}
+                  >
+                    <span style={{ ...cellTextStyle, color: a.reserved > 0 ? '#FE975B' : 'rgba(45,64,89,0.5)', textDecoration: a.reserved > 0 ? 'underline' : 'none' }}>
+                      {a.reserved > 0 ? a.reserved : '—'}
+                    </span>
+                  </div>
+
+                  <div style={{ position: 'absolute', left: COL_AVAIL_LEFT, top: 0, height: ROW_H, width: COL_AVAIL_W, display: 'flex', alignItems: 'center' }}>
+                    <span style={cellTextStyle}>{a.free != null ? a.free : '—'}</span>
+                  </div>
+
+                  <div style={{ position: 'absolute', left: COL_MIN_LEFT, top: 0, height: ROW_H, width: COL_MIN_W, display: 'flex', alignItems: 'center' }}>
+                    <span style={cellTextStyle}>{a.minStock != null ? a.minStock : '-'}</span>
+                  </div>
+
+                  <div style={{ position: 'absolute', left: COL_CRIT_LEFT, top: 0, height: ROW_H, width: COL_CRIT_W, display: 'flex', alignItems: 'center' }}>
+                    <span style={{ ...cellTextStyle, color: a.kuoExists ? '#2D4059' : '#A0A3BD' }}>
+                      {a.kuoExists ? (a.criticalStock != null ? a.criticalStock : '-') : 'КУО не задано'}
+                    </span>
+                  </div>
                 </div>
 
-                <div style={{ position: 'absolute', left: COL_MOVE_LEFT, top: 0, height: ROW_H, width: COL_MOVE_W, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ ...cellTextStyle, color: '#666EFE' }}>
-                    {r.toMoveMax != null ? r.toMoveMax : '—'}
-                  </span>
-                </div>
-
-                <div style={{ position: 'absolute', left: COL_AVAIL_LEFT, top: 0, height: ROW_H, width: COL_AVAIL_W, display: 'flex', alignItems: 'center' }}>
-                  <span style={cellTextStyle}>{r.freeQuantity != null ? r.freeQuantity : '—'}</span>
-                </div>
-
-                <div style={{ position: 'absolute', left: COL_MIN_LEFT, top: 0, height: ROW_H, width: COL_MIN_W, display: 'flex', alignItems: 'center' }}>
-                  <span style={cellTextStyle}>{r.minStock != null ? r.minStock : '-'}</span>
-                </div>
-
-                <div style={{ position: 'absolute', left: COL_CRIT_LEFT, top: 0, height: ROW_H, width: COL_CRIT_W, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ ...cellTextStyle, color: r.kuoExists ? '#2D4059' : '#A0A3BD' }}>
-                    {r.kuoExists
-                      ? (r.criticalStock != null ? r.criticalStock : '-')
-                      : 'КУО не задано'}
-                  </span>
-                </div>
-
-                <div style={{
-                  position: 'absolute',
-                  left: VERTICAL_DIVIDER_LEFT,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: 1,
-                  height: 16,
-                  backgroundColor: DIVIDER_COLOR,
-                }} />
+                {isExpanded && a.reservations.length > 0 && (
+                  <div style={{ backgroundColor: 'rgba(254, 151, 91, 0.06)', borderBottom: `1px solid ${DIVIDER_COLOR}`, padding: '10px 0 10px 114px' }}>
+                    {a.reservations.map((resRow: StockReservationRow) => (
+                      <div key={resRow.uid} style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(45,64,89,0.75)', lineHeight: '20px' }}>
+                        {describeDocHolder(resRow)} — {resRow.reservedQuantity ?? 0} {pluralizeUnits(resRow.reservedQuantity ?? 0)}
+                        {resRow.authorFullName || resRow.author ? ` (${resRow.authorFullName || resRow.author})` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
 
           {!isLoading && rows.length > 0 && Array.from({ length: emptyRowsCount }).map((_, i) => (
-            <div
-              key={`empty-${i}`}
-              style={{
-                position: 'relative',
-                height: ROW_H,
-                borderBottom: `1px solid ${DIVIDER_COLOR}`,
-              }}
-            />
+            <div key={`empty-${i}`} style={{ position: 'relative', height: ROW_H, borderBottom: `1px solid ${DIVIDER_COLOR}` }} />
           ))}
         </div>
 
-        <div style={{
-          position: 'absolute',
-          bottom: BOTTOM_OFFSET,
-          right: CLOSE_RIGHT,
-          display: 'flex',
-          alignItems: 'center',
-          gap: BTN_GAP,
-        }}>
+        <div style={{ position: 'absolute', bottom: BOTTOM_OFFSET, right: CLOSE_RIGHT, display: 'flex', alignItems: 'center', gap: BTN_GAP }}>
           <button
             onClick={handleMove}
             disabled={!selectedRow}
             style={{
-              width: MOVE_W,
-              height: MOVE_H,
-              borderRadius: BTN_RADIUS,
-              border: 'none',
-              backgroundColor: '#FFFFFF',
-              color: '#2D4059',
-              cursor: !selectedRow ? 'not-allowed' : 'pointer',
-              opacity: !selectedRow ? 0.5 : 1,
-              fontFamily: 'Inter, sans-serif',
-              fontSize: 14,
-              fontWeight: 500,
+              width: MOVE_W, height: MOVE_H, borderRadius: BTN_RADIUS, border: 'none',
+              backgroundColor: '#FFFFFF', color: '#2D4059',
+              cursor: !selectedRow ? 'not-allowed' : 'pointer', opacity: !selectedRow ? 0.5 : 1,
+              fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
             }}
-          >
-            Переместить
-          </button>
+          >Переместить</button>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             style={{
-              width: CLOSE_W,
-              height: CLOSE_H,
-              borderRadius: BTN_RADIUS,
-              border: 'none',
-              backgroundColor: '#FFFFFF',
-              cursor: 'pointer',
-              fontFamily: 'Inter, sans-serif',
-              fontSize: 14,
-              fontWeight: 400,
-              color: '#2D4059',
+              width: CLOSE_W, height: CLOSE_H, borderRadius: BTN_RADIUS, border: 'none',
+              backgroundColor: '#FFFFFF', cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 400, color: '#2D4059',
             }}
-          >
-            Закрыть
-          </button>
+          >Закрыть</button>
         </div>
       </div>
     </div>
