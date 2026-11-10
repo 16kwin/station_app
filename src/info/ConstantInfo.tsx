@@ -621,6 +621,16 @@ restApiMoveOrderApprove: (uid: string) => `/api/move-orders/${uid}/approve`,
 restApiMoveOrderReject: (uid: string) => `/api/move-orders/${uid}/reject`,
 restApiMoveOrderTakeToWork: (uid: string) => `/api/move-orders/${uid}/take-to-work`,
 restApiMoveOrderCancel: (uid: string) => `/api/move-orders/${uid}/cancel`,
+  restApiStationDistributionLinks: (stationUid: string) => `/api/stations/${stationUid}/distribution-links`,
+  restApiStationDistributionLinkItems: (distributionUid: string) => `/api/stations/${distributionUid}/distribution-links/items`,
+  restApiStationDistributionLinkCreate: (distributionUid: string, linkedUid: string) => `/api/stations/${distributionUid}/distribution-links?linkedUid=${encodeURIComponent(linkedUid)}`,
+  restApiStationDistributionLinkDelete: (linkUid: string) => `/api/stations/distribution-links/${linkUid}`,
+  restApiStationDistributionLinksSet: (distributionUid: string) => `/api/stations/${distributionUid}/distribution-links/set`,
+    // Связи распределительных складов
+  restApiStationDistributionLinkSetIncoming: (stationUid: string) => `/api/stations/${stationUid}/distribution-links/incoming`,
+  restApiStationDistributionLinkSetOutgoing: (stationUid: string) => `/api/stations/${stationUid}/distribution-links/outgoing`,
+  restApiRefillTakeToWork: (uid: string) => `/api/documents/refill/crud/${uid}/take-to-work`,
+restApiRefillCancel: (uid: string) => `/api/documents/refill/crud/${uid}/cancel`,
 };
 
 export default ConstantInfo;

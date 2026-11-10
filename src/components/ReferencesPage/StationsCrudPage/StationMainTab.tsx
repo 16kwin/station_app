@@ -1,4 +1,4 @@
-// StationMainTab.tsx — ПОЛНЫЙ ФАЙЛ (с автокоррекцией при вводе)
+// StationMainTab.tsx — ПОЛНЫЙ ФАЙЛ (старый дизайн + выбор модели + isDistribution + условные флаги по modelIsAutomatic)
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
@@ -38,6 +38,7 @@ import SectionIcon20Blue from '../../../assets/Icons/SectionIcons/SectionIcon20B
 export interface StationMainTabProps {
   uid?: string; code: number; name: string;
   modelId: string; modelName: string;
+  modelIsAutomatic: boolean | null;
   article: string; typeName: string; revision: string;
   serialNumber: string; productionDate: string;
   modelImageUrl: string;
@@ -56,6 +57,7 @@ export interface StationMainTabProps {
   isOk: boolean; setIsOk: (v: boolean) => void;
   isAdditionalModule: boolean; setIsAdditionalModule: (v: boolean) => void;
   hasAdditionalModule: boolean; setHasAdditionalModule: (v: boolean) => void;
+  isDistribution: boolean; setIsDistribution: (v: boolean) => void;
   status: string; setStatus: (v: string) => void;
   description: string; setDescription: (v: string) => void;
   ipAddress: string; setIpAddress: (v: string) => void;
@@ -96,6 +98,9 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const [enterpriseOptions, setEnterpriseOptions] = useState<{ uid: string; name: string }[]>([]);
   const [workshopOptions, setWorkshopOptions] = useState<{ uid: string; name: string }[]>([]);
   const [sectionOptions, setSectionOptions] = useState<{ uid: string; name: string }[]>([]);
+
+  // Логика: неавтоматический склад — только ТМЦ и СГД
+  const isManual = props.modelIsAutomatic === false;
 
   useEffect(() => {
     fetchModelOptions();
@@ -141,78 +146,47 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const getDaysInMonth = (month: number, year: number): number => {
     const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     if (month === 2) {
-      if ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) {
-        return 29;
-      }
+      if ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) return 29;
     }
     return daysInMonth[month - 1] || 31;
   };
 
   const formatDateInput = (input: string): string => {
     if (!input || input === '') return '';
-    
     let digits = input.replace(/\D/g, '');
     digits = digits.slice(0, 8);
-    
     if (digits.length === 0) return '';
-    
+
     let day = '';
     let month = '';
     let year = '';
-    
-    // Парсим день
-    if (digits.length >= 1) {
-      day = digits.slice(0, 2);
-    }
-    
-    // Парсим месяц
-    if (digits.length >= 3) {
-      month = digits.slice(2, 4);
-    }
-    
-    // Парсим год
-    if (digits.length >= 5) {
-      year = digits.slice(4, 8);
-    }
-    
-    // Автокоррекция
+
+    if (digits.length >= 1) day = digits.slice(0, 2);
+    if (digits.length >= 3) month = digits.slice(2, 4);
+    if (digits.length >= 5) year = digits.slice(4, 8);
+
     let dayNum = parseInt(day) || 0;
     let monthNum = parseInt(month) || 0;
     let yearNum = parseInt(year) || new Date().getFullYear();
-    
-    // Корректируем день
+
     if (dayNum > 31) dayNum = 31;
     if (dayNum < 1 && day.length === 2) dayNum = 1;
-    
-    // Корректируем месяц
     if (monthNum > 12) monthNum = 12;
     if (monthNum < 1 && month.length === 2) monthNum = 1;
-    
-    // Корректируем день относительно месяца
+
     if (monthNum > 0 && dayNum > 0) {
       const maxDays = getDaysInMonth(monthNum, yearNum);
       if (dayNum > maxDays) dayNum = maxDays;
     }
-    
-    // Собираем результат
+
     let result = '';
-    
-    if (day.length === 1) {
-      result += String(dayNum);
-    } else if (day.length === 2) {
-      result += String(dayNum).padStart(2, '0');
-    }
-    
-    if (month.length === 1) {
-      result += '.' + String(monthNum);
-    } else if (month.length === 2) {
-      result += '.' + String(monthNum).padStart(2, '0');
-    }
-    
-    if (year.length > 0) {
-      result += '.' + year;
-    }
-    
+    if (day.length === 1) result += String(dayNum);
+    else if (day.length === 2) result += String(dayNum).padStart(2, '0');
+
+    if (month.length === 1) result += '.' + String(monthNum);
+    else if (month.length === 2) result += '.' + String(monthNum).padStart(2, '0');
+
+    if (year.length > 0) result += '.' + year;
     return result;
   };
 
@@ -220,33 +194,26 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
     if (!dateStr) return '';
     if (dateStr.includes('.')) return dateStr;
     const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}.${parts[1]}.${parts[0]}`;
-    }
+    if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
     return dateStr;
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
-    
     if (input === '' || input === null) {
       setDateInputValue('');
       props.setProductionDate('');
       return;
     }
-    
     const formatted = formatDateInput(input);
     setDateInputValue(formatted);
-    
     const dateRegex = /^(\d{2})\.(\d{2})\.(\d{4})$/;
     const match = formatted.match(dateRegex);
-    
     if (match) {
       const day = parseInt(match[1]);
       const month = parseInt(match[2]);
       const year = parseInt(match[3]);
       const maxDays = getDaysInMonth(month, year);
-      
       if (day >= 1 && day <= maxDays && month >= 1 && month <= 12) {
         props.setProductionDate(formatted);
       }
@@ -293,30 +260,25 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
 
   const placementText = [props.holdingName, props.enterpriseName, props.workshopName, props.sectionName].filter(Boolean).join('; ') || 'Выберите размещение';
 
+  // Виды учёта: для неавтоматических — только ТМЦ и СГД
   const accountingItems = [
     { label: 'Товарно-материальная ценность (ТМЦ)', value: props.isTmc, setter: () => props.setIsTmc(!props.isTmc) },
     { label: 'Склад готовых деталей (СГД)', value: props.isSgd, setter: () => props.setIsSgd(!props.isSgd) },
-    { label: 'Выдача по операционной карте (ОК)', value: props.isOk, setter: () => props.setIsOk(!props.isOk) },
-    { label: 'Имеет дополнительный модуль', value: props.hasAdditionalModule, setter: () => props.setHasAdditionalModule(!props.hasAdditionalModule) },
+    ...(!isManual ? [
+      { label: 'Выдача по операционной карте (ОК)', value: props.isOk, setter: () => props.setIsOk(!props.isOk) },
+      { label: 'Имеет дополнительный модуль', value: props.hasAdditionalModule, setter: () => props.setHasAdditionalModule(!props.hasAdditionalModule) },
+    ] : []),
   ];
 
   const accountingLabels = accountingItems.filter(item => item.value).map(item => item.label);
   const accountingText = accountingLabels.length > 0 ? accountingLabels.join(', ') : 'Выберите вид учёта';
 
   const selectFieldStyle = (hasValue: boolean): React.CSSProperties => ({
-    width: 456,
-    height: 44,
-    borderRadius: 10,
-    display: 'flex',
-    alignItems: 'center',
-    paddingLeft: 13,
-    paddingRight: 14,
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 500,
-    outline: 'none',
-    backgroundColor: '#FFFFFF',
-    boxSizing: 'border-box',
+    width: 456, height: 44, borderRadius: 10,
+    display: 'flex', alignItems: 'center',
+    paddingLeft: 13, paddingRight: 14,
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, outline: 'none',
+    backgroundColor: '#FFFFFF', boxSizing: 'border-box',
     border: hasValue ? '1px solid #666EFE' : '1px solid #A0A3BD',
     cursor: 'pointer',
   });
@@ -324,45 +286,25 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
   const selectTextColor = (hasValue: boolean): string => hasValue ? '#666EFE' : '#A0A3BD';
 
   const screenLabelStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#2D4059',
-    lineHeight: '17px',
-    display: 'block',
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059', lineHeight: '17px', display: 'block',
   };
 
   const screenTitleStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#2D4059',
-    lineHeight: '17px',
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059', lineHeight: '17px',
   };
 
   const checkboxTextStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#2D4059',
-    lineHeight: '18px',
+    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', lineHeight: '18px',
   };
 
   const backButtonStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 14,
-    left: 17,
-    width: 24,
-    height: 24,
-    border: 'none',
-    background: 'transparent',
-    cursor: 'pointer',
-    padding: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
+    position: 'absolute', top: 14, left: 17, width: 24, height: 24,
+    border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
   };
+
+  // Логика: при смене модели на неавтоматическую — визуальные чекбоксы ОК/доп.модулей скрываются,
+  // но значения в стейте остаются; санитизацию делает StationCreatePage при сохранении/загрузке.
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 30 }}>
@@ -511,7 +453,7 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
           </div>
         </div>
 
-        {/* ЦЕНТРАЛЬНЫЙ — Размещение и вид учёта (536×300) */}
+        {/* ЦЕНТРАЛЬНЫЙ — Размещение и вид учёта */}
         <div style={{ width: 536, height: 300, ...blockStyle, overflow: 'hidden', flexShrink: 0 }}>
           {/* Главный экран */}
           <motion.div
@@ -545,6 +487,12 @@ const StationMainTab: React.FC<StationMainTabProps> = (props) => {
               <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
                 <img src={accountingLabels.length > 0 ? ArrowIcon18Blue : ArrowIcon18Gray} alt="" style={{ width: 18, height: 18 }} />
               </div>
+            </div>
+
+            {/* Свойства склада: Распределительный */}
+            <div style={{ position: 'absolute', top: 73 + 44 + 55 + 17 + 11 + 44 + 20, left: 40, right: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' }}>Распределительный склад</span>
+              <Checkbox checked={props.isDistribution} onChange={() => props.setIsDistribution(!props.isDistribution)} />
             </div>
           </motion.div>
 

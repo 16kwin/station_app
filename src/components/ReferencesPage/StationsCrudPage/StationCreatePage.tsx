@@ -1,4 +1,4 @@
-// StationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (исправлена конвертация даты при сохранении)
+// StationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (isDistribution, isAutomatic/isAddress из модели, вкладка «Связанные склады», переименование «Станция» → «Склад»)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -11,6 +11,7 @@ import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import StationMainTab from './StationMainTab';
 import StationConfigurationTab from './StationConfigurationTab';
 import StationFilesTab from './StationFilesTab';
+import StationLinksTab from './StationLinksTab';
 import type { StationLocalDocumentItem, StationDocumentChange } from './StationFilesTab';
 import HistoryTable from '../../elements/HistoryTable';
 import IconArrow from '../../../assets/References/NomenclatureCreatePage/IconArrow.svg';
@@ -45,6 +46,7 @@ interface InitialState {
   isOk: boolean;
   isAdditionalModule: boolean;
   hasAdditionalModule: boolean;
+  isDistribution: boolean;
   modelId: string;
   configurationUid: string;
   holdingId: number | null;
@@ -76,8 +78,10 @@ const StationCreatePage = () => {
   const [isOk, setIsOk] = useState(false);
   const [isAdditionalModule, setIsAdditionalModule] = useState(false);
   const [hasAdditionalModule, setHasAdditionalModule] = useState(false);
+  const [isDistribution, setIsDistribution] = useState(false);
   const [modelId, setModelId] = useState('');
   const [modelName, setModelName] = useState('');
+  const [modelIsAutomatic, setModelIsAutomatic] = useState<boolean | null>(null);
   const [article, setArticle] = useState('');
   const [typeName, setTypeName] = useState('');
   const [revision, setRevision] = useState('');
@@ -94,7 +98,6 @@ const StationCreatePage = () => {
   const [sectionName, setSectionName] = useState('');
 
   const [localDocuments, setLocalDocuments] = useState<StationLocalDocumentItem[]>([]);
-  // Печать и PDF карточки — под функцией export
   const canExport = useCanExport();
   const [documentChanges, setDocumentChanges] = useState<StationDocumentChange[]>([]);
 
@@ -117,7 +120,7 @@ const StationCreatePage = () => {
   const [popupType, setPopupType] = useState<PopupType>('stationModel');
   const [popupFilterParam, setPopupFilterParam] = useState<string | undefined>(undefined);
 
-  const tabs_list = ['Основное', 'Конфигурация', 'Файлы'];
+  const tabs_list = ['Основное', 'Конфигурация', 'Связанные склады', 'Файлы'];
 
   useEffect(() => {
     if (!uid) return;
@@ -144,14 +147,15 @@ const StationCreatePage = () => {
     }
   }, [uid]);
 
-  useEffect(() => { if (historySearchExpanded && historySearchInputRef.current) setTimeout(() => historySearchInputRef.current?.focus(), 100); }, [historySearchExpanded]);
+  useEffect(() => {
+    if (!historySearchExpanded) return;
+    const t = setTimeout(() => historySearchInputRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, [historySearchExpanded]);
 
-  // Функция конвертации даты для API
   const convertDateForAPI = (dateStr: string): string | null => {
     if (!dateStr) return null;
-    // Если дата уже в ISO формате (YYYY-MM-DD)
     if (dateStr.includes('-') && dateStr.length === 10) return dateStr;
-    // Конвертируем из DD.MM.YYYY в YYYY-MM-DD
     const parts = dateStr.split('.');
     if (parts.length === 3) {
       const day = parseInt(parts[0]);
@@ -164,16 +168,11 @@ const StationCreatePage = () => {
     return dateStr;
   };
 
-  // Функция конвертации даты из API для отображения
   const convertDateFromAPI = (dateStr: string): string => {
     if (!dateStr) return '';
-    // Если дата уже в формате DD.MM.YYYY
     if (dateStr.includes('.')) return dateStr;
-    // Конвертируем из YYYY-MM-DD в DD.MM.YYYY
     const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}.${parts[1]}.${parts[0]}`;
-    }
+    if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
     return dateStr;
   };
 
@@ -198,6 +197,16 @@ const StationCreatePage = () => {
     }
   };
 
+  /** Санитизация флагов по классу модели: неавтоматический — только ТМЦ/СГД, без ОК/доп.модулей/parentUid. */
+  const sanitizeFlagsByModel = (isAutomatic: boolean | null) => {
+    if (isAutomatic === false) {
+      setIsOk(false);
+      setIsAdditionalModule(false);
+      setHasAdditionalModule(false);
+      setParentUid('');
+    }
+  };
+
   const applyCopyData = async (d: any) => {
     setName(d.name || '');
     setCode(d.code || 0);
@@ -214,6 +223,7 @@ const StationCreatePage = () => {
     setIsOk(d.isOk || false);
     setIsAdditionalModule(d.isAdditionalModule || false);
     setHasAdditionalModule(d.hasAdditionalModule || false);
+    setIsDistribution(d.isDistribution || false);
 
     if (d.modelId) {
       setModelId(d.modelId);
@@ -234,7 +244,6 @@ const StationCreatePage = () => {
     if (d.workshopId) { setWorkshopId(d.workshopId); setWorkshopName(d.workshopName || ''); }
     if (d.sectionId) { setSectionId(d.sectionId); setSectionName(d.sectionName || ''); }
 
-    // Документы копии загружаются на сервер заново — только при функции uploads; без неё копия создаётся без документов
     if (d.documents && Array.isArray(d.documents) && canUploadNow()) {
       const newLocalDocs: StationLocalDocumentItem[] = [];
       for (const doc of d.documents) {
@@ -269,6 +278,7 @@ const StationCreatePage = () => {
       isOk: d.isOk || false,
       isAdditionalModule: d.isAdditionalModule || false,
       hasAdditionalModule: d.hasAdditionalModule || false,
+      isDistribution: d.isDistribution || false,
       modelId: d.modelId || '',
       configurationUid: d.configurationUid || '',
       holdingId: d.holdingId || null,
@@ -283,16 +293,22 @@ const StationCreatePage = () => {
     try {
       const d = (await AxiosService.get(ConstantInfo.restApiStationCrud(stationUid))).data;
       setName(d.name || ''); setCode(d.code || 0); setDescription(d.description || '');
-      setSerialNumber(d.serialNumber || ''); 
+      setSerialNumber(d.serialNumber || '');
       setProductionDate(convertDateFromAPI(d.productionDate || ''));
       setStatus(d.status || 'WORKING'); setIpAddress(d.ipAddress || ''); setNetworkPort(d.networkPort || '');
       setParentUid(d.parentUid || '');
       setHasError(d.hasError || false); setIsTmc(d.isTmc || false); setIsSgd(d.isSgd || false);
       setIsOk(d.isOk || false); setIsAdditionalModule(d.isAdditionalModule || false);
       setHasAdditionalModule(d.hasAdditionalModule || false);
+      setIsDistribution(d.isDistribution || false);
+
       if (d.modelId) {
         setModelId(d.modelId); setModelName(d.modelName || '');
         setArticle(d.article || ''); setTypeName(d.stationType || ''); setRevision(d.revision || '');
+        if (d.isAutomatic !== undefined) {
+          setModelIsAutomatic(d.isAutomatic);
+          sanitizeFlagsByModel(d.isAutomatic);
+        }
         await loadModelInfo(d.modelId);
       }
       if (d.configurationUid) { setConfigurationUid(d.configurationUid); setConfigurationName(d.configurationName || ''); }
@@ -316,6 +332,7 @@ const StationCreatePage = () => {
         isOk: d.isOk || false,
         isAdditionalModule: d.isAdditionalModule || false,
         hasAdditionalModule: d.hasAdditionalModule || false,
+        isDistribution: d.isDistribution || false,
         modelId: d.modelId || '',
         configurationUid: d.configurationUid || '',
         holdingId: d.holdingId || null,
@@ -333,22 +350,26 @@ const StationCreatePage = () => {
       setRevision(d.revision || '');
       if (d.typeName) setTypeName(d.typeName);
       if (d.name) setModelName(d.name);
-      
+      if (d.isAutomatic !== undefined && d.isAutomatic !== null) {
+        setModelIsAutomatic(d.isAutomatic);
+        sanitizeFlagsByModel(d.isAutomatic);
+      }
+
       const imgRes = await AxiosService.get(ConstantInfo.restApiStationModelImages(modelUid));
       if (imgRes.data && imgRes.data.length > 0) {
         setModelImageUrl(imgRes.data[0].url ? ConstantInfo.fileDir + imgRes.data[0].url.replace(/^\//, '') : '');
       } else {
         setModelImageUrl('');
       }
-      
+
       const configsRes = await AxiosService.get(`${ConstantInfo.restApiStationConfigurations}?modelId=${modelUid}`);
       const configsList = Array.isArray(configsRes.data) ? configsRes.data : (configsRes.data?.data || []);
-      
+
       if (configsList.length > 0) {
-        const defaultConfig = configsList.find((c: any) => 
+        const defaultConfig = configsList.find((c: any) =>
           c.name && (c.name.toLowerCase().includes('типовая') || c.name.toLowerCase().includes('типовая конфигурация') || c.name.toLowerCase().includes('default') || c.name.toLowerCase().includes('по умолчанию'))
         ) || configsList[0];
-        
+
         setConfigurationUid(defaultConfig.uid || defaultConfig.id);
         setConfigurationName(defaultConfig.name);
       } else {
@@ -369,7 +390,7 @@ const StationCreatePage = () => {
 
   const isDirty = useMemo(() => {
     if (!isEdit || !initialState) return name.trim().length > 0 || localDocuments.length > 0 || documentChanges.length > 0;
-    
+
     return (
       name !== initialState.name ||
       description !== initialState.description ||
@@ -385,6 +406,7 @@ const StationCreatePage = () => {
       isOk !== initialState.isOk ||
       isAdditionalModule !== initialState.isAdditionalModule ||
       hasAdditionalModule !== initialState.hasAdditionalModule ||
+      isDistribution !== initialState.isDistribution ||
       modelId !== initialState.modelId ||
       configurationUid !== initialState.configurationUid ||
       holdingId !== initialState.holdingId ||
@@ -394,7 +416,7 @@ const StationCreatePage = () => {
       localDocuments.length > 0 ||
       documentChanges.length > 0
     );
-  }, [isEdit, initialState, name, description, serialNumber, productionDate, status, ipAddress, networkPort, parentUid, hasError, isTmc, isSgd, isOk, isAdditionalModule, hasAdditionalModule, modelId, configurationUid, holdingId, enterpriseId, workshopId, sectionId, localDocuments, documentChanges]);
+  }, [isEdit, initialState, name, description, serialNumber, productionDate, status, ipAddress, networkPort, parentUid, hasError, isTmc, isSgd, isOk, isAdditionalModule, hasAdditionalModule, isDistribution, modelId, configurationUid, holdingId, enterpriseId, workshopId, sectionId, localDocuments, documentChanges]);
 
   const canSave = isDirty && name.trim().length > 0;
 
@@ -419,12 +441,8 @@ const StationCreatePage = () => {
   };
 
   const handleHistoryClick = () => {
-    if (!showHistory) {
-      fetchHistory();
-      setSlideDirection('left');
-    } else {
-      setSlideDirection('right');
-    }
+    if (!showHistory) { fetchHistory(); setSlideDirection('left'); }
+    else { setSlideDirection('right'); }
     setShowHistory(!showHistory);
   };
 
@@ -446,18 +464,21 @@ const StationCreatePage = () => {
     try {
       const body: any = {
         uid, name: name.trim(), description: description.trim(),
-        serialNumber: serialNumber.trim(), 
-        productionDate: convertDateForAPI(productionDate), // Конвертируем дату для API
+        serialNumber: serialNumber.trim(),
+        productionDate: convertDateForAPI(productionDate),
         status, ipAddress: ipAddress.trim(), networkPort: networkPort || null,
         parentUid: parentUid || null,
-        hasError, isTmc, isSgd, isOk, isAdditionalModule, hasAdditionalModule,
+        hasError, isTmc, isSgd,
+        // При неавтоматической модели — флаги сбрасываются на фронте, но страхуемся
+        isOk: modelIsAutomatic === false ? false : isOk,
+        isAdditionalModule: modelIsAutomatic === false ? false : isAdditionalModule,
+        hasAdditionalModule: modelIsAutomatic === false ? false : hasAdditionalModule,
+        isDistribution,
         modelId: modelId || null, configurationUid: configurationUid || null,
         holdingId: holdingId || null,
         enterpriseId: enterpriseId || null, workshopId: workshopId || null, sectionId: sectionId || null,
       };
-      
-      console.log('Отправляемые данные:', body); // Для отладки
-      
+
       const wasCreate = !isEdit;
       if (isEdit) {
         await AxiosService.patch(ConstantInfo.restApiStationCrud(uid), body);
@@ -465,8 +486,6 @@ const StationCreatePage = () => {
         await AxiosService.post(ConstantInfo.restApiStationsCrud(USER_ID).split('?')[0], body);
       }
 
-      // Файлы уходят, только пока включена загрузка (функция uploads): её могли выключить, пока карточка открыта.
-      // Тогда новые файлы остаются в карточке несохранёнными, а всё остальное записывается
       if (canUploadNow()) {
         for (const doc of localDocuments) {
           if (doc.isNew) {
@@ -487,7 +506,7 @@ const StationCreatePage = () => {
         await AxiosService.delete(ConstantInfo.restApiStationDeleteDocument(uid, change.serverUid!));
       }
       setDocumentChanges([]);
-      
+
       setInitialState({
         name: name.trim(),
         description: description.trim(),
@@ -500,9 +519,10 @@ const StationCreatePage = () => {
         hasError: hasError,
         isTmc: isTmc,
         isSgd: isSgd,
-        isOk: isOk,
-        isAdditionalModule: isAdditionalModule,
-        hasAdditionalModule: hasAdditionalModule,
+        isOk: modelIsAutomatic === false ? false : isOk,
+        isAdditionalModule: modelIsAutomatic === false ? false : isAdditionalModule,
+        hasAdditionalModule: modelIsAutomatic === false ? false : hasAdditionalModule,
+        isDistribution,
         modelId: modelId,
         configurationUid: configurationUid,
         holdingId: holdingId,
@@ -510,20 +530,20 @@ const StationCreatePage = () => {
         workshopId: workshopId,
         sectionId: sectionId,
       });
-      
+
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
       setIsDataSaved(true);
       if (wasCreate && activeTabId) {
         setIsEdit(true);
         const newPath = `/references/stations/edit/${uid}`;
-        const newLabel = `Станция: ${name.trim()}`;
+        const newLabel = `Склад: ${name.trim()}`;
         replaceTab(activeTabId, newPath, newLabel, <StationCreatePage />);
       }
-    } catch (e) { 
-      console.error('Ошибка сохранения:', e); 
+    } catch (e) {
+      console.error('Ошибка сохранения:', e);
       alert('Ошибка при сохранении: ' + (e as any).message);
-    } finally { 
-      setIsSaving(false); 
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -539,10 +559,10 @@ const StationCreatePage = () => {
 
   const handlePopupSelect = (id: string, nm: string) => {
     switch (popupType) {
-      case 'stationModel': 
-        setModelId(id); 
-        setModelName(nm); 
-        loadModelInfo(id); 
+      case 'stationModel':
+        setModelId(id);
+        setModelName(nm);
+        loadModelInfo(id);
         break;
       case 'stationConfiguration': setConfigurationUid(id); setConfigurationName(nm); break;
       case 'enterprise':
@@ -585,18 +605,9 @@ const StationCreatePage = () => {
   const tween = { type: 'tween' as const, duration: 0.2 };
 
   const slideVariants = {
-    enter: (direction: 'left' | 'right') => ({
-      x: direction === 'left' ? 200 : -200,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (direction: 'left' | 'right') => ({
-      x: direction === 'left' ? -200 : 200,
-      opacity: 0,
-    }),
+    enter: (direction: 'left' | 'right') => ({ x: direction === 'left' ? 200 : -200, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (direction: 'left' | 'right') => ({ x: direction === 'left' ? -200 : 200, opacity: 0 }),
   };
 
   const currentView = showHistory ? 'history' : `tab-${activeTab}`;
@@ -606,9 +617,9 @@ const StationCreatePage = () => {
       return (
         <div style={{ position: 'absolute', top: 10, left: 0, right: 0, bottom: 0 }}>
           <div style={{ position: 'absolute', top: 0, left: 15, zIndex: 10, height: 40 }}>
-            <motion.div 
-              style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
-              animate={{ width: historySearchWidth }} 
+            <motion.div
+              style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }}
+              animate={{ width: historySearchWidth }}
               transition={tween}
             >
               <div onClick={historySearchExpanded ? () => { setHistorySearchExpanded(false); setHistorySearchValue(''); } : () => setHistorySearchExpanded(true)} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
@@ -633,7 +644,7 @@ const StationCreatePage = () => {
         {activeTab === 0 && (
           <StationMainTab
             uid={uid} code={code} name={name}
-            modelId={modelId} modelName={modelName}
+            modelId={modelId} modelName={modelName} modelIsAutomatic={modelIsAutomatic}
             article={article} typeName={typeName} revision={revision}
             modelImageUrl={modelImageUrl}
             serialNumber={serialNumber} productionDate={productionDate}
@@ -652,6 +663,7 @@ const StationCreatePage = () => {
             isOk={isOk} setIsOk={setIsOk}
             isAdditionalModule={isAdditionalModule} setIsAdditionalModule={setIsAdditionalModule}
             hasAdditionalModule={hasAdditionalModule} setHasAdditionalModule={setHasAdditionalModule}
+            isDistribution={isDistribution} setIsDistribution={setIsDistribution}
             status={status} setStatus={setStatus}
             description={description} setDescription={setDescription}
             ipAddress={ipAddress} setIpAddress={setIpAddress}
@@ -678,6 +690,13 @@ const StationCreatePage = () => {
           />
         )}
         {activeTab === 2 && (
+          <StationLinksTab
+            stationUid={uid || ''}
+            isDistribution={isDistribution}
+            isEdit={isEdit}
+          />
+        )}
+        {activeTab === 3 && (
           <StationFilesTab
             stationUid={uid || ''}
             isEdit={isEdit}
@@ -695,11 +714,11 @@ const StationCreatePage = () => {
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#FAFBFF', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60, zIndex: 10, display: 'flex', alignItems: 'center', gap: 25 }}>
         <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
-          {showHistory 
-            ? `Станция: ${initialState?.name || 'Станция'} (История изменений)` 
-            : isEdit 
-              ? `Справочник: Станции (${initialState?.name || 'Станция'})` 
-              : 'Справочник: Станции (Создание)'}
+          {showHistory
+            ? `Склад: ${initialState?.name || 'Склад'} (История изменений)`
+            : isEdit
+              ? `Справочник: Склады (${initialState?.name || 'Склад'})`
+              : 'Справочник: Склады (Создание)'}
         </h1>
         <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
       </div>
@@ -708,14 +727,13 @@ const StationCreatePage = () => {
         <div style={{ display: 'flex', gap: 25, alignItems: 'center' }}>
           <button onClick={() => handleTabClick(0)} style={mainButtonStyle(activeTab === 0 && !showHistory)}>
             <span>Основное</span>
-            {/* Стрелка «свернуть вкладки» — span, а не button: кнопка внутри кнопки — недопустимый HTML (ошибка в консоли); tabIndex и Enter/Пробел — чтобы до стрелки, как раньше, доходили с клавиатуры */}
             <span role="button" tabIndex={0} aria-label="Свернуть или развернуть вкладки" onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); handleToggleCollapse(); } }} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', width: 6, height: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <motion.img src={activeTab === 0 ? IconArrow : IconArrow2} alt="" style={{ width: 6, height: 10 }} animate={{ rotate: tabsCollapsed ? 0 : 180 }} transition={{ duration: 0.3 }} />
             </span>
           </button>
           <AnimatePresence>
             {!tabsCollapsed && tabs_list.slice(1).map((tab, i) => (
-              <motion.button key={tab} onClick={() => handleTabClick(i + 1)} style={buttonStyle(activeTab === i + 1 && !showHistory)} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
+              <motion.button key={tab} onClick={() => handleTabClick(i + 1)} style={{ ...buttonStyle(activeTab === i + 1 && !showHistory), width: tab === 'Связанные склады' ? 180 : 151 }} initial={{ width: 0, opacity: 0, marginRight: -25 }} animate={{ width: tab === 'Связанные склады' ? 180 : 151, opacity: 1, marginRight: 0 }} exit={{ width: 0, opacity: 0, marginRight: -25 }} transition={{ duration: 0.3 }}>
                 <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ whiteSpace: 'nowrap', overflow: 'hidden' }}>{tab}</motion.span>
               </motion.button>
             ))}

@@ -1,4 +1,4 @@
-// SchablonPage.tsx — ПОЛНЫЙ ФАЙЛ (snake у барабанов + правила контекстного меню в документной форме + тёмный блюр фона у всех попапов + корректное закрытие крыльев при смене барабана/колонки)
+// SchablonPage.tsx — ПОЛНЫЙ ФАЙЛ (парсинг cells_structure под новый формат {"cells":[...]})
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
@@ -354,6 +354,67 @@ const SnakeBorder: React.FC<{
   );
 };
 
+// ============ ПАРСИНГ НОВОГО ФОРМАТА cells_structure ============
+// Новый формат: { "cells": [ { id, drum, column, number, colSpan, rowSpan, deleted, name } ] }
+// Старые поля (type, drums, columnsPerDrum, rowsPerColumn, cellsPerColumn) больше не используются.
+interface ParsedStructure {
+  modelCells: ModelCell[];
+  totalDrums: number;
+  totalColumns: number;
+  totalRows: number;
+  cellType: 'drum' | 'postamat';
+}
+
+const parseCellsStructure = (raw: string | null | undefined): ParsedStructure => {
+  const fallback: ParsedStructure = {
+    modelCells: [],
+    totalDrums: 1,
+    totalColumns: 14,
+    totalRows: 18,
+    cellType: 'drum',
+  };
+  if (!raw) return fallback;
+
+  let structure: any;
+  try {
+    structure = JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+
+  const cellsRaw: any[] = Array.isArray(structure?.cells) ? structure.cells : [];
+  if (cellsRaw.length === 0) return fallback;
+
+  const modelCells: ModelCell[] = cellsRaw.map((c: any, idx: number) => ({
+    id: c.id != null ? String(c.id) : `cell-${idx}`,
+    drum: c.drum != null ? Number(c.drum) : undefined,
+    column: c.column != null ? Number(c.column) : (c.col != null ? Number(c.col) : 1),
+    // на фронте row, в JSONB — number. Старый ключ row тоже поддерживаем.
+    row: c.number != null ? Number(c.number) : (c.row != null ? Number(c.row) : 1),
+    colSpan: c.colSpan != null ? Number(c.colSpan) : 1,
+    rowSpan: c.rowSpan != null ? Number(c.rowSpan) : 1,
+    deleted: !!c.deleted,
+  }));
+
+  const active = modelCells.filter(mc => !mc.deleted);
+  if (active.length === 0) {
+    return { ...fallback, modelCells };
+  }
+
+  const maxDrum = Math.max(...active.map(mc => mc.drum ?? 1));
+  const maxColumn = Math.max(...active.map(mc => mc.column ?? 1));
+  const maxRow = Math.max(...active.map(mc => mc.row ?? 1));
+
+  const totalDrums = Math.max(1, maxDrum);
+  const totalColumns = Math.max(1, maxColumn);
+  const totalRows = Math.max(1, maxRow);
+
+  // mode в новом формате нет; вычисляем: несколько барабанов → 'drum', иначе 'drum' (сетка)
+  const cellType: 'drum' | 'postamat' = totalDrums > 1 ? 'drum' : 'drum';
+
+  return { modelCells, totalDrums, totalColumns, totalRows, cellType };
+};
+
 const normalizeCells = (list: CellData[]) =>
   [...list]
     .map(c => ({
@@ -372,7 +433,6 @@ const normalizeCells = (list: CellData[]) =>
       return ak.localeCompare(bk);
     });
 
-// === Общий оверлей с тёмным блюром для попапов ===
 const POPUP_BACKDROP_STYLE: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
@@ -485,10 +545,6 @@ const SchablonPage: React.FC = () => {
 
   const isAnyPopupOpen = isClearPopupOpen || isCellPopupOpen || isSaveAsOpen || showCloseConfirm || isStationSelectOpen;
 
-  // === КОНТЕКСТ ВЫДЕЛЕНИЯ ===
-  // Храним не только id выделенных ячеек, но и контекст (барабан/колонка),
-  // при котором это выделение было сделано. Это нужно, чтобы при смене
-  // барабана/колонки корректно закрыть крылья ЯЧЕЕК ИЗ СТАРОГО КОНТЕКСТА.
   const prevSelectedIdsRef = useRef<Set<number>>(new Set());
   const prevContextRef = useRef<{ drum: number; column: number }>({ drum: 1, column: 1 });
 
@@ -570,7 +626,6 @@ const SchablonPage: React.FC = () => {
     animationFrameRef.current[wingIndex] = requestAnimationFrame(animate);
   }, [LAST_FRAME_INDEX]);
 
-  // === Хелпер: закрыть крылья для набора id в указанном контексте (барабан) ===
   const closeWingsForIds = useCallback((ids: Set<number>, drum: number) => {
     if (ids.size === 0) return;
     ids.forEach(id => {
@@ -597,20 +652,12 @@ const SchablonPage: React.FC = () => {
     const prevIds = prevSelectedIdsRef.current;
     const prevCtx = prevContextRef.current;
 
-    // Закрываем крылья тех ячеек, которые были выделены и теперь сняты,
-    // используя СОХРАНЁННЫЙ контекст (барабан/колонку), а не текущий —
-    // это корректно работает при смене барабана и колонки.
     const closedIds = new Set<number>();
-    prevIds.forEach(id => {
-      if (!ids.has(id)) closedIds.add(id);
-    });
+    prevIds.forEach(id => { if (!ids.has(id)) closedIds.add(id); });
     closeWingsForIds(closedIds, prevCtx.drum);
 
-    // Открываем крылья новых выделенных ячеек в ТЕКУЩЕМ контексте
     const openedIds = new Set<number>();
-    ids.forEach(id => {
-      if (!prevIds.has(id)) openedIds.add(id);
-    });
+    ids.forEach(id => { if (!prevIds.has(id)) openedIds.add(id); });
     if (openedIds.size > 0) {
       const currentDrum = currentDrumFromSelection();
       openedIds.forEach(id => {
@@ -633,11 +680,9 @@ const SchablonPage: React.FC = () => {
     }
 
     prevSelectedIdsRef.current = new Set(ids);
-    // Сохраняем контекст на момент этого выделения
     prevContextRef.current = { drum: currentDrumFromSelection(), column: currentColumnRef.current };
   }, [modelCells, closeWingsForIds, startWingAnimation]);
 
-  // Вспомогательные refs, чтобы handleSelectionChange всегда видел актуальные значения
   const currentDrumRef = useRef<number>(1);
   const currentColumnRef = useRef<number>(1);
   useEffect(() => { currentDrumRef.current = currentDrum; }, [currentDrum]);
@@ -646,7 +691,6 @@ const SchablonPage: React.FC = () => {
   const currentDrumFromSelection = () => currentDrumRef.current;
 
   const handleContextChange = useCallback((col: number, drum: number) => {
-    // Если меняется колонка — закрываем крылья текущего выделения в старом контексте
     if (col !== currentColumnRef.current && prevSelectedIdsRef.current.size > 0) {
       closeWingsForIds(prevSelectedIdsRef.current, prevContextRef.current.drum);
       prevSelectedIdsRef.current = new Set();
@@ -701,25 +745,16 @@ const SchablonPage: React.FC = () => {
         try {
           const configRes = await AxiosService.get(ConstantInfo.restApiStationConfiguration(templateData.configurationUid));
           const configData = configRes.data;
-          if (configData.cellsStructure) {
-            const structure = JSON.parse(configData.cellsStructure);
-            setCellType(structure.type || 'drum');
-            if (structure.type === 'drum') {
-              setTotalColumns(structure.columnsPerDrum || 14);
-              setTotalRows(structure.rowsPerColumn || 18);
-              setTotalDrums(structure.drums || 1);
-            } else {
-              setTotalColumns(structure.columns || 14);
-              setTotalRows(structure.cellsPerColumn || 18);
-              setTotalDrums(1);
-            }
-            if (Array.isArray(structure.cells)) {
-              setModelCells(structure.cells.map((c: any) => ({
-                id: c.id, drum: c.drum, column: c.column ?? 1, row: c.row ?? 1,
-                colSpan: c.colSpan ?? 1, rowSpan: c.rowSpan ?? 1, deleted: !!c.deleted,
-              })));
-            }
-          }
+
+          // ===== НОВЫЙ ПАРСИНГ cells_structure =====
+          const parsed = parseCellsStructure(configData?.cellsStructure);
+
+          setModelCells(parsed.modelCells);
+          setTotalDrums(parsed.totalDrums);
+          setTotalColumns(parsed.totalColumns);
+          setTotalRows(parsed.totalRows);
+          setCellType(parsed.cellType);
+
           setConfigLoaded(true);
         } catch (e) { console.error('Ошибка загрузки конфигурации:', e); setConfigLoaded(true); }
       } else setConfigLoaded(true);
@@ -1108,11 +1143,9 @@ const SchablonPage: React.FC = () => {
     setActiveButtons(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
   };
 
-  // === Смена барабана — закрываем крылья текущего выделения в старом контексте ===
   const handleDrumChange = useCallback((drum: number) => {
     if (drum === selectedDrum) return;
 
-    // Закрываем крылья выделенных ячеек в контексте старого барабана
     if (prevSelectedIdsRef.current.size > 0) {
       closeWingsForIds(prevSelectedIdsRef.current, prevContextRef.current.drum);
     }
@@ -1586,7 +1619,6 @@ const SchablonPage: React.FC = () => {
     setDocContextMenu({ x: e.clientX, y: e.clientY, uid, target: row._target, cellData: row._cellData });
   };
 
-  // === Правила контекстного меню документальной формы — 1-в-1 как в SchablonTableCell ===
   const docContextCellIsEmpty = !docContextMenu?.cellData?.materialUid && !docContextMenu?.cellData?.cellAssignmentUid;
   const docContextIsMultiSelect = docSelectedIds.size > 1;
   const docContextIsEmptyMultiple = docContextIsMultiSelect && docContextCellIsEmpty;

@@ -1,6 +1,6 @@
-// StationConfigurationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (заголовок использует initialState.name)
+// StationConfigurationCreatePage.tsx — ПОЛНЫЙ ФАЙЛ (новый формат: isAddress из модели, ячейки с name, переименование по правому клику)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useTabs } from '../../../context/TabContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import AxiosService from '../../../services/AxiosService';
@@ -13,6 +13,7 @@ import PrintPDFIcon14Black from '../../../assets/Icons/PrintPDFIcons/PrintPDFIco
 import HistoryIcon18Black from '../../../assets/Icons/HistoryIcons/HistoryIcon18Black.svg';
 import StructureIcon18Black from '../../../assets/Icons/StructureIcons/StructureIcon18Black.svg';
 import UnificationIcon12White from '../../../assets/Icons/UnificationIcons/UnificationIcon12White.svg';
+import CreateIcon14Gray from '../../../assets/Icons/СreateIcons/СreateIcon14Gray.svg';
 import WriteIcon21Black from '../../../assets/Icons/WriteIcons/WriteIcon21Black.svg';
 import SearchIcon18Black from '../../../assets/Icons/SearchIcons/SearchIcon18Black.svg';
 import SearchIcon18White from '../../../assets/Icons/SearchIcons/SearchIcon18White.svg';
@@ -31,10 +32,11 @@ interface CellData {
   id: string;
   drum?: number;
   column: number;
-  row: number;
+  row: number;       // на бэк уходит как number
   colSpan: number;
   rowSpan: number;
   deleted: boolean;
+  name: string;
 }
 
 const CELL_GAP_V = 5;
@@ -59,26 +61,23 @@ const HighlightedText: React.FC<{ text: string; highlight: string }> = ({ text, 
 
 const StationConfigurationCreatePage = () => {
   const { uid } = useParams<{ uid: string }>();
-  const navigate = useNavigate();
   const { tabs, activeTabId, closeTab, replaceTab } = useTabs();
 
   const [name, setName] = useState('');
   const [modelId, setModelId] = useState('');
   const [modelName, setModelName] = useState('');
+  const [modelIsAddress, setModelIsAddress] = useState(false);
+
   const [cells, setCells] = useState<CellData[]>([]);
-  const [gridType, setGridType] = useState<'postamat' | 'drum' | null>(null);
-  const [columns, setColumns] = useState<number | null>(null);
-  const [cellsPerColumn, setCellsPerColumn] = useState<number | null>(null);
-  const [drums, setDrums] = useState<number | null>(null);
-  const [columnsPerDrum, setColumnsPerDrum] = useState<number | null>(null);
-  const [rowsPerColumn, setRowsPerColumn] = useState<number | null>(null);
   const [selectedDrum, setSelectedDrum] = useState<number>(1);
   const [selectedCellIds, setSelectedCellIds] = useState<Set<string>>(new Set());
+
+  const [renamingCellId, setRenamingCellId] = useState<string | null>(null);
+  const [renamingValue, setRenamingValue] = useState('');
 
   const [isEdit, setIsEdit] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [nameFocused, setNameFocused] = useState(false);
   const [showClosePopup, setShowClosePopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
@@ -100,12 +99,6 @@ const StationConfigurationCreatePage = () => {
     name: string;
     modelId: string;
     cells: CellData[];
-    gridType: 'postamat' | 'drum' | null;
-    columns: number | null;
-    cellsPerColumn: number | null;
-    drums: number | null;
-    columnsPerDrum: number | null;
-    rowsPerColumn: number | null;
   } | null>(null);
 
   const getPopupOpenKey = () => `station_config_popup_open_${uid}`;
@@ -114,7 +107,6 @@ const StationConfigurationCreatePage = () => {
 
   const LEFT_PANEL_WIDTH = 391;
   const RIGHT_PANEL_WIDTH = 345;
-
   const dividerStyle: React.CSSProperties = { position: 'absolute', top: 60, width: 2, height: 444, backgroundColor: '#E6E9F4' };
 
   useEffect(() => {
@@ -129,7 +121,11 @@ const StationConfigurationCreatePage = () => {
     fetchModelOptions();
   }, [uid]);
 
-  useEffect(() => { if (historySearchExpanded && historySearchInputRef.current) setTimeout(() => historySearchInputRef.current?.focus(), 100); }, [historySearchExpanded]);
+  useEffect(() => {
+    if (!historySearchExpanded) return;
+    const t = setTimeout(() => historySearchInputRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, [historySearchExpanded]);
 
   const fetchModelOptions = async () => {
     try {
@@ -140,77 +136,67 @@ const StationConfigurationCreatePage = () => {
     } catch (e) { console.error(e); }
   };
 
+  const parseCellsStructure = (raw: any): CellData[] => {
+    if (!raw) return [];
+    try {
+      const cs = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!Array.isArray(cs?.cells)) return [];
+      return cs.cells.map((c: any) => {
+        const col = c.column;
+        const row = c.number ?? c.row ?? 1;
+        return {
+          id: c.id || crypto.randomUUID(),
+          drum: c.drum,
+          column: col,
+          row,
+          colSpan: c.colSpan ?? 1,
+          rowSpan: c.rowSpan ?? 1,
+          deleted: !!c.deleted,
+          name: c.name && String(c.name).trim() ? c.name : `${col}-${row}`,
+        };
+      });
+    } catch { return []; }
+  };
+
   const loadConfigData = async (configUid: string) => {
     setIsLoading(true);
     try {
       const d = (await AxiosService.get(ConstantInfo.restApiStationConfiguration(configUid))).data;
       setName(d.name || '');
-      if (d.modelId) { setModelId(d.modelId); setModelName(d.modelName || ''); await loadModelCells(d.modelId, d.cellsStructure); }
-      
+      setModelIsAddress(!!d.isAddress);
+      let loadedCells: CellData[] = [];
+      if (d.modelId) {
+        setModelId(d.modelId);
+        setModelName(d.modelName || '');
+        loadedCells = parseCellsStructure(d.cellsStructure);
+        if (loadedCells.length === 0) {
+          // если у конфигурации пустая структура — берём из модели
+          try {
+            const m = (await AxiosService.get(ConstantInfo.restApiStationModel(d.modelId))).data;
+            setModelIsAddress(!!m.isAddress);
+            loadedCells = parseCellsStructure(m.cellsStructure);
+          } catch {}
+        }
+        setCells(loadedCells);
+      }
       setInitialState({
         name: d.name || '',
         modelId: d.modelId || '',
-        cells: JSON.parse(JSON.stringify(cells)),
-        gridType: gridType,
-        columns: columns,
-        cellsPerColumn: cellsPerColumn,
-        drums: drums,
-        columnsPerDrum: columnsPerDrum,
-        rowsPerColumn: rowsPerColumn,
+        cells: JSON.parse(JSON.stringify(loadedCells)),
       });
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
   const loadModelCells = async (mid: string, existingStructure?: string) => {
     try {
-      const d = (await AxiosService.get(ConstantInfo.restApiStationModel(mid))).data;
-      if (d.cellsStructure) {
-        const parsed = JSON.parse(d.cellsStructure);
-        const newGridType = parsed.type;
-        let newColumns = null;
-        let newCellsPerColumn = null;
-        let newDrums = null;
-        let newColumnsPerDrum = null;
-        let newRowsPerColumn = null;
-        let newCells: CellData[] = [];
-        
-        setGridType(parsed.type);
-        if (parsed.type === 'postamat') { 
-          newColumns = parsed.columns; newCellsPerColumn = parsed.cellsPerColumn;
-          setColumns(parsed.columns); setCellsPerColumn(parsed.cellsPerColumn); 
-        }
-        else if (parsed.type === 'drum') { 
-          newDrums = parsed.drums; newColumnsPerDrum = parsed.columnsPerDrum; newRowsPerColumn = parsed.rowsPerColumn;
-          setDrums(parsed.drums); setColumnsPerDrum(parsed.columnsPerDrum); setRowsPerColumn(parsed.rowsPerColumn); 
-        }
-        
-        if (existingStructure) {
-          try {
-            const existing = JSON.parse(existingStructure);
-            if (existing.cells?.length > 0) { 
-              newCells = existing.cells;
-              setCells(existing.cells); 
-            }
-          } catch {}
-        }
-        
-        if (newCells.length === 0 && parsed.cells?.length > 0) {
-          newCells = parsed.cells.map((c: any) => ({ ...c, colSpan: c.colSpan || 1, rowSpan: c.rowSpan || 1, deleted: c.deleted || false }));
-          setCells(newCells);
-        }
-
-        setInitialState({
-          name: name,
-          modelId: mid,
-          cells: JSON.parse(JSON.stringify(newCells)),
-          gridType: newGridType,
-          columns: newColumns,
-          cellsPerColumn: newCellsPerColumn,
-          drums: newDrums,
-          columnsPerDrum: newColumnsPerDrum,
-          rowsPerColumn: newRowsPerColumn,
-        });
-      }
+      const m = (await AxiosService.get(ConstantInfo.restApiStationModel(mid))).data;
+      setModelIsAddress(!!m.isAddress);
+      const existing = existingStructure ? parseCellsStructure(existingStructure) : [];
+      const fromModel = parseCellsStructure(m.cellsStructure);
+      const finalCells = existing.length > 0 ? existing : fromModel;
+      setCells(finalCells);
+      setSelectedDrum(1);
+      setSelectedCellIds(new Set());
     } catch (e) { console.error(e); }
   };
 
@@ -222,26 +208,19 @@ const StationConfigurationCreatePage = () => {
       colSpan: c.colSpan,
       rowSpan: c.rowSpan,
       deleted: c.deleted,
+      name: c.name,
     })).sort((a, b) => a.column - b.column || a.row - b.row || (a.drum || 0) - (b.drum || 0));
   }, []);
 
   const isDirty = useMemo(() => {
     if (!isEdit || !initialState) return name.trim().length > 0 && modelId.length > 0;
-    
     const cellsChanged = JSON.stringify(normalizeCells(cells)) !== JSON.stringify(normalizeCells(initialState.cells));
-    
     return (
       name !== initialState.name ||
       modelId !== initialState.modelId ||
-      gridType !== initialState.gridType ||
-      columns !== initialState.columns ||
-      cellsPerColumn !== initialState.cellsPerColumn ||
-      drums !== initialState.drums ||
-      columnsPerDrum !== initialState.columnsPerDrum ||
-      rowsPerColumn !== initialState.rowsPerColumn ||
       cellsChanged
     );
-  }, [isEdit, initialState, name, modelId, gridType, columns, cellsPerColumn, drums, columnsPerDrum, rowsPerColumn, cells, normalizeCells]);
+  }, [isEdit, initialState, name, modelId, cells, normalizeCells]);
 
   const canSave = isDirty && name.trim().length > 0 && modelId.length > 0;
 
@@ -266,20 +245,13 @@ const StationConfigurationCreatePage = () => {
   };
 
   const handleHistoryClick = () => {
-    if (!showHistory) {
-      fetchHistory();
-      setSlideDirection('left');
-    } else {
-      setSlideDirection('right');
-    }
+    if (!showHistory) { fetchHistory(); setSlideDirection('left'); }
+    else { setSlideDirection('right'); }
     setShowHistory(!showHistory);
   };
 
   const handleMainClick = () => {
-    if (showHistory) {
-      setSlideDirection('right');
-      setShowHistory(false);
-    }
+    if (showHistory) { setSlideDirection('right'); setShowHistory(false); }
   };
 
   const openModelPopup = () => { setPopupType('stationModel'); setPopupOpen(true); if (uid) sessionStorage.setItem(getPopupOpenKey(), 'true'); };
@@ -341,16 +313,37 @@ const StationConfigurationCreatePage = () => {
 
   const totalActiveCells = cells.filter(c => !c.deleted).length;
 
-  const cols = gridType === 'postamat' ? (columns || 1) : (columnsPerDrum || 1);
-  const rows = gridType === 'postamat' ? (cellsPerColumn || 1) : (rowsPerColumn || 1);
+  // Вычисляем размеры сетки из ячеек (у конфигурации нет своих drums/columns — берём из фактических ячеек)
+  const visibleCellsForAddress = useMemo(() => {
+    if (!modelIsAddress) return cells.filter(c => !c.deleted);
+    return cells.filter(c => !c.deleted && c.drum === selectedDrum);
+  }, [cells, modelIsAddress, selectedDrum]);
+
+  const maxColumn = useMemo(() => {
+    let m = 1;
+    for (const c of visibleCellsForAddress) m = Math.max(m, c.column + c.colSpan - 1);
+    return m;
+  }, [visibleCellsForAddress]);
+
+  const maxRow = useMemo(() => {
+    let m = 1;
+    for (const c of visibleCellsForAddress) m = Math.max(m, c.row + c.rowSpan - 1);
+    return m;
+  }, [visibleCellsForAddress]);
+
+  const availableDrums = useMemo(() => {
+    const set = new Set<number>();
+    for (const c of cells) if (!c.deleted && c.drum != null) set.add(c.drum);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [cells]);
 
   const cellW = (() => {
-    const calculated = (900 - (cols - 1) * CELL_GAP_H) / cols;
+    const calculated = (900 - (maxColumn - 1) * CELL_GAP_H) / maxColumn;
     return Math.min(calculated, 160);
   })();
 
   const cellH = (() => {
-    const calculated = (450 - (rows - 1) * CELL_GAP_V) / rows;
+    const calculated = (450 - (maxRow - 1) * CELL_GAP_V) / maxRow;
     return Math.min(calculated, 65);
   })();
 
@@ -361,26 +354,40 @@ const StationConfigurationCreatePage = () => {
     setSelectedCellIds(prev => { const next = new Set(prev); next.has(cellId) ? next.delete(cellId) : next.add(cellId); return next; });
   };
 
+  const handleRenameCell = (cellId: string) => {
+    const cell = cells.find(c => c.id === cellId);
+    if (!cell) return;
+    setRenamingCellId(cellId);
+    setRenamingValue(cell.name || '');
+  };
+
+  const submitRename = () => {
+    if (!renamingCellId) return;
+    setCells(prev => prev.map(c => c.id === renamingCellId ? { ...c, name: renamingValue } : c));
+    setRenamingCellId(null);
+    setRenamingValue('');
+  };
+
   const canMergeSelected = useCallback((): boolean => {
     if (selectedCellIds.size < 2) return false;
     const sc = cells.filter(c => selectedCellIds.has(c.id) && !c.deleted);
     if (sc.length !== selectedCellIds.size) return false;
     let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
     for (const c of sc) { minCol = Math.min(minCol, c.column); maxCol = Math.max(maxCol, c.column + c.colSpan - 1); minRow = Math.min(minRow, c.row); maxRow = Math.max(maxRow, c.row + c.rowSpan - 1); }
-    for (const c of cells) { if (c.deleted || (gridType === 'drum' && c.drum !== selectedDrum)) continue; const cS = c.column, cE = c.column + c.colSpan - 1, rS = c.row, rE = c.row + c.rowSpan - 1; if (cE >= minCol && cS <= maxCol && rE >= minRow && rS <= maxRow && !selectedCellIds.has(c.id)) return false; }
+    for (const c of cells) { if (c.deleted || (modelIsAddress && c.drum !== selectedDrum)) continue; const cS = c.column, cE = c.column + c.colSpan - 1, rS = c.row, rE = c.row + c.rowSpan - 1; if (cE >= minCol && cS <= maxCol && rE >= minRow && rS <= maxRow && !selectedCellIds.has(c.id)) return false; }
     return true;
-  }, [selectedCellIds, cells, gridType, selectedDrum]);
+  }, [selectedCellIds, cells, modelIsAddress, selectedDrum]);
 
   const handleMergeSelected = () => {
     if (!canMergeSelected()) return;
     const sc = cells.filter(c => selectedCellIds.has(c.id) && !c.deleted);
     let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
     for (const c of sc) { minCol = Math.min(minCol, c.column); maxCol = Math.max(maxCol, c.column + c.colSpan - 1); minRow = Math.min(minRow, c.row); maxRow = Math.max(maxRow, c.row + c.rowSpan - 1); }
-    const tl = cells.find(c => c.column === minCol && c.row === minRow && !c.deleted && (gridType === 'drum' ? c.drum === selectedDrum : true));
+    const tl = cells.find(c => c.column === minCol && c.row === minRow && !c.deleted && (!modelIsAddress || c.drum === selectedDrum));
     if (!tl) return;
     setCells(prev => prev.map(c => {
       if (c.id === tl.id) return { ...c, colSpan: maxCol - minCol + 1, rowSpan: maxRow - minRow + 1 };
-      if (c.column >= minCol && c.column <= maxCol && c.row >= minRow && c.row <= maxRow && c.id !== tl.id && (gridType !== 'drum' || c.drum === selectedDrum)) return { ...c, deleted: true, colSpan: 1, rowSpan: 1 };
+      if (c.column >= minCol && c.column <= maxCol && c.row >= minRow && c.row <= maxRow && c.id !== tl.id && (!modelIsAddress || c.drum === selectedDrum)) return { ...c, deleted: true, colSpan: 1, rowSpan: 1 };
       return c;
     }));
     setSelectedCellIds(new Set());
@@ -395,7 +402,7 @@ const StationConfigurationCreatePage = () => {
       mergedToSplit.forEach(merged => {
         updated = updated.map(c => {
           if (c.id === merged.id) return { ...c, colSpan: 1, rowSpan: 1, deleted: true };
-          if (c.deleted && c.column >= merged.column && c.column < merged.column + merged.colSpan && c.row >= merged.row && c.row < merged.row + merged.rowSpan && c.id !== merged.id && (gridType !== 'drum' || c.drum === selectedDrum)) return { ...c, deleted: true };
+          if (c.deleted && c.column >= merged.column && c.column < merged.column + merged.colSpan && c.row >= merged.row && c.row < merged.row + merged.rowSpan && c.id !== merged.id && (!modelIsAddress || c.drum === selectedDrum)) return { ...c, deleted: true };
           return c;
         });
       });
@@ -409,32 +416,44 @@ const StationConfigurationCreatePage = () => {
     e.preventDefault();
     const cell = cells.find(c => c.id === cellId);
     if (!cell) return;
-    if (cell.deleted) { setCells(prev => prev.map(c => c.id === cellId ? { ...c, deleted: false } : c)); }
-    else if (cell.colSpan > 1 || cell.rowSpan > 1) { setCells(prev => prev.map(c => { if (c.id === cellId) return { ...c, colSpan: 1, rowSpan: 1 }; if (c.deleted && c.column >= cell.column && c.column < cell.column + cell.colSpan && c.row >= cell.row && c.row < cell.row + cell.rowSpan && (gridType !== 'drum' || c.drum === selectedDrum)) return { ...c, deleted: false }; return c; })); }
+    if (cell.deleted) { setCells(prev => prev.map(c => c.id === cellId ? { ...c, deleted: false } : c)); return; }
+    if (cell.colSpan > 1 || cell.rowSpan > 1) {
+      setCells(prev => prev.map(c => {
+        if (c.id === cellId) return { ...c, colSpan: 1, rowSpan: 1 };
+        if (c.deleted && c.column >= cell.column && c.column < cell.column + cell.colSpan && c.row >= cell.row && c.row < cell.row + cell.rowSpan && (!modelIsAddress || c.drum === selectedDrum)) return { ...c, deleted: false };
+        return c;
+      }));
+      return;
+    }
+    handleRenameCell(cellId);
   };
 
   const handleClearSelection = () => setSelectedCellIds(new Set());
 
   const renderCells = () => {
-    if (!gridType) return null;
-    if (!cols || !rows) return null;
+    if (maxColumn < 1 || maxRow < 1) return null;
     const rendered = new Set<string>();
     const elements: React.ReactNode[] = [];
-    cells.filter(c => !c.deleted && (gridType === 'drum' ? c.drum === selectedDrum : true)).forEach(cell => {
+
+    const visible = modelIsAddress
+      ? cells.filter(c => !c.deleted && c.drum === selectedDrum)
+      : cells.filter(c => !c.deleted);
+
+    visible.forEach(cell => {
       const key = `${cell.column}-${cell.row}`; if (rendered.has(key)) return;
       const isSelected = selectedCellIds.has(cell.id), isMerged = cell.colSpan > 1 || cell.rowSpan > 1;
       const left = (cell.column - 1) * (cellW + CELL_GAP_H), top = (cell.row - 1) * (cellH + CELL_GAP_V);
       const w = cellW * cell.colSpan + CELL_GAP_H * (cell.colSpan - 1), h = cellH * cell.rowSpan + CELL_GAP_V * (cell.rowSpan - 1);
       for (let c = 0; c < cell.colSpan; c++) for (let r = 0; r < cell.rowSpan; r++) rendered.add(`${cell.column + c}-${cell.row + r}`);
 
-      const colStart = cell.column;
-      const rowStart = cell.row;
-      const colEnd = cell.column + cell.colSpan - 1;
-      const rowEnd = cell.row + cell.rowSpan - 1;
+      const colStart = cell.column, rowStart = cell.row, colEnd = cell.column + cell.colSpan - 1, rowEnd = cell.row + cell.rowSpan - 1;
       const fitsInOneRow = w >= MERGED_MIN_WIDTH;
+      const displayText = cell.name?.trim() || `${colStart}-${rowStart}`;
 
       elements.push(
-        <div key={cell.id} onClick={(e) => handleCellClick(cell.id, e)} onContextMenu={(e) => handleCellContextMenu(cell.id, e)} style={{ position: 'absolute', left, top, width: w, height: h, borderRadius: 3, backgroundColor: isSelected ? '#666EFE' : 'rgba(45, 64, 89, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none', zIndex: 1, overflow: 'hidden', transition: 'background-color 0.15s ease' }}>
+        <div key={cell.id} onClick={(e) => handleCellClick(cell.id, e)} onContextMenu={(e) => handleCellContextMenu(cell.id, e)}
+          title={cell.name || ''}
+          style={{ position: 'absolute', left, top, width: w, height: h, borderRadius: 3, backgroundColor: isSelected ? '#666EFE' : 'rgba(45, 64, 89, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none', zIndex: 1, overflow: 'hidden', transition: 'background-color 0.15s ease', padding: 4, boxSizing: 'border-box' }}>
           {isMerged ? (
             fitsInOneRow ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -450,46 +469,53 @@ const StationConfigurationCreatePage = () => {
               </div>
             )
           ) : (
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#FFFFFF' }}>{colStart}-{rowStart}</span>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{displayText}</span>
           )}
         </div>
       );
     });
-    cells.filter(c => c.deleted && (gridType === 'drum' ? c.drum === selectedDrum : true)).forEach(cell => {
+
+    cells.filter(c => c.deleted && (!modelIsAddress || c.drum === selectedDrum)).forEach(cell => {
       const key = `${cell.column}-${cell.row}`; if (rendered.has(key)) return;
       const left = (cell.column - 1) * (cellW + CELL_GAP_H), top = (cell.row - 1) * (cellH + CELL_GAP_V);
       rendered.add(key);
       elements.push(
-        <div key={cell.id} onClick={(e) => handleCellClick(cell.id, e)} onContextMenu={(e) => handleCellContextMenu(cell.id, e)} style={{ position: 'absolute', left, top, width: cellW, height: cellH, borderRadius: 3, border: '1px dashed rgba(45, 64, 89, 0.25)', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none', zIndex: 0 }}>
-          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>+</span>
+        <div key={cell.id} onClick={(e) => handleCellClick(cell.id, e)} style={{ position: 'absolute', left, top, width: cellW, height: cellH, borderRadius: 3, border: '1px dashed rgba(45, 64, 89, 0.25)', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none', zIndex: 0 }}>
+          <img src={CreateIcon14Gray} alt="" style={{ width: 14, height: 14 }} />
         </div>
       );
     });
-    return <div style={{ position: 'relative', width: cols * cellW + (cols - 1) * CELL_GAP_H, height: rows * cellH + (rows - 1) * CELL_GAP_V }}>{elements}</div>;
+
+    return <div style={{ position: 'relative', width: maxColumn * cellW + (maxColumn - 1) * CELL_GAP_H, height: maxRow * cellH + (maxRow - 1) * CELL_GAP_V }}>{elements}</div>;
   };
 
   const handleSave = async () => {
     if (!uid) return;
     setIsSaving(true);
     try {
-      const cellsStructure = JSON.stringify({ type: gridType, columns: gridType === 'postamat' ? columns : undefined, cellsPerColumn: gridType === 'postamat' ? cellsPerColumn : undefined, drums: gridType === 'drum' ? drums : undefined, columnsPerDrum: gridType === 'drum' ? columnsPerDrum : undefined, rowsPerColumn: gridType === 'drum' ? rowsPerColumn : undefined, cells });
+      const serialized = cells.map(c => ({
+        id: c.id,
+        drum: c.drum,
+        column: c.column,
+        number: c.row,       // row → number
+        colSpan: c.colSpan,
+        rowSpan: c.rowSpan,
+        deleted: c.deleted,
+        name: c.name,
+      }));
+      const cellsStructure = JSON.stringify({ cells: serialized });
       const body = { uid, name: name.trim(), modelId: modelId || null, cellsStructure };
+
       const wasCreate = !isEdit;
       if (isEdit) await AxiosService.patch(`${ConstantInfo.restApiStationConfigurations}/${uid}`, body);
       else await AxiosService.post(ConstantInfo.restApiStationConfigurations, body);
-      
+
       setInitialState({
         name: name.trim(),
         modelId: modelId,
         cells: JSON.parse(JSON.stringify(cells)),
-        gridType: gridType,
-        columns: columns,
-        cellsPerColumn: cellsPerColumn,
-        drums: drums,
-        columnsPerDrum: columnsPerDrum,
-        rowsPerColumn: rowsPerColumn,
       });
-      
+
       if (uid) sessionStorage.removeItem(getPopupOpenKey());
       setIsDataSaved(true);
       if (wasCreate && activeTabId) {
@@ -580,52 +606,21 @@ const StationConfigurationCreatePage = () => {
   const button1Bottom = button2Bottom + BUTTON_HEIGHT + BUTTON_GAP;
 
   const buttonBaseStyle: React.CSSProperties = {
-    position: 'absolute',
-    left: BUTTON_LEFT,
-    width: BUTTON_WIDTH,
-    height: BUTTON_HEIGHT,
-    borderRadius: 8,
-    border: 'none',
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#FFFFFF',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', left: BUTTON_LEFT, width: BUTTON_WIDTH, height: BUTTON_HEIGHT,
+    borderRadius: 8, border: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500,
+    color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
   };
 
-  const infoTextStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#2D4059',
-    opacity: 0.6,
-  };
-
-  const infoNumberStyle: React.CSSProperties = {
-    fontFamily: 'Inter, sans-serif',
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#2D4059',
-  };
+  const infoTextStyle: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059', opacity: 0.6 };
+  const infoNumberStyle: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' };
 
   const historySearchWidth = historySearchExpanded ? BTN_SEARCH_EXPANDED : BTN_COLLAPSED;
   const tween = { type: 'tween' as const, duration: 0.2 };
 
   const slideVariants = {
-    enter: (direction: 'left' | 'right') => ({
-      x: direction === 'left' ? 200 : -200,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (direction: 'left' | 'right') => ({
-      x: direction === 'left' ? -200 : 200,
-      opacity: 0,
-    }),
+    enter: (direction: 'left' | 'right') => ({ x: direction === 'left' ? 200 : -200, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (direction: 'left' | 'right') => ({ x: direction === 'left' ? -200 : 200, opacity: 0 }),
   };
 
   const currentView = showHistory ? 'history' : 'main';
@@ -635,9 +630,9 @@ const StationConfigurationCreatePage = () => {
       return (
         <div style={{ position: 'absolute', top: 10, left: 0, right: 0, bottom: 0 }}>
           <div style={{ position: 'absolute', top: 0, left: 15, zIndex: 10, height: 40 }}>
-            <motion.div 
-              style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }} 
-              animate={{ width: historySearchWidth }} 
+            <motion.div
+              style={{ position: 'absolute', left: 0, top: 0, height: 40, borderRadius: 10, backgroundColor: historySearchExpanded ? '#666EFE' : '#FFFFFF', border: historySearchExpanded ? 'none' : '1px solid rgba(102, 110, 254, 0.15)', cursor: 'default', display: 'flex', alignItems: 'center', padding: 0, overflow: 'hidden' }}
+              animate={{ width: historySearchWidth }}
               transition={tween}
             >
               <div onClick={historySearchExpanded ? () => { setHistorySearchExpanded(false); setHistorySearchValue(''); } : () => setHistorySearchExpanded(true)} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
@@ -665,29 +660,24 @@ const StationConfigurationCreatePage = () => {
             <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#2D4059', marginLeft: 12 }}>Конфигурация ячеек</span>
           </div>
 
-          {gridType === 'drum' && (
+          {modelIsAddress && availableDrums.length > 1 && (
             <div style={{ position: 'absolute', top: drumSwitcherTop, left: 0, right: 0, height: DRUM_SWITCHER_TOTAL_HEIGHT }}>
-              {drums != null && drums > 1 ? (
-                (() => {
-                  const totalDrums = drums;
-                  const { lineWidth, positions } = getDrumLayout(totalDrums);
-                  return Array.from({ length: totalDrums }).map((_, i) => {
-                    const drumNum = i + 1;
-                    const isSelected = selectedDrum === drumNum;
-                    const left = positions[i];
-                    const label = getDrumLabel(drumNum, totalDrums);
-                    return (
-                      <React.Fragment key={drumNum}>
-                        <button onClick={() => { setSelectedDrum(drumNum); setSelectedCellIds(new Set()); }}
-                          style={{ position: 'absolute', left, top: 0, width: lineWidth, height: DRUM_TEXT_HEIGHT, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: isSelected ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_TEXT_HEIGHT}px`, transition: 'color 0.3s ease', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</button>
-                        <div style={{ position: 'absolute', top: DRUM_TEXT_HEIGHT + DRUM_TEXT_TO_LINE, left, width: lineWidth, height: LINE_HEIGHT, backgroundColor: isSelected ? '#666EFE' : 'rgba(45, 64, 89, 0.06)', borderRadius: '1.5px', transition: 'background-color 0.3s ease' }} />
-                      </React.Fragment>
-                    );
-                  });
-                })()
-              ) : (
-                <div style={{ width: '100%', height: '100%' }} />
-              )}
+              {(() => {
+                const totalDrums = availableDrums.length;
+                const { lineWidth, positions } = getDrumLayout(totalDrums);
+                return availableDrums.map((drumNum, i) => {
+                  const isSelected = selectedDrum === drumNum;
+                  const left = positions[i];
+                  const label = getDrumLabel(drumNum, totalDrums);
+                  return (
+                    <React.Fragment key={drumNum}>
+                      <button onClick={() => { setSelectedDrum(drumNum); setSelectedCellIds(new Set()); }}
+                        style={{ position: 'absolute', left, top: 0, width: lineWidth, height: DRUM_TEXT_HEIGHT, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 14, color: isSelected ? '#666EFE' : 'rgba(45, 64, 89, 0.6)', textAlign: 'center', lineHeight: `${DRUM_TEXT_HEIGHT}px`, transition: 'color 0.3s ease', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</button>
+                      <div style={{ position: 'absolute', top: DRUM_TEXT_HEIGHT + DRUM_TEXT_TO_LINE, left, width: lineWidth, height: LINE_HEIGHT, backgroundColor: isSelected ? '#666EFE' : 'rgba(45, 64, 89, 0.06)', borderRadius: '1.5px', transition: 'background-color 0.3s ease' }} />
+                    </React.Fragment>
+                  );
+                });
+              })()}
             </div>
           )}
 
@@ -697,7 +687,7 @@ const StationConfigurationCreatePage = () => {
               <div style={{ position: 'absolute', left: 17, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img src={name ? NameIcon18Blue : NameIcon18Gray} alt="" style={{ width: 18, height: 18 }} />
               </div>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} onFocus={() => setNameFocused(true)} onBlur={() => setNameFocused(false)} placeholder="Введите название" style={{ ...inputStyle, color: name ? '#666EFE' : '#A0A3BD', paddingLeft: 46, paddingRight: name ? 36 : 12 }} />
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Введите название" style={{ ...inputStyle, color: name ? '#666EFE' : '#A0A3BD', paddingLeft: 46, paddingRight: name ? 36 : 12 }} />
               {name && (
                 <div style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setName('')}>
                   <img src={CloseIcon18Blue} alt="Очистить" style={{ width: 18, height: 18 }} />
@@ -714,14 +704,7 @@ const StationConfigurationCreatePage = () => {
                   <div style={{ position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <img src={ModelIcon16Blue} alt="" style={{ width: 16, height: 16 }} />
                   </div>
-                  <input
-                    type="text"
-                    autoFocus
-                    value={modelSearchValue}
-                    onChange={handleModelSearchChange}
-                    placeholder="Поиск..."
-                    style={{ ...inputStyle, color: '#666EFE', paddingLeft: 46, paddingRight: 36 }}
-                  />
+                  <input type="text" autoFocus value={modelSearchValue} onChange={handleModelSearchChange} placeholder="Поиск..." style={{ ...inputStyle, color: '#666EFE', paddingLeft: 46, paddingRight: 36 }} />
                   <div style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={handleModelRightIconClick}>
                     <img src={PopupIcon16Blue} alt="" style={{ width: 16, height: 4 }} />
                   </div>
@@ -757,10 +740,8 @@ const StationConfigurationCreatePage = () => {
                   ))
                 )}
                 <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}>
-                  <button
-                    onClick={() => { openModelPopup(); setIsModelSearchMode(false); setShowModelDropdown(false); setModelSearchValue(''); }}
-                    style={{ width: 126, height: 34, borderRadius: 8, backgroundColor: '#666EFE', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF' }}
-                  >
+                  <button onClick={() => { openModelPopup(); setIsModelSearchMode(false); setShowModelDropdown(false); setModelSearchValue(''); }}
+                    style={{ width: 126, height: 34, borderRadius: 8, backgroundColor: '#666EFE', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF' }}>
                     Весь список
                   </button>
                 </div>
@@ -768,7 +749,7 @@ const StationConfigurationCreatePage = () => {
             )}
           </div>
 
-          {gridType && (
+          {modelId && (
             <div style={{ position: 'absolute', top: infoBlockTop, left: INFO_BLOCK_LEFT }}>
               <div style={{ height: INFO_ROW_HEIGHT, display: 'flex', alignItems: 'center' }}>
                 <span style={infoTextStyle}>Общее количество ячеек&nbsp;</span>
@@ -776,36 +757,27 @@ const StationConfigurationCreatePage = () => {
               </div>
               <div style={{ height: INFO_ROW_HEIGHT, display: 'flex', alignItems: 'center', marginTop: INFO_ROW_GAP }}>
                 <span style={infoTextStyle}>Колонок&nbsp;</span>
-                <span style={infoNumberStyle}>{cols}</span>
+                <span style={infoNumberStyle}>{maxColumn}</span>
               </div>
               <div style={{ height: INFO_ROW_HEIGHT, display: 'flex', alignItems: 'center', marginTop: INFO_ROW_GAP }}>
                 <span style={infoTextStyle}>Строк&nbsp;</span>
-                <span style={infoNumberStyle}>{rows}</span>
+                <span style={infoNumberStyle}>{maxRow}</span>
               </div>
             </div>
           )}
 
-          <button
-            onClick={hasSelection ? handleClearSelection : undefined}
-            disabled={!hasSelection}
-            style={{ ...buttonBaseStyle, bottom: button3Bottom, backgroundColor: 'rgba(45, 64, 89, 0.5)', opacity: hasSelection ? 1 : 0.35, cursor: hasSelection ? 'pointer' : 'default' }}
-          >
+          <button onClick={hasSelection ? handleClearSelection : undefined} disabled={!hasSelection}
+            style={{ ...buttonBaseStyle, bottom: button3Bottom, backgroundColor: 'rgba(45, 64, 89, 0.5)', opacity: hasSelection ? 1 : 0.35, cursor: hasSelection ? 'pointer' : 'default' }}>
             Снять выделение
           </button>
 
-          <button
-            onClick={hasSelection ? handleDeleteSelected : undefined}
-            disabled={!hasSelection}
-            style={{ ...buttonBaseStyle, bottom: button2Bottom, backgroundColor: '#FF3052', opacity: hasSelection ? 1 : 0.6, cursor: hasSelection ? 'pointer' : 'default' }}
-          >
+          <button onClick={hasSelection ? handleDeleteSelected : undefined} disabled={!hasSelection}
+            style={{ ...buttonBaseStyle, bottom: button2Bottom, backgroundColor: '#FF3052', opacity: hasSelection ? 1 : 0.6, cursor: hasSelection ? 'pointer' : 'default' }}>
             Удалить выбранные ячейки
           </button>
 
-          <button
-            onClick={hasSelection && mergeAllowed ? handleMergeSelected : undefined}
-            disabled={!hasSelection || !mergeAllowed}
-            style={{ ...buttonBaseStyle, bottom: button1Bottom, backgroundColor: '#666EFE', opacity: hasSelection && mergeAllowed ? 1 : 0.6, cursor: hasSelection && mergeAllowed ? 'pointer' : 'default' }}
-          >
+          <button onClick={hasSelection && mergeAllowed ? handleMergeSelected : undefined} disabled={!hasSelection || !mergeAllowed}
+            style={{ ...buttonBaseStyle, bottom: button1Bottom, backgroundColor: '#666EFE', opacity: hasSelection && mergeAllowed ? 1 : 0.6, cursor: hasSelection && mergeAllowed ? 'pointer' : 'default' }}>
             Объединить выбранные ячейки
           </button>
         </div>
@@ -820,11 +792,10 @@ const StationConfigurationCreatePage = () => {
 
         <div style={{ ...dividerStyle, right: RIGHT_PANEL_WIDTH }} />
 
-        <div style={{ width: RIGHT_PANEL_WIDTH, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ width: '100%', height: 200, borderRadius: 10, border: '1px dashed rgba(102, 110, 254, 0.3)', backgroundColor: '#F5F6FA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10, cursor: 'pointer', margin: '0 30px' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="#666EFE" strokeWidth="2" strokeLinecap="round"/></svg>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#666EFE' }}>У модели нет библиотеки</span>
-          </div>
+        <div style={{ width: RIGHT_PANEL_WIDTH, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10 }}>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#6B7280', textAlign: 'center', padding: '0 30px' }}>
+            Правый клик по ячейке — переименовать.<br />Правый клик по объединённой — разъединить.
+          </span>
         </div>
       </div>
     );
@@ -834,10 +805,10 @@ const StationConfigurationCreatePage = () => {
     <div style={{ position: 'relative', height: '100%', backgroundColor: '#F5F6FA', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 35, left: 60, zIndex: 10, display: 'flex', alignItems: 'center', gap: 25 }}>
         <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 600, color: '#2D4059', margin: 0, lineHeight: '29px' }}>
-          {showHistory 
-            ? `Конфигурация станции: ${initialState?.name || 'Конфигурация'} (История изменений)` 
-            : isEdit 
-              ? `Справочник: Конфигурация станции (${initialState?.name || 'Конфигурация'})` 
+          {showHistory
+            ? `Конфигурация станции: ${initialState?.name || 'Конфигурация'} (История изменений)`
+            : isEdit
+              ? `Справочник: Конфигурация станции (${initialState?.name || 'Конфигурация'})`
               : 'Справочник: Конфигурация станции (Создание)'}
         </h1>
         <img src={getStatusIcon()} alt="" style={{ width: getStatusIconWidth(), height: 29, flexShrink: 0 }} />
@@ -860,45 +831,14 @@ const StationConfigurationCreatePage = () => {
 
       <div style={{ position: 'absolute', top: 155, left: 30, right: 30, bottom: 96, overflow: 'hidden' }}>
         <AnimatePresence mode="wait" custom={slideDirection}>
-          <motion.div
-            key={currentView}
-            custom={slideDirection}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          >
+          <motion.div key={currentView} custom={slideDirection} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2, ease: 'easeInOut' }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
             {renderContent()}
           </motion.div>
         </AnimatePresence>
       </div>
 
       <div style={{ position: 'absolute', bottom: 30, right: 30, display: 'flex', alignItems: 'center', gap: 15, zIndex: 10 }}>
-        <button 
-          onClick={canSave ? handleSave : undefined} 
-          disabled={!canSave || isSaving} 
-          style={{ 
-            width: 154, 
-            height: 51, 
-            borderRadius: 10, 
-            border: '1px solid rgba(102, 110, 254, 0.15)', 
-            backgroundColor: '#FFFFFF', 
-            cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', 
-            display: 'flex', 
-            alignItems: 'center', 
-            paddingLeft: 20,
-            paddingRight: 20,
-            fontFamily: 'Inter, sans-serif', 
-            fontSize: 15, 
-            fontWeight: 600, 
-            color: '#2D4059', 
-            opacity: canSave ? 1 : 0.5,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-          }}
-        >
+        <button onClick={canSave ? handleSave : undefined} disabled={!canSave || isSaving} style={{ width: 154, height: 51, borderRadius: 10, border: '1px solid rgba(102, 110, 254, 0.15)', backgroundColor: '#FFFFFF', cursor: canSave && !isSaving ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', paddingLeft: 20, paddingRight: 20, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#2D4059', opacity: canSave ? 1 : 0.5, whiteSpace: 'nowrap', overflow: 'hidden' }}>
           <img src={WriteIcon21Black} alt="" style={{ width: 21, height: 21, flexShrink: 0 }} />
           <span style={{ marginLeft: 17, flexShrink: 0 }}>Записать</span>
         </button>
@@ -907,15 +847,31 @@ const StationConfigurationCreatePage = () => {
 
       <CatalogSelectPopup isOpen={popupOpen} onClose={handlePopupClose} onSelect={handlePopupSelect} popupType={popupType} />
 
+      {renamingCellId && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setRenamingCellId(null)}>
+          <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Имя ячейки</h3>
+            <input type="text" value={renamingValue} onChange={e => setRenamingValue(e.target.value)} autoFocus
+              style={{ height: 44, borderRadius: 10, border: '1px solid #666EFE', padding: '0 14px', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#2D4059', outline: 'none', boxSizing: 'border-box' }}
+              onKeyDown={e => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setRenamingCellId(null); }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={submitRename} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить</button>
+              <button onClick={() => setRenamingCellId(null)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showClosePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClosePopup(false)}>
           <div style={{ width: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 30, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', gap: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
-            <p style={{ fontFamily: 'Inter', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены.'}</p>
+            <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: 20, fontWeight: 500, color: '#2D4059', margin: 0, textAlign: 'center' }}>Закрыть вкладку</h3>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#6B7280', margin: 0, textAlign: 'center' }}>{canSave ? 'Сохранить изменения перед закрытием?' : 'Не все обязательные поля заполнены.'}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}
-              <button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button>
-              <button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
+              {canSave && <button onClick={handleSaveAndClose} style={{ height: 44, borderRadius: 10, border: 'none', backgroundColor: '#666EFE', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 500, color: '#FFFFFF' }}>Сохранить и закрыть</button>}
+              <button onClick={handleCloseWithoutSaving} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Закрыть без сохранения</button>
+              <button onClick={() => setShowClosePopup(false)} style={{ height: 44, borderRadius: 10, border: '1px solid rgba(102,110,254,0.15)', backgroundColor: '#FFFFFF', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 400, color: '#2D4059' }}>Отмена</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-// StationModelMainTab.tsx — ИСПРАВЛЕННЫЙ (использует handleTypeSelect для типа станции)
+// StationModelMainTab.tsx — ПОЛНЫЙ ФАЙЛ (новые поля: isAutomatic / isAddress; условное отображение полей)
 import React, { useState, useEffect, useRef } from 'react';
 import type { PopupType } from '../NomenclaturePage/CatalogSelectPopup';
 import FormField from '../../elements/FormField';
@@ -56,6 +56,10 @@ interface StationModelMainTabProps {
   handleTypeSelect?: (id: string, name: string) => void;
   openPopup: (type: PopupType, filter?: string) => void;
   isEdit: boolean;
+  isAutomatic: boolean;
+  setIsAutomatic: (v: boolean) => void;
+  isAddress: boolean;
+  setIsAddress: (v: boolean) => void;
 }
 
 const FIELD_WIDTH = 340;
@@ -74,9 +78,10 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   setTypeId, setTypeName, setManufacturerId, setManufacturerName,
   handleTypeSelect,
   openPopup, uid,
+  isAutomatic, setIsAutomatic,
+  isAddress, setIsAddress,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Загрузка файлов выключена (функция uploads) — изображение только просматривается: кнопки «Добавить» / «Удалить» нет
   const canUpload = useCanUpload();
 
   const [stationTypeOptions, setStationTypeOptions] = useState<{ uid: string; name: string }[]>([]);
@@ -141,32 +146,49 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   const displayImageUrl = localImage ? localImage.url : (deletedImageUid ? '' : modelImageUrl);
   const hasImage = !!displayImageUrl;
 
+  // Тумблер (checkbox-style)
+  const renderToggle = (label: string, value: boolean, onChange: (v: boolean) => void, disabled?: boolean) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <button
+        type="button"
+        onClick={() => !disabled && onChange(!value)}
+        disabled={disabled}
+        style={{
+          width: 40, height: 22, borderRadius: 11, border: 'none', padding: 0,
+          backgroundColor: value ? '#666EFE' : '#D1D5DB',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          position: 'relative', transition: 'background-color 0.2s ease',
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <div style={{
+          width: 18, height: 18, borderRadius: '50%', backgroundColor: '#FFFFFF',
+          position: 'absolute', top: 2, left: value ? 20 : 2,
+          transition: 'left 0.2s ease',
+        }} />
+      </button>
+      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, color: '#2D4059' }}>{label}</span>
+    </div>
+  );
+
   const col1Fields = [
     { top: getTop(0), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Код:" value={String(code).padStart(4, '0')} type="input" disabled icon={CodeIcon20LightBlue} iconWidth={20} iconHeight={14} /> },
-    { top: getTop(1), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Артикул:" value={article} placeholder="Артикул" type="input" onChange={e => setArticle(e.target.value)} onClear={() => setArticle('')} icon={ArticleIcon18Gray} iconActive={ArticleIcon18Blue} iconWidth={18} iconHeight={10} /> },
-    { top: getTop(2), component: (
-      <FormField 
-        width={FIELD_WIDTH} 
-        height={FIELD_HEIGHT} 
-        label="Производитель:" 
-        value={manufacturerName} 
-        placeholder="Выберите производителя" 
-        type="select" 
-        icon={ManufacturerIcon18Gray} 
-        iconActive={ManufacturerIcon18Blue} 
-        selectIconWidth={18} 
-        selectIconHeight={16} 
-        searchOptions={stationManufacturerOptions}
-        onSelectOption={(selectedUid, selectedName) => {
-          setManufacturerId?.(selectedUid);
-          setManufacturerName?.(selectedName);
-        }}
-        onOpenFullList={() => openPopup('stationManufacturer')}
-        searchTitle="Найденный производитель"
-        searchNotFoundText="Производители не найдены"
-      />
+    { top: getTop(1), component: (
+      <div>
+        <span style={labelStyle}>Тип склада:</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 4 }}>
+          {renderToggle('Автоматический', isAutomatic, setIsAutomatic)}
+          {renderToggle('Адресный', isAddress, setIsAddress, isAutomatic)}
+        </div>
+      </div>
     )},
+    { top: getTop(2), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Артикул:" value={article} placeholder="Артикул" type="input" onChange={e => setArticle(e.target.value)} onClear={() => setArticle('')} icon={ArticleIcon18Gray} iconActive={ArticleIcon18Blue} iconWidth={18} iconHeight={10} disabled={!isAutomatic} /> },
     { top: getTop(3), component: (
+      <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Производитель:" value={manufacturerName} placeholder="Выберите производителя" type="select" icon={ManufacturerIcon18Gray} iconActive={ManufacturerIcon18Blue} selectIconWidth={18} selectIconHeight={16} searchOptions={stationManufacturerOptions}
+        onSelectOption={(selectedUid, selectedName) => { setManufacturerId?.(selectedUid); setManufacturerName?.(selectedName); }}
+        onOpenFullList={() => openPopup('stationManufacturer')} searchTitle="Найденный производитель" searchNotFoundText="Производители не найдены" disabled={!isAutomatic} />
+    )},
+    { top: getTop(4), component: (
       <div>
         <span style={labelStyle}>Описание модели:</span>
         <div style={{ width: 780, height: 155, borderRadius: 10, border: description ? '1px solid #666EFE' : '1px solid #A0A3BD', backgroundColor: '#FFFFFF', position: 'relative' }}>
@@ -185,34 +207,16 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
   ];
 
   const col2Fields = [
-    { top: getTop(0), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Наименование модели станции:" value={name} placeholder="Введите название" type="input" onChange={e => setName(e.target.value)} onClear={() => setName('')} icon={NameIcon18Gray} iconActive={NameIcon18Blue} iconWidth={18} iconHeight={18} /> },
+    { top: getTop(0), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Наименование модели:" value={name} placeholder="Введите название" type="input" onChange={e => setName(e.target.value)} onClear={() => setName('')} icon={NameIcon18Gray} iconActive={NameIcon18Blue} iconWidth={18} iconHeight={18} /> },
     { top: getTop(1), component: (
-      <FormField 
-        width={FIELD_WIDTH} 
-        height={FIELD_HEIGHT} 
-        label="Тип станции:" 
-        value={typeName} 
-        placeholder="Выберите тип" 
-        type="select" 
-        icon={TypeIcon16Gray} 
-        iconActive={TypeIcon16Blue} 
-        selectIconWidth={16} 
-        selectIconHeight={16} 
-        searchOptions={stationTypeOptions}
+      <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Тип станции:" value={typeName} placeholder="Выберите тип" type="select" icon={TypeIcon16Gray} iconActive={TypeIcon16Blue} selectIconWidth={16} selectIconHeight={16} searchOptions={stationTypeOptions}
         onSelectOption={(selectedUid, selectedName) => {
-          if (handleTypeSelect) {
-            handleTypeSelect(selectedUid, selectedName);
-          } else {
-            setTypeId?.(selectedUid);
-            setTypeName?.(selectedName);
-          }
+          if (handleTypeSelect) handleTypeSelect(selectedUid, selectedName);
+          else { setTypeId?.(selectedUid); setTypeName?.(selectedName); }
         }}
-        onOpenFullList={() => openPopup('stationType')}
-        searchTitle="Найденный тип"
-        searchNotFoundText="Типы не найдены"
-      />
+        onOpenFullList={() => openPopup('stationType')} searchTitle="Найденный тип" searchNotFoundText="Типы не найдены" disabled={!isAutomatic} />
     )},
-    { top: getTop(2), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Ревизия:" value={revision} placeholder="Ревизия" type="input" onChange={e => setRevision(e.target.value)} onClear={() => setRevision('')} icon={RevisionIcon18Gray} iconActive={RevisionIcon18Blue} iconWidth={18} iconHeight={18} /> },
+    { top: getTop(2), component: <FormField width={FIELD_WIDTH} height={FIELD_HEIGHT} label="Ревизия:" value={revision} placeholder="Ревизия" type="input" onChange={e => setRevision(e.target.value)} onClear={() => setRevision('')} icon={RevisionIcon18Gray} iconActive={RevisionIcon18Blue} iconWidth={18} iconHeight={18} disabled={!isAutomatic} /> },
   ];
 
   return (
@@ -228,9 +232,7 @@ const StationModelMainTab: React.FC<StationModelMainTabProps> = ({
         <div style={{ width: col3Width, height: col3Height, borderRadius: 10, border: hasImage ? '1px solid #666EFE' : '1px solid #A0A3BD', backgroundColor: hasImage ? '#FFFFFF' : '#F5F6FA', overflow: 'hidden', position: 'relative' }}>
           {canUpload && (
             <>
-              <button
-                onClick={() => hasImage ? (localImage ? handleLocalImageDelete() : handleServerImageDelete()) : fileInputRef.current?.click()}
-                style={{ position: 'absolute', top: 20, left: 20, zIndex: 2, width: 32, height: 32, borderRadius: '50%', border: `2px solid ${hasImage ? '#666EFE' : '#A0A3BD'}`, backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+              <button onClick={() => hasImage ? (localImage ? handleLocalImageDelete() : handleServerImageDelete()) : fileInputRef.current?.click()} style={{ position: 'absolute', top: 20, left: 20, zIndex: 2, width: 32, height: 32, borderRadius: '50%', border: `2px solid ${hasImage ? '#666EFE' : '#A0A3BD'}`, backgroundColor: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
                 <img src={hasImage ? DeleteIcon16Blue : CreateIcon14Gray} alt="" style={{ width: hasImage ? 16 : 14, height: hasImage ? 16 : 14 }} />
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLocalImageUpload} />
