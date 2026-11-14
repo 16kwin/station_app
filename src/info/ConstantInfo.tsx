@@ -631,6 +631,25 @@ restApiMoveOrderCancel: (uid: string) => `/api/move-orders/${uid}/cancel`,
   restApiStationDistributionLinkSetOutgoing: (stationUid: string) => `/api/stations/${stationUid}/distribution-links/outgoing`,
   restApiRefillTakeToWork: (uid: string) => `/api/documents/refill/crud/${uid}/take-to-work`,
 restApiRefillCancel: (uid: string) => `/api/documents/refill/crud/${uid}/cancel`,
+
+ // === Документы: Поступление ===
+  restApiIncomingList: (userId: number) => `/api/documents/incoming/list?userId=${userId}`,
+  restApiIncomingGenerateCode: '/api/documents/incoming/generate-code',
+  restApiIncomingGet: (uid: string) => `/api/documents/incoming/${uid}`,
+  restApiIncomingCreate: '/api/documents/incoming/crud',
+  restApiIncomingUpdate: (uid: string) => `/api/documents/incoming/crud/${uid}`,
+  restApiIncomingPost: (uid: string) => `/api/documents/incoming/crud/${uid}/post`,
+  restApiIncomingCancel: (uid: string) => `/api/documents/incoming/crud/${uid}/cancel`,
+  restApiIncomingDelete: (uid: string) => `/api/documents/incoming/crud/${uid}`,
+  restApiIncomingEvents: '/api/documents/incoming/events',
+  restApiIncomingEventsByUid: (uid: string) => `/api/documents/incoming/${uid}/events`,
+    restApiIncomingAllSettings: (userId: number) => `/api/documents/incoming/settings?userId=${userId}`,
+  restApiIncomingColumnsSettings: (userId: number) => `/api/documents/incoming/columns-settings?userId=${userId}`,
+  restApiIncomingColumnsSettingsSave: (userId: number) => `/api/documents/incoming/columns-settings?userId=${userId}`,
+  restApiIncomingFiltersSettings: (userId: number) => `/api/documents/incoming/filters-settings?userId=${userId}`,
+  restApiIncomingFiltersSettingsSave: (userId: number) => `/api/documents/incoming/filters-settings?userId=${userId}`,
+  restApiIncomingSortSettings: (userId: number) => `/api/documents/incoming/sort-settings?userId=${userId}`,
+  restApiIncomingSortSettingsSave: (userId: number) => `/api/documents/incoming/sort-settings?userId=${userId}`,
 };
 
 export default ConstantInfo;

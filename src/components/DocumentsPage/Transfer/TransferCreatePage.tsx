@@ -465,7 +465,7 @@ const TransferCreatePage: React.FC = () => {
 
   const canTakeToWork = isDraft && !isNew && !isCancelled && (!isMoveOrder || isAgreed);
   const canShip = isInProgress && !isCancelled;
-  const canReceive = isShipped && !isCancelled;
+  const canReceive = isShipped && !isCancelled && !isRefill;
   const canLoad = (isShipped || isReceived) && !isCancelled;
 
   const canCancelDoc = !isMoveOrder && !isRefill && !isNew && !isCancelled && (isDraft || isInProgress);
@@ -484,6 +484,8 @@ const TransferCreatePage: React.FC = () => {
   const statusLabel = (() => {
     if (isCancelled) return 'Отменён';
     if (isNew) return 'Новый';
+    if (isRefill && isShipped) return 'В работе';
+    if (isRefill && isPosted) return 'Закрыт';
     return doc?.status ? (STATUS_LABELS[doc.status] || doc.status) : '';
   })();
 
@@ -498,12 +500,28 @@ const TransferCreatePage: React.FC = () => {
     if (isCancelled) return 'Отменён';
     if (isNew) return '—';
     if (isMoveOrder && isDraft && isAgreed) return 'Не взят в работу';
+    if (isRefill) {
+      const s = doc?.status || '';
+      if (s === 'SHIPPED') return 'Отгружено';
+      if (s === 'POSTED') return 'Загружено';
+      if (s === 'IN_PROGRESS') return 'В работе';
+      if (s === 'DRAFT') return 'Создан';
+      return TRACK_BY_STATUS[s] || '—';
+    }
     return TRACK_BY_STATUS[doc?.status || ''] || '—';
   })();
 
   const techState = (() => {
     if (isCancelled) return 'Отменён';
     if (isNew) return '—';
+    if (isRefill) {
+      const s = doc?.status || '';
+      if (s === 'SHIPPED') return 'Отгружено';
+      if (s === 'POSTED') return 'Закрыт (проведён)';
+      if (s === 'IN_PROGRESS') return 'В работе';
+      if (s === 'DRAFT') return 'Записан';
+      return TECH_BY_STATUS[s] || '—';
+    }
     return TECH_BY_STATUS[doc?.status || ''] || '—';
   })();
 
@@ -794,10 +812,16 @@ const TransferCreatePage: React.FC = () => {
     opacity: active ? 1 : 0.5,
   });
 
-  // Шаг 4: единая кнопка. Для MANUAL и MOVE_ORDER порядок одинаков:
-  // IN_PROGRESS → Отгружено, SHIPPED → Принято, RECEIVED → Загружено, POSTED → disabled.
+  // Шаг 4:
+  //  - REFILL: IN_PROGRESS → Отгружено, SHIPPED → Загружено, POSTED → disabled (без RECEIVED)
+  //  - MANUAL / MOVE_ORDER: IN_PROGRESS → Отгружено, SHIPPED → Принято, RECEIVED → Загружено, POSTED → disabled
   const step4Label = (() => {
     if (isPosted) return 'Загружено';
+    if (isRefill) {
+      if (isShipped) return 'Загружено';
+      if (isInProgress) return 'Отгружено';
+      return 'Отгружено';
+    }
     if (isReceived) return 'Загружено';
     if (isShipped) return 'Принято';
     if (isInProgress) return 'Отгружено';
@@ -806,6 +830,11 @@ const TransferCreatePage: React.FC = () => {
 
   const step4Active = (() => {
     if (isPosted) return false;
+    if (isRefill) {
+      if (isShipped) return true;
+      if (isInProgress) return true;
+      return false;
+    }
     if (isReceived) return true;
     if (isShipped) return true;
     if (isInProgress) return true;
@@ -814,6 +843,12 @@ const TransferCreatePage: React.FC = () => {
 
   const handleStep4 = () => {
     if (isPosted) return;
+    if (isRefill) {
+      // REFILL: только ship → load, без receive
+      if (isShipped) { handlePost(); return; }
+      if (isInProgress) { handleShip(); return; }
+      return;
+    }
     if (isReceived) { handlePost(); return; }
     if (isShipped) { handleReceive(); return; }
     if (isInProgress) { handleShip(); return; }

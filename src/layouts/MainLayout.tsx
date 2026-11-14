@@ -1,4 +1,4 @@
-// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты перемещения)
+// MainLayout.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты поступления)
 import { useLocation } from 'react-router-dom';
 import FloatingMenu from '../components/Menu/FloatingMenu';
 import TabBar from '../components/TabBar/TabBar';
@@ -21,6 +21,8 @@ import MoveOrderPage from '../components/DocumentsPage/MoveOrder/MoveOrderPage';
 import MoveOrderCreatePage from '../components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
 import TransferPage from '../components/DocumentsPage/Transfer/TransferPage';
 import TransferCreatePage from '../components/DocumentsPage/Transfer/TransferCreatePage';
+import IncomingPage from '../components/DocumentsPage/Incoming/IncomingPage';
+import IncomingCreatePage from '../components/DocumentsPage/Incoming/IncomingCreatePage';
 import NomenclaturePage from '../components/ReferencesPage/NomenclaturePage/NomenclaturePage';
 import NomenclatureCreatePage from '../components/ReferencesPage/NomenclaturePage/NomenclatureCreatePage';
 import AccountingGroupsPage from '../components/ReferencesPage/AccountingGroupsPage/AccountingGroupsPage';
@@ -129,6 +131,7 @@ const staticComponents: Record<TabSection, ReactNode> = {
   '/documents/refill': <RefillPage />,
   '/documents/move-orders': <MoveOrderPage />,
   '/documents/transfers': <TransferPage />,
+  '/documents/incoming': <IncomingPage />,
   '/documents/video-archive': <VideoArchivePage />,
   '/documents/gpp': <GppPage />,
 };
@@ -156,6 +159,8 @@ const childComponents: Record<TabChildPrefix, ReactNode> = {
   '/documents/move-orders/edit/': <MoveOrderCreatePage />,
   '/documents/transfers/create/': <TransferCreatePage />,
   '/documents/transfers/edit/': <TransferCreatePage />,
+  '/documents/incoming/create/': <IncomingCreatePage />,
+  '/documents/incoming/edit/': <IncomingCreatePage />,
 };
 
 const uidComponents: Record<TabUidSection, ReactNode> = {
@@ -210,6 +215,7 @@ const getLabelByPath = (path: string): string => {
     '/documents/refill': 'Документ: Пополнение',
     '/documents/move-orders': 'Документ: Заказ на перемещение',
     '/documents/transfers': 'Документ: Перемещение',
+    '/documents/incoming': 'Документ: Поступление',
     '/documents/video-archive': 'Журнал событий: видеоархив',
     '/documents/gpp': 'Документ: ГПП',
   };
@@ -237,6 +243,8 @@ const getLabelByPath = (path: string): string => {
   if (path.startsWith('/documents/move-orders/edit/')) { return 'Заказ на перемещение'; }
   if (path.startsWith('/documents/transfers/create/')) { return 'Перемещение (новый)'; }
   if (path.startsWith('/documents/transfers/edit/')) { return 'Перемещение'; }
+  if (path.startsWith('/documents/incoming/create/')) { return 'Поступление (новый)'; }
+  if (path.startsWith('/documents/incoming/edit/')) { return 'Поступление'; }
   if (path.startsWith('/documents/schablon/')) { const pathOnly = path.split('?')[0]; const uid = pathOnly.replace('/documents/schablon/', ''); const cached = templateInfoCache.get(uid); return cached ? `Шаблон - ${cached}` : `Шаблон - ${uid}`; }
   return path.replace('/', '') || 'Главная';
 };
@@ -248,7 +256,6 @@ const MainLayout = () => {
   const { tabs, activeTabId, openTab, updateTabComponent, updateTabLabel, switchTab } = useTabs();
   const location = useLocation();
   const prevPathRef = useRef('');
-  // Телефон и планшет: рамка по экрану вместо холста 1920 (компьютерный вид ниже не меняется)
   const compact = useCompact();
 
   const MIN_WIDTH = 1920; 
@@ -286,20 +293,16 @@ const MainLayout = () => {
         return;
       }
     };
-    
     document.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
   }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
-    
     tabs.forEach(tab => {
       if (tab.component === null) {
         const component = getGuardedComponent(tab.path);
-        if (component) {
-          updateTabComponent(tab.id, component);
-        }
+        if (component) updateTabComponent(tab.id, component);
       }
     });
   }, [tabs, isLoaded, updateTabComponent]);
@@ -307,11 +310,8 @@ const MainLayout = () => {
   useEffect(() => {
     if (!isLoaded) return;
     const fullPath = location.pathname + location.search;
-    // Тот же путь пропускаем, только если его вкладка есть: после восстановления вкладок (TabContext) прямая
-    // ссылка приходит тем же путём, а её вкладки в восстановленном списке ещё нет
     if (prevPathRef.current === fullPath && tabs.some(tab => tab.path === fullPath)) return;
     prevPathRef.current = fullPath;
-    
     const existingTab = tabs.find(tab => tab.path === fullPath);
     if (existingTab) {
       if (activeTabId !== existingTab.id) switchTab(existingTab.id);
@@ -321,13 +321,10 @@ const MainLayout = () => {
       }
       return;
     }
-    
     const label = getLabelByPath(fullPath);
     const component = getGuardedComponent(location.pathname);
-
     const parentTabId = isChildTabPath(location.pathname) ? (activeTabId ?? undefined) : undefined;
     const newTabId = openTab(fullPath, label, component, parentTabId);
-    
     if (location.pathname.startsWith('/documents/schablon/')) { const uid = location.pathname.replace('/documents/schablon/', ''); fetchTemplateName(uid).then(name => updateTabLabel(newTabId, `Шаблон - ${name}`)); }
     if (location.pathname.startsWith('/references/nomenclature/edit/')) { const segments = location.pathname.split('/'); const uid = segments[segments.length - 2]; fetchNomenclatureName(uid).then(name => updateTabLabel(newTabId, name)); }
     if (location.pathname.startsWith('/references/suppliers/edit/')) { const uid = location.pathname.split('/').pop() || ''; if (uid) { fetchSupplierName(uid).then(name => updateTabLabel(newTabId, name)); } }
@@ -360,25 +357,16 @@ const MainLayout = () => {
 
   const tabPanes = tabs.map(tab => (
     <div key={tab.id} className={compact ? (isChildTabPath(tabPathname(tab.path)) ? 'awms-compact-pane awms-compact-card' : 'awms-compact-pane') : undefined} style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-      {/* Ленивый раздел ждёт загрузки своего куска внутри своей вкладки: соседние вкладки не прячутся */}
       <Suspense fallback={null}>{tab.component}</Suspense>
     </div>
   ));
 
   if (compact) {
-    // Вкладки сверху, рабочая область — весь экран между ними и меню. Страницы, свёрстанные под 1800 px,
-    // прокручиваются внутри области в обе стороны, пока для них нет своей раскладки
     return (
       <div className="w-full h-dvh flex flex-col" style={{ overflow: 'hidden' }}>
         <div style={{ flexShrink: 0, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', paddingBottom: 6 }}><TabBar /></div>
         <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            margin: `0 8px ${COMPACT_MENU_SPACE}`,
-            backgroundColor: '#FAFBFC',
-            borderRadius: 16,
-          }}
+          style={{ flex: 1, minHeight: 0, margin: `0 8px ${COMPACT_MENU_SPACE}`, backgroundColor: '#FAFBFC', borderRadius: 16 }}
           className="shadow overflow-hidden white-block relative"
         >
           {tabPanes}
@@ -399,15 +387,10 @@ const MainLayout = () => {
           <div className="absolute left-0 right-0 flex justify-center" style={{ top: `${tabBarTop}px` }}>
             <div style={{ width: `${windowSize.width - padding * 2}px` }}><TabBar /></div>
           </div>
-          
           <div 
             style={{ 
-              position: 'absolute', 
-              left: '50%', 
-              marginLeft: `-${WHITE_BLOCK_WIDTH / 2}px`,
-              top: `${whiteBlockTop}px`,
-              width: `${WHITE_BLOCK_WIDTH}px`,
-              height: `${WHITE_BLOCK_HEIGHT}px`,
+              position: 'absolute', left: '50%', marginLeft: `-${WHITE_BLOCK_WIDTH / 2}px`,
+              top: `${whiteBlockTop}px`, width: `${WHITE_BLOCK_WIDTH}px`, height: `${WHITE_BLOCK_HEIGHT}px`,
               backgroundColor: '#FAFBFC',
             }} 
             className="rounded-[20px] shadow overflow-auto white-block relative"
@@ -421,7 +404,6 @@ const MainLayout = () => {
         </div>
       </div>
       <FloatingMenu />
-      {/* Планшет в альбомной ориентации (от 1024 px) — компьютерная раскладка, но режим просмотра остаётся */}
       <ReadOnlyGuard />
     </div>
   );

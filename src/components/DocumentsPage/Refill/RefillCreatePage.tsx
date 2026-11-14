@@ -155,19 +155,44 @@ const formatDateWithSeconds = (dateStr: string): string => {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  NEW: 'Новый',
   DRAFT: 'Записан',
   IN_PROGRESS: 'В работе',
   CLOSED: 'Закрыт',
   CANCELLED: 'Отменён',
 };
 
+// Лейблы состояния строки пополнения — как у строки заказа на перемещение.
+// RECEIVED — legacy, новый поток REFILL его не порождает.
 const LINE_STATUS_LABELS: Record<string, string> = {
   NOT_STARTED: 'Не взят в работу',
+  TRANSFERRED: 'Передан в работу',
   IN_PROGRESS: 'Взят в работу',
   SHIPPED: 'Отгружено',
-  RECEIVED: 'Принято',
+  RECEIVED: 'Принято', // legacy
   CLOSED: 'Загружено',
   CANCELLED: 'Отменено',
+};
+
+const COLOR_STATUS_CLOSED = '#00D664';
+const COLOR_STATUS_LOADING_OR_SHIPPED = '#FE975B';
+const COLOR_STATUS_TRANSFERRED = '#666EFE';
+const COLOR_STATUS_IN_PROGRESS = '#666EFE';
+const COLOR_STATUS_NOT_STARTED = '#2D4059';
+const COLOR_STATUS_CANCELLED = '#FF3052';
+
+// Как getOverallStatus в заказе на перемещение, но с «Передан в работу» между
+// «Не взят» и «Взят». RECEIVED — legacy, AGREED нет вовсе.
+const getRefillOverallStatus = (status: string | null | undefined, cancelled?: boolean | null): { label: string; color: string; ratio: number } => {
+  if (cancelled) return { label: 'Отменено', color: COLOR_STATUS_CANCELLED, ratio: 0 };
+  const s = String(status || '');
+  if (s === 'CANCELLED') return { label: 'Отменено', color: COLOR_STATUS_CANCELLED, ratio: 0 };
+  if (s === 'CLOSED') return { label: 'Загружено', color: COLOR_STATUS_CLOSED, ratio: 1 };
+  if (s === 'RECEIVED') return { label: 'Принято', color: '#00A64F', ratio: 0.8 }; // legacy
+  if (s === 'SHIPPED') return { label: 'Отгружено', color: COLOR_STATUS_LOADING_OR_SHIPPED, ratio: 0.6 };
+  if (s === 'IN_PROGRESS') return { label: 'Взят в работу', color: COLOR_STATUS_IN_PROGRESS, ratio: 0.4 };
+  if (s === 'TRANSFERRED') return { label: 'Передан в работу', color: COLOR_STATUS_TRANSFERRED, ratio: 0.2 };
+  return { label: 'Не взят в работу', color: COLOR_STATUS_NOT_STARTED, ratio: 0.125 };
 };
 
 const POPUP_BACKDROP_STYLE: React.CSSProperties = {
@@ -197,6 +222,27 @@ const normalizeEditableCells = (list: RefillCell[]) =>
       return ak.localeCompare(bk);
     });
 
+const isMeaningfulDraft = (cells: any): boolean => {
+  if (!Array.isArray(cells) || cells.length === 0) return false;
+  return cells.some((c: any) =>
+    (Number(c.refillQuantity) || 0) > 0 ||
+    (Array.isArray(c.sources) && c.sources.some((s: any) => (Number(s.quantity) || 0) > 0))
+  );
+};
+
+const stripTransfers = (cells: RefillCell[]): RefillCell[] =>
+  cells.map(c => ({
+    ...c,
+    sources: (c.sources || []).map(s => ({
+      ...s,
+      transferUid: null,
+      transferCode: null,
+      transferLineUid: null,
+      transferStatus: null,
+      transferCancelled: null,
+    })),
+  }));
+
 interface DocumentRow {
   uid: string;
   numberCell: string;
@@ -207,10 +253,13 @@ interface DocumentRow {
   schemeQuantity: string;
   factQuantity: string;
   refillQuantity: string;
-  statusLabel: string;
+  overallStatusLabel: string;
+  overallStatusColor: string;
+  overallStatusRatio: number;
   cancelledLabel: string;
   transferLabel: string;
   _cell: RefillCell;
+  _transferUid: string | null;
 }
 
 const DOC_COLUMNS = [
@@ -221,7 +270,7 @@ const DOC_COLUMNS = [
   { key: 'schemeQuantity', label: 'По схеме' },
   { key: 'factQuantity', label: 'В ячейке' },
   { key: 'refillQuantity', label: 'К загрузке' },
-  { key: 'statusLabel', label: 'Статус' },
+  { key: 'overallStatusLabel', label: 'Состояние' },
   { key: 'cancelledLabel', label: 'Отменено' },
   { key: 'transferLabel', label: 'Перемещение' },
 ];
@@ -232,7 +281,7 @@ const RefillCreatePage: React.FC = () => {
   const location = useLocation();
   const stationUidParam = searchParams.get('stationUid') || '';
   const stationNameParam = searchParams.get('stationName') || '';
-  const { tabs, activeTabId, closeTab, replaceTab, setTabLocked } = useTabs();
+  const { tabs, activeTabId, closeTab, replaceTab, setTabLocked, openTab } = useTabs();
 
   const isEdit = !!uid && location.pathname.startsWith(`/documents/refill/edit/${uid}`);
 
@@ -330,9 +379,11 @@ const RefillCreatePage: React.FC = () => {
                 const raw = sessionStorage.getItem(draftKey);
                 if (raw) {
                   const parsed = JSON.parse(raw);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
+                  if (isMeaningfulDraft(parsed)) {
                     hasDraft = true;
-                    setLocalCells(parsed as RefillCell[]);
+                    setLocalCells(stripTransfers(parsed as RefillCell[]));
+                  } else {
+                    try { sessionStorage.removeItem(draftKey); } catch {}
                   }
                 }
               } catch {}
@@ -373,9 +424,12 @@ const RefillCreatePage: React.FC = () => {
           const raw = sessionStorage.getItem(draftKey);
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (isMeaningfulDraft(parsed)) {
               hasDraft = true;
-              setLocalCells(parsed as RefillCell[]);
+              const restored = parsed as RefillCell[];
+              setLocalCells(d.status === 'DRAFT' ? stripTransfers(restored) : restored);
+            } else {
+              try { sessionStorage.removeItem(draftKey); } catch {}
             }
           }
         } catch {}
@@ -447,10 +501,18 @@ const RefillCreatePage: React.FC = () => {
     });
   }, [localCells, searchValue, filterValues, hasActiveFilter]);
 
+  const transfersVisible = !!doc && doc.status !== 'DRAFT' && !(doc.code == null && !isEdit);
+
   const documentRows: DocumentRow[] = useMemo(() => {
     return filteredCells.map(c => {
       const sourceNames = (c.sources || []).map(s => s.stockFromName || s.stockFromUid).filter(Boolean).join(', ');
-      const transferCode = (c.sources || []).map(s => s.transferCode).find(x => x != null) ?? null;
+      const sourceWithTransfer = transfersVisible
+        ? (c.sources || []).find(s => s.transferUid != null || s.transferStatus != null || s.transferCancelled != null)
+        : undefined;
+      const transferCode = sourceWithTransfer?.transferCode ?? null;
+      const transferUid = sourceWithTransfer?.transferUid ?? null;
+      // Состояние строки на бэке (reg_refill_cells.status) — как overallStatus в заказе
+      const overall = getRefillOverallStatus(c.status, c.cancelled);
       return {
         uid: c.uid,
         numberCell: `${c.columnNumber ?? 0}-${c.numberCell ?? 0}`,
@@ -461,13 +523,16 @@ const RefillCreatePage: React.FC = () => {
         schemeQuantity: formatQty(c.templateQuantity),
         factQuantity: formatQty(c.factQuantity),
         refillQuantity: formatQty(c.refillQuantity),
-        statusLabel: LINE_STATUS_LABELS[String(c.status || 'NOT_STARTED')] || String(c.status || '—'),
+        overallStatusLabel: overall.label,
+        overallStatusColor: overall.color,
+        overallStatusRatio: overall.ratio,
         cancelledLabel: c.cancelled ? 'Да' : 'Нет',
         transferLabel: transferCode != null ? `№${String(transferCode).padStart(4, '0')}` : '—',
         _cell: c,
+        _transferUid: transferUid,
       };
     });
-  }, [filteredCells]);
+  }, [filteredCells, transfersVisible]);
 
   const docVisibleColumns = DOC_COLUMNS.map(c => c.key);
 
@@ -475,6 +540,62 @@ const RefillCreatePage: React.FC = () => {
     const val = (item as any)[key];
     if (val === null || val === undefined || val === '') return '—';
     return String(val);
+  };
+
+  const documentRenderCellNode = (key: string, item: DocumentRow): React.ReactNode | null => {
+    if (key === 'overallStatusLabel') {
+      return (
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div
+            style={{
+              width: '100%',
+              height: 12,
+              borderRadius: 999,
+              backgroundColor: 'rgba(45, 64, 89, 0.12)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${item.overallStatusRatio * 100}%`,
+                height: '100%',
+                borderRadius: 999,
+                backgroundColor: item.overallStatusColor,
+                transition: 'width 0.2s ease',
+              }}
+            />
+          </div>
+          <span style={{ color: item.overallStatusColor, fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500 }}>
+            {item.overallStatusLabel}
+          </span>
+        </div>
+      );
+    }
+    if (key === 'transferLabel' && item._transferUid) {
+      return (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            openTab(
+              `/documents/transfers/edit/${item._transferUid}`,
+              `Перемещение: ${item.transferLabel.replace('№', '')}`,
+              null
+            );
+          }}
+          style={{
+            color: '#666EFE',
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 15,
+          }}
+        >
+          {item.transferLabel}
+        </span>
+      );
+    }
+    return null;
   };
 
   const selectedCellsCount = useMemo(
@@ -551,7 +672,7 @@ const RefillCreatePage: React.FC = () => {
         const res = await AxiosService.post(ConstantInfo.restApiRefillCrud(1), payload);
         const d = res.data as DocRefill;
         setDoc(d);
-        const fresh = (d.cells || []).map(c => ({ ...c, uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`, sources: c.sources || [] }));
+        const fresh = stripTransfers((d.cells || []).map(c => ({ ...c, uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`, sources: c.sources || [] })));
         setSavedCells(fresh); setLocalCells(fresh);
         clearDraft(); setEditMode(false);
         if (activeTabId && d.uid && d.code != null) {
@@ -568,7 +689,7 @@ const RefillCreatePage: React.FC = () => {
       });
       const d = res.data as DocRefill;
       setDoc(d);
-      const fresh = (d.cells || []).map(c => ({ ...c, uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`, sources: c.sources || [] }));
+      const fresh = stripTransfers((d.cells || []).map(c => ({ ...c, uid: c.uid || `${c.drumNumber ?? 1}-${c.columnNumber ?? 0}-${c.numberCell ?? 0}`, sources: c.sources || [] })));
       setSavedCells(fresh); setLocalCells(fresh);
       clearDraft(); setEditMode(false);
       return true;
@@ -724,14 +845,32 @@ const RefillCreatePage: React.FC = () => {
   const isClosed = docStatus === 'CLOSED';
   const isCancelled = docStatus === 'CANCELLED';
 
-  const isSavedOnce = isEdit || (docCode != null && docStatus !== 'NEW');
-  const isEditable = isDraft && (editMode || !isSavedOnce);
+  const isNewDoc = !isEdit && docCode == null;
+  const isSavedOnce = !isNewDoc;
+  const isEditable = isDraft && (editMode || isNewDoc);
 
-  const statusIcon = isClosed ? StatusIcon114Green
+  const showDirty = isDirty && isSavedOnce;
+
+  const displayStatus = isNewDoc ? 'NEW' : docStatus;
+
+  const statusIcon = isNewDoc
+    ? StatusIcon104Blue
+    : (isClosed ? StatusIcon114Green
     : (isCancelled ? StatusIcon93Red
     : (isInProgress ? StatusIcon108LightBlue
-    : (isDirty ? StatusIcon107Orange : StatusIcon104Blue)));
-  const statusWidth = isClosed ? 114 : (isCancelled ? 93 : (isInProgress ? 108 : (isDirty ? 107 : 104)));
+    : (showDirty ? StatusIcon107Orange : StatusIcon104Blue))));
+  const statusWidth = isNewDoc
+    ? 104
+    : (isClosed ? 114
+    : (isCancelled ? 93
+    : (isInProgress ? 108
+    : (showDirty ? 107 : 104))));
+
+  const statusTextColor = isNewDoc
+    ? '#666EFE'
+    : (isCancelled ? '#FF3052'
+    : (isClosed ? '#00D664'
+    : (showDirty ? '#FE975B' : '#666EFE')));
 
   const titleText = isSavedOnce
     ? `Документ: Пополнение станции (${docStationName}) N${String(docCode || 0).padStart(4, '0')} от ${formatDateWithSeconds(docDatetime)}`
@@ -741,9 +880,9 @@ const RefillCreatePage: React.FC = () => {
 
   const hasFilledRefill = selectedCellsCount > 0;
   const canSave = isDraft && !isSaving && hasFilledRefill && isDirty && invalidCells.size === 0;
-  const canTakeToWork = isDraft && isSavedOnce && !isDirty && hasFilledRefill && invalidCells.size === 0 && !isTakingToWork;
-  const canCancel = isDraft && isSavedOnce && !isDirty && !isCancelling;
-  const canEdit = isDraft && isSavedOnce && !editMode;
+  const canTakeToWork = isDraft && !isNewDoc && !isDirty && hasFilledRefill && invalidCells.size === 0 && !isTakingToWork;
+  const canCancel = isDraft && !isNewDoc && !isDirty && !isCancelling;
+  const canEdit = isDraft && !isNewDoc && !editMode;
 
   const BTN_SIZE = 54;
   const BTN_GAP = 20;
@@ -798,12 +937,13 @@ const RefillCreatePage: React.FC = () => {
   const tableTop = BLOCK_TOP + BTN_SIZE + TABLE_TOP_GAP;
 
   const FILTER_FIELDS: { key: string; label: string }[] = [
-    { key: 'status', label: 'Статус строки' },
+    { key: 'status', label: 'Состояние' },
     { key: 'cancelled', label: 'Отменено' },
   ];
 
   const STATUS_FILTER_OPTIONS = [
     { uid: 'NOT_STARTED', name: 'Не взят в работу' },
+    { uid: 'TRANSFERRED', name: 'Передан в работу' },
     { uid: 'IN_PROGRESS', name: 'Взят в работу' },
     { uid: 'SHIPPED', name: 'Отгружено' },
     { uid: 'RECEIVED', name: 'Принято' },
@@ -841,15 +981,6 @@ const RefillCreatePage: React.FC = () => {
     return TOP_PAD + idx * ROW_STEP + (TEXT_HEIGHT - INDICATOR_HEIGHT) / 2;
   };
 
-  const topBtnStyle: React.CSSProperties = {
-    position: 'absolute', top: 0,
-    width: TOP_BTN_SIZE, height: TOP_BTN_SIZE, borderRadius: 15,
-    backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: 0, flexShrink: 0,
-  };
-
   const docBtnStyle: React.CSSProperties = {
     width: 40, height: 40, borderRadius: 10,
     backgroundColor: '#FFFFFF', border: '1px solid rgba(102, 110, 254, 0.15)',
@@ -862,13 +993,7 @@ const RefillCreatePage: React.FC = () => {
 
   const DOC_TABLE_FULL_W = 1720;
   const DOC_TABLE_TOP = 100 + 142 + 30 + 40 + 12;
-  const DOC_TABLE_HEIGHT = 406;
-
-  const statusIcons: string[] = [];
-  if (isTmc) statusIcons.push(TMC);
-  if (isSgd) statusIcons.push(SGD);
-  if (isOk) statusIcons.push(OK);
-  if (parentUid) statusIcons.push(CHAIN);
+  const DOC_TABLE_HEIGHT = 418;
 
   const slideVariants = {
     enter: (direction: 'left' | 'right') => ({ x: direction === 'left' ? 200 : -200, opacity: 0 }),
@@ -891,8 +1016,8 @@ const RefillCreatePage: React.FC = () => {
       <div style={{ position: 'absolute', top: 35, left: 60, display: 'flex', alignItems: 'center', gap: 25, zIndex: 2 }}>
         <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 500, color: '#2D4059', margin: 0, lineHeight: '29px', whiteSpace: 'nowrap' }}>{titleText}</h1>
         <img src={statusIcon} alt="" style={{ width: statusWidth, height: 29, flexShrink: 0 }} />
-        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: isCancelled ? '#FF3052' : (isClosed ? '#00D664' : '#666EFE') }}>
-          {STATUS_LABELS[docStatus] || docStatus}
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: statusTextColor }}>
+          {STATUS_LABELS[displayStatus] || displayStatus}
         </span>
       </div>
 
@@ -1066,7 +1191,7 @@ const RefillCreatePage: React.FC = () => {
 
                 <AnimatePresence mode="wait">
                   {!showHistory ? (
-                    <motion.div key="doc-table" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: DOC_TABLE_TOP, left: 40, width: DOC_TABLE_FULL_W, height: DOC_TABLE_HEIGHT }}>
+                    <motion.div key="doc-table" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: DOC_TABLE_TOP, left: 40, width: DOC_TABLE_FULL_W, height: DOC_TABLE_HEIGHT, overflow: 'hidden' }}>
                       <DataTable
                         columns={DOC_COLUMNS}
                         visibleKeys={docVisibleColumns}
@@ -1077,6 +1202,7 @@ const RefillCreatePage: React.FC = () => {
                         onRowClick={handleDocRowClick}
                         onDoubleClick={handleDocumentRowDoubleClick}
                         renderCell={documentRenderCell}
+                        renderCellNode={documentRenderCellNode}
                         isGrayColumn={(key) => key !== 'numberCell' && key !== 'materialName'}
                         tableWidth={DOC_TABLE_FULL_W}
                         rowHeight={58}
@@ -1087,7 +1213,7 @@ const RefillCreatePage: React.FC = () => {
                       />
                     </motion.div>
                   ) : (
-                    <motion.div key="doc-history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: DOC_TABLE_TOP, left: 40, width: DOC_TABLE_FULL_W, height: DOC_TABLE_HEIGHT }}>
+                    <motion.div key="doc-history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} style={{ position: 'absolute', top: DOC_TABLE_TOP, left: 40, width: DOC_TABLE_FULL_W, height: DOC_TABLE_HEIGHT, overflow: 'hidden' }}>
                       <HistoryTable
                         events={historyEvents}
                         isLoading={historyLoading}
@@ -1174,7 +1300,7 @@ const RefillCreatePage: React.FC = () => {
             </button>
           )}
 
-          {isDraft && (
+          {isDraft && !isNewDoc && (
             <button onClick={canCancel ? handleCancel : undefined} disabled={!canCancel} style={{ ...bottomButtonStyle, width: 160, backgroundColor: '#FFFFFF', color: '#FF3052', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)', opacity: canCancel ? 1 : 0.35, cursor: canCancel ? 'pointer' : 'not-allowed' }}>
               <img src={CancelIcon16Black} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
               <span style={{ marginLeft: '15px' }}>{isCancelling ? 'Отмена...' : 'Отменить'}</span>

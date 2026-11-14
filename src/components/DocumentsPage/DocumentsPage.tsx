@@ -1,4 +1,4 @@
-// DocumentsPage.tsx — ПОЛНЫЙ ФАЙЛ (добавлена кнопка «Перемещение»)
+// DocumentsPage.tsx — ПОЛНЫЙ ФАЙЛ (добавлена кнопка «Поступление»)
 import React from 'react';
 import { useTabs } from '../../context/TabContext';
 import { useFeatureSnapshot } from '../../services/features/featureStore';
@@ -17,6 +17,7 @@ const DOCUMENT_BUTTONS: readonly DocumentButton[] = [
   { path: '/documents/refill', label: 'Документ: Пополнение', text: 'Пополнение' },
   { path: '/documents/move-orders', label: 'Документ: Заказ на перемещение', text: 'Заказ на перемещение' },
   { path: '/documents/transfers', label: 'Документ: Перемещение', text: 'Перемещение' },
+  { path: '/documents/incoming', label: 'Документ: Поступление', text: 'Поступление' },
   { path: '/documents/video-archive', label: 'Журнал событий: видеоархив', text: 'Журнал событий: видеоархив' },
   { path: '/documents/gpp', label: 'Документ: ГПП', text: 'График подготовки производства' },
 ];

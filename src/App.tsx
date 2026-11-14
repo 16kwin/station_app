@@ -1,4 +1,4 @@
-// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты перемещения)
+// App.tsx — ПОЛНЫЙ ФАЙЛ (добавлены роуты поступления)
 import { Suspense, useEffect, useState } from 'react';
 import FullScreenPreloader from './components/commonComponents/FullScreenPreloader';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
@@ -53,6 +53,8 @@ import MoveOrderPage from './components/DocumentsPage/MoveOrder/MoveOrderPage';
 import MoveOrderCreatePage from './components/DocumentsPage/MoveOrder/MoveOrderCreatePage';
 import TransferPage from './components/DocumentsPage/Transfer/TransferPage';
 import TransferCreatePage from './components/DocumentsPage/Transfer/TransferCreatePage';
+import IncomingPage from './components/DocumentsPage/Incoming/IncomingPage';
+import IncomingCreatePage from './components/DocumentsPage/Incoming/IncomingCreatePage';
 import ReportsPage from './components/ReportsPage/ReportsPage';
 import SettingsPage from './components/SettingsPage/SettingsPage';
 import AccountPage from './components/AccountPage/AccountPage';
@@ -67,14 +69,8 @@ import { useInactivityLock } from './components/hooks/useInactivityLock';
 import AnimatedGradientBackground from './effects/AnimatedGradientBackground';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  AnalyticsPage,
-  EventsScreenPage,
-  OrderCreatePage,
-  OrdersPage,
-  PurchaseGraphPage,
-  TkpPage,
-  TkpViewPage,
-  VideoArchivePage,
+  AnalyticsPage, EventsScreenPage, OrderCreatePage, OrdersPage,
+  PurchaseGraphPage, TkpPage, TkpViewPage, VideoArchivePage,
 } from './services/features/lazyModules';
 import { FeatureProvider, FeatureRoute } from './services/features/FeatureGate';
 
@@ -174,6 +170,9 @@ const AppContent = () => {
                     <Route path="documents/transfers" element={<TransferPage />} />
                     <Route path="documents/transfers/create/:uid" element={<TransferCreatePage />} />
                     <Route path="documents/transfers/edit/:uid" element={<TransferCreatePage />} />
+                    <Route path="documents/incoming" element={<IncomingPage />} />
+                    <Route path="documents/incoming/create/:uid" element={<IncomingCreatePage />} />
+                    <Route path="documents/incoming/edit/:uid" element={<IncomingCreatePage />} />
                     <Route path="reports" element={<ReportsPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route path="orders" element={<OrdersPage />} />

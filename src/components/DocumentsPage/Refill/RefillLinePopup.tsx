@@ -92,19 +92,16 @@ const RefillLinePopup: React.FC<RefillLinePopupProps> = ({
         const selectedUids: string[] =
           Array.isArray(linksData?.incomingSelected) ? linksData.incomingSelected : [];
 
-        // Объединяем incomingCandidates + incomingSelected
-        const seen = new Set<string>();
-        const combined: Array<{ uid: string; name: string }> = [];
+        // В попапе пополнения показываем ТОЛЬКО связанные распределители
+        // (incomingSelected). incomingCandidates используется как справочник имён.
+        const nameByUid = new Map<string, string>();
         for (const c of candidates) {
-          if (!c?.uid || seen.has(c.uid)) continue;
-          seen.add(c.uid);
-          combined.push({ uid: c.uid, name: c.name || c.uid });
+          if (c?.uid) nameByUid.set(c.uid, c.name || c.uid);
         }
-        for (const uid of selectedUids) {
-          if (!uid || seen.has(uid)) continue;
-          seen.add(uid);
-          combined.push({ uid, name: uid });
-        }
+
+        const combined: Array<{ uid: string; name: string }> = selectedUids
+          .filter(uid => !!uid)
+          .map(uid => ({ uid, name: nameByUid.get(uid) || uid }));
 
         if (combined.length === 0) {
           setIncoming([]);
@@ -266,7 +263,7 @@ const RefillLinePopup: React.FC<RefillLinePopupProps> = ({
             )}
             {!loadingIncoming && incoming.length === 0 && (
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#9CA3AF' }}>
-                Нет доступных распределительных складов для этой станции
+                Нет связанных распределительных складов для этой станции
               </div>
             )}
             {!loadingIncoming && incoming.map(st => {
